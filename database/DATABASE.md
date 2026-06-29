@@ -1,6 +1,11 @@
 
 # Database Design
 
+## Database Diagram 
+``` 
+https://dbdiagram.io/d/ai-personalized-6a41e4ebb3ebc94a7daf0252
+```
+
 ## ID Generation Strategy
 
 Different tables use different ID generation strategies based on their characteristics.
@@ -86,22 +91,19 @@ This module implements **RBAC (Role-Based Access Control)** for authentication a
 
 ## course
 
-| Column         | Type     | Description                        |
-| -------------- | -------- | ---------------------------------- |
-| id             | BIGINT   | Course ID                          |
-| category_id    | BIGINT   | Category                           |
-| name           | VARCHAR  | Course name                        |
-| slug           | VARCHAR  | URL-friendly identifier            |
-| description    | TEXT     | Course description                 |
-| thumbnail_url  | VARCHAR  | Course thumbnail                   |
-| level          | VARCHAR  | Beginner / Intermediate / Advanced |
-| total_lessons  | INT      | Total lessons                      |
-| total_duration | INT      | Total duration (minutes)           |
-| status         | TINYINT  | Draft / Published / Archived       |
-| created_at     | DATETIME | Created time                       |
-| created_by     | BIGINT   | Created by                         |
-| updated_at     | DATETIME | Updated time                       |
-| updated_by     | BIGINT   | Updated by                         |
+| Column                          | Type     | Description      |
+|---------------------------------| -------- | ---------------- |
+| id                              | BIGINT   | Course ID        |
+| category_id                     | BIGINT   | Category         |
+| name                            | VARCHAR  | Course name      |
+| link                            | VARCHAR  | URL-friendly identifier |
+| description                     | TEXT     | Course description |
+| level                           | VARCHAR  | Beginner / Intermediate / Advanced |
+| status                          | TINYINT  | Draft / Published / Archived |
+| created_at                      | DATETIME | Created time     |
+| created_by                      | BIGINT   | Created by       |
+| updated_at                      | DATETIME | Updated time     |
+| updated_by                      | BIGINT   | Updated by       |
 
 ---
 
