@@ -3,6 +3,7 @@ package com.ailms.entity;
 import com.ailms.common.snowflake.SnowflakeId;
 import jakarta.persistence.*;
 import lombok.*;
+import lombok.experimental.SuperBuilder;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -15,7 +16,7 @@ import java.util.List;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
+@SuperBuilder
 public class CourseEntity extends BaseEntity {
 
     @Id
