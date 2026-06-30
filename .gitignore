@@ -1,0 +1,33 @@
+#be
+*.jar
+.env
+*.class
+*.war
+*.ear
+*.nar
+*.log
+logs/
+
+# frontend
+node_modules/
+dist/
+jspm_packages/
+build/
+dist/
+npm-debug.log*
+
+#typescript 
+*.tsbuildinfo
+.eslintcache
+.stylelintcache
+
+# system
+.DS_Store
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.iml
+*.iws
+out/
+
