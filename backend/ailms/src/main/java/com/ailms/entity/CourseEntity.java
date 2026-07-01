@@ -58,3 +58,4 @@ public class CourseEntity extends BaseEntity {
     @Builder.Default
     private List<CourseSectionEntity> sections = new ArrayList<>();
 }
+

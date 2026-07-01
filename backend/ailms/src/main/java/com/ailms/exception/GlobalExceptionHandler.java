@@ -78,6 +78,7 @@ public class GlobalExceptionHandler {
     // Các ngoại lệ còn lại
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleGeneral(Exception ex, HttpServletRequest request) {
+        ex.printStackTrace();
         return build(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error", request, null);
     }
 
