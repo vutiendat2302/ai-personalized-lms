@@ -1,0 +1,29 @@
+spring:
+  application:
+    name: ai-lms
+  datasource:
+    url: jdbc:mysql://localhost:3306/ailms
+    username: root
+    password: 123456
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ##(create, update, create-drop, validate)
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+    open-in-view: true
+
+server:
+  port: 8080
+
+api:
+  prefix: /api/v1
+  auth-prefix: /api/auth
+
+app:
+  jwt:
+    secret: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+    expiration-ms: 86400000
