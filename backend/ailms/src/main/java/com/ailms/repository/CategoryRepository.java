@@ -17,8 +17,8 @@ public interface CategoryRepository extends JpaRepository<CategoryEntity, Long>,
 
 
 
-    @Query("SELECT COUNT(c) " +
-            "FROM CourseEntity c " +
-            "WHERE c.categoryEntity.id = :categoryId")
-    long countCoursesByCategoryId(@Param("categoryId") Long categoryId);
+//    @Query("SELECT COUNT(c) " +
+//            "FROM CourseEntity c " +
+//            "WHERE c.categoryEntity.id = :categoryId")
+//    long countCoursesByCategoryId(@Param("categoryId") Long categoryId);
 }

@@ -51,7 +51,7 @@ public class CourseEntity extends BaseEntity {
      */
     @Column(name = "status", nullable = false)
     @Builder.Default
-    private Byte status = 0;
+    private Byte status = 1;
 
     @OneToMany(mappedBy = "courseEntity", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @OrderBy("orderIndex ASC")

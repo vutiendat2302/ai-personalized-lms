@@ -11,7 +11,7 @@ import java.util.List;
 
 public class CourseSpecification {
 
-    public static Specification<CourseEntity> buildSpec(CourseSearchRequest request) {
+    public static Specification<CourseEntity> build(CourseSearchRequest request) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
@@ -22,16 +22,16 @@ public class CourseSpecification {
                 predicates.add(cb.or(namePredicate, descPredicate));
             }
 
-            if (request.getCategoryId() != null) {
-                predicates.add(cb.equal(root.get("categoryEntity").get("id"), request.getCategoryId()));
-            }
-
-            if (StringUtils.hasText(request.getLevel())) {
-                predicates.add(cb.equal(root.get("level"), request.getLevel()));
-            }
-
             if (request.getStatus() != null) {
                 predicates.add(cb.equal(root.get("status"), request.getStatus()));
+            }
+
+            if (request.getCreatedFrom() != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), request.getCreatedFrom()));
+            }
+
+            if (request.getCreatedTo() != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), request.getCreatedTo()));
             }
 
             return cb.and(predicates.toArray(new Predicate[0]));

@@ -33,9 +33,6 @@ public interface CourseMapper {
 
     @Mapping(target = "categoryId", source = "categoryEntity.id")
     @Mapping(target = "categoryName", source = "categoryEntity.name")
-
-
-
     CourseResponse toResponse(CourseEntity entity);
 
 

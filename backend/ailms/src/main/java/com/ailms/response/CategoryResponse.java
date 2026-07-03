@@ -17,7 +17,7 @@ public class CategoryResponse {
     private String description;
     private Byte status;
 
-    private Long courseCount;
+    //private Long courseCount;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime createdAt;

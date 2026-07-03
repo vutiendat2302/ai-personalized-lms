@@ -15,28 +15,27 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1")
+@RequestMapping("/api/v1/sections")
 @RequiredArgsConstructor
 public class CourseSectionController {
 
     private final ICourseSectionService courseSectionService;
 
-    @PostMapping("/courses/{courseId}/sections")
+    @PostMapping("/section")
     public ResponseEntity<ApiResponse<SectionResponse>> create(
-            @PathVariable Long courseId,
             @Valid @RequestBody CreateSectionRequest request) {
-        SectionResponse response = courseSectionService.create(courseId, request);
+        SectionResponse response = courseSectionService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.of("Section created successfully", response));
     }
 
-    @GetMapping("/courses/{courseId}/sections")
+    @GetMapping("/{courseId}/sections")
     public ResponseEntity<ApiResponse<List<SectionResponse>>> getSectionsByCourseId(@PathVariable Long courseId) {
         List<SectionResponse> response = courseSectionService.getSectionsByCourseId(courseId);
         return ResponseEntity.ok(ApiResponse.of("Sections retrieved successfully", response));
     }
 
-    @PutMapping("/sections/{id}")
+    @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<SectionResponse>> update(
             @PathVariable Long id,
             @Valid @RequestBody UpdateSectionRequest request) {
@@ -44,15 +43,28 @@ public class CourseSectionController {
         return ResponseEntity.ok(ApiResponse.of("Section updated successfully", response));
     }
 
-    @DeleteMapping("/sections/{id}")
+    @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         courseSectionService.delete(id);
         return ResponseEntity.ok(ApiResponse.message("Section deleted successfully"));
     }
 
+    // Đổi thứ tự
     @PatchMapping("/sections/reorder")
     public ResponseEntity<ApiResponse<Void>> reorder(@Valid @RequestBody ReorderRequest request) {
         courseSectionService.reorder(request);
         return ResponseEntity.ok(ApiResponse.message("Sections reordered successfully"));
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<ApiResponse<SectionResponse>> getById(@PathVariable Long id) {
+        SectionResponse response = courseSectionService.getById(id);
+        return ResponseEntity.ok(ApiResponse.of("Section retrieved successfully", response));
+    }
+
+    @GetMapping
+    public ResponseEntity<ApiResponse<List<SectionResponse>>> getAll() {
+        List<SectionResponse> response= courseSectionService.getAll();
+        return ResponseEntity.ok(ApiResponse.of("Sections retrieved successfully", response));
     }
 }

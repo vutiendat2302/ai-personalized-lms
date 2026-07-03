@@ -1,6 +1,7 @@
 package com.ailms.request;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.*;
 
@@ -16,5 +17,9 @@ public class CreateSectionRequest {
     private String name;
 
     private Integer orderIndex;
+
+    // Sau sua thanh ten sau
+    @NotNull(message = "Category ID is required")
+    private Long courseId;
 
 }

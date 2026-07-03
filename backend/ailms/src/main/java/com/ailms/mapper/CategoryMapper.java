@@ -24,7 +24,7 @@ public interface CategoryMapper {
      * Ánh xạ từ nhiều nguồn vào một đối tượng
      * Gán giá trị mặc định
      */
-    @Mapping(target = "courseCount", ignore = true)
+    //@Mapping(target = "courseCount", ignore = true)
     CategoryResponse toCategoryResponse(CategoryEntity entity);
 
     @Mapping(target = "id", ignore = true)
@@ -59,8 +59,8 @@ public interface CategoryMapper {
      * không có trong entity
      * nên cần query riêng từ service
      */
-    default CategoryResponse withCourseCount(CategoryResponse response, Long courseCount) {
-        response.setCourseCount(courseCount);
-        return response;
-    }
+//    default CategoryResponse withCourseCount(CategoryResponse response, Long courseCount) {
+//        response.setCourseCount(courseCount);
+//        return response;
+//    }
 }
