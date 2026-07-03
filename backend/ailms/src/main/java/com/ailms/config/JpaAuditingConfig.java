@@ -1,10 +1,12 @@
 package com.ailms.config;
 
-import org.apache.tomcat.util.net.openssl.ciphers.Authentication;
+import com.ailms.security.CustomUserDetails;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.domain.AuditorAware;
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.util.Optional;
 
@@ -14,6 +16,16 @@ public class JpaAuditingConfig {
 
     @Bean
     public AuditorAware<Long> auditorAware() {
-        return () -> Optional.of(1L); // tạm thời, thay sau khi có auth
+        return () -> {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+            if (authentication == null || !authentication.isAuthenticated() 
+                || authentication.getPrincipal().equals("anonymousUser")) {
+                return Optional.empty();
+            }
+
+            CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
+            return Optional.of(userDetails.getUser().getId());
+        };
     }
 }
