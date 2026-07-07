@@ -651,10 +651,6 @@ PRIMARY KEY (course_id, user_id)
 | user_agent | VARCHAR | Trình duyệt |
 | occurred_at | DATETIME | Thời điểm xảy ra |
 
-> Chỉ 1 quan hệ FK thật: `user 1:N audit_log`. `entity_type` + `entity_id` là polymorphic reference (không phải FK thật trong DB), do tầng application tự diễn giải để biết trỏ tới bảng nào.
-
-> Chỉ nên ghi log cho các bảng nhạy cảm về quyền hạn/tiền bạc: `user_role`, `role_permission`, `salary`, `teaching_session_payment`, `employee_contract`, `submission` (score/feedback), `user.status`.
-
 ---
 
 # Module 9. AI Recommendation (To Do)
@@ -668,18 +664,3 @@ PRIMARY KEY (course_id, user_id)
 
 ---
 
-# Development Progress
-
-* [x] Initialize repository
-* [x] Write README
-* [x] Plan database modules
-* [ ] Design ER Diagram
-* [x] User & Authorization Module
-* [x] Course Management Module
-* [x] Class Management Module
-* [x] HR Management Module
-* [x] Student Management Module
-* [x] Learning Progress & Tracking Module
-* [x] Assessment Module
-* [x] Audit & System Log Module
-* [ ] AI Recommendation Module
