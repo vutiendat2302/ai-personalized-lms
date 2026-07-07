@@ -9,7 +9,7 @@ import java.util.List;
 
 public interface ICourseSectionService {
 
-    SectionResponse create(Long courseId, CreateSectionRequest request);
+    SectionResponse create(CreateSectionRequest request);
 
     SectionResponse update(Long id, UpdateSectionRequest request);
 
@@ -18,5 +18,14 @@ public interface ICourseSectionService {
     List<SectionResponse> getSectionsByCourseId(Long courseId);
 
     void reorder(ReorderRequest request);
+
+    // get section by id
+    // get all section
+    // search
+    // Quan he ve lesson, source
+
+    SectionResponse getById(Long id);
+    List<SectionResponse> getAll();
+
 
 }

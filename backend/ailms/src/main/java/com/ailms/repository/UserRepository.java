@@ -14,4 +14,7 @@ public interface UserRepository extends JpaRepository<UserEntity, Long>, JpaSpec
 
     @Query("SELECT u FROM UserEntity u WHERE u.username = :usernameOrEmail OR u.email = :usernameOrEmail")
     Optional<UserEntity> findByUsernameOrEmail(@Param("usernameOrEmail") String usernameOrEmail);
+
+    @Query("SELECT u FROM UserEntity u WHERE u.username = :info OR u.email = :info OR u.phone = :info")
+    Optional<UserEntity> findByUsernameOrEmailOrPhone(@Param("info") String info);
 }

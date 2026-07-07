@@ -14,10 +14,8 @@ import java.time.LocalDateTime;
 public class CourseSearchRequest extends BaseSearchRequest {
     
     private String keyword;
-    
-    private Long categoryId;
-    
-    private String level;
+
+    // private String level; Sau fix enum bổ sung sau
     
     private Byte status;
 

@@ -74,9 +74,9 @@ public class CategoryService implements ICategoryService{
     @Override
     public CategoryResponse getCategoryById(Long id) {
         CategoryEntity entity = findEntityById(id);
-        long courseCount = categoryRepository.countCoursesByCategoryId(id);
+        //long courseCount = categoryRepository.countCoursesByCategoryId(id);
 
-        return categoryMapper.withCourseCount(categoryMapper.toCategoryResponse(entity), courseCount);
+        return categoryMapper.toCategoryResponse(entity);
     }
 
     @Override

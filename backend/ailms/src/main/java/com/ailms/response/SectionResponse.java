@@ -15,6 +15,7 @@ public class SectionResponse {
     private Long id;
 
     private Long courseId;
+    private String courseName;
 
     private String name;
 

@@ -21,4 +21,7 @@ public class UpdateSectionRequest {
     @NotNull(message = "Status is required")
     private Byte status;
 
+    @NotNull
+    private Long courseId;
+
 }
