@@ -11,5 +11,7 @@ public class RoleResponse {
     private String description;
     private Boolean isSystem;
     private LocalDateTime createdAt;
+    private Long createdBy;
+    private Long updatedBy;
     private LocalDateTime updatedAt;
 }

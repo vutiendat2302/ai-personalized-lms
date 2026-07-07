@@ -52,12 +52,25 @@ public class AuditLogEntity extends BaseEntity{
     @Column(name = "new_value", columnDefinition = "json")
     private String newValue;
 
+    /**
+     * Địa chỉ IP của client thực hiện yêu cầu.
+     */
     @Column(name = "ip_address", length = 45)
     private String ipAddress;
 
-    @Column(name = "user_agent", length = 255)
+    /**
+     * Thông tin User-Agent của client.
+     * Dùng để xác định trình duyệt, hệ điều hành
+     * hoặc thiết bị gửi request.
+     */
+    @Column(name = "user_agent")
     private String userAgent;
 
+    /**
+     * Thời điểm hành động xảy ra.
+     * Có thể sử dụng để truy vết lịch sử thao tác,
+     * phục vụ kiểm toán (Audit) và điều tra sự cố.
+     */
     @Column(name = "occurred_at")
     private LocalDateTime occurredAt;
 }

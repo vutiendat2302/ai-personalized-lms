@@ -1,0 +1,23 @@
+{ // Cấu hình typescritp dành riêng cho các file chạy trong môi trường node.js 
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo", // file cache, lưu thông tin build vào đây 
+    "target": "es2023", // js mà ts hướng tới (phiên bản) 
+    "lib": ["ES2023"],
+    "types": ["node"], // nạp kiểu dữ liệu của node 
+    "skipLibCheck": true, // không kiểm tra lỗi trong node modules 
+
+    /* Bundler mode */
+    "module": "nodenext",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+
+    /* Linting */
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["vite.config.ts"] // ktra vite 
+}

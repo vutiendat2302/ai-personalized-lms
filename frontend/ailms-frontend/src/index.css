@@ -1,0 +1,510 @@
+@import "tailwindcss"; /* framework css */
+@import "tw-animate-css"; /* thu vien animation cho tailwind */
+@import "shadcn/tailwind.css"; /* cau hinh shadcn ui */
+@import "@fontsource/source-sans-3";
+
+/* (#id > .class > tag) */
+/* cho phep dung class dark */
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+    /* Font tiêu đề (mặc định dùng font sans) */
+    --font-heading: var(--font-sans);
+
+    /* Font mặc định của toàn bộ website */
+    --font-sans: 'Source Sans 3', sans-serif;
+
+    /* Màu viền focus (ring) của sidebar */
+    --color-sidebar-ring: var(--sidebar-ring);
+
+    /* Màu đường viền sidebar */
+    --color-sidebar-border: var(--sidebar-border);
+
+    /* Màu chữ trên nền accent của sidebar */
+    --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+
+    /* Màu accent (hover/highlight) của sidebar */
+    --color-sidebar-accent: var(--sidebar-accent);
+
+    /* Màu chữ trên nền primary của sidebar */
+    --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+
+    /* Màu primary của sidebar */
+    --color-sidebar-primary: var(--sidebar-primary);
+
+    /* Màu chữ mặc định của sidebar */
+    --color-sidebar-foreground: var(--sidebar-foreground);
+
+    /* Màu nền của sidebar */
+    --color-sidebar: var(--sidebar);
+
+    /* Màu biểu đồ số 5 */
+    --color-chart-5: var(--chart-5);
+
+    /* Màu biểu đồ số 4 */
+    --color-chart-4: var(--chart-4);
+
+    /* Màu biểu đồ số 3 */
+    --color-chart-3: var(--chart-3);
+
+    /* Màu biểu đồ số 2 */
+    --color-chart-2: var(--chart-2);
+
+    /* Màu biểu đồ số 1 */
+    --color-chart-1: var(--chart-1);
+
+    /* Màu viền focus (ring) */
+    --color-ring: var(--ring);
+
+    /* Màu của ô nhập liệu */
+    --color-input: var(--input);
+
+    /* Màu đường viền */
+    --color-border: var(--border);
+
+    /* Màu cho hành động nguy hiểm (Delete, Remove...) */
+    --color-destructive: var(--destructive);
+
+    /* Màu chữ trên nền accent */
+    --color-accent-foreground: var(--accent-foreground);
+
+    /* Màu accent (hover, highlight...) */
+    --color-accent: var(--accent);
+
+    /* Màu chữ của nội dung phụ */
+    --color-muted-foreground: var(--muted-foreground);
+
+    /* Màu nền của nội dung phụ */
+    --color-muted: var(--muted);
+
+    /* Màu chữ trên nền secondary */
+    --color-secondary-foreground: var(--secondary-foreground);
+
+    /* Màu secondary */
+    --color-secondary: var(--secondary);
+
+    /* Màu chữ trên nền primary */
+    --color-primary-foreground: var(--primary-foreground);
+
+    /* Màu chính của hệ thống */
+    --color-primary: var(--primary);
+
+    /* Màu chữ trong popover */
+    --color-popover-foreground: var(--popover-foreground);
+
+    /* Màu nền popover */
+    --color-popover: var(--popover);
+
+    /* Màu chữ trong card */
+    --color-card-foreground: var(--card-foreground);
+
+    /* Màu nền card */
+    --color-card: var(--card);
+
+    /* Màu chữ mặc định của website */
+    --color-foreground: var(--foreground);
+
+    /* Màu nền mặc định của website */
+    --color-background: var(--background);
+
+    /* Bo góc nhỏ (~60% radius gốc) */
+    --radius-sm: calc(var(--radius) * 0.6);
+
+    /* Bo góc vừa (~80% radius gốc) */
+    --radius-md: calc(var(--radius) * 0.8);
+
+    /* Bo góc mặc định */
+    --radius-lg: var(--radius);
+
+    /* Bo góc lớn (~140% radius gốc) */
+    --radius-xl: calc(var(--radius) * 1.4);
+
+    /* Bo góc rất lớn (~180% radius gốc) */
+    --radius-2xl: calc(var(--radius) * 1.8);
+
+    /* Bo góc cực lớn (~220% radius gốc) */
+    --radius-3xl: calc(var(--radius) * 2.2);
+
+    /* Bo góc tối đa (~260% radius gốc) */
+    --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+    /* =========================
+      MÀU NỀN & MÀU CHỮ CHUNG
+       ========================= */
+
+    /* Màu nền mặc định của toàn bộ website */
+    --background: #EAECF0;
+
+    /* Màu chữ mặc định */
+    --foreground: #273338;
+
+
+    /* =========================
+      CARD (Box, Form, Dialog)
+       ========================= */
+
+    /* Màu nền của Card */
+    --card: #FFFFFF;
+
+    /* Màu chữ trong Card */
+    --card-foreground: #273338;
+
+
+    /* =========================
+      POPOVER (Dropdown, Tooltip...)
+       ========================= */
+
+    /* Màu nền của Popover */
+    --popover: #FFFFFF;
+
+    /* Màu chữ trong Popover */
+    --popover-foreground: #273338;
+
+
+    /* =========================
+      PRIMARY (Màu chính)
+       ========================= */
+
+    /* Màu chính của hệ thống (Logo, Button chính...) */
+    --primary: #293681;
+
+    /* Màu chữ trên nền Primary */
+    --primary-foreground: #FFFFFF;
+
+
+    /* =========================
+      SECONDARY (Màu phụ)
+       ========================= */
+
+    /* Màu nền Secondary */
+    --secondary: #D9D9D9;
+
+    /* Màu chữ trên nền Secondary */
+    --secondary-foreground: #233D4D;
+
+
+    /* =========================
+      MUTED (Nội dung phụ)
+       ========================= */
+
+    /* Màu nền cho các thành phần phụ */
+    --muted: #D9D9D9;
+
+    /* Màu chữ của nội dung phụ */
+    --muted-foreground: #618764;
+
+
+    /* =========================
+      ACCENT (Điểm nhấn)
+       ========================= */
+
+    /* Màu nhấn (Hover, Badge, Highlight...) */
+    --accent: #FE7F2D;
+
+    /* Màu chữ trên nền Accent */
+    --accent-foreground: #FFFFFF;
+
+
+    /* =========================
+      DESTRUCTIVE (Thao tác nguy hiểm)
+       ========================= */
+
+    /* Màu cho Delete, Remove, Error... */
+    --destructive: #D0311E;
+
+
+    /* =========================
+      BORDER / INPUT / FOCUS
+       ========================= */
+
+    /* Màu đường viền */
+    --border: #D9D9D9;
+
+    /* Màu nền hoặc viền của ô nhập liệu */
+    --input: #D9D9D9;
+
+    /* Màu viền khi component được focus */
+    --ring: #4274D9;
+
+
+    /* =========================
+      BORDER RADIUS
+       ========================= */
+
+    /* Bo góc mặc định của hệ thống */
+    /* REM → PX (với root font-size = 16px mặc định) */
+    --radius: 0.625rem;
+
+
+    /* =========================
+      CHART (Biểu đồ)
+       ========================= */
+
+    /* Màu cột/đường dữ liệu số 1 */
+    --chart-1: #FE7F2D;
+
+    /* Màu cột/đường dữ liệu số 2 */
+    --chart-2: #2B5748;
+
+    /* Màu cột/đường dữ liệu số 3 */
+    --chart-3: #95CCDD;
+
+    /* Màu cột/đường dữ liệu số 4 */
+    --chart-4: #F8EBAB;
+
+    /* Màu cột/đường dữ liệu số 5 */
+    --chart-5: #FF97D0;
+
+
+    /* =========================
+      SIDEBAR
+       ========================= */
+
+    /* Màu nền Sidebar */
+    --sidebar: #FFFFFF;
+
+    /* Màu chữ trong Sidebar */
+    --sidebar-foreground: #273338;
+
+    /* Màu Primary của Sidebar (Menu đang chọn...) */
+    --sidebar-primary: #293681;
+
+    /* Màu chữ trên nền Primary của Sidebar */
+    --sidebar-primary-foreground: #FFFFFF;
+
+    /* Màu nền khi Hover hoặc Active trong Sidebar */
+    --sidebar-accent: #EAECF0;
+
+    /* Màu chữ trên nền Accent của Sidebar */
+    --sidebar-accent-foreground: #293681;
+
+    /* Màu đường viền Sidebar */
+    --sidebar-border: #D9D9D9;
+
+    /* Màu viền Focus của Sidebar */
+    --sidebar-ring: #4274D9;
+}
+
+.dark {
+    /* =========================
+       MÀU NỀN & MÀU CHỮ CHUNG
+       ========================= */
+
+    /* Màu nền mặc định của toàn bộ website */
+    --background: #233D4D;
+
+    /* Màu chữ mặc định */
+    --foreground: #EAECF0;
+
+
+    /* =========================
+       CARD (Box, Form, Dialog)
+       ========================= */
+
+    /* Màu nền của Card */
+    --card: #273338;
+
+    /* Màu chữ trong Card */
+    --card-foreground: #EAECF0;
+
+
+    /* =========================
+       POPOVER (Dropdown, Tooltip...)
+       ========================= */
+
+    /* Màu nền của Popover */
+    --popover: #273338;
+
+    /* Màu chữ trong Popover */
+    --popover-foreground: #EAECF0;
+
+
+    /* =========================
+       PRIMARY (Màu chính)
+       ========================= */
+
+    /* Màu chính của hệ thống (Logo, Button chính...) */
+    --primary: #4274D9;
+
+    /* Màu chữ trên nền Primary */
+    --primary-foreground: #FFFFFF;
+
+
+    /* =========================
+       SECONDARY (Màu phụ)
+       ========================= */
+
+    /* Màu nền Secondary */
+    --secondary: #293681;
+
+    /* Màu chữ trên nền Secondary */
+    --secondary-foreground: #EAECF0;
+
+
+    /* =========================
+       MUTED (Nội dung phụ)
+       ========================= */
+
+    /* Màu nền cho các thành phần phụ */
+    --muted: #273338;
+
+    /* Màu chữ của nội dung phụ */
+    --muted-foreground: #D9D9D9;
+
+
+    /* =========================
+       ACCENT (Điểm nhấn)
+       ========================= */
+
+    /* Màu nhấn (Hover, Badge, Highlight...) */
+    --accent: #FE7F2D;
+
+    /* Màu chữ trên nền Accent */
+    --accent-foreground: #FFFFFF;
+
+
+    /* =========================
+       DESTRUCTIVE (Thao tác nguy hiểm)
+       ========================= */
+
+    /* Màu cho Delete, Remove, Error... */
+    --destructive: #BE1A1A;
+
+
+    /* =========================
+       BORDER / INPUT / FOCUS
+       ========================= */
+
+    /* Màu đường viền */
+    --border: #4274D9;
+
+    /* Màu nền hoặc viền của ô nhập liệu */
+    --input: #4274D9;
+
+    /* Màu viền khi component được focus */
+    --ring: #95CCDD;
+
+
+    /* =========================
+       CHART (Biểu đồ)
+       ========================= */
+
+    /* Màu cột/đường dữ liệu số 1 */
+    --chart-1: #FE7F2D;
+
+    /* Màu cột/đường dữ liệu số 2 */
+    --chart-2: #2B5748;
+
+    /* Màu cột/đường dữ liệu số 3 */
+    --chart-3: #95CCDD;
+
+    /* Màu cột/đường dữ liệu số 4 */
+    --chart-4: #F8EBAB;
+
+    /* Màu cột/đường dữ liệu số 5 */
+    --chart-5: #FF97D0;
+
+
+    /* =========================
+       SIDEBAR
+       ========================= */
+
+    /* Màu nền Sidebar */
+    --sidebar: #273338;
+
+    /* Màu chữ trong Sidebar */
+    --sidebar-foreground: #EAECF0;
+
+    /* Màu Primary của Sidebar (Menu đang chọn...) */
+    --sidebar-primary: #4274D9;
+
+    /* Màu chữ trên nền Primary của Sidebar */
+    --sidebar-primary-foreground: #FFFFFF;
+
+    /* Màu nền khi Hover hoặc Active trong Sidebar */
+    --sidebar-accent: #233D4D;
+
+    /* Màu chữ trên nền Accent của Sidebar */
+    --sidebar-accent-foreground: #EAECF0;
+
+    /* Màu đường viền Sidebar */
+    --sidebar-border: #4274D9;
+
+    /* Màu viền Focus của Sidebar */
+    --sidebar-ring: #95CCDD;
+}
+
+/* @layer la kniem cua tailwind quan ly css theo 3 tang 
+@layer base: Thiết lập style mặc định cho toàn bộ website.
+@layer components: Tạo các component tái sử dụng.
+@layer utilities: Thêm các utility class tùy chỉnh.
+base (ưu tiên thấp) 
+│
+├── CSS mặc định (html, body, h1, p, button...)
+│
+components
+│
+├── Các component tự tạo (.btn, .card...)
+│
+utilities (ưu tiên cao) 
+│
+└── Các class tiện ích (bg-red-500, p-4...)
+
+Mức độ ưu tiên cao nhất: style css thuần 
+*/
+@layer base {
+
+    /* Áp dụng cho tất cả các phần tử (*) trên website */
+    * {
+        /* 
+         * border-border:
+         *  - Sử dụng màu viền mặc định (--border) cho mọi border.
+         *
+         * outline-ring/50:
+         *  - Màu outline (viền focus) sử dụng màu --ring.
+         *  - /50 nghĩa là độ trong suốt 50%.
+         */
+        @apply border-border outline-ring/70;
+    }
+
+    /* Thiết lập mặc định cho thẻ body */
+    body {
+        /*
+         * bg-background:
+         *  - Màu nền của toàn bộ website.
+         *
+         * text-foreground:
+         *  - Màu chữ mặc định của toàn bộ website.
+         */
+        @apply bg-background text-foreground;
+    }
+
+    /* Thiết lập mặc định cho toàn bộ tài liệu HTML */
+    html {
+        /*
+         * font-sans:
+         *  - Sử dụng font mặc định của hệ thống
+         *    (--font-sans: 'Source Sans 3', sans-serif).
+         *  - Tất cả các phần tử sẽ kế thừa font này nếu không được ghi đè.
+         */
+        @apply font-sans;
+    }
+}
+
+/* @layer components vi du: */
+@layer components {
+    .btn-primary {
+        @apply bg-primary text-primary-foreground rounded-lg px-4 py-2 hover:bg-primary/90;
+    }
+}
+
+/* @layer utilities: chi lm 1 viec duy nhat  vi du: */
+@layer utilities {
+    .text-balance {
+        text-wrap: balance;
+    }
+}
+
+/* Thiết kế một màu đặc biệt: dùng className của taildwind hoặc shadcn variant  */

@@ -1,0 +1,37 @@
+{
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
+    "target": "es2023",
+    "lib": ["ES2023", "DOM"], // DOM: Document Object Model - mô hình đối tượng tài liệu, tạo ra cây cấu trúc trong file html 
+    "module": "esnext",
+    "types": ["vite/client"],
+    "allowArbitraryExtensions": true, // Cho phép import những file ko phải .ts, .js 
+    "skipLibCheck": true, // Không kiểm tra lỗi trong node_modules 
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true, // ts không tạo .js mà vite sẽ build 
+    "jsx": "react-jsx",
+
+    /* Linting */
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true,
+
+    "paths": {
+      "@/*": ["./src/*"]
+    }, 
+
+    "noImplicitAny": true, // truyen gia tri bien vao ham phai khai bao kieu du lieu 
+    "strict": true, // bat tat ca che do bat loi 
+    "strictNullChecks": true, // bat loi gia tri null khi khai bao 
+
+    
+    
+  },
+  "include": ["src"]
+}
