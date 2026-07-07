@@ -1,0 +1,7 @@
+{ // quản lý tsconfig.app cho react và tsconfig.node cho vite/nodejs 
+  "files": [],
+  "references": [
+    { "path": "./tsconfig.app.json" },
+    { "path": "./tsconfig.node.json" }
+  ]
+}

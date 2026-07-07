@@ -1,5 +1,7 @@
 package com.ailms.security;
 
+import com.ailms.exception.InvalidTokenException;
+import com.ailms.exception.TokenExpiredException;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
@@ -51,14 +53,26 @@ public class JwtUtils {
      * JwtUtils.getUserNameFromJwtToken()
      */
 
-    @Value("${app.jwt.secret}") // HS256
+    @Value("${app.jwt.secret}") // HS256 token
     private String jwtSecret;
 
-    @Value("${app.jwt.expiration-ms}")
+    @Value("${app.jwt.expiration-ms}") // access token
     private int jwtExpirationMs;
 
-    private SecretKey key() {
+    @Value("${app.jwt.refresh-expiration-ms}") // refresh token
+    private int refreshExpirationMs;
+
+    private SecretKey key() { // create secret key from jwtSecret (access token)
         return Keys.hmacShaKeyFor(Decoders.BASE64.decode(jwtSecret));
+    }
+
+    public String generateRefreshToken(String username) { // refresh token)
+        return Jwts.builder()
+                .subject(username)
+                .issuedAt(new Date())
+                .expiration(new Date((new Date()).getTime() + refreshExpirationMs))
+                .signWith(key(), Jwts.SIG.HS256)
+                .compact();
     }
 
     public String generateJwtToken(Authentication authentication) {
@@ -76,7 +90,7 @@ public class JwtUtils {
                 .claim("authorities", authorities) // roles and permissions
                 .issuedAt(new Date())
                 .expiration(new Date((new Date()).getTime() + jwtExpirationMs))
-                .signWith(key(), Jwts.SIG.HS256)
+                .signWith(key(), Jwts.SIG.HS256) // login with key or jwt 256 (access token)
                 .compact();
     }
 
@@ -85,18 +99,27 @@ public class JwtUtils {
                 .parseSignedClaims(token).getPayload().getSubject();
     }
 
-    public boolean validateJwtToken(String authToken) {
+    public Date getIssuedAtFromJwtToken(String token) {
+        return Jwts.parser().verifyWith(key()).build()
+                .parseSignedClaims(token).getPayload().getIssuedAt();
+    }
+
+    public boolean validateJwtToken(String authToken) { // check token
         try {
             Jwts.parser().verifyWith(key()).build().parseSignedClaims(authToken);
             return true;
-        } catch (MalformedJwtException e) {
+        } catch (MalformedJwtException e) { // ko dung jwt (token)
             log.error("Invalid JWT token: {}", e.getMessage());
-        } catch (ExpiredJwtException e) {
+        } catch (TokenExpiredException e) { // token het han
             log.error("JWT token is expired: {}", e.getMessage());
-        } catch (UnsupportedJwtException e) {
+            throw TokenExpiredException.of("Token", e.getMessage());
+        } catch (UnsupportedJwtException e) { // token khong ho tro
             log.error("JWT token is unsupported: {}", e.getMessage());
-        } catch (IllegalArgumentException e) {
+        } catch (InvalidTokenException e) { // token rong
             log.error("JWT claims string is empty: {}", e.getMessage());
+            throw InvalidTokenException.of("Token", e.getMessage());
+        } catch (Exception e) {
+            log.error("Cannot validate JWT token: {}", e.getMessage());
         }
 
         return false;

@@ -1,7 +1,23 @@
 package com.ailms.entity;
 
 public enum UserStatusEntity {
+    /**
+     * Tài khoản chưa được kích hoạt.
+     */
     INACTIVE,
+
+    /**
+     * Tài khoản đã được kích hoạt và có thể sử dụng hệ thống.
+     */
     ACTIVE,
-    LOCKED
+
+    /**
+     * Tài khoản bị khóa, không được phép đăng nhập.
+     */
+    LOCKED,
+
+    /**
+     * Tài khoản đang chờ người dùng xác thực OTP để hoàn tất đăng ký.
+     */
+    PENDING_VERIFICATION
 }
