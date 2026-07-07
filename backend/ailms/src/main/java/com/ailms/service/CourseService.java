@@ -1,5 +1,8 @@
 package com.ailms.service;
 
+import com.ailms.repository.specification.CategorySpecification;
+import com.ailms.request.*;
+import com.ailms.response.CategoryResponse;
 import com.ailms.response.PageResponse;
 import com.ailms.entity.CategoryEntity;
 import com.ailms.entity.CourseEntity;
@@ -10,10 +13,6 @@ import com.ailms.mapper.CourseMapper;
 import com.ailms.repository.CategoryRepository;
 import com.ailms.repository.CourseRepository;
 import com.ailms.repository.specification.CourseSpecification;
-import com.ailms.request.CourseSearchRequest;
-import com.ailms.request.CourseStatusRequest;
-import com.ailms.request.CreateCourseRequest;
-import com.ailms.request.UpdateCourseRequest;
 import com.ailms.response.CourseResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,11 +29,13 @@ import java.util.regex.Pattern;
 @Service
 @RequiredArgsConstructor
 @Slf4j // Tự sinh log cho class
+@Transactional(readOnly = true)
 public class CourseService implements ICourseService {
 
     private final CourseRepository courseRepository;
     private final CategoryRepository categoryRepository;
     private final CourseMapper courseMapper;
+    private static final String RESOURCE_NAME = "Course";
 
     @Override
     public List<CourseResponse> getAll() {
@@ -47,14 +48,15 @@ public class CourseService implements ICourseService {
 
 
     @Override
-    @Transactional
     public CourseResponse create(CreateCourseRequest request) {
         log.info("Creating course with name: {}", request.getName());
 
         CategoryEntity category = categoryRepository.findById(request.getCategoryId())
-                .orElseThrow(() -> new ResourceNotFoundException("Category not found with id: " + request.getCategoryId()));
+                .orElseThrow(() -> ResourceNotFoundException.of("Category ", request.getCategoryId()));
 
-        log.info("Category found");
+        if (courseRepository.existsByNameIgnoreCaseAndCategoryEntity_Id(request.getName(), request.getCategoryId())) {
+            throw DuplicateResourceException.of(RESOURCE_NAME, "Category ID and name", request.getName());
+        }
 
         String link = request.getLink();
         if (link == null || link.trim().isEmpty()) {
@@ -78,18 +80,14 @@ public class CourseService implements ICourseService {
         log.info("Updating course with id: {}", id);
 
         CourseEntity existingEntity = courseRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Course not found with id: " + id));
+                .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
 
         CategoryEntity category = categoryRepository.findById(request.getCategoryId())
-                .orElseThrow(() -> new ResourceNotFoundException("Category not found with id: " + request.getCategoryId()));
+                .orElseThrow(() -> ResourceNotFoundException.of("Category", request.getCategoryId()));
 
         String link = request.getLink();
         if (link == null || link.trim().isEmpty()) {
             link = generateSlug(request.getName());
-        }
-
-        if (courseRepository.existsByLinkIgnoreCaseAndIdNot(link, id)) {
-            throw new DuplicateResourceException("Course with link '" + link + "' already exists");
         }
 
         courseMapper.updateEntityFromRequest(request, existingEntity);
@@ -106,7 +104,7 @@ public class CourseService implements ICourseService {
         log.info("Updating status for course id: {} to {}", id, request.getStatus());
 
         CourseEntity existingEntity = courseRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Course not found with id: " + id));
+                .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
 
         existingEntity.setStatus(request.getStatus());
 
@@ -120,7 +118,7 @@ public class CourseService implements ICourseService {
         log.info("Deleting course with id: {}", id);
         
         if (!courseRepository.existsById(id)) {
-            throw new ResourceNotFoundException("Course not found with id: " + id);
+            throw ResourceNotFoundException.of(RESOURCE_NAME, id);
         }
         
         courseRepository.deleteById(id);
@@ -131,7 +129,7 @@ public class CourseService implements ICourseService {
         log.info("Getting course by id: {}", id);
 
         CourseEntity entity = courseRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Course not found with id: " + id));
+                .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
 
         return courseMapper.toResponse(entity);
     }
@@ -140,11 +138,12 @@ public class CourseService implements ICourseService {
     public PageResponse<CourseResponse> search(CourseSearchRequest request) {
         log.info("Searching courses with keyword: {}", request.getKeyword());
 
-        Specification<CourseEntity> spec = CourseSpecification.buildSpec(request);
-        Pageable pageable = request.toPageable();
+        Page<CourseEntity> page = courseRepository.findAll(
+                CourseSpecification.build(request),
+                request.toPageable()
+        );
 
-        Page<CourseEntity> pageResult = courseRepository.findAll(spec, pageable);
-        Page<CourseResponse> responsePage = pageResult.map(courseMapper::toResponse);
+        Page<CourseResponse> responsePage = page.map(courseMapper::toResponse);
 
         return PageResponse.from(responsePage);
     }
