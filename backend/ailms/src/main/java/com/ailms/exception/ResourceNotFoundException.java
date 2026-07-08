@@ -7,4 +7,8 @@ public class ResourceNotFoundException extends RuntimeException {
     public static ResourceNotFoundException of (String resourceName, Long id) {
         return new ResourceNotFoundException(resourceName + " not found with id: " +id);
     }
+
+    public static ResourceNotFoundException of (String resourceName) {
+        return new ResourceNotFoundException(resourceName);
+    }
 }

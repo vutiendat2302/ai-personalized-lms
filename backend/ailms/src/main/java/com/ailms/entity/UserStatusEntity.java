@@ -19,5 +19,11 @@ public enum UserStatusEntity {
     /**
      * Tài khoản đang chờ người dùng xác thực OTP để hoàn tất đăng ký.
      */
-    PENDING_VERIFICATION
+    PENDING_VERIFICATION,
+
+    /**
+     * Tài khoản đã bị xóa (soft delete).
+     */
+    DELETED
 }
+

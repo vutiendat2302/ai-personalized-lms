@@ -1,26 +1,72 @@
 package com.ailms.repository.specification;
 
 import com.ailms.entity.UserEntity;
+import com.ailms.entity.UserRoleEntity;
+import com.ailms.request.UserSearchRequest;
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
+
+import java.time.LocalDateTime;
 
 public class UserSpecification {
 
-    public static Specification<UserEntity> filterAndSearch(Integer status, String search) {
+    public static Specification<UserEntity> filterAndSearch(UserSearchRequest request) {
         Specification<UserEntity> spec = (root, query, criteriaBuilder) -> criteriaBuilder.conjunction();
 
-        if (status != null) {
-            spec = spec.and((root, query, criteriaBuilder) ->
-                    criteriaBuilder.equal(root.get("status"), status));
+        if (request == null) {
+            return spec;
         }
 
-        if (StringUtils.hasText(search)) {
-            String pattern = "%" + search.toLowerCase() + "%";
+        // Keyword search
+        if (StringUtils.hasText(request.getKeyword())) {
+            String pattern = "%" + request.getKeyword().toLowerCase() + "%";
             spec = spec.and((root, query, criteriaBuilder) -> criteriaBuilder.or(
                     criteriaBuilder.like(criteriaBuilder.lower(root.get("username")), pattern),
                     criteriaBuilder.like(criteriaBuilder.lower(root.get("email")), pattern),
                     criteriaBuilder.like(criteriaBuilder.lower(root.get("fullName")), pattern)
             ));
+        }
+
+        // Status filter
+        if (!CollectionUtils.isEmpty(request.getStatuses())) {
+            spec = spec.and((root, query, criteriaBuilder) ->
+                    root.get("status").in(request.getStatuses()));
+        } else {
+            // Exclude DELETED status by default if no statuses are requested
+            spec = spec.and((root, query, criteriaBuilder) ->
+                    criteriaBuilder.notEqual(root.get("status"), com.ailms.entity.UserStatusEntity.DELETED));
+        }
+
+        // Date range filter
+        if (request.getCreatedFrom() != null) {
+            spec = spec.and((root, query, criteriaBuilder) ->
+                    criteriaBuilder.greaterThanOrEqualTo(root.get("createdAt"), request.getCreatedFrom()));
+        }
+        if (request.getCreatedTo() != null) {
+            spec = spec.and((root, query, criteriaBuilder) ->
+                    criteriaBuilder.lessThanOrEqualTo(root.get("createdAt"), request.getCreatedTo()));
+        }
+
+        // Role filter
+        if (!CollectionUtils.isEmpty(request.getRoleIds())) {
+            spec = spec.and((root, query1, criteriaBuilder) -> {
+                Subquery<Long> subquery = query1.subquery(Long.class);
+                Root<UserRoleEntity> subRoot = subquery.from(UserRoleEntity.class);
+                subquery.select(subRoot.get("userEntity").get("id"));
+                subquery.where(
+                        criteriaBuilder.and(
+                                subRoot.get("roleEntity").get("id").in(request.getRoleIds()),
+                                criteriaBuilder.or(
+                                        criteriaBuilder.isNull(subRoot.get("expired_at")),
+                                        criteriaBuilder.greaterThan(subRoot.get("expired_at"), LocalDateTime.now())
+                                )
+                        )
+                );
+                return root.get("id").in(subquery);
+            });
         }
 
         return spec;

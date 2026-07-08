@@ -10,6 +10,15 @@ import lombok.experimental.SuperBuilder;
 
 import java.time.LocalDateTime;
 
+/**
+ * Liên kết giữa User và Role.
+ * Hỗ trợ:
+ * - Một user có nhiều role.
+ * - Theo dõi ai đã gán role và thời điểm gán.
+ * - Có thể đặt thời hạn cho role.
+ * - Hỗ trợ mở rộng ABAC thông qua scopeType và scopeId.
+ */
+
 @Entity
 @Table(name = "user_role")
 @Getter
@@ -19,15 +28,18 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class UserRoleEntity extends BaseEntity {
 
+    /** ID duy nhất được sinh bằng thuật toán Snowflake. */
     @Id
     @SnowflakeId
     @Column(name = "id", updatable = false, nullable = false)
     private Long id;
 
+    /** User duoc gan role */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)
     private UserEntity userEntity;
 
+//    Role duoc gan cho user
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "role_id", nullable = false)
     private RoleEntity roleEntity;
@@ -36,9 +48,11 @@ public class UserRoleEntity extends BaseEntity {
     @Column(name = "assigned_by")
     private Long assignedBy;
 
+//    Thoi diem gan role
     @Column(name = "assigned_at")
     private LocalDateTime assigned_at;
 
+//    Thoi diem het hieu luc
     @Column(name = "expired_at")
     private LocalDateTime expired_at;
 
@@ -46,6 +60,7 @@ public class UserRoleEntity extends BaseEntity {
     @Column(name = "scope_type", length = 50)
     private String scopeType;
 
+//    Id cua doi tuong thuoc pham vi ap dung ABAC
     @Column(name = "scope_id")
     private Long scopeId;
 }

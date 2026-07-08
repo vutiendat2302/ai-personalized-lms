@@ -3,9 +3,7 @@ package com.ailms.mapper;
 import com.ailms.entity.RoleEntity;
 import com.ailms.request.RoleRequest;
 import com.ailms.response.RoleResponse;
-import org.mapstruct.Mapper;
-import org.mapstruct.Mapping;
-import org.mapstruct.MappingTarget;
+import org.mapstruct.*;
 
 import java.util.List;
 
@@ -22,9 +20,9 @@ public interface RoleMapper {
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
     @Mapping(target = "rolePermissions", ignore = true)
-    @Mapping(target = "isSystem", ignore = true)
     RoleEntity toRoleEntity(RoleRequest request);
 
+    @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "createdBy", ignore = true)

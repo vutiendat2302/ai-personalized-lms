@@ -21,6 +21,7 @@ public class PermissionService {
 
     private final PermissionRepository permissionRepository;
     private final PermissionMapper permissionMapper;
+    private final com.ailms.repository.RolePermissionRepository rolePermissionRepository;
 
     @Transactional(readOnly = true)
     public Page<PermissionResponse> getPermissions(String entityFilter, String actionFilter, String search, Pageable pageable) {
@@ -63,6 +64,10 @@ public class PermissionService {
     public void deletePermission(Long id) {
         if (!permissionRepository.existsById(id)) {
             throw ResourceNotFoundException.of("Permission", id);
+        }
+        if (rolePermissionRepository.existsByPermissionEntity_Id(id)) {
+            long count = rolePermissionRepository.countByPermissionEntity_Id(id);
+            throw new com.ailms.exception.BusinessException("Permission đang được gán cho " + count + " role, không thể xóa");
         }
         permissionRepository.deleteById(id);
     }

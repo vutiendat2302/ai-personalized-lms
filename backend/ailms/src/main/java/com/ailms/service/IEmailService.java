@@ -37,4 +37,15 @@ public interface IEmailService {
      * @param changedAt Thời điểm đổi mật khẩu.
      */
     void sendPasswordChangedNotification(String toEmail, LocalDateTime changedAt);
+
+    /**
+     * Gửi email mời tham gia hệ thống.
+     * @param toEmail Email người nhận.
+     * @param inviteLink Đường dẫn kích hoạt tài khoản.
+     */
+    void sendInviteEmail(String toEmail, String inviteLink);
+
+
+    void sendSetPasswordEmail(String toEmail);
 }
+

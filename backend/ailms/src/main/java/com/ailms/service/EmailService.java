@@ -154,4 +154,35 @@ public class EmailService implements IEmailService {
             </div>
             """.formatted(formattedTime);
     }
+
+    @Override
+    public void sendInviteEmail(String toEmail, String inviteLink) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setTo(toEmail);
+            helper.setSubject("Lời mời tham gia hệ thống AILMS");
+            helper.setText(buildInviteEmailContent(inviteLink), true);
+            mailSender.send(message);
+        } catch (MessagingException e) {
+            throw new EmailSendException(toEmail);
+        }
+    }
+
+    private String buildInviteEmailContent(String inviteLink) {
+        return """
+                <div style="font-family: Arial, sans-serif;">
+                    <h2>Chào mừng bạn đến với AILMS</h2>
+                    <p>Bạn đã được mời tham gia hệ thống AILMS. Vui lòng click vào link bên dưới để đặt mật khẩu và kích hoạt tài khoản của bạn:</p>
+                    <p><a href="%s" style="display:inline-block; background-color:#4CAF50; color:white; padding:10px 20px; text-decoration:none; border-radius:5px;">Đặt mật khẩu và kích hoạt</a></p>
+                    <p>Link này có hiệu lực trong vòng 24 giờ.</p>
+                </div>
+                """.formatted(inviteLink);
+    }
+
+    @Override
+    public void sendSetPasswordEmail(String toEmail) {
+
+    }
 }
+

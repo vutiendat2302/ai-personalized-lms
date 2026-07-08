@@ -24,6 +24,7 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final IAuthService authService;
+    private final com.ailms.service.UserService userService;
 
     @Value("${app.jwt.refresh-expiration-ms}")
     private int refreshExpirationMs;
@@ -152,4 +153,14 @@ public class AuthController {
         authService.resetPassword(request);
         return ResponseEntity.ok(ApiResponse.message("Đặt lại mật khẩu thành công"));
     }
+
+//    /**
+//     * Đặt mật khẩu và kích hoạt tài khoản từ link mời.
+//     */
+//    @PostMapping("/complete-invite")
+//    public ResponseEntity<ApiResponse<Void>> completeInvite(@Valid @RequestBody com.ailms.request.CompleteInviteRequest request) {
+//        log.info("Đặt mật khẩu và kích hoạt tài khoản từ link mời");
+//        userService.completeInvite(request);
+//        return ResponseEntity.ok(ApiResponse.message("Đặt mật khẩu và kích hoạt tài khoản thành công."));
+//    }
 }
