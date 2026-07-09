@@ -12,6 +12,7 @@ import java.util.List;
 @Mapper(componentModel = "spring")
 public interface UserMapper {
 
+    @Mapping(target = "roles", ignore = true)
     UserResponse toUserResponse(UserEntity userEntity);
     
     List<UserResponse> toUserResponseList(List<UserEntity> userEntities);
@@ -21,6 +22,10 @@ public interface UserMapper {
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
+    @Mapping(target = "passwordHash", ignore = true)
+    @Mapping(target = "avatarUrl", ignore = true)
+    @Mapping(target = "attributes", ignore = true)
+    @Mapping(target = "lastLoginAt", ignore = true)
     UserEntity toUserEntity(CreateUserRequest request);
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)

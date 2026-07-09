@@ -24,7 +24,7 @@ public class EmailService implements IEmailService {
      */
     private final JavaMailSender mailSender;
 
-    @Value("${app.frontend.set-password.}")
+    @Value("${app.frontend.set-password}")
     private String frontendUrl;
     /**
      * Gửi email chứa mã OTP đến người dùng.
@@ -165,6 +165,7 @@ public class EmailService implements IEmailService {
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
             helper.setTo(toEmail);
             helper.setSubject("Lời mời tham gia hệ thống AILMS");
+            log.info("Gui loi moi toi email {}", toEmail);
             helper.setText(buildInviteEmailContent(inviteLink), true);
             mailSender.send(message);
         } catch (MessagingException e) {
@@ -190,7 +191,6 @@ public class EmailService implements IEmailService {
      * @param toEmail email của người nhận
      * @param token token dùng để xác thực yêu cầu thiết lập mật khẩu
      */
-    @Override
     public void sendSetPasswordEmail(String toEmail, String token) {
         try {
             String setPasswordLink = frontendUrl + "/set-password?token=" + token;

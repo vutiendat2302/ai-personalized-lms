@@ -4,6 +4,7 @@ import com.ailms.request.AssignPermissionsRequest;
 import com.ailms.request.RoleRequest;
 import com.ailms.request.CloneRoleRequest;
 import com.ailms.response.ApiResponse;
+import com.ailms.response.PermissionResponse;
 import com.ailms.response.RoleResponse;
 import com.ailms.response.UserResponse;
 import com.ailms.service.RoleService;
@@ -14,8 +15,10 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.stereotype.Repository;
 import org.springframework.web.bind.annotation.*;
 
+import javax.management.relation.Role;
 import java.util.List;
 
 @RestController
@@ -25,8 +28,7 @@ public class RoleController {
 
     private final RoleService roleService;
 
-    @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/page")
     public ResponseEntity<ApiResponse<Page<RoleResponse>>> getRoles(
             @RequestParam(required = false) Boolean isSystem,
             @RequestParam(required = false) String search,
@@ -35,15 +37,18 @@ public class RoleController {
         return ResponseEntity.ok(ApiResponse.of("Roles retrieved successfully", response));
     }
 
+    @GetMapping
+    public ResponseEntity<ApiResponse<List<RoleResponse>>> getAllRoles() {
+        return ResponseEntity.ok(ApiResponse.of("Get All Roles", roleService.getAllRoles()));
+    }
+
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<RoleResponse>> getRoleById(@PathVariable Long id) {
         RoleResponse response = roleService.getRoleById(id);
         return ResponseEntity.ok(ApiResponse.of("Role retrieved successfully", response));
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<RoleResponse>> createRole(@Valid @RequestBody RoleRequest request) {
         RoleResponse response = roleService.createRole(request);
         return ResponseEntity.status(HttpStatus.CREATED)
@@ -51,7 +56,6 @@ public class RoleController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<RoleResponse>> updateRole(
             @PathVariable Long id, @Valid @RequestBody RoleRequest request) {
         RoleResponse response = roleService.updateRole(id, request);
@@ -59,14 +63,12 @@ public class RoleController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deleteRole(@PathVariable Long id) {
         roleService.deleteRole(id);
         return ResponseEntity.ok(ApiResponse.message("Role deleted successfully"));
     }
 
     @PostMapping("/{id}/permissions")
-    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Void>> assignPermissions(
             @PathVariable Long id, @Valid @RequestBody AssignPermissionsRequest request) {
         roleService.assignPermissions(id, request);
@@ -74,7 +76,6 @@ public class RoleController {
     }
 
     @PostMapping("/{id}/clone")
-    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<RoleResponse>> cloneRole(
             @PathVariable Long id, @Valid @RequestBody CloneRoleRequest request) {
         RoleResponse response = roleService.cloneRole(id, request);
@@ -83,9 +84,13 @@ public class RoleController {
     }
 
     @GetMapping("/{id}/users")
-    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<List<UserResponse>>> getUsersByRoleId(@PathVariable Long id) {
         List<UserResponse> response = roleService.getUsersByRoleId(id);
         return ResponseEntity.ok(ApiResponse.of("Users under role retrieved successfully", response));
+    }
+
+    @GetMapping("/{roleId}/permissions")
+    public ResponseEntity<ApiResponse<List<PermissionResponse>>> getPermissionsByRoleId(@PathVariable Long roleId) {
+        return ResponseEntity.ok(ApiResponse.of("Permissions by role id completed", roleService.getPermissionsByRoleId(roleId)));
     }
 }

@@ -19,6 +19,5 @@ public class UserResponse {
     private LocalDateTime lastLoginAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-    // Roles mapped as list of role names or RoleResponse. For simplicity, just names.
     private List<String> roles;
 }

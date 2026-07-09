@@ -11,6 +11,7 @@ import com.ailms.response.JwtAuthenticationResponse;
 import com.ailms.security.CustomUserDetails;
 import com.ailms.security.CustomUserDetailsService;
 import com.ailms.security.JwtUtils;
+import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -182,7 +183,7 @@ public class AuthService implements IAuthService{ // login - register
         // Lấy thông tin người dùng đã xác thực
         CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
         userDetails.getUser().setLastLoginAt(LocalDateTime.now());
-        auditLogService.log("Login", "user", userDetails, null, null);
+        auditLogService.log("Login", "user", userDetails.getUser().getId(), null, null);
         return buildAuthResponse(userDetails, jwt, refreshToken);
     }
 
@@ -317,7 +318,7 @@ public class AuthService implements IAuthService{ // login - register
                             FORGOT_PASSWORD_OTP_TTL
                     );
                     emailService.sendResetPasswordOtpEmail(user.getEmail(), otp);
-                    auditLogService.log("Forgot Password", "User", user, null, null);
+                    auditLogService.log("Forgot Password", "User", user.getId(), null, null);
                 });
     }
 
@@ -355,7 +356,7 @@ public class AuthService implements IAuthService{ // login - register
         otpService.invalidateOtp(user.getEmail(), OTP_PURPOSE_FORGOT_PASSWORD);
 
         // Ghi nhận lịch sử thao tác
-        auditLogService.log("Reset Password", "User", user, null, null);
+        auditLogService.log("Reset Password", "User", user.getId(), null, null);
 
         invalidateAllTokens(user.getEmail());
 
@@ -390,8 +391,15 @@ public class AuthService implements IAuthService{ // login - register
         if (!jwtUtils.validateJwtToken(request.getToken())) {
             throw new InvalidTokenException("Liên kết thiết lập mật khẩu không hợp lệ hoặc đã hết hạn.");
         }
+        Claims claims =jwtUtils.getClaimsFromToken(request.getToken());
+        String tokenType = claims.get("type", String.class);
+        if (!"invite".equals(tokenType)) {
+            throw new InvalidTokenException(
+                    "Token không hợp lệ."
+            );
+        }
 
-        Long userId = jwtUtils.getUserIdFromJwtToken(request.getToken());
+        Long userId = Long.parseLong(claims.getSubject());
 
         UserEntity user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng."));
@@ -399,6 +407,8 @@ public class AuthService implements IAuthService{ // login - register
         user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
         user.setStatus(UserStatusEntity.ACTIVE);
         userRepository.save(user);
-        auditLogService.log("Set Password", "User", user, null, null);
+
+
+        auditLogService.log("Set Password", "User", user.getId(), null, null);
     }
 }

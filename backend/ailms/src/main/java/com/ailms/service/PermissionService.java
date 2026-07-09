@@ -17,15 +17,18 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
-public class PermissionService {
+public class PermissionService implements IPermissionService{
 
     private final PermissionRepository permissionRepository;
     private final PermissionMapper permissionMapper;
     private final RolePermissionRepository rolePermissionRepository;
 
     @Transactional(readOnly = true)
+    @Override
     public Page<PermissionResponse> getPermissions(String entityFilter, String actionFilter, String search,
             Pageable pageable) {
         Specification<PermissionEntity> spec = PermissionSpecification.filterAndSearch(entityFilter, actionFilter,
@@ -41,6 +44,7 @@ public class PermissionService {
     }
 
     @Transactional
+    @Override
     public PermissionResponse createPermission(PermissionRequest request) {
         if (permissionRepository.existsByName(request.getName())) {
             throw DuplicateResourceException.of("Permission", "name", request.getName());
@@ -55,6 +59,7 @@ public class PermissionService {
     }
 
     @Transactional
+    @Override
     public PermissionResponse updatePermission(Long id, PermissionRequest request) {
         PermissionEntity entity = permissionRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of("Permission", id));
@@ -72,6 +77,7 @@ public class PermissionService {
     }
 
     @Transactional
+    @Override
     public void deletePermission(Long id) {
         PermissionEntity entity = permissionRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of("Permission", id));
@@ -80,5 +86,10 @@ public class PermissionService {
             throw new BusinessException("Permission is assigned to " + count + " role(s), cannot delete");
         }
         permissionRepository.delete(entity);
+    }
+
+    @Override
+    public List<PermissionResponse> getAllPermissions() {
+        return permissionRepository.findAll().stream().map(permissionMapper::toPermissionResponse).toList();
     }
 }

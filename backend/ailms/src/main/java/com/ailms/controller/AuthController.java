@@ -154,15 +154,15 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.message("Đặt lại mật khẩu thành công"));
     }
 
-//    /**
-//     * Đặt mật khẩu và kích hoạt tài khoản từ link mời.
-//     */
-//    @PostMapping("/complete-invite")
-//    public ResponseEntity<ApiResponse<Void>> completeInvite(@Valid @RequestBody com.ailms.request.CompleteInviteRequest request) {
-//        log.info("Đặt mật khẩu và kích hoạt tài khoản từ link mời");
-//        userService.completeInvite(request);
-//        return ResponseEntity.ok(ApiResponse.message("Đặt mật khẩu và kích hoạt tài khoản thành công."));
-//    }
+    /**
+     * Đặt mật khẩu và kích hoạt tài khoản từ link mời.
+     */
+    @PostMapping("/complete-invite")
+    public ResponseEntity<ApiResponse<Void>> completeInvite(@Valid @RequestBody CompleteInviteRequest request) {
+        log.info("Đặt mật khẩu và kích hoạt tài khoản từ link mời");
+        userService.completeInvite(request);
+        return ResponseEntity.ok(ApiResponse.message("Đặt mật khẩu và kích hoạt tài khoản thành công."));
+    }
 
     @PostMapping("/set-password")
     public ResponseEntity<ApiResponse<Void>> setPassword(@Valid @RequestBody SetPasswordRequest request) {

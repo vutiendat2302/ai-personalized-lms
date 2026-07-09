@@ -1,13 +1,20 @@
 package com.ailms.service;
 
+import com.ailms.config.SimpleJsonWriter;
 import com.ailms.entity.AuditLogEntity;
-import com.ailms.entity.UserEntity;
+import com.ailms.exception.ResourceNotFoundException;
+import com.ailms.mapper.AuditLogMapper;
 import com.ailms.repository.AuditLogRepository;
 import com.ailms.repository.UserRepository;
+import com.ailms.repository.specification.AuditLogSpecification;
+import com.ailms.response.AuditLogResponse;
 import com.ailms.security.CustomUserDetails;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -16,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.request.RequestContextHolder;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -25,10 +33,12 @@ public class AuditLogService implements IAuditLogService{
     private final AuditLogRepository auditLogRepository;
     private final UserRepository userRepository;
     private final HttpServletRequest request;
+    private final AuditLogMapper auditLogMapper;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @Override
     public void log(String action, String entityType, Long entityId, Object oldValue, Object newValue) {
+        Long actorId = getCurrentUserIdFromSecurityContext();
         try {
             AuditLogEntity auditLog = new AuditLogEntity();
             auditLog.setAction(action);
@@ -36,30 +46,12 @@ public class AuditLogService implements IAuditLogService{
             auditLog.setEntityId(entityId);
             auditLog.setOccurredAt(LocalDateTime.now());
 
-            // Set current user if logged in
-            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-            if (auth != null && auth.getPrincipal() instanceof CustomUserDetails userDetails) {
-                UserEntity currentUser = userRepository.findById(userDetails.getUser().getId()).orElse(null);
-                auditLog.setUser(currentUser);
+            if (actorId != null) {
+                userRepository.findById(actorId).ifPresent(auditLog::setUser);
             }
 
-            // Set IP and User Agent
-            if (RequestContextHolder.getRequestAttributes() != null) {
-                String ip = request.getHeader("X-Forwarded-For");
-                if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-                    ip = request.getRemoteAddr();
-                }
-                auditLog.setIpAddress(ip);
-                auditLog.setUserAgent(request.getHeader("User-Agent"));
-            }
-//
-//            // Serialize old and new values
-//            if (oldValue != null) {
-//                auditLog.setOldValue(objectMapper.writeValueAsString(oldValue));
-//            }
-//            if (newValue != null) {
-//                auditLog.setNewValue(objectMapper.writeValueAsString(newValue));
-//            }
+            enrichRequestMetadata(auditLog);
+            serializeChanges(auditLog, oldValue, newValue);
 
             auditLogRepository.save(auditLog);
         } catch (Exception e) {
@@ -67,83 +59,72 @@ public class AuditLogService implements IAuditLogService{
         }
     }
 
-    @Transactional
-    @Override
-    public void log(String action, String entityType, CustomUserDetails userDetails, Object oldValue, Object newValue) {
-        try {
-            AuditLogEntity auditLog = new AuditLogEntity();
-            auditLog.setAction(action);
-            auditLog.setEntityType(entityType);
-            auditLog.setEntityId(userDetails.getUser().getId());
-            auditLog.setOccurredAt(LocalDateTime.now());
+    private Long getCurrentUserIdFromSecurityContext() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof CustomUserDetails userDetails) {
+            return userDetails.getUser().getId();
+        }
+        return null;
+    }
 
-            // Set current user if logged in
-            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-            UserEntity currentUser = userRepository.findById(userDetails.getUser().getId()).orElse(null);
-            auditLog.setUser(currentUser);
+    private void enrichRequestMetadata(AuditLogEntity auditLog) {
+        if (RequestContextHolder.getRequestAttributes() == null) {
+            return;
+        }
+        String ip = request.getHeader("X-Forwarded-For");
+        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+            ip = request.getRemoteAddr();
+        }
+        auditLog.setIpAddress(ip);
+        auditLog.setUserAgent(request.getHeader("User-Agent"));
+    }
 
-
-            // Set IP and User Agent
-            if (RequestContextHolder.getRequestAttributes() != null) {
-                String ip = request.getHeader("X-Forwarded-For");
-                if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-                    ip = request.getRemoteAddr();
-                }
-                auditLog.setIpAddress(ip);
-                auditLog.setUserAgent(request.getHeader("User-Agent"));
-            }
-//
-//            // Serialize old and new values
-//            if (oldValue != null) {
-//                auditLog.setOldValue(objectMapper.writeValueAsString(oldValue));
-//            }
-//            if (newValue != null) {
-//                auditLog.setNewValue(objectMapper.writeValueAsString(newValue));
-//            }
-
-            auditLogRepository.save(auditLog);
-        } catch (Exception e) {
-            log.error("Failed to save audit log: {}", e.getMessage(), e);
+    private void serializeChanges(AuditLogEntity auditLog, Object oldValue, Object newValue) {
+        if (oldValue != null) {
+            auditLog.setOldValue(safeWriteValueAsString(oldValue));
+        }
+        if (newValue != null) {
+            auditLog.setNewValue(safeWriteValueAsString(newValue));
         }
     }
 
-    @Transactional
-    @Override
-    public void log(String action, String entityType, UserEntity user, Object oldValue, Object newValue) {
+    private String safeWriteValueAsString(Object value) {
         try {
-            AuditLogEntity auditLog = new AuditLogEntity();
-            auditLog.setAction(action);
-            auditLog.setEntityType(entityType);
-            auditLog.setEntityId(user.getId());
-            auditLog.setOccurredAt(LocalDateTime.now());
-
-            // Set current user if logged in
-            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-            UserEntity currentUser = userRepository.findById(user.getId()).orElse(null);
-            auditLog.setUser(currentUser);
-
-
-            // Set IP and User Agent
-            if (RequestContextHolder.getRequestAttributes() != null) {
-                String ip = request.getHeader("X-Forwarded-For");
-                if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-                    ip = request.getRemoteAddr();
-                }
-                auditLog.setIpAddress(ip);
-                auditLog.setUserAgent(request.getHeader("User-Agent"));
-            }
-//
-//            // Serialize old and new values
-//            if (oldValue != null) {
-//                auditLog.setOldValue(objectMapper.writeValueAsString(oldValue));
-//            }
-//            if (newValue != null) {
-//                auditLog.setNewValue(objectMapper.writeValueAsString(newValue));
-//            }
-
-            auditLogRepository.save(auditLog);
+            return SimpleJsonWriter.toJson(value);
         } catch (Exception e) {
-            log.error("Failed to save audit log: {}", e.getMessage(), e);
+            log.warn("Failed to serialize audit log value: {}", e.getMessage());
+            return null;
         }
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public AuditLogResponse getByLogId(Long id) {
+        AuditLogEntity entity = auditLogRepository.findById(id)
+                .orElseThrow(() -> ResourceNotFoundException.of("AuditLog", id));
+        return auditLogMapper.toResponse(entity);
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public Page<AuditLogResponse> getAuditLogs(
+            String entityType, Long entityId, String action,
+            LocalDateTime start, LocalDateTime end, Pageable pageable) {
+        Specification<AuditLogEntity> spec = AuditLogSpecification.filterLogs(entityType, entityId, action, start, end);
+        return auditLogRepository.findAll(spec, pageable).map(auditLogMapper::toResponse);
+    }
+
+    @Override
+    public List<AuditLogResponse> getAllAuditLogs() {
+        return auditLogRepository.findAll().stream().map(auditLogMapper::toResponse).toList();
+    }
+
+    @Override
+    public List<AuditLogResponse> getAuditLogsByUserId(Long userId) {
+        List<AuditLogEntity> auditLogEntities = auditLogRepository.findByUser_Id(userId);
+        if (auditLogEntities.isEmpty()) {
+            throw ResourceNotFoundException.of("AuditLog", userId);
+        }
+        return auditLogMapper.toResponseList(auditLogEntities);
     }
 }

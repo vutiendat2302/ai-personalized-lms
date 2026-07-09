@@ -2,14 +2,10 @@ package com.ailms.service;
 
 import com.ailms.entity.*;
 import com.ailms.mapper.UserMapper;
-import com.ailms.mapper.AuditLogMapper;
 import com.ailms.repository.*;
 import com.ailms.repository.specification.UserSpecification;
-import com.ailms.repository.specification.AuditLogSpecification;
 import com.ailms.request.*;
-import com.ailms.response.CategoryResponse;
 import com.ailms.response.UserResponse;
-import com.ailms.response.AuditLogResponse;
 import com.ailms.response.EffectivePermissionResponse;
 import com.ailms.exception.DuplicateResourceException;
 import com.ailms.exception.ResourceNotFoundException;
@@ -17,22 +13,17 @@ import com.ailms.exception.BusinessException;
 import com.ailms.security.JwtUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
-import org.springframework.security.core.parameters.P;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import com.ailms.security.CustomUserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -45,14 +36,15 @@ public class UserService implements IUserService {
     private final UserRepository userRepository;
     private final UserRoleRepository userRoleRepository;
     private final RoleRepository roleRepository;
-    private final AuditLogRepository auditLogRepository;
     private final UserMapper userMapper;
-    private final AuditLogMapper auditLogMapper;
     private final IEmailService emailService;
     private final RedisTemplate<String, String> redisTemplate;
     private final PasswordEncoder passwordEncoder;
     private final IAuditLogService auditLogService;
     private final JwtUtils jwtUtils;
+
+    @Value("${app.frontend.set-password}/api/auth")
+    private String frontendUrl;
 
     @Transactional(readOnly = true)
     @Override
@@ -78,8 +70,6 @@ public class UserService implements IUserService {
 
     /**
      * Admin, hr tao tai khoan cho user
-     * @param request
-     * @return
      */
     @Transactional
     @Override
@@ -94,7 +84,7 @@ public class UserService implements IUserService {
             user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
             user.setStatus(request.getStatus() != null ? request.getStatus() : UserStatusEntity.ACTIVE);
         } else {
-            user.setPasswordHash(passwordEncoder.encode("A" + UUID.randomUUID().toString()));
+            user.setPasswordHash(passwordEncoder.encode("A" + UUID.randomUUID()));
             user.setStatus(UserStatusEntity.PENDING_VERIFICATION);
         }
 
@@ -104,6 +94,7 @@ public class UserService implements IUserService {
 
         if (!hasPassword) {
             String token = jwtUtils.generateSetPasswordToken(user.getId());
+            log.info("Invite JWT Token = {}", token);
             emailService.sendInviteEmail(user.getEmail(), token);
         }
 
@@ -113,6 +104,7 @@ public class UserService implements IUserService {
     }
 
     @Transactional
+    @Override
     public UserResponse updateProfile(Long userId, UpdateProfileRequest request) {
         UserEntity user = userRepository.findById(userId)
                 .orElseThrow(() -> ResourceNotFoundException.of("User", userId));
@@ -127,6 +119,7 @@ public class UserService implements IUserService {
 
 
     @Transactional
+    @Override
     public UserResponse updateUser(Long id, UpdateUserRequest request) {
         UserEntity user = userRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of("User", id));
@@ -140,6 +133,7 @@ public class UserService implements IUserService {
     }
 
     @Transactional
+    @Override
     public void deleteUser(Long id) {
         UserEntity user = userRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of("User", id));
@@ -161,7 +155,6 @@ public class UserService implements IUserService {
 
     /**
      * Gửi lời mời tạo tài khoản cho người dùng.
-     *
      * Quy trình:
      * 1. Kiểm tra email đã tồn tại trong hệ thống hay chưa.
      * 2. Nếu chưa tồn tại thì tạo tài khoản ở trạng thái INACTIVE.
@@ -171,6 +164,7 @@ public class UserService implements IUserService {
      * 6. Ghi Audit Log.
      */
     @Transactional
+    @Override
     public void inviteUser(InviteUserRequest request) {
         Optional<UserEntity> existingUserOpt = userRepository.findByEmail(request.getEmail());
         UserEntity user;
@@ -181,44 +175,31 @@ public class UserService implements IUserService {
                 throw new BusinessException("User account is already active or locked.");
             }
         } else {
+            log.info("Create User");
             user = new UserEntity();
             user.setUsername(request.getEmail());
 
             user.setEmail(request.getEmail());
             user.setStatus(UserStatusEntity.INACTIVE);
             user.setPasswordHash(passwordEncoder.encode(UUID.randomUUID().toString()));
+            log.info("Luu User");
             user = userRepository.save(user);
         }
 
-        // Vô hiệu hoá token cũ của email này nếu có trong Redis
-        String emailKey = "invite:email:" + request.getEmail();
-        String oldToken = redisTemplate.opsForValue().get(emailKey);
-        if (oldToken != null) {
-            redisTemplate.delete("invite:token:" + oldToken);
-        }
+        String token = jwtUtils.generateSetPasswordToken(user.getId());
+        log.info("Invite token = {}", token);
 
-        String token = UUID.randomUUID().toString();
-        String tokenKey = "invite:token:" + token;
-
-        String roleIdsStr = "";
-        if (request.getRoleIds() != null && !request.getRoleIds().isEmpty()) {
-            roleIdsStr = request.getRoleIds().stream().map(Object::toString).collect(Collectors.joining(","));
-        }
-
-        String value = request.getEmail() + "|" + roleIdsStr;
-        redisTemplate.opsForValue().set(tokenKey, value, Duration.ofHours(24));
-        redisTemplate.opsForValue().set(emailKey, token, Duration.ofHours(24));
-
+        log.info("send Invite");
         // Send Email invite link
-        String inviteLink = "http://localhost:8080/set-password?token=" + token;
+        String inviteLink = frontendUrl + "/set-password?token=" + token;
         emailService.sendInviteEmail(request.getEmail(), inviteLink);
 
+        log.info("Audit log");
         auditLogService.log("user_invited", "user", user.getId(), null, user);
     }
 
     /**
      * Hoàn tất quá trình kích hoạt tài khoản từ lời mời.
-     *
      * Quy trình:
      * 1. Kiểm tra token có hợp lệ và còn hiệu lực.
      * 2. Thiết lập mật khẩu cho người dùng.
@@ -228,6 +209,7 @@ public class UserService implements IUserService {
      * 6. Ghi Audit Log.
      */
     @Transactional
+    @Override
     public void completeInvite(CompleteInviteRequest request) {
         String tokenKey = "invite:token:" + request.getToken();
         String storedValue = redisTemplate.opsForValue().get(tokenKey);
@@ -277,16 +259,15 @@ public class UserService implements IUserService {
 
     /**
      * Xóa mềm nhiều người dùng cùng lúc.
-     *
      * Với mỗi người dùng:
      * - Kiểm tra tồn tại.
      * - Chuyển trạng thái sang DELETED.
      * - Vô hiệu hóa phiên đăng nhập.
      * - Ghi Audit Log.
-     *
      * Trả về số lượng thành công, thất bại và danh sách lỗi.
      */
     @Transactional
+    @Override
     public Map<String, Object> bulkDelete(BulkDeleteRequest request) {
         int successCount = 0;
         int failureCount = 0;
@@ -305,6 +286,7 @@ public class UserService implements IUserService {
                 successCount++;
                 continue;
             }
+            Long adminId = getCurrentUserId();
 
             try {
                 UserEntity oldState = userMapper.cloneUser(user);
@@ -313,7 +295,7 @@ public class UserService implements IUserService {
 
                 redisTemplate.opsForValue().set("invalidate:token:user:" + userId,
                         String.valueOf(System.currentTimeMillis()));
-                auditLogService.log("delete_user", "user", userId, oldState, user);
+                auditLogService.log("delete_user", "user", adminId, oldState, user);
 
                 successCount++;
             } catch (Exception e) {
@@ -330,12 +312,28 @@ public class UserService implements IUserService {
     }
 
     /**
-     * Gán một Role cho nhiều người dùng.
+     * Gán một role cho nhiều người dùng cùng lúc.
      *
-     * Chỉ gán nếu người dùng chưa có Role đó.
-     * Trả về kết quả thành công, thất bại và danh sách lỗi.
+     * <p>Quy trình:
+     * <ol>
+     *     <li>Kiểm tra role có tồn tại hay không.</li>
+     *     <li>Lấy ID của admin đang thực hiện thao tác.</li>
+     *     <li>Duyệt danh sách user cần gán role.</li>
+     *     <li>Kiểm tra user có tồn tại không.</li>
+     *     <li>Kiểm tra user đã có role này chưa.</li>
+     *     <li>Nếu chưa có thì tạo bản ghi UserRoleEntity.</li>
+     *     <li>Ghi nhận audit log cho từng lần gán role thành công.</li>
+     *     <li>Thống kê số lượng thành công, thất bại và danh sách lỗi.</li>
+     * </ol>
+     *
+     * @param request chứa roleId và danh sách userIds cần gán role
+     * @return kết quả xử lý gồm:
+     *         successCount - số user gán thành công
+     *         failureCount - số user thất bại
+     *         errors - danh sách lỗi chi tiết
      */
     @Transactional
+    @Override
     public Map<String, Object> bulkAssignRole(BulkAssignRoleRequest request) {
         int successCount = 0;
         int failureCount = 0;
@@ -384,43 +382,21 @@ public class UserService implements IUserService {
     }
 
     /**
-     * Lấy danh sách Audit Log theo các điều kiện lọc.
-     */
-    @Transactional(readOnly = true)
-    public Page<AuditLogResponse> getAuditLogs(
-            String entityType,
-            Long entityId,
-            String action,
-            LocalDateTime start,
-            LocalDateTime end,
-            Pageable pageable) {
-        Specification<AuditLogEntity> spec = AuditLogSpecification.filterLogs(entityType, entityId, action, start, end);
-        return auditLogRepository.findAll(spec, pageable).map(auditLogMapper::toResponse);
-    }
-
-    /**
      * Lấy toàn bộ Permission có hiệu lực của người dùng.
-     *
      * Permission được tổng hợp từ tất cả Role còn hiệu lực.
      * Nếu nhiều Role chứa cùng Permission thì chỉ trả về một lần.
      */
     @Transactional(readOnly = true)
+    @Override
     public List<EffectivePermissionResponse> getEffectivePermissions(Long userId) {
-        List<UserRoleEntity> userRoles = userRoleRepository.findByUserEntity_Id(userId);
-        LocalDateTime now = LocalDateTime.now();
-
-        // Filter valid non-expired user roles
-        List<UserRoleEntity> activeUserRoles = userRoles.stream()
-                .filter(ur -> ur.getExpired_at() == null || ur.getExpired_at().isAfter(now))
-                .collect(Collectors.toList());
-
+        List<UserRoleEntity> activeUserRoles = userRoleRepository.findActiveUserRoleWithPermissions(userId, LocalDateTime.now());
         Map<Long, EffectivePermissionResponse> permMap = new HashMap<>();
 
         for (UserRoleEntity ur : activeUserRoles) {
             RoleEntity role = ur.getRoleEntity();
             for (RolePermissionEntity rp : role.getRolePermissions()) {
                 PermissionEntity perm = rp.getPermissionEntity();
-                EffectivePermissionResponse resp = permMap.computeIfAbsent(perm.getId(), k -> {
+                EffectivePermissionResponse resp = permMap.computeIfAbsent(perm.getId(), _ -> {
                     EffectivePermissionResponse r = new EffectivePermissionResponse();
                     r.setPermissionId(perm.getId());
                     r.setPermissionName(perm.getName());
@@ -442,9 +418,16 @@ public class UserService implements IUserService {
 
     /**
      * Gán lại danh sách Role cho người dùng.
-     * Toàn bộ Role hiện tại sẽ được thay thế bằng danh sách mới.
+     * <p>Toàn bộ Role hiện tại sẽ bị xóa và được thay thế
+     * bằng danh sách Role mới được cung cấp.</p>
+     *
+     * <p>Được sử dụng trong luồng cập nhật quyền của người dùng.</p>
+     *
+     * @param userId   ID người dùng.
+     * @param request  Danh sách Role mới cần gán.
      */
     @Transactional
+    @Override
     public void assignRoles(Long userId, AssignRolesRequest request) {
         UserEntity user = userRepository.findById(userId)
                 .orElseThrow(() -> ResourceNotFoundException.of("User", userId));
@@ -461,17 +444,25 @@ public class UserService implements IUserService {
             RoleEntity role = roleRepository.findById(roleId)
                     .orElseThrow(() -> ResourceNotFoundException.of("Role", roleId));
 
-            UserRoleEntity ur = new UserRoleEntity();
-            ur.setUserEntity(user);
-            ur.setRoleEntity(role);
-            ur.setAssignedBy(currentAdminId);
-            ur.setAssigned_at(LocalDateTime.now());
+            UserRoleEntity ur = buildUserRole(user, role, currentAdminId);
             userRoleRepository.save(ur);
         }
 
-        auditLogService.log("assign_roles", "user", userId, null, request.getRoleIds());
+        auditLogService.log("assign_roles", "user", currentAdminId, null, request.getRoleIds());
     }
 
+    /**
+     * Gán danh sách Role ban đầu cho User mới tạo.
+     *
+     * <p>Phương thức chỉ thêm các Role được truyền vào,
+     * không xóa hoặc thay thế Role hiện có.</p>
+     *
+     * <p>Được sử dụng trong luồng tạo mới người dùng.</p>
+     *
+     * @param user     Người dùng cần gán Role.
+     * @param roleIds  Danh sách ID Role.
+     * @param adminId  ID quản trị viên thực hiện thao tác.
+     */
     private void assignRolesToUser(UserEntity user, List<Long> roleIds, Long adminId) {
         if (roleIds == null || roleIds.isEmpty()) {
             return;
@@ -506,6 +497,7 @@ public class UserService implements IUserService {
      * - Ghi Audit Log.
      */
     @Transactional
+    @Override
     public void verifyEmailChange(Long userId, VerifyEmailChangeRequest request) {
         String redisKey = "otp:change_email:" + userId;
         String storedValue = redisTemplate.opsForValue().get(redisKey);

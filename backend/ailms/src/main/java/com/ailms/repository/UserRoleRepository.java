@@ -5,9 +5,13 @@ import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.security.core.parameters.P;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
 
 @Repository
 public interface UserRoleRepository extends JpaRepository<UserRoleEntity, Long> {
@@ -27,5 +31,16 @@ public interface UserRoleRepository extends JpaRepository<UserRoleEntity, Long> 
     boolean existsByRoleEntity_Id(Long roleId);
 
     List<UserRoleEntity> findByRoleEntity_Id(Long roleId);
+
+
+    @Query("""
+        select distinct ur
+        from UserRoleEntity ur join fetch ur.roleEntity r 
+        join fetch r.rolePermissions rp
+        join fetch rp.permissionEntity p 
+        where ur.userEntity.id = :userId
+        and (ur.expired_at is null or ur.expired_at >: now)
+    """)
+    List<UserRoleEntity> findActiveUserRoleWithPermissions(@Param("userId") Long userId, @Param("now") LocalDateTime now);
 }
 

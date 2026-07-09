@@ -1,13 +1,9 @@
 package com.ailms.service;
 
 import com.ailms.request.*;
-import com.ailms.response.AuditLogResponse;
 import com.ailms.response.EffectivePermissionResponse;
 import com.ailms.response.UserResponse;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -39,72 +35,52 @@ public interface IUserService {
      * kem token moi co thoi gian, va link set password cho user
      * @param request email va role cho user duoc moi
      */
-//    void inviteUser(InviteUserRequest request);
-//
-//    /**
-//     * Hoàn tất quá trình được mời: xác thực token, cho user đặt password
-//     * và kích hoạt tài khoản (chuyển status = ACTIVE), gán role đã chuẩn bị sẵn.
-//     *
-//     * @param request token mời và password mới do user nhập
-//     */
-//    void completeInvite(CompleteInviteRequest request);
-//
-//    /**
-//     * Xóa mềm nhiều user cùng lúc. Xử lý theo từng phần tử (partial success),
-//     * user nào lỗi sẽ được ghi nhận lại thay vì làm fail toàn bộ batch.
-//     *
-//     * @param request danh sách id user cần xóa
-//     * @return kết quả tổng hợp gồm số lượng thành công/thất bại và chi tiết lỗi
-//     */
-//    Map<String, Object> bulkDelete(BulkDeleteRequest request);
-//
-//    /**
-//     * Gán 1 role cho nhiều user cùng lúc. User nào đã có role đó thì bỏ qua,
-//     * không tạo trùng. Xử lý theo kiểu partial success như bulkDelete.
-//     *
-//     * @param request danh sách id user và id role cần gán
-//     * @return kết quả tổng hợp gồm số lượng thành công/thất bại và chi tiết lỗi
-//     */
-//    Map<String, Object> bulkAssignRole(BulkAssignRoleRequest request);
-//
-//    /**
-//     * Truy vấn lịch sử thay đổi (audit log), hỗ trợ lọc theo loại entity, id entity,
-//     * loại hành động và khoảng thời gian.
-//     *
-//     * @param entityType loại đối tượng (VD: "user", "role"), có thể null nếu không lọc
-//     * @param entityId   id của đối tượng, có thể null nếu không lọc
-//     * @param action     loại hành động (VD: "create_user", "delete_user"), có thể null nếu không lọc
-//     * @param start      thời điểm bắt đầu, có thể null nếu không lọc
-//     * @param end        thời điểm kết thúc, có thể null nếu không lọc
-//     * @param pageable   thông tin phân trang
-//     * @return danh sách audit log đã phân trang
-//     */
-//    Page<AuditLogResponse> getAuditLogs(
-//            String entityType,
-//            Long entityId,
-//            String action,
-//            LocalDateTime start,
-//            LocalDateTime end,
-//            Pageable pageable);
-//
-//    /**
-//     * Tổng hợp toàn bộ permission hiệu lực (effective permissions) của 1 user,
-//     * gộp từ tất cả role đang active (chưa hết hạn) mà user đang có.
-//     * Mỗi permission trả về kèm danh sách role nào cung cấp nó, phục vụ tra cứu/kiểm tra quyền.
-//     *
-//     * @param userId id của user cần tra cứu quyền
-//     * @return danh sách permission tổng hợp, đã dedupe theo permission
-//     */
-//    List<EffectivePermissionResponse> getEffectivePermissions(Long userId);
-//
-//    /**
-//     * Gán lại toàn bộ role cho user (thay thế danh sách role hiện tại bằng danh sách mới).
-//     * Yêu cầu user luôn phải có ít nhất 1 role sau khi gán.
-//     *
-//     * @param userId  id của user
-//     * @param request danh sách id role mới muốn gán
-//     */
-//    void assignRoles(Long userId, AssignRolesRequest request);
+    void inviteUser(InviteUserRequest request);
+
+    /**
+     * Hoàn tất quá trình được mời: xác thực token, cho user đặt password
+     * và kích hoạt tài khoản (chuyển status = ACTIVE), gán role đã chuẩn bị sẵn.
+     *
+     * @param request token mời và password mới do user nhập
+     */
+    void completeInvite(CompleteInviteRequest request);
+
+    /**
+     * Xóa mềm nhiều user cùng lúc. Xử lý theo từng phần tử (partial success),
+     * user nào lỗi sẽ được ghi nhận lại thay vì làm fail toàn bộ batch.
+     *
+     * @param request danh sách id user cần xóa
+     * @return kết quả tổng hợp gồm số lượng thành công/thất bại và chi tiết lỗi
+     */
+    Map<String, Object> bulkDelete(BulkDeleteRequest request);
+
+    /**
+     * Gán 1 role cho nhiều user cùng lúc. User nào đã có role đó thì bỏ qua,
+     * không tạo trùng. Xử lý theo kiểu partial success như bulkDelete.
+     *
+     * @param request danh sách id user và id role cần gán
+     * @return kết quả tổng hợp gồm số lượng thành công/thất bại và chi tiết lỗi
+     */
+    Map<String, Object> bulkAssignRole(BulkAssignRoleRequest request);
+
+    /**
+     * Tổng hợp toàn bộ permission hiệu lực (effective permissions) của 1 user,
+     * gộp từ tất cả role đang active (chưa hết hạn) mà user đang có.
+     * Mỗi permission trả về kèm danh sách role nào cung cấp nó, phục vụ tra cứu/kiểm tra quyền.
+     *
+     * @param userId id của user cần tra cứu quyền
+     * @return danh sách permission tổng hợp, đã dedupe theo permission
+     */
+    List<EffectivePermissionResponse> getEffectivePermissions(Long userId);
+
+    /**
+     * Gán lại toàn bộ role cho user (thay thế danh sách role hiện tại bằng danh sách mới).
+     * Yêu cầu user luôn phải có ít nhất 1 role sau khi gán.
+     *
+     * @param userId  id của user
+     * @param request danh sách id role mới muốn gán
+     */
+    void assignRoles(Long userId, AssignRolesRequest request);
 
     /**
      * Cập nhật thông tin hồ sơ cá nhân của user (self-update, không đổi role/status).

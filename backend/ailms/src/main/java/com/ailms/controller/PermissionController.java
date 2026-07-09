@@ -13,6 +13,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/permissions")
 @RequiredArgsConstructor
@@ -20,8 +22,7 @@ public class PermissionController {
 
     private final PermissionService permissionService;
 
-    @GetMapping
-    @PreAuthorize("hasRole('ADMIN')")
+    @GetMapping("/page")
     public ResponseEntity<ApiResponse<Page<PermissionResponse>>> getPermissions(
             @RequestParam(required = false) String entity,
             @RequestParam(required = false) String action,
@@ -31,15 +32,18 @@ public class PermissionController {
         return ResponseEntity.ok(ApiResponse.of("Permissions retrieved successfully", response));
     }
 
+    @GetMapping
+    public ResponseEntity<ApiResponse<List<PermissionResponse>>> getAllPermissions() {
+        return ResponseEntity.ok(ApiResponse.of("Get All Permission successfully", permissionService.getAllPermissions()));
+    }
+
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<PermissionResponse>> getPermissionById(@PathVariable Long id) {
         PermissionResponse response = permissionService.getPermissionById(id);
         return ResponseEntity.ok(ApiResponse.of("Permission retrieved successfully", response));
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<PermissionResponse>> createPermission(@Valid @RequestBody PermissionRequest request) {
         PermissionResponse response = permissionService.createPermission(request);
         return ResponseEntity.status(HttpStatus.CREATED)
@@ -47,7 +51,6 @@ public class PermissionController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<PermissionResponse>> updatePermission(
             @PathVariable Long id, @Valid @RequestBody PermissionRequest request) {
         PermissionResponse response = permissionService.updatePermission(id, request);
@@ -55,7 +58,6 @@ public class PermissionController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deletePermission(@PathVariable Long id) {
         permissionService.deletePermission(id);
         return ResponseEntity.ok(ApiResponse.message("Permission deleted successfully"));
