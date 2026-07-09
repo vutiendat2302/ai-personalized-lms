@@ -45,7 +45,4 @@ public interface IEmailService {
      */
     void sendInviteEmail(String toEmail, String inviteLink);
 
-
-    void sendSetPasswordEmail(String toEmail);
 }
-

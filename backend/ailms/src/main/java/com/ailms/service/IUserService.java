@@ -30,7 +30,7 @@ public interface IUserService {
 
     List<UserResponse> getAllUsers();
     UserResponse getUserById(Long id);
-    UserResponse createUser(CreateUserRequest request, Long adminId);
+    UserResponse createUser(CreateUserRequest request);
     UserResponse updateUser(Long id, UpdateUserRequest request);
     void deleteUser(Long id);
 

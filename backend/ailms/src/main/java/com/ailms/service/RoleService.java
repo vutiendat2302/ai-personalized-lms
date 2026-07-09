@@ -3,8 +3,11 @@ package com.ailms.service;
 import com.ailms.entity.PermissionEntity;
 import com.ailms.entity.RoleEntity;
 import com.ailms.entity.RolePermissionEntity;
-import com.ailms.entity.UserRoleEntity;
 import com.ailms.entity.UserEntity;
+import com.ailms.entity.UserRoleEntity;
+import com.ailms.exception.BusinessException;
+import com.ailms.exception.DuplicateResourceException;
+import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.mapper.RoleMapper;
 import com.ailms.mapper.UserMapper;
 import com.ailms.repository.PermissionRepository;
@@ -13,8 +16,8 @@ import com.ailms.repository.RoleRepository;
 import com.ailms.repository.UserRoleRepository;
 import com.ailms.repository.specification.RoleSpecification;
 import com.ailms.request.AssignPermissionsRequest;
-import com.ailms.request.RoleRequest;
 import com.ailms.request.CloneRoleRequest;
+import com.ailms.request.RoleRequest;
 import com.ailms.response.RoleResponse;
 import com.ailms.response.UserResponse;
 import lombok.RequiredArgsConstructor;
@@ -23,11 +26,10 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import com.ailms.exception.DuplicateResourceException;
-import com.ailms.exception.ResourceNotFoundException;
-import com.ailms.exception.BusinessException;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -62,6 +64,7 @@ public class RoleService {
         if (roleRepository.existsByCode(request.getCode())) {
             throw DuplicateResourceException.of("Role", "code", request.getCode());
         }
+
         RoleEntity entity = roleMapper.toRoleEntity(request);
         entity = roleRepository.save(entity);
         return roleMapper.toRoleResponse(entity);
@@ -71,11 +74,10 @@ public class RoleService {
     public RoleResponse updateRole(Long id, RoleRequest request) {
         RoleEntity entity = roleRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of("Role", id));
-        
-        if (entity.getIsSystem()) {
+
+        if (Boolean.TRUE.equals(entity.getIsSystem())) {
             throw new BusinessException("Cannot update system role");
         }
-
         if (!entity.getName().equalsIgnoreCase(request.getName()) && roleRepository.existsByName(request.getName())) {
             throw DuplicateResourceException.of("Role", "name", request.getName());
         }
@@ -92,12 +94,12 @@ public class RoleService {
     public void deleteRole(Long id) {
         RoleEntity entity = roleRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of("Role", id));
-        if (entity.getIsSystem()) {
+        if (Boolean.TRUE.equals(entity.getIsSystem())) {
             throw new BusinessException("Cannot delete system role");
         }
         if (userRoleRepository.existsByRoleEntity_Id(id)) {
             long count = userRoleRepository.countByRoleEntity_Id(id);
-            throw new BusinessException("Role đang được " + count + " user sử dụng, vui lòng gỡ trước");
+            throw new BusinessException("Role is assigned to " + count + " user(s), please remove it before deleting");
         }
         roleRepository.delete(entity);
     }
@@ -123,12 +125,11 @@ public class RoleService {
 
         newRole = roleRepository.save(newRole);
 
-        // Copy permissions
-        for (RolePermissionEntity rp : original.getRolePermissions()) {
-            RolePermissionEntity newRp = new RolePermissionEntity();
-            newRp.setRoleEntity(newRole);
-            newRp.setPermissionEntity(rp.getPermissionEntity());
-            rolePermissionRepository.save(newRp);
+        for (RolePermissionEntity rolePermission : original.getRolePermissions()) {
+            RolePermissionEntity newRolePermission = new RolePermissionEntity();
+            newRolePermission.setRoleEntity(newRole);
+            newRolePermission.setPermissionEntity(rolePermission.getPermissionEntity());
+            rolePermissionRepository.save(newRolePermission);
         }
 
         return roleMapper.toRoleResponse(newRole);
@@ -139,14 +140,11 @@ public class RoleService {
         if (!roleRepository.existsById(roleId)) {
             throw ResourceNotFoundException.of("Role", roleId);
         }
+
         List<UserRoleEntity> userRoles = userRoleRepository.findByRoleEntity_Id(roleId);
-        return userRoles.stream().map(ur -> {
-            UserEntity user = ur.getUserEntity();
-            UserResponse response = userMapper.toUserResponse(user);
-            List<UserRoleEntity> urList = userRoleRepository.findByUserEntity_Id(user.getId());
-            response.setRoles(urList.stream().map(urItem -> urItem.getRoleEntity().getName()).collect(Collectors.toList()));
-            return response;
-        }).collect(Collectors.toList());
+        return userRoles.stream()
+                .map(this::toUserResponseWithRoles)
+                .collect(Collectors.toList());
     }
 
     @Transactional
@@ -155,29 +153,36 @@ public class RoleService {
                 .orElseThrow(() -> ResourceNotFoundException.of("Role", roleId));
 
         List<RolePermissionEntity> existing = rolePermissionRepository.findByRoleEntity_Id(roleId);
-        java.util.Set<Long> existingPermIds = existing.stream()
-                .map(rp -> rp.getPermissionEntity().getId())
+        Set<Long> existingPermissionIds = existing.stream()
+                .map(rolePermission -> rolePermission.getPermissionEntity().getId())
                 .collect(Collectors.toSet());
+        Set<Long> newPermissionIds = new HashSet<>(request.getPermissionIds());
 
-        java.util.Set<Long> newPermIds = new java.util.HashSet<>(request.getPermissionIds());
-
-        // Permissions to remove
         List<RolePermissionEntity> toRemove = existing.stream()
-                .filter(rp -> !newPermIds.contains(rp.getPermissionEntity().getId()))
+                .filter(rolePermission -> !newPermissionIds.contains(rolePermission.getPermissionEntity().getId()))
                 .collect(Collectors.toList());
         rolePermissionRepository.deleteAll(toRemove);
 
-        // Permissions to add
-        for (Long permId : newPermIds) {
-            if (!existingPermIds.contains(permId)) {
-                PermissionEntity permission = permissionRepository.findById(permId)
-                        .orElseThrow(() -> ResourceNotFoundException.of("Permission", permId));
+        for (Long permissionId : newPermissionIds) {
+            if (!existingPermissionIds.contains(permissionId)) {
+                PermissionEntity permission = permissionRepository.findById(permissionId)
+                        .orElseThrow(() -> ResourceNotFoundException.of("Permission", permissionId));
 
-                RolePermissionEntity rp = new RolePermissionEntity();
-                rp.setRoleEntity(role);
-                rp.setPermissionEntity(permission);
-                rolePermissionRepository.save(rp);
+                RolePermissionEntity rolePermission = new RolePermissionEntity();
+                rolePermission.setRoleEntity(role);
+                rolePermission.setPermissionEntity(permission);
+                rolePermissionRepository.save(rolePermission);
             }
         }
+    }
+
+    private UserResponse toUserResponseWithRoles(UserRoleEntity userRole) {
+        UserEntity user = userRole.getUserEntity();
+        UserResponse response = userMapper.toUserResponse(user);
+        List<UserRoleEntity> userRoles = userRoleRepository.findByUserEntity_Id(user.getId());
+        response.setRoles(userRoles.stream()
+                .map(item -> item.getRoleEntity().getName())
+                .collect(Collectors.toList()));
+        return response;
     }
 }

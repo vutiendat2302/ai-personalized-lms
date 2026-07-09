@@ -14,6 +14,7 @@ import com.ailms.response.EffectivePermissionResponse;
 import com.ailms.exception.DuplicateResourceException;
 import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.exception.BusinessException;
+import com.ailms.security.JwtUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -22,6 +23,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.parameters.P;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.core.Authentication;
@@ -49,8 +51,11 @@ public class UserService implements IUserService {
     private final IEmailService emailService;
     private final RedisTemplate<String, String> redisTemplate;
     private final PasswordEncoder passwordEncoder;
-    private final AuditLogService auditLogService;
+    private final IAuditLogService auditLogService;
+    private final JwtUtils jwtUtils;
 
+    @Transactional(readOnly = true)
+    @Override
     public Page<UserResponse> getUsers(UserSearchRequest request) {
         Specification<UserEntity> spec = UserSpecification.filterAndSearch(request);
         return userRepository.findAll(spec, request.toPageable()).map(this::mapToUserResponse);
@@ -63,6 +68,7 @@ public class UserService implements IUserService {
                 .toList();
     }
 
+    @Override
     public UserResponse getUserById(Long id) {
         UserEntity user = userRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of("User", id));
@@ -72,27 +78,23 @@ public class UserService implements IUserService {
 
     /**
      * Admin, hr tao tai khoan cho user
-     * 
      * @param request
-     * @param adminId
      * @return
      */
     @Transactional
-    public UserResponse createUser(CreateUserRequest request, Long adminId) {
+    @Override
+    public UserResponse createUser(CreateUserRequest request) {
         validateUniqueUsernameAndEmail(request.getUsername(), request.getEmail());
-        log.info("da check username");
         UserEntity user = userMapper.toUserEntity(request);
+        Long adminId = getCurrentUserId();
         user.setCreatedBy(adminId);
-        log.info("Da mapper Entity {}", user.getId());
+
         boolean hasPassword = request.getPassword() != null && !request.getPassword().isBlank();
         if (hasPassword) {
-
             user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
-            log.info("hash password {}", user.getPasswordHash());
             user.setStatus(request.getStatus() != null ? request.getStatus() : UserStatusEntity.ACTIVE);
         } else {
-            log.info("Deo co password");
-            user.setPasswordHash(passwordEncoder.encode(UUID.randomUUID().toString()));
+            user.setPasswordHash(passwordEncoder.encode("A" + UUID.randomUUID().toString()));
             user.setStatus(UserStatusEntity.PENDING_VERIFICATION);
         }
 
@@ -101,39 +103,28 @@ public class UserService implements IUserService {
         assignRolesToUser(user, request.getRoleIds(), adminId);
 
         if (!hasPassword) {
-            emailService.sendSetPasswordEmail(user.getEmail());
+            String token = jwtUtils.generateSetPasswordToken(user.getId());
+            emailService.sendInviteEmail(user.getEmail(), token);
         }
-        // Log audit
+
         auditLogService.log("create_user", "user", adminId, null, user);
 
         return mapToUserResponse(user);
     }
 
-    private void assignRolesToUser(UserEntity user, List<Long> roleIds, Long adminId) {
-        if (roleIds == null || roleIds.isEmpty()) {
-            return;
-        }
-        List<RoleEntity> roles = roleRepository.findAllById(roleIds);
-        if (roles.size() != roleIds.size()) {
-            throw ResourceNotFoundException.of("Role");
-        }
+    @Transactional
+    public UserResponse updateProfile(Long userId, UpdateProfileRequest request) {
+        UserEntity user = userRepository.findById(userId)
+                .orElseThrow(() -> ResourceNotFoundException.of("User", userId));
 
-        List<UserRoleEntity> userRoles = roles.stream()
-                .map(role -> buildUserRole(user, role, adminId))
-                .toList();
+        UserEntity oldUser = userMapper.cloneUser(user);
+        userMapper.updateUserProfile(user, request);
+        user = userRepository.save(user);
 
-        userRoleRepository.saveAll(userRoles);
-
+        auditLogService.log("update_profile", "user", userId, oldUser, user);
+        return mapToUserResponse(user);
     }
 
-    private UserRoleEntity buildUserRole(UserEntity user, RoleEntity role, Long adminId) {
-        return UserRoleEntity.builder()
-                .userEntity(user)
-                .roleEntity(role)
-                .assignedBy(adminId)
-                .assigned_at(LocalDateTime.now())
-                .build();
-    }
 
     @Transactional
     public UserResponse updateUser(Long id, UpdateUserRequest request) {
@@ -141,12 +132,10 @@ public class UserService implements IUserService {
                 .orElseThrow(() -> ResourceNotFoundException.of("User", id));
 
         userMapper.updateUserEntity(user, request);
-
         user = userRepository.save(user);
 
         // Log audit
         auditLogService.log("update_user", "user", id, null, user);
-
         return mapToUserResponse(user);
     }
 
@@ -167,7 +156,6 @@ public class UserService implements IUserService {
         // Invalidate token / revoke session
         redisTemplate.opsForValue().set("invalidate:token:user:" + id, String.valueOf(System.currentTimeMillis()));
 
-        // Log audit
         auditLogService.log("delete_user", "user", id, oldState, user);
     }
 
@@ -195,6 +183,7 @@ public class UserService implements IUserService {
         } else {
             user = new UserEntity();
             user.setUsername(request.getEmail());
+
             user.setEmail(request.getEmail());
             user.setStatus(UserStatusEntity.INACTIVE);
             user.setPasswordHash(passwordEncoder.encode(UUID.randomUUID().toString()));
@@ -453,7 +442,6 @@ public class UserService implements IUserService {
 
     /**
      * Gán lại danh sách Role cho người dùng.
-     *
      * Toàn bộ Role hiện tại sẽ được thay thế bằng danh sách mới.
      */
     @Transactional
@@ -484,22 +472,34 @@ public class UserService implements IUserService {
         auditLogService.log("assign_roles", "user", userId, null, request.getRoleIds());
     }
 
-    @Transactional
-    public UserResponse updateProfile(Long userId, UpdateProfileRequest request) {
-        UserEntity user = userRepository.findById(userId)
-                .orElseThrow(() -> ResourceNotFoundException.of("User", userId));
+    private void assignRolesToUser(UserEntity user, List<Long> roleIds, Long adminId) {
+        if (roleIds == null || roleIds.isEmpty()) {
+            return;
+        }
+        List<RoleEntity> roles = roleRepository.findAllById(roleIds);
+        if (roles.size() != roleIds.size()) {
+            throw ResourceNotFoundException.of("Role");
+        }
 
-        UserEntity oldUser = userMapper.cloneUser(user);
-        userMapper.updateUserProfile(user, request);
-        user = userRepository.save(user);
+        List<UserRoleEntity> userRoles = roles.stream()
+                .map(role -> buildUserRole(user, role, adminId))
+                .toList();
 
-        auditLogService.log("update_profile", "user", userId, oldUser, user);
-        return mapToUserResponse(user);
+        userRoleRepository.saveAll(userRoles);
+
+    }
+
+    private UserRoleEntity buildUserRole(UserEntity user, RoleEntity role, Long adminId) {
+        return UserRoleEntity.builder()
+                .userEntity(user)
+                .roleEntity(role)
+                .assignedBy(adminId)
+                .assigned_at(LocalDateTime.now())
+                .build();
     }
 
     /**
      * Xác thực thay đổi địa chỉ email bằng mã OTP.
-     *
      * Sau khi xác thực thành công:
      * - Cập nhật email mới.
      * - Xóa OTP khỏi Redis.
@@ -529,15 +529,12 @@ public class UserService implements IUserService {
 
         user.setEmail(newEmail);
         userRepository.save(user);
-
         redisTemplate.delete(redisKey);
-
         auditLogService.log("verify_email_change", "user", userId, oldState, user);
     }
 
     /**
      * Kiểm tra Username và Email chưa tồn tại trong hệ thống.
-     *
      * Ném DuplicateResourceException nếu phát hiện dữ liệu trùng.
      */
     private void validateUniqueUsernameAndEmail(String username, String email) {
@@ -549,6 +546,7 @@ public class UserService implements IUserService {
         }
     }
 
+    // map entity -> response va lay role còn hiệu lực của user
     private UserResponse mapToUserResponse(UserEntity user) {
         log.info("map entity");
         UserResponse response = userMapper.toUserResponse(user);
@@ -560,9 +558,10 @@ public class UserService implements IUserService {
         return response;
     }
 
+    // lay id của user đang đăng nhập
     private Long getCurrentUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null && authentication.isAuthenticated() && !(authentication instanceof org.springframework.security.authentication.AnonymousAuthenticationToken)) {
+        if (authentication != null && authentication.isAuthenticated() && !(authentication instanceof AnonymousAuthenticationToken)) {
             Object principal = authentication.getPrincipal();
             if (principal instanceof CustomUserDetails userDetails) {
                 return userDetails.getUser().getId();

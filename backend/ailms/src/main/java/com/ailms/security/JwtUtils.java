@@ -5,6 +5,7 @@ import com.ailms.exception.TokenExpiredException;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
+import jakarta.validation.constraints.NotBlank;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
@@ -59,6 +60,8 @@ public class JwtUtils {
     @Value("${app.jwt.expiration-ms}") // access token
     private int jwtExpirationMs;
 
+    private final static int EXPIRATION_PASSWORD_TOKEN = 86400000;
+
     @Value("${app.jwt.refresh-expiration-ms}") // refresh token
     private int refreshExpirationMs;
 
@@ -94,6 +97,16 @@ public class JwtUtils {
                 .compact();
     }
 
+    public String generateSetPasswordToken(Long userId) {
+        return Jwts.builder()
+                .subject(userId.toString())
+                .claim("id", userId)
+                .issuedAt(new Date())
+                .expiration(new Date((new Date()).getTime() + EXPIRATION_PASSWORD_TOKEN))
+                .signWith(key(), Jwts.SIG.HS256) // login with key or jwt 256 (access token)
+                .compact();
+    }
+
     public String getUserNameFromJwtToken(String token) {
         return Jwts.parser().verifyWith(key()).build()
                 .parseSignedClaims(token).getPayload().getSubject();
@@ -123,5 +136,15 @@ public class JwtUtils {
         }
 
         return false;
+    }
+
+    public Long getUserIdFromJwtToken(String token) {
+        Claims claims = Jwts.parser()
+                .verifyWith(key())
+                .build()
+                .parseSignedClaims(token)
+                .getPayload();
+
+        return claims.get("id", Long.class);
     }
 }

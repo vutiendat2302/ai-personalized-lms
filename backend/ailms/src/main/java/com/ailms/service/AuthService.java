@@ -73,7 +73,8 @@ public class AuthService implements IAuthService{ // login - register
     private static final Duration FORGOT_PASSWORD_OTP_TTL = Duration.ofMinutes(3);
 
     private static final String INVALIDATE_TOKEN_PREFIX = "invalidate:token:user:";
-
+    private final IAuditLogService auditLogService;
+    private final UserService userService;
 
     /**
      * Đăng ký tài khoản mới.
@@ -180,6 +181,8 @@ public class AuthService implements IAuthService{ // login - register
 
         // Lấy thông tin người dùng đã xác thực
         CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
+        userDetails.getUser().setLastLoginAt(LocalDateTime.now());
+        auditLogService.log("Login", "user", userDetails, null, null);
         return buildAuthResponse(userDetails, jwt, refreshToken);
     }
 
@@ -205,7 +208,7 @@ public class AuthService implements IAuthService{ // login - register
         CustomUserDetails userDetails = (CustomUserDetails) customUserDetailsService.loadUserByUsername(username);
 
         // Tạo Authentication để sinh Access Token mới
-        UsernamePasswordAuthenticationToken authentication = 
+        UsernamePasswordAuthenticationToken authentication =
                 new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
 
         // Sinh Access Token và Refresh Token mới
@@ -289,7 +292,7 @@ public class AuthService implements IAuthService{ // login - register
         userEntity.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(userEntity);
 
-        saveAuditLog(userEntity, "CHANGE_PASSWORD");
+        auditLogService.log("Change Password", "User", userId, null, null);
         invalidateAllTokens(userEntity.getEmail());
 
         // Gửi email thông báo đổi mật khẩu thành công
@@ -314,7 +317,7 @@ public class AuthService implements IAuthService{ // login - register
                             FORGOT_PASSWORD_OTP_TTL
                     );
                     emailService.sendResetPasswordOtpEmail(user.getEmail(), otp);
-                    saveAuditLog(user, "FORGOT_PASSWORD_REQUEST");
+                    auditLogService.log("Forgot Password", "User", user, null, null);
                 });
     }
 
@@ -352,7 +355,7 @@ public class AuthService implements IAuthService{ // login - register
         otpService.invalidateOtp(user.getEmail(), OTP_PURPOSE_FORGOT_PASSWORD);
 
         // Ghi nhận lịch sử thao tác
-        saveAuditLog(user, "RESET_PASSWORD");
+        auditLogService.log("Reset Password", "User", user, null, null);
 
         invalidateAllTokens(user.getEmail());
 
@@ -362,16 +365,6 @@ public class AuthService implements IAuthService{ // login - register
     private void invalidateAllTokens(String email) {
         String invalidateKey = INVALIDATE_TOKEN_PREFIX + email;
         redisTemplate.opsForValue().set(invalidateKey, String.valueOf(System.currentTimeMillis()));
-    }
-
-    private void saveAuditLog(UserEntity user, String action) {
-        AuditLogEntity auditLog = new AuditLogEntity();
-        auditLog.setUser(user);
-        auditLog.setAction(action);
-        auditLog.setEntityType("user");
-        auditLog.setEntityId(user.getId());
-        auditLog.setOccurredAt(LocalDateTime.now());
-        auditLogRepository.save(auditLog);
     }
 
     @Override
@@ -385,5 +378,27 @@ public class AuthService implements IAuthService{ // login - register
                     );
                     emailService.sendResetPasswordOtpEmail(user.getEmail(), otp);
                 });
+    }
+
+    @Override
+    public void setPassword(SetPasswordRequest request) {
+        if (!request.getPassword().equals(request.getConfirmPassword())) {
+            throw new BadRequestException("Mật khẩu xác nhận không khớp.");
+        }
+
+        // Kiểm tra token
+        if (!jwtUtils.validateJwtToken(request.getToken())) {
+            throw new InvalidTokenException("Liên kết thiết lập mật khẩu không hợp lệ hoặc đã hết hạn.");
+        }
+
+        Long userId = jwtUtils.getUserIdFromJwtToken(request.getToken());
+
+        UserEntity user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng."));
+
+        user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+        user.setStatus(UserStatusEntity.ACTIVE);
+        userRepository.save(user);
+        auditLogService.log("Set Password", "User", user, null, null);
     }
 }

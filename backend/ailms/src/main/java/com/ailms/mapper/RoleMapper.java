@@ -19,6 +19,7 @@ public interface RoleMapper {
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
+    @Mapping(target = "isSystem", constant = "false")
     @Mapping(target = "rolePermissions", ignore = true)
     RoleEntity toRoleEntity(RoleRequest request);
 
@@ -28,6 +29,7 @@ public interface RoleMapper {
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
+    @Mapping(target = "isSystem", ignore = true)
     @Mapping(target = "rolePermissions", ignore = true)
     void updateRoleFromRequest(RoleRequest request, @MappingTarget RoleEntity entity);
 }

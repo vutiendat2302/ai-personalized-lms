@@ -163,4 +163,11 @@ public class AuthController {
 //        userService.completeInvite(request);
 //        return ResponseEntity.ok(ApiResponse.message("Đặt mật khẩu và kích hoạt tài khoản thành công."));
 //    }
+
+    @PostMapping("/set-password")
+    public ResponseEntity<ApiResponse<Void>> setPassword(@Valid @RequestBody SetPasswordRequest request) {
+        authService.setPassword(request);
+        return ResponseEntity.ok(
+                ApiResponse.message("Thiết lập mật khẩu thành công"));
+    }
 }

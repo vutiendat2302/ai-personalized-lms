@@ -9,7 +9,7 @@ spring:
   jpa:
     hibernate:
       ##(create, update, create-drop, validate)
-      ddl-auto: create
+      ddl-auto: update
     show-sql: true
     properties:
       hibernate:
@@ -47,6 +47,7 @@ app:
     refresh-expiration-ms: 604800000 # 7 days - thời gian sống của refresh token
   frontend:
     url: "http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:3000"
+    set-password: "http://localhost:8080"
   otp:
     expiration-minutes: 3
   cookie:

@@ -29,7 +29,6 @@ import java.util.Map;
 public class UserController {
 
     private final UserService userService;
-
     @GetMapping("/page")
     @PreAuthorize("hasRole('ROLE_M1')")
     public ResponseEntity<ApiResponse<Page<UserResponse>>> getUsers(
@@ -39,23 +38,20 @@ public class UserController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('ROLE_M1')")
     public ResponseEntity<ApiResponse<UserResponse>> getUserById(@PathVariable Long id) {
         UserResponse response = userService.getUserById(id);
         return ResponseEntity.ok(ApiResponse.of("User retrieved successfully", response));
     }
 
     @PostMapping("/{adminId}")
-    @PreAuthorize("hasRole('ROLE_M1')")
-    public ResponseEntity<ApiResponse<UserResponse>> createUser(@Valid @RequestBody CreateUserRequest request, @PathVariable Long adminId) {
-        UserResponse response = userService.createUser(request, adminId);
+    public ResponseEntity<ApiResponse<UserResponse>> createUser(@Valid @RequestBody CreateUserRequest request) {
+        UserResponse response = userService.createUser(request);
         log.info("create completed");
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.of("User created successfully", response));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('ROLE_M1')")
     public ResponseEntity<ApiResponse<UserResponse>> updateUser(
             @PathVariable Long id,
             @Valid @RequestBody UpdateUserRequest request) {
@@ -64,7 +60,6 @@ public class UserController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deleteUser(@PathVariable Long id) {
         userService.deleteUser(id);
         return ResponseEntity.ok(ApiResponse.message("User soft-deleted successfully"));
@@ -157,7 +152,6 @@ public class UserController {
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('ROLE_M1')")
     public ResponseEntity<ApiResponse<List<UserResponse>>> getAllUsers() {
         List<UserResponse> users = userService.getAllUsers();
         return ResponseEntity.ok(ApiResponse.of("Get all users successfully", users));

@@ -10,4 +10,7 @@ import java.util.Optional;
 @Repository
 public interface PermissionRepository extends JpaRepository<PermissionEntity, Long>, JpaSpecificationExecutor<PermissionEntity> {
     Optional<PermissionEntity> findByName(String name);
+    Optional<PermissionEntity> findByCode(String code);
+    boolean existsByName(String name);
+    boolean existsByCode(String code);
 }

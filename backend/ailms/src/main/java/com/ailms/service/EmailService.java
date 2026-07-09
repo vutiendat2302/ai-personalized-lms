@@ -4,6 +4,7 @@ import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
@@ -23,6 +24,8 @@ public class EmailService implements IEmailService {
      */
     private final JavaMailSender mailSender;
 
+    @Value("${app.frontend.set-password.}")
+    private String frontendUrl;
     /**
      * Gửi email chứa mã OTP đến người dùng.
      * @param toEmail Địa chỉ email người nhận
@@ -180,9 +183,57 @@ public class EmailService implements IEmailService {
                 """.formatted(inviteLink);
     }
 
-    @Override
-    public void sendSetPasswordEmail(String toEmail) {
 
+    /**
+     * Gửi email chứa liên kết thiết lập mật khẩu.
+     *
+     * @param toEmail email của người nhận
+     * @param token token dùng để xác thực yêu cầu thiết lập mật khẩu
+     */
+    @Override
+    public void sendSetPasswordEmail(String toEmail, String token) {
+        try {
+            String setPasswordLink = frontendUrl + "/set-password?token=" + token;
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setTo(toEmail);
+            helper.setSubject("Thiết lập mật khẩu tài khoản AILMS");
+            helper.setText(buildSetPasswordEmailContent(setPasswordLink), true);
+            mailSender.send(message);
+        } catch (MessagingException e) {
+            throw new EmailSendException(toEmail);
+        }
+    }
+
+    private String buildSetPasswordEmailContent(String setPasswordLink) {
+        return """
+        <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6;">
+            <h2>Chào mừng bạn đến với AILMS!</h2>
+            <p>Tài khoản của bạn đã được tạo thành công.</p>
+            <p>Vui lòng nhấn vào nút bên dưới để thiết lập mật khẩu và kích hoạt tài khoản:</p>
+            <p style="margin: 24px 0;">
+                <a href="%s"
+                   style="
+                       background-color:#2563eb;
+                       color:white;
+                       padding:12px 24px;
+                       text-decoration:none;
+                       border-radius:6px;
+                       display:inline-block;">
+                    Thiết lập mật khẩu
+                </a>
+            </p>
+            <p>Hoặc sao chép liên kết sau vào trình duyệt:</p>
+            <p>%s</p>
+            <p><strong>Lưu ý:</strong> Liên kết này sẽ hết hạn sau 24 giờ.</p>
+            <p>Nếu bạn không mong đợi email này, vui lòng bỏ qua.</p>
+            <br>
+            <p>Trân trọng,<br>
+            AILMS Team</p>
+        </body>
+        </html>
+        """.formatted(setPasswordLink, setPasswordLink);
     }
 }
 

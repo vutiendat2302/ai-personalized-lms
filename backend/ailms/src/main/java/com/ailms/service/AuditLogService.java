@@ -20,13 +20,14 @@ import java.time.LocalDateTime;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class AuditLogService {
+public class AuditLogService implements IAuditLogService{
 
     private final AuditLogRepository auditLogRepository;
     private final UserRepository userRepository;
     private final HttpServletRequest request;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Override
     public void log(String action, String entityType, Long entityId, Object oldValue, Object newValue) {
         try {
             AuditLogEntity auditLog = new AuditLogEntity();
@@ -41,6 +42,86 @@ public class AuditLogService {
                 UserEntity currentUser = userRepository.findById(userDetails.getUser().getId()).orElse(null);
                 auditLog.setUser(currentUser);
             }
+
+            // Set IP and User Agent
+            if (RequestContextHolder.getRequestAttributes() != null) {
+                String ip = request.getHeader("X-Forwarded-For");
+                if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+                    ip = request.getRemoteAddr();
+                }
+                auditLog.setIpAddress(ip);
+                auditLog.setUserAgent(request.getHeader("User-Agent"));
+            }
+//
+//            // Serialize old and new values
+//            if (oldValue != null) {
+//                auditLog.setOldValue(objectMapper.writeValueAsString(oldValue));
+//            }
+//            if (newValue != null) {
+//                auditLog.setNewValue(objectMapper.writeValueAsString(newValue));
+//            }
+
+            auditLogRepository.save(auditLog);
+        } catch (Exception e) {
+            log.error("Failed to save audit log: {}", e.getMessage(), e);
+        }
+    }
+
+    @Transactional
+    @Override
+    public void log(String action, String entityType, CustomUserDetails userDetails, Object oldValue, Object newValue) {
+        try {
+            AuditLogEntity auditLog = new AuditLogEntity();
+            auditLog.setAction(action);
+            auditLog.setEntityType(entityType);
+            auditLog.setEntityId(userDetails.getUser().getId());
+            auditLog.setOccurredAt(LocalDateTime.now());
+
+            // Set current user if logged in
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            UserEntity currentUser = userRepository.findById(userDetails.getUser().getId()).orElse(null);
+            auditLog.setUser(currentUser);
+
+
+            // Set IP and User Agent
+            if (RequestContextHolder.getRequestAttributes() != null) {
+                String ip = request.getHeader("X-Forwarded-For");
+                if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
+                    ip = request.getRemoteAddr();
+                }
+                auditLog.setIpAddress(ip);
+                auditLog.setUserAgent(request.getHeader("User-Agent"));
+            }
+//
+//            // Serialize old and new values
+//            if (oldValue != null) {
+//                auditLog.setOldValue(objectMapper.writeValueAsString(oldValue));
+//            }
+//            if (newValue != null) {
+//                auditLog.setNewValue(objectMapper.writeValueAsString(newValue));
+//            }
+
+            auditLogRepository.save(auditLog);
+        } catch (Exception e) {
+            log.error("Failed to save audit log: {}", e.getMessage(), e);
+        }
+    }
+
+    @Transactional
+    @Override
+    public void log(String action, String entityType, UserEntity user, Object oldValue, Object newValue) {
+        try {
+            AuditLogEntity auditLog = new AuditLogEntity();
+            auditLog.setAction(action);
+            auditLog.setEntityType(entityType);
+            auditLog.setEntityId(user.getId());
+            auditLog.setOccurredAt(LocalDateTime.now());
+
+            // Set current user if logged in
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            UserEntity currentUser = userRepository.findById(user.getId()).orElse(null);
+            auditLog.setUser(currentUser);
+
 
             // Set IP and User Agent
             if (RequestContextHolder.getRequestAttributes() != null) {

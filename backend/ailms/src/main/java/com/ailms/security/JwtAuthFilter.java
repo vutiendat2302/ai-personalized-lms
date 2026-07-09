@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -53,7 +54,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     /**
      * Thao tác với Redis để kiểm tra token có bị vô hiệu hóa không.
      */
-    private final org.springframework.data.redis.core.RedisTemplate<String, String> redisTemplate;
+    private final RedisTemplate<String, String> redisTemplate;
 
     /**
      * Xử lý xác thực JWT cho mỗi HTTP request.
