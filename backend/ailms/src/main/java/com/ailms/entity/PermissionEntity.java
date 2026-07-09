@@ -29,10 +29,10 @@ public class PermissionEntity extends BaseEntity {
      * Mã permission dạng "resource:action", VD: "course:create", "course:read",
      * "course:update:own" (chừa sẵn hậu tố ":own"/":any" để bước sang ABAC scope sau này).
      */
-    @Column(name = "name", nullable = false, unique = true, length = 100)
+    @Column(name = "name", nullable = false, unique = true, length = 50)
     private String name;
 
-    @Column(name = "code", nullable = false, unique = true, length = 30)
+    @Column(name = "code", nullable = false, unique = true, length = 50)
     private String code;
 
     @Column(name = "entity", nullable = false, length = 50)
@@ -41,6 +41,6 @@ public class PermissionEntity extends BaseEntity {
     @Column(name = "action", nullable = false, length = 50)
     private String action;
 
-    @Column(name = "description", length = 255)
+    @Column(name = "description")
     private String description;
 }

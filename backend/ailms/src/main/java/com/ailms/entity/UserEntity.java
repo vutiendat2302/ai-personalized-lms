@@ -2,16 +2,15 @@ package com.ailms.entity;
 
 import com.ailms.common.snowflake.SnowflakeId;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
+import lombok.experimental.SuperBuilder;
 
 import java.time.LocalDateTime;
 
 @Getter
 @Setter
 @Entity
+@SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
 @Table(name = "user", indexes = {
@@ -97,7 +96,8 @@ public class UserEntity extends BaseEntity{
      */
     @Column(name = "status")
     @Enumerated(EnumType.STRING)
-    private UserStatusEntity status;
+    @Builder.Default
+    private UserStatusEntity status = UserStatusEntity.INACTIVE;
 
     /**
      * Thời điểm người dùng đăng nhập gần nhất.

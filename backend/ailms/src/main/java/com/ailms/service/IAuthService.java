@@ -77,4 +77,9 @@ public interface IAuthService {
      * @return Thông báo kết quả.
      */
     void resendForgotPasswordOtp(String usernameOrEmail);
+
+    /**
+     *
+     */
+    void setPassword(SetPasswordRequest request);
 }

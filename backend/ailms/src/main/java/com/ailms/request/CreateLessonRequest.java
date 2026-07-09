@@ -3,12 +3,13 @@ package com.ailms.request;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.*;
+import lombok.experimental.SuperBuilder;
 
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
+@SuperBuilder
 public class CreateLessonRequest {
 
     @NotBlank(message = "Lesson name must not be blank")

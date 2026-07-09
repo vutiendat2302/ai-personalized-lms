@@ -1,5 +1,6 @@
 package com.ailms.exception;
 
+// Token khong hop le
 public class InvalidTokenException extends RuntimeException {
     public InvalidTokenException(String message) {
         super(message);

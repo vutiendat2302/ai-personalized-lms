@@ -24,6 +24,7 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final IAuthService authService;
+    private final com.ailms.service.UserService userService;
 
     @Value("${app.jwt.refresh-expiration-ms}")
     private int refreshExpirationMs;
@@ -151,5 +152,22 @@ public class AuthController {
         log.info("Yêu cầu đặt lại mật khẩu với OTP cho thông tin: {}", request.getUsernameOrEmail());
         authService.resetPassword(request);
         return ResponseEntity.ok(ApiResponse.message("Đặt lại mật khẩu thành công"));
+    }
+
+    /**
+     * Đặt mật khẩu và kích hoạt tài khoản từ link mời.
+     */
+    @PostMapping("/complete-invite")
+    public ResponseEntity<ApiResponse<Void>> completeInvite(@Valid @RequestBody CompleteInviteRequest request) {
+        log.info("Đặt mật khẩu và kích hoạt tài khoản từ link mời");
+        userService.completeInvite(request);
+        return ResponseEntity.ok(ApiResponse.message("Đặt mật khẩu và kích hoạt tài khoản thành công."));
+    }
+
+    @PostMapping("/set-password")
+    public ResponseEntity<ApiResponse<Void>> setPassword(@Valid @RequestBody SetPasswordRequest request) {
+        authService.setPassword(request);
+        return ResponseEntity.ok(
+                ApiResponse.message("Thiết lập mật khẩu thành công"));
     }
 }

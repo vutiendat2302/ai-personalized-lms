@@ -10,6 +10,12 @@ import lombok.experimental.SuperBuilder;
 
 import java.time.LocalDateTime;
 
+/**
+ * Liên kết giữa Role và Permission.
+ * Mỗi bản ghi biểu diễn một Permission được gán cho một Role.
+ * Cặp (role_id, permission_id) là duy nhất, tránh gán trùng Permission cho cùng một Role.
+ */
+
 @Entity
 @Table(name = "role_permission", uniqueConstraints = {
         @UniqueConstraint(name = "uk_role_permission", columnNames = {"role_id", "permission_id"})
@@ -34,4 +40,11 @@ public class RolePermissionEntity extends BaseEntity {
     @JoinColumn(name = "permission_id", nullable = false)
     private PermissionEntity permissionEntity;
 
+    // Nguoi gan permission cho role
+    @Column(name = "granted_by")
+    private Long grantedBy;
+
+    // Thoi diem gan permission cho role
+    @Column(name = "granted_at")
+    private LocalDateTime grantedAt;
 }
