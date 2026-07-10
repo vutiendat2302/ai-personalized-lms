@@ -11,25 +11,31 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 
 function App() {
   return (
-    <AuthProvider>
-      <Router>
-        <Routes>
-          <Route path="/" element={<Landing />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/verify-otp" element={<VerifyOtp />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
-          
-          <Route element={<ProtectedRoute />}>
-            <Route path="/dashboard" element={<Dashboard />} />
-            {/* Add more protected routes here */}
-          </Route>
-          
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Router>
-    </AuthProvider>
+    // Router quản lý điều hướng và URL của ứng dụng
+    <Router>
+      {/* Cung cấp trạng thái xác thực (user, token, login, logout)
+          cho toàn bộ các route bên trong */}
+      <AuthProvider>
+          <Routes>
+             {/* Public Routes - không yêu cầu đăng nhập */}
+            <Route path="/" element={<Landing />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/verify-otp" element={<VerifyOtp />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+            
+             {/* Protected Routes - yêu cầu người dùng đã xác thực */}
+            <Route element={<ProtectedRoute />}>
+              <Route path="/dashboard" element={<Dashboard />} />
+              {/* Add more protected routes here */}
+            </Route>
+
+            {/* Chuyển hướng các URL không hợp lệ về trang chủ */}
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+      </AuthProvider>
+    </Router>
   );
 }
 

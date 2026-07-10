@@ -14,8 +14,9 @@ export interface JwtAuthenticationResponse {
 
 export interface AuthUser {
   id: string;
+  username: string;
   email: string;
-  role: RoleCode;
+  roles: RoleCode[];
   permissions: string[];
 }
 
@@ -65,18 +66,14 @@ export interface VerifyOtpRequest {
   otp: string;
 }
 
-export interface ApiResponse<T> {
-  success: boolean;
-  message: string | null;
-  data: T;
-  timestamp: string;
+export interface CompleteInviteRequest {
+
+  token: string;
+  password: string;
 }
 
-export interface ErrorResponse {
-  timestamp: string;
-  status: number;
-  error: string;
-  message: string;
-  path: string;
-  details: string[] | null;
+export interface SetPasswordRequest {
+  token: string;
+  password: string;
+  confirmPassword: string;
 }
