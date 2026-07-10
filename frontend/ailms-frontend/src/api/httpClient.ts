@@ -1,6 +1,7 @@
 // api/httpClient.ts
 import axios from "axios";
-import type { ApiResponse, ErrorResponse, JwtAuthenticationResponse } from "@/types/jwtAuthentication";
+import type { JwtAuthenticationResponse } from "@/types/jwtAuthentication";
+import type { ApiResponse, ErrorResponse } from "@/types/base";
 
 /* ============================================================
  * ACCESS TOKEN
