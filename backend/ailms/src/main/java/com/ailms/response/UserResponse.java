@@ -1,7 +1,9 @@
 package com.ailms.response;
 
 import com.ailms.entity.UserStatusEntity;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -14,7 +16,8 @@ public class UserResponse {
     private String phone;
     private String avatarUrl;
     private Integer gender;
-    private LocalDateTime dateOfBirth;
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    private LocalDate dateOfBirth;
     private UserStatusEntity status;
     private LocalDateTime lastLoginAt;
     private LocalDateTime createdAt;

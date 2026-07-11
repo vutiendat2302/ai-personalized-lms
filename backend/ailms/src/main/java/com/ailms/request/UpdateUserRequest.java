@@ -31,4 +31,6 @@ public class UpdateUserRequest {
     private UserStatusEntity status;
 
     private List<Long> roleIds;
+
+    private String attributes;
 }

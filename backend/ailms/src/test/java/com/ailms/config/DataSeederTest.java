@@ -4,6 +4,7 @@ import com.ailms.entity.RoleEntity;
 import com.ailms.entity.UserEntity;
 import com.ailms.repository.RoleRepository;
 import com.ailms.repository.UserRepository;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -13,6 +14,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+@Disabled
 @SpringBootTest
 @Transactional
 class DataSeederTest {

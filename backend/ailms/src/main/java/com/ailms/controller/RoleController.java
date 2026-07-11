@@ -1,6 +1,7 @@
 package com.ailms.controller;
 
 import com.ailms.request.AssignPermissionsRequest;
+import com.ailms.request.PermissionRequest;
 import com.ailms.request.RoleRequest;
 import com.ailms.request.CloneRoleRequest;
 import com.ailms.response.ApiResponse;
@@ -92,5 +93,13 @@ public class RoleController {
     @GetMapping("/{roleId}/permissions")
     public ResponseEntity<ApiResponse<List<PermissionResponse>>> getPermissionsByRoleId(@PathVariable Long roleId) {
         return ResponseEntity.ok(ApiResponse.of("Permissions by role id completed", roleService.getPermissionsByRoleId(roleId)));
+    }
+
+    @PostMapping("/{id}/permissions/create")
+    public ResponseEntity<ApiResponse<PermissionResponse>> createAndAssignPermission(
+            @PathVariable Long id, @Valid @RequestBody PermissionRequest request) {
+        PermissionResponse response = roleService.createAndAssignPermission(id, request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.of("Permission created and assigned to role successfully", response));
     }
 }

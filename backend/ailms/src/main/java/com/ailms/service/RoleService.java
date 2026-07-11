@@ -18,6 +18,7 @@ import com.ailms.repository.UserRoleRepository;
 import com.ailms.repository.specification.RoleSpecification;
 import com.ailms.request.AssignPermissionsRequest;
 import com.ailms.request.CloneRoleRequest;
+import com.ailms.request.PermissionRequest;
 import com.ailms.request.RoleRequest;
 import com.ailms.response.PermissionResponse;
 import com.ailms.response.RoleResponse;
@@ -260,6 +261,28 @@ public class RoleService implements IRoleService {
         }
 
         return roleMapper.toRoleResponse(newRole);
+    }
+
+    @Transactional
+    @Override
+    public PermissionResponse createAndAssignPermission(Long roleId, PermissionRequest request) {
+        RoleEntity role = roleRepository.findById(roleId)
+                .orElseThrow(() -> ResourceNotFoundException.of("Role", roleId));
+
+        if (permissionRepository.existsByName(request.getName())) {
+            throw DuplicateResourceException.of("Permission", "name", request.getName());
+        }
+        if (permissionRepository.existsByCode(request.getCode())) {
+            throw DuplicateResourceException.of("Permission", "code", request.getCode());
+        }
+
+        PermissionEntity permission = permissionMapper.toPermissionEntity(request);
+        permission = permissionRepository.save(permission);
+
+        RolePermissionEntity rolePermission = buildRolePermission(role, permission);
+        rolePermissionRepository.save(rolePermission);
+
+        return permissionMapper.toPermissionResponse(permission);
     }
 
 }

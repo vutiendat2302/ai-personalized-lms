@@ -5,6 +5,7 @@ import com.ailms.response.ApiResponse;
 import com.ailms.response.UserResponse;
 import com.ailms.response.EffectivePermissionResponse;
 import com.ailms.security.CustomUserDetails;
+import com.ailms.service.IUserService;
 import com.ailms.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -24,7 +25,7 @@ import java.util.Map;
 @Slf4j
 public class UserController {
 
-    private final UserService userService;
+    private final IUserService userService;
 
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<UserResponse>> getUserById(@PathVariable Long id) {
@@ -33,7 +34,7 @@ public class UserController {
     }
 
     @PostMapping()
-    @PreAuthorize("hasRole('ROLE_M1')")
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
     public ResponseEntity<ApiResponse<UserResponse>> createUser(@Valid @RequestBody CreateUserRequest request) {
         UserResponse response = userService.createUser(request);
         log.info("create completed");

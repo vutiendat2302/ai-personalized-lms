@@ -17,6 +17,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.core.Authentication;
@@ -73,6 +74,7 @@ public class UserService implements IUserService {
      */
     @Transactional
     @Override
+    @PreAuthorize("hasAuthority('USER_CREATE')")
     public UserResponse createUser(CreateUserRequest request) {
         validateUniqueUsernameAndEmail(request.getUsername(), request.getEmail());
         UserEntity user = userMapper.toUserEntity(request);

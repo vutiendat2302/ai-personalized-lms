@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.*;
@@ -24,10 +25,11 @@ import java.util.stream.Collectors;
 @Configuration
 @RequiredArgsConstructor
 @Slf4j
+@Profile("seed")
 public class DataSeeder {
 
     private static final String ADMIN_ROLE_NAME = "ADMIN";
-    private static final String ADMIN_ROLE_CODE = "M1";
+    private static final String ADMIN_ROLE_CODE = "ADMIN";
     private static final String ADMIN_USERNAME = "admin123";
     private static final String ADMIN_EMAIL = "admin@gmail.com";
     private static final String ADMIN_DEFAULT_PASSWORD = "Password@123";

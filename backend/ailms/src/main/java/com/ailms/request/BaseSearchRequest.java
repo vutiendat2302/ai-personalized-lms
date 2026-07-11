@@ -25,9 +25,9 @@ public class BaseSearchRequest {
     private Integer size = DEFAULT_SIZE;
 
     /**
-     * Field để sort, vd: "name", "createdAt"
+     * Field để sort, vd: "id", "createdAt"
      */
-    private String sortBy = "name";
+    private String sortBy = "id";
 
     /**
      * ASC hoặc DESC
