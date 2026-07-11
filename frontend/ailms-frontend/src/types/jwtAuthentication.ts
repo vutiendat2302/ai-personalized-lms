@@ -18,6 +18,7 @@ export interface AuthUser {
   email: string;
   roles: RoleCode[];
   permissions: string[];
+  fullName?: string;
 }
 
 export interface AuthState {

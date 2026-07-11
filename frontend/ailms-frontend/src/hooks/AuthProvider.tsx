@@ -39,7 +39,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             username: res.username || "",
             email: res.email || "",
             roles: roleList,
-            permissions: res.permissions || []
+            permissions: res.permissions || [],
+            fullName: res.fullName || res.username || ""
           });
         }
       } catch (error) {
@@ -73,7 +74,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           username: res.username || "",
           email: res.email || "",
           roles: roleList,
-          permissions: res.permissions || []
+          permissions: res.permissions || [],
+          fullName: res.fullName || res.username || ""
         });
     }
   };

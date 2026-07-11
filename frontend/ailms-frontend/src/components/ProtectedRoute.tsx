@@ -27,8 +27,9 @@ import type { RoleCode } from "@/types/jwtAuthentication";
 
 // /* Props truyền vào ProtectedRoute */
 interface ProtectedRouteProps {
-  allowedRoles?: RoleCode[];
+  allowedRoles?: (RoleCode | string)[];
   allowedPermission?: string[];
+  allowPerimmision?: string[]; // Alias to handle potential typo in guidelines
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
@@ -58,7 +59,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   }
 
   const user = auth.user;
-  
+
   /* ==========================================================
    * KIỂM TRA PHÂN QUYỀN (RBAC)
    * ==========================================================
