@@ -1,17 +1,15 @@
 package com.ailms.service;
 
 import com.ailms.request.PermissionRequest;
+import com.ailms.request.PermissionSearchRequest;
 import com.ailms.response.PermissionResponse;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 
 public interface IPermissionService {
 
-    // Page, search, filter
-    Page<PermissionResponse> getPermissions(String entityFilter, String actionFilter, String search,
-                                                   Pageable pageable);
+    Page<PermissionResponse> getPermissions(PermissionSearchRequest request);
 
     // Get all
     List<PermissionResponse> getAllPermissions();

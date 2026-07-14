@@ -1,7 +1,6 @@
 package com.ailms.response;
 
-import com.ailms.entity.PaymentType;
-import com.ailms.entity.RateStatus;
+import com.ailms.entity.BaseStatusEnum;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.*;
 
@@ -21,8 +20,6 @@ public class TeachingRateResponse {
 
     private Long classId;
 
-    private PaymentType paymentType;
-
     private BigDecimal rate;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
@@ -31,7 +28,7 @@ public class TeachingRateResponse {
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime effectiveTo;
 
-    private RateStatus status;
+    private BaseStatusEnum status;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime createdAt;

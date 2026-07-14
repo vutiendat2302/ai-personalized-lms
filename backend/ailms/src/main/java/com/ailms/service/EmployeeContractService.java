@@ -6,6 +6,7 @@ import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.mapper.EmployeeContractMapper;
 import com.ailms.repository.EmployeeContractRepository;
 import com.ailms.repository.EmployeeRepository;
+import com.ailms.repository.FileMetadataRepository;
 import com.ailms.request.EmployeeContractRequest;
 import com.ailms.response.EmployeeContractResponse;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,7 @@ public class EmployeeContractService {
     private final EmployeeContractRepository employeeContractRepository;
     private final EmployeeRepository employeeRepository;
     private final EmployeeContractMapper employeeContractMapper;
+    private final FileMetadataRepository fileMetadataRepository;
 
     private static final String RESOURCE_NAME = "EmployeeContract";
 
@@ -54,6 +56,11 @@ public class EmployeeContractService {
         EmployeeContractEntity entity = employeeContractMapper.toEntity(request);
         entity.setEmployee(employee);
 
+        if (request.getFileUrl() != null) {
+            fileMetadataRepository.findByFileUrl(request.getFileUrl())
+                    .ifPresent(entity::setFileMetadata);
+        }
+
         EmployeeContractEntity saved = employeeContractRepository.save(entity);
         return employeeContractMapper.toResponse(saved);
     }
@@ -70,6 +77,16 @@ public class EmployeeContractService {
 
         employeeContractMapper.updateFromRequest(request, existing);
         existing.setEmployee(employee);
+
+        if (request.getFileUrl() != null) {
+            fileMetadataRepository.findByFileUrl(request.getFileUrl())
+                    .ifPresentOrElse(
+                            existing::setFileMetadata,
+                            () -> existing.setFileMetadata(null)
+                    );
+        } else {
+            existing.setFileMetadata(null);
+        }
 
         EmployeeContractEntity updated = employeeContractRepository.save(existing);
         return employeeContractMapper.toResponse(updated);

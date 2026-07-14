@@ -12,11 +12,14 @@ import java.util.List;
 @Mapper(componentModel = "spring")
 public interface EmployeeMapper {
 
+    @Mapping(source = "department.id", target = "departmentId")
+    @Mapping(source = "department.name", target = "departmentName")
     EmployeeResponse toResponse(EmployeeEntity entity);
 
     List<EmployeeResponse> toResponseList(List<EmployeeEntity> list);
 
     @Mapping(target = "userEntity", ignore = true)
+    @Mapping(target = "department", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
@@ -25,6 +28,7 @@ public interface EmployeeMapper {
 
     @Mapping(target = "userId", ignore = true)
     @Mapping(target = "userEntity", ignore = true)
+    @Mapping(target = "department", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)

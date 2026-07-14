@@ -1,19 +1,19 @@
 package com.ailms.service;
 
-import com.ailms.config.SimpleJsonWriter;
+import com.ailms.common.converter.SimpleJsonWriter;
 import com.ailms.entity.AuditLogEntity;
 import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.mapper.AuditLogMapper;
 import com.ailms.repository.AuditLogRepository;
 import com.ailms.repository.UserRepository;
 import com.ailms.repository.specification.AuditLogSpecification;
+import com.ailms.request.AuditLogSearchRequest;
 import com.ailms.response.AuditLogResponse;
 import com.ailms.security.CustomUserDetails;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -107,11 +107,9 @@ public class AuditLogService implements IAuditLogService{
 
     @Transactional(readOnly = true)
     @Override
-    public Page<AuditLogResponse> getAuditLogs(
-            String entityType, Long entityId, String action,
-            LocalDateTime start, LocalDateTime end, Pageable pageable) {
-        Specification<AuditLogEntity> spec = AuditLogSpecification.filterLogs(entityType, entityId, action, start, end);
-        return auditLogRepository.findAll(spec, pageable).map(auditLogMapper::toResponse);
+    public Page<AuditLogResponse> getAuditLogs(AuditLogSearchRequest request) {
+        Specification<AuditLogEntity> spec = AuditLogSpecification.filterAndSearch(request);
+        return auditLogRepository.findAll(spec, request.toPageable()).map(auditLogMapper::toResponse);
     }
 
     @Override
@@ -119,12 +117,16 @@ public class AuditLogService implements IAuditLogService{
         return auditLogRepository.findAll().stream().map(auditLogMapper::toResponse).toList();
     }
 
+    @Transactional(readOnly = true)
     @Override
-    public List<AuditLogResponse> getAuditLogsByUserId(Long userId) {
-        List<AuditLogEntity> auditLogEntities = auditLogRepository.findByUser_Id(userId);
-        if (auditLogEntities.isEmpty()) {
-            throw ResourceNotFoundException.of("AuditLog", userId);
+    public Page<AuditLogResponse> getAuditLogsByUserId(Long userId, AuditLogSearchRequest request) {
+        if (!userRepository.existsById(userId)) {
+            throw ResourceNotFoundException.of("User", userId);
         }
-        return auditLogMapper.toResponseList(auditLogEntities);
+        if (request == null) {
+            request = new AuditLogSearchRequest();
+        }
+        request.setUserId(userId);
+        return getAuditLogs(request);
     }
 }

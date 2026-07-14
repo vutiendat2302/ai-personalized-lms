@@ -2,39 +2,41 @@ package com.ailms.repository.specification;
 
 import com.ailms.entity.CourseEntity;
 import com.ailms.request.CourseSearchRequest;
-import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.util.StringUtils;
 
-import java.util.ArrayList;
-import java.util.List;
-
 public class CourseSpecification {
 
-    public static Specification<CourseEntity> build(CourseSearchRequest request) {
-        return (root, query, cb) -> {
-            List<Predicate> predicates = new ArrayList<>();
+    public static Specification<CourseEntity> filterAndSearch(CourseSearchRequest request) {
+        Specification<CourseEntity> spec = (root, query, criteriaBuilder) -> criteriaBuilder.conjunction();
 
-            if (StringUtils.hasText(request.getKeyword())) {
-                String keywordPattern = "%" + request.getKeyword().toLowerCase() + "%";
-                Predicate namePredicate = cb.like(cb.lower(root.get("name")), keywordPattern);
-                Predicate descPredicate = cb.like(cb.lower(root.get("description")), keywordPattern);
-                predicates.add(cb.or(namePredicate, descPredicate));
-            }
+        if (request == null) {
+            return spec;
+        }
 
-            if (request.getStatus() != null) {
-                predicates.add(cb.equal(root.get("status"), request.getStatus()));
-            }
+        if (StringUtils.hasText(request.getKeyword())) {
+            String pattern = "%" + request.getKeyword().toLowerCase() + "%";
+            spec = spec.and((root, query, criteriaBuilder) -> criteriaBuilder.or(
+                    criteriaBuilder.like(criteriaBuilder.lower(root.get("name")), pattern),
+                    criteriaBuilder.like(criteriaBuilder.lower(root.get("description")), pattern)
+            ));
+        }
 
-            if (request.getCreatedFrom() != null) {
-                predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), request.getCreatedFrom()));
-            }
+        if (request.getStatus() != null) {
+            spec = spec.and((root, query, criteriaBuilder) ->
+                    criteriaBuilder.equal(root.get("status"), request.getStatus()));
+        }
 
-            if (request.getCreatedTo() != null) {
-                predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), request.getCreatedTo()));
-            }
+        if (request.getCreatedFrom() != null) {
+            spec = spec.and((root, query, criteriaBuilder) ->
+                    criteriaBuilder.greaterThanOrEqualTo(root.get("createdAt"), request.getCreatedFrom()));
+        }
 
-            return cb.and(predicates.toArray(new Predicate[0]));
-        };
+        if (request.getCreatedTo() != null) {
+            spec = spec.and((root, query, criteriaBuilder) ->
+                    criteriaBuilder.lessThanOrEqualTo(root.get("createdAt"), request.getCreatedTo()));
+        }
+
+        return spec;
     }
 }

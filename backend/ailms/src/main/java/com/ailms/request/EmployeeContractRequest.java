@@ -1,7 +1,7 @@
 package com.ailms.request;
 
-import com.ailms.entity.ContractStatus;
-import com.ailms.entity.ContractType;
+import com.ailms.entity.BaseStatusEnum;
+import com.ailms.entity.ContractTypeEnum;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 
@@ -19,7 +19,7 @@ public class EmployeeContractRequest {
     @NotNull(message = "Employee ID is required")
     private Long employeeId;
 
-    private ContractType contractType;
+    private ContractTypeEnum contractTypeEnum;
 
     private LocalDate startDate;
 
@@ -29,7 +29,7 @@ public class EmployeeContractRequest {
 
     private String fileUrl;
 
-    private ContractStatus status;
+    private BaseStatusEnum status;
 
     private LocalDateTime signedAt;
 }

@@ -1,6 +1,6 @@
 package com.ailms.request;
 
-import com.ailms.entity.UserStatusEntity;
+import com.ailms.entity.UserStatusEnum;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.validation.constraints.*;
 import lombok.*;
@@ -19,10 +19,7 @@ public class CreateUserRequest {
 
     @NotBlank(message = "Username cannot be blank")
     @Size(min = 6, max = 50, message = "Username must be between 6 and 50 characters")
-    @Pattern(
-            regexp = "^[a-zA-Z0-9._-]+$",
-            message = "Username may only contain letters, numbers, dots (.), underscores (_) and hyphens (-)"
-    )
+    @Pattern(regexp = "^[a-zA-Z0-9._-]+$", message = "Username may only contain letters, numbers, dots (.), underscores (_) and hyphens (-)")
     private String username;
 
     @NotBlank(message = "Email cannot be blank")
@@ -43,7 +40,7 @@ public class CreateUserRequest {
     @Max(value = 2, message = "Gender is invalid")
     private Integer gender;
 
-    private UserStatusEntity status;
+    private UserStatusEnum status;
 
     private List<Long> roleIds;
 }

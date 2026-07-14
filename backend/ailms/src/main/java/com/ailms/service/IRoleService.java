@@ -2,20 +2,20 @@ package com.ailms.service;
 
 import com.ailms.request.AssignPermissionsRequest;
 import com.ailms.request.CloneRoleRequest;
+import com.ailms.request.PermissionRequest;
 import com.ailms.request.RoleRequest;
+import com.ailms.request.RoleSearchRequest;
 import com.ailms.response.PermissionResponse;
 import com.ailms.response.RoleResponse;
 import com.ailms.response.UserResponse;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 
 
 import java.util.List;
 
 public interface IRoleService {
 
-    // Page
-    Page<RoleResponse> getRoles(Boolean isSystem, String search, Pageable pageable);
+    Page<RoleResponse> getRoles(RoleSearchRequest request);
 
     List<RoleResponse> getAllRoles();
 
@@ -46,4 +46,9 @@ public interface IRoleService {
      * Clone role cung toan bo perimission tao mot role moi
      */
     RoleResponse cloneRole(Long roleId, CloneRoleRequest request);
+
+    /**
+     * Tạo một Permission mới và gán trực tiếp cho Role.
+     */
+    PermissionResponse createAndAssignPermission(Long roleId, PermissionRequest request);
 }

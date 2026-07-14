@@ -1,7 +1,7 @@
 package com.ailms.response;
 
-import com.ailms.entity.ContractStatus;
-import com.ailms.entity.ContractType;
+import com.ailms.entity.BaseStatusEnum;
+import com.ailms.entity.ContractTypeEnum;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.*;
 
@@ -20,7 +20,7 @@ public class EmployeeContractResponse {
 
     private Long employeeId;
 
-    private ContractType contractType;
+    private ContractTypeEnum contractTypeEnum;
 
     @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDate startDate;
@@ -32,7 +32,7 @@ public class EmployeeContractResponse {
 
     private String fileUrl;
 
-    private ContractStatus status;
+    private BaseStatusEnum status;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime signedAt;

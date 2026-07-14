@@ -1,10 +1,12 @@
 package com.ailms.service;
 
+import com.ailms.entity.DepartmentEntity;
 import com.ailms.entity.EmployeeEntity;
 import com.ailms.entity.UserEntity;
 import com.ailms.exception.DuplicateResourceException;
 import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.mapper.EmployeeMapper;
+import com.ailms.repository.DepartmentRepository;
 import com.ailms.repository.EmployeeRepository;
 import com.ailms.repository.UserRepository;
 import com.ailms.request.EmployeeRequest;
@@ -23,6 +25,7 @@ import java.util.List;
 public class EmployeeService {
 
     private final EmployeeRepository employeeRepository;
+    private final DepartmentRepository departmentRepository;
     private final UserRepository userRepository;
     private final EmployeeMapper employeeMapper;
 
@@ -57,6 +60,7 @@ public class EmployeeService {
 
         EmployeeEntity entity = employeeMapper.toEntity(request);
         entity.setUserEntity(user);
+        entity.setDepartment(resolveDepartment(request.getDepartmentId()));
 
         EmployeeEntity saved = employeeRepository.save(entity);
         return employeeMapper.toResponse(saved);
@@ -75,6 +79,7 @@ public class EmployeeService {
         }
 
         employeeMapper.updateFromRequest(request, existing);
+        existing.setDepartment(resolveDepartment(request.getDepartmentId()));
         EmployeeEntity updated = employeeRepository.save(existing);
         return employeeMapper.toResponse(updated);
     }
@@ -86,5 +91,13 @@ public class EmployeeService {
             throw ResourceNotFoundException.of(RESOURCE_NAME, id);
         }
         employeeRepository.deleteById(id);
+    }
+
+    private DepartmentEntity resolveDepartment(Long departmentId) {
+        if (departmentId == null) {
+            return null;
+        }
+        return departmentRepository.findById(departmentId)
+                .orElseThrow(() -> ResourceNotFoundException.of("Department", departmentId));
     }
 }

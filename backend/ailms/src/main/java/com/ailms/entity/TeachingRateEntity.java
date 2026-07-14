@@ -11,6 +11,9 @@ import lombok.experimental.SuperBuilder;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+/**
+ * Luu tru don gia giang day cua giang vien
+ */
 @Entity
 @Table(name = "teaching_rate")
 @Getter
@@ -32,20 +35,20 @@ public class TeachingRateEntity extends BaseEntity {
     @Column(name = "class_id", nullable = false)
     private Long classId;
 
-    @Column(name = "payment_type")
-    @Enumerated(EnumType.ORDINAL)
-    private PaymentType paymentType;
-
+//    Don gia duoc ap dung
     @Column(name = "rate", precision = 12, scale = 2)
     private BigDecimal rate;
 
+//    Thoi diem bat dau co hieu luc
     @Column(name = "effective_from")
     private LocalDateTime effectiveFrom;
 
+//    Thoi diem het hieu luc
     @Column(name = "effective_to")
     private LocalDateTime effectiveTo;
 
+//    Trang thai cua ban ghi don gia
     @Column(name = "status")
-    @Enumerated(EnumType.ORDINAL)
-    private RateStatus status;
+    @Enumerated(EnumType.STRING)
+    private BaseStatusEnum status;
 }

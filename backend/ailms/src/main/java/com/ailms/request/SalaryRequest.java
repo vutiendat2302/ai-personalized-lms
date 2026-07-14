@@ -1,12 +1,13 @@
 package com.ailms.request;
 
-import com.ailms.entity.SalaryStatus;
+import com.ailms.entity.SalaryStatusEnum;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 
 @Getter
 @Setter
@@ -19,7 +20,7 @@ public class SalaryRequest {
     private Long employeeId;
 
     @NotBlank(message = "Salary period is required")
-    private String period;
+    private YearMonth period;
 
     private BigDecimal baseSalary;
 
@@ -29,7 +30,7 @@ public class SalaryRequest {
 
     private BigDecimal totalSalary;
 
-    private SalaryStatus status;
+    private SalaryStatusEnum status;
 
     private LocalDateTime paidAt;
 }

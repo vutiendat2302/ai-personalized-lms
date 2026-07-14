@@ -6,6 +6,7 @@ import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.mapper.LessonResourceMapper;
 import com.ailms.repository.LessonRepository;
 import com.ailms.repository.LessonResourceRepository;
+import com.ailms.repository.FileMetadataRepository;
 import com.ailms.request.CreateResourceRequest;
 import com.ailms.request.UpdateResourceRequest;
 import com.ailms.response.ResourceResponse;
@@ -25,6 +26,7 @@ public class LessonResourceService implements ILessonResourceService {
     private final LessonResourceRepository lessonResourceRepository;
     private final LessonRepository lessonRepository;
     private final LessonResourceMapper lessonResourceMapper;
+    private final FileMetadataRepository fileMetadataRepository;
 
     @Override
     @Transactional
@@ -36,6 +38,11 @@ public class LessonResourceService implements ILessonResourceService {
 
         LessonResourceEntity entity = lessonResourceMapper.toEntity(request);
         entity.setLessonEntity(lesson);
+
+        if (request.getFileUrl() != null) {
+            fileMetadataRepository.findByFileUrl(request.getFileUrl())
+                    .ifPresent(entity::setFileMetadata);
+        }
 
         LessonResourceEntity savedEntity = lessonResourceRepository.save(entity);
         return lessonResourceMapper.toResponse(savedEntity);
@@ -50,6 +57,17 @@ public class LessonResourceService implements ILessonResourceService {
                 .orElseThrow(() -> new ResourceNotFoundException("Resource not found with id: " + id));
 
         lessonResourceMapper.updateEntityFromRequest(request, existingEntity);
+
+        if (request.getFileUrl() != null) {
+            fileMetadataRepository.findByFileUrl(request.getFileUrl())
+                    .ifPresentOrElse(
+                            existingEntity::setFileMetadata,
+                            () -> existingEntity.setFileMetadata(null)
+                    );
+        } else {
+            existingEntity.setFileMetadata(null);
+        }
+
         LessonResourceEntity updatedEntity = lessonResourceRepository.save(existingEntity);
         return lessonResourceMapper.toResponse(updatedEntity);
     }

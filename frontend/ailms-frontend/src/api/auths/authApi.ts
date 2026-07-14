@@ -1,7 +1,6 @@
 // api/auth/authApi.ts
 import httpClient from "@/api/httpClient";
 import type {
-    ApiResponse,
     JwtAuthenticationResponse,
     LoginRequest,
     RegisterRequest,
@@ -9,7 +8,11 @@ import type {
     ChangePasswordRequest,
     ForgotPasswordRequest,
     ResetPasswordRequest,
+    CompleteInviteRequest,
+    SetPasswordRequest,
 } from "@/types/jwtAuthentication";
+
+import type { ApiResponse } from "@/types/base";
 
 export const authApi = {
     login: (payload: LoginRequest) =>
@@ -38,6 +41,10 @@ export const authApi = {
 
     resetPassword: (payload: ResetPasswordRequest) =>
         httpClient.post<ApiResponse<null>>("/auth/reset-password", payload),
+
+    completeInvite: (payload: CompleteInviteRequest) => httpClient.post<ApiResponse<null>>("/auth/complete-invite", payload),
+    
+    setPassword: (payload: SetPasswordRequest) => httpClient.post<ApiResponse<null>>("/auth/set-password", payload),
 
     logout: () => httpClient.post<ApiResponse<null>>("/auth/logout"),
 };

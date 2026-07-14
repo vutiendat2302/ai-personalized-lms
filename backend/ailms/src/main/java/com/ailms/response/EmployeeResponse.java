@@ -1,7 +1,7 @@
 package com.ailms.response;
 
-import com.ailms.entity.EmployeeStatus;
-import com.ailms.entity.EmploymentType;
+import com.ailms.entity.EmployeeStatusEnum;
+import com.ailms.entity.EmploymentTypeEnum;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.*;
 
@@ -20,9 +20,11 @@ public class EmployeeResponse {
 
     private Long departmentId;
 
+    private String departmentName;
+
     private String position;
 
-    private EmploymentType employmentType;
+    private EmploymentTypeEnum employmentTypeEnum;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime startDate;
@@ -30,7 +32,7 @@ public class EmployeeResponse {
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime endDate;
 
-    private EmployeeStatus status;
+    private EmployeeStatusEnum status;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime createdAt;

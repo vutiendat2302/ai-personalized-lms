@@ -1,24 +1,22 @@
 package com.ailms.controller;
 
 import com.ailms.request.AssignPermissionsRequest;
+import com.ailms.request.PermissionRequest;
 import com.ailms.request.RoleRequest;
 import com.ailms.request.CloneRoleRequest;
+import com.ailms.request.RoleSearchRequest;
 import com.ailms.response.ApiResponse;
 import com.ailms.response.PermissionResponse;
 import com.ailms.response.RoleResponse;
 import com.ailms.response.UserResponse;
-import com.ailms.service.RoleService;
+import com.ailms.service.IRoleService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.stereotype.Repository;
 import org.springframework.web.bind.annotation.*;
-
-import javax.management.relation.Role;
 import java.util.List;
 
 @RestController
@@ -26,14 +24,11 @@ import java.util.List;
 @RequiredArgsConstructor
 public class RoleController {
 
-    private final RoleService roleService;
+    private final IRoleService roleService;
 
     @GetMapping("/page")
-    public ResponseEntity<ApiResponse<Page<RoleResponse>>> getRoles(
-            @RequestParam(required = false) Boolean isSystem,
-            @RequestParam(required = false) String search,
-            Pageable pageable) {
-        Page<RoleResponse> response = roleService.getRoles(isSystem, search, pageable);
+    public ResponseEntity<ApiResponse<Page<RoleResponse>>> getRoles(RoleSearchRequest request) {
+        Page<RoleResponse> response = roleService.getRoles(request);
         return ResponseEntity.ok(ApiResponse.of("Roles retrieved successfully", response));
     }
 
@@ -68,6 +63,7 @@ public class RoleController {
         return ResponseEntity.ok(ApiResponse.message("Role deleted successfully"));
     }
 
+// Gán permissions cho role
     @PostMapping("/{id}/permissions")
     public ResponseEntity<ApiResponse<Void>> assignPermissions(
             @PathVariable Long id, @Valid @RequestBody AssignPermissionsRequest request) {
@@ -92,5 +88,13 @@ public class RoleController {
     @GetMapping("/{roleId}/permissions")
     public ResponseEntity<ApiResponse<List<PermissionResponse>>> getPermissionsByRoleId(@PathVariable Long roleId) {
         return ResponseEntity.ok(ApiResponse.of("Permissions by role id completed", roleService.getPermissionsByRoleId(roleId)));
+    }
+
+    @PostMapping("/{id}/permissions/create")
+    public ResponseEntity<ApiResponse<PermissionResponse>> createAndAssignPermission(
+            @PathVariable Long id, @Valid @RequestBody PermissionRequest request) {
+        PermissionResponse response = roleService.createAndAssignPermission(id, request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.of("Permission created and assigned to role successfully", response));
     }
 }

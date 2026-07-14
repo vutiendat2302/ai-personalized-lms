@@ -1,8 +1,7 @@
 package com.ailms.service;
 
-import com.ailms.entity.AuditLogEntity;
 import com.ailms.entity.UserEntity;
-import com.ailms.entity.UserStatusEntity;
+import com.ailms.entity.UserStatusEnum;
 import com.ailms.exception.*;
 import com.ailms.repository.AuditLogRepository;
 import com.ailms.repository.UserRepository;
@@ -98,7 +97,7 @@ public class AuthService implements IAuthService{ // login - register
         userEntity.setUsername(request.getUsername());
         userEntity.setEmail(request.getEmail());
         userEntity.setFullName(request.getFullName());
-        userEntity.setStatus(UserStatusEntity.ACTIVE);
+        userEntity.setStatus(UserStatusEnum.ACTIVE);
         userEntity.setGender(request.getGender());
         // atStartOfDay: format LocalDate -> LocalDatetime
         if (request.getDateOfBirth() != null) {
@@ -107,7 +106,7 @@ public class AuthService implements IAuthService{ // login - register
             userEntity.setDateOfBirth(null);
         }
         // Chưa xác thực email -> chưa cho login
-        userEntity.setStatus(UserStatusEntity.PENDING_VERIFICATION);
+        userEntity.setStatus(UserStatusEnum.PENDING_VERIFICATION);
         userEntity.setPhone(request.getPhone());
         // Mã hóa mật khẩu trước khi lưu
         userEntity.setPasswordHash(passwordEncoder.encode(request.getPassword()));
@@ -132,7 +131,7 @@ public class AuthService implements IAuthService{ // login - register
         UserEntity userEntity = userRepository.findByUsernameOrEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy tài khoản với email: " + email));
 
-        userEntity.setStatus(UserStatusEntity.ACTIVE);
+        userEntity.setStatus(UserStatusEnum.ACTIVE);
         userRepository.save(userEntity);
 
         // Xoá OTP sau khi dùng, tránh verify lại nhiều lần bằng mã cũ
@@ -147,7 +146,7 @@ public class AuthService implements IAuthService{ // login - register
         UserEntity userEntity = userRepository.findByUsernameOrEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy tài khoản với email: " + email));
 
-        if (userEntity.getStatus() == UserStatusEntity.ACTIVE) {
+        if (userEntity.getStatus() == UserStatusEnum.ACTIVE) {
             throw new BusinessException("Tài khoản đã được xác thực trước đó.");
         }
 
@@ -405,7 +404,7 @@ public class AuthService implements IAuthService{ // login - register
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng."));
 
         user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
-        user.setStatus(UserStatusEntity.ACTIVE);
+        user.setStatus(UserStatusEnum.ACTIVE);
         userRepository.save(user);
 
 

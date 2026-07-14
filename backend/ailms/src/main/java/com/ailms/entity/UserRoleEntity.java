@@ -50,11 +50,11 @@ public class UserRoleEntity extends BaseEntity {
 
 //    Thoi diem gan role
     @Column(name = "assigned_at")
-    private LocalDateTime assigned_at;
+    private LocalDateTime assignedAt;
 
 //    Thoi diem het hieu luc
     @Column(name = "expired_at")
-    private LocalDateTime expired_at;
+    private LocalDateTime expiredAt;
 
     /** Chỗ trống cho ABAC sau này: giới hạn role theo phạm vi, VD: courseId cụ thể. Để null = áp dụng toàn hệ thống. */
     @Column(name = "scope_type", length = 50)

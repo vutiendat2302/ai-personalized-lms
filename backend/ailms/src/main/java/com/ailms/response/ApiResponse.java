@@ -68,7 +68,6 @@ public class ApiResponse<T> {
 
     /**
      * Tạo phản hồi API chỉ chứa dữ liệu.
-     *
      * @param data Dữ liệu trả về.
      * @return Đối tượng {@link ApiResponse}.
      */

@@ -31,6 +31,10 @@ public class LessonResourceEntity extends BaseEntity {
     @Column(name = "file_url", nullable = false, length = 500)
     private String fileUrl;
 
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "file_metadata_id")
+    private FileMetadataEntity fileMetadata;
+
     /**
      * PDF / ZIP / DOCX / PPTX
      */

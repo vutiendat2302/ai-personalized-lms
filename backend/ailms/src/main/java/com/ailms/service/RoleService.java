@@ -18,13 +18,14 @@ import com.ailms.repository.UserRoleRepository;
 import com.ailms.repository.specification.RoleSpecification;
 import com.ailms.request.AssignPermissionsRequest;
 import com.ailms.request.CloneRoleRequest;
+import com.ailms.request.PermissionRequest;
 import com.ailms.request.RoleRequest;
+import com.ailms.request.RoleSearchRequest;
 import com.ailms.response.PermissionResponse;
 import com.ailms.response.RoleResponse;
 import com.ailms.response.UserResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -50,9 +51,9 @@ public class RoleService implements IRoleService {
 
     @Transactional(readOnly = true)
     @Override
-    public Page<RoleResponse> getRoles(Boolean isSystem, String search, Pageable pageable) {
-        Specification<RoleEntity> spec = RoleSpecification.filterAndSearch(isSystem, search);
-        return roleRepository.findAll(spec, pageable).map(roleMapper::toRoleResponse);
+    public Page<RoleResponse> getRoles(RoleSearchRequest request) {
+        Specification<RoleEntity> spec = RoleSpecification.filterAndSearch(request);
+        return roleRepository.findAll(spec, request.toPageable()).map(roleMapper::toRoleResponse);
     }
 
     @Transactional(readOnly = true)
@@ -200,7 +201,7 @@ public class RoleService implements IRoleService {
 
         // Kiem tra xem cac permission co ton tai khong
         if (permissionsToAdd.size() != permissionIdsToAdd.size()) {
-            throw ResourceNotFoundException.of("Permission");
+            throw ResourceNotFoundException.of("Permission not fun");
         }
 
         List<RolePermissionEntity> newRolePermissions =
@@ -260,6 +261,28 @@ public class RoleService implements IRoleService {
         }
 
         return roleMapper.toRoleResponse(newRole);
+    }
+
+    @Transactional
+    @Override
+    public PermissionResponse createAndAssignPermission(Long roleId, PermissionRequest request) {
+        RoleEntity role = roleRepository.findById(roleId)
+                .orElseThrow(() -> ResourceNotFoundException.of("Role", roleId));
+
+        if (permissionRepository.existsByName(request.getName())) {
+            throw DuplicateResourceException.of("Permission", "name", request.getName());
+        }
+        if (permissionRepository.existsByCode(request.getCode())) {
+            throw DuplicateResourceException.of("Permission", "code", request.getCode());
+        }
+
+        PermissionEntity permission = permissionMapper.toPermissionEntity(request);
+        permission = permissionRepository.save(permission);
+
+        RolePermissionEntity rolePermission = buildRolePermission(role, permission);
+        rolePermissionRepository.save(rolePermission);
+
+        return permissionMapper.toPermissionResponse(permission);
     }
 
 }

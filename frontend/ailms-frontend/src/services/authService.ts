@@ -8,7 +8,9 @@ import type {
   VerifyOtpRequest, 
   ChangePasswordRequest, 
   ForgotPasswordRequest, 
-  ResetPasswordRequest 
+  ResetPasswordRequest, 
+  CompleteInviteRequest,
+  SetPasswordRequest
 } from "@/types/jwtAuthentication";
 
 /* ============================================================
@@ -98,5 +100,13 @@ export const authService = {
 
   async resetPassword(payload: ResetPasswordRequest): Promise<void> {
     await authApi.resetPassword(payload);
-  }
+  },
+
+  async completeInvite(payload: CompleteInviteRequest): Promise<void> {
+    await authApi.completeInvite(payload);
+  },
+
+  async setPassword(payload: SetPasswordRequest): Promise<void> {
+    await authApi.setPassword(payload);
+  }, 
 };

@@ -139,7 +139,7 @@ public class CourseService implements ICourseService {
         log.info("Searching courses with keyword: {}", request.getKeyword());
 
         Page<CourseEntity> page = courseRepository.findAll(
-                CourseSpecification.build(request),
+                CourseSpecification.filterAndSearch(request),
                 request.toPageable()
         );
 

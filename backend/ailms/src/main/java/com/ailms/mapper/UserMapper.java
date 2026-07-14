@@ -14,7 +14,7 @@ public interface UserMapper {
 
     @Mapping(target = "roles", ignore = true)
     UserResponse toUserResponse(UserEntity userEntity);
-    
+
     List<UserResponse> toUserResponseList(List<UserEntity> userEntities);
 
     @Mapping(target = "id", ignore = true)
@@ -42,7 +42,6 @@ public interface UserMapper {
     @Mapping(target = "lastLoginAt", ignore = true)
     void updateUserEntity(@MappingTarget UserEntity userEntity, UpdateUserRequest request);
 
-
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "username", ignore = true)
@@ -57,7 +56,6 @@ public interface UserMapper {
     @Mapping(target = "lastLoginAt", ignore = true)
     @Mapping(target = "status", ignore = true)
     void updateUserProfile(@MappingTarget UserEntity userEntity, UpdateProfileRequest request);
-
 
     UserEntity cloneUser(UserEntity oldUser);
 

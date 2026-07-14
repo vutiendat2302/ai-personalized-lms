@@ -1,7 +1,6 @@
 package com.ailms.request;
 
-import com.ailms.entity.PaymentType;
-import com.ailms.entity.RateStatus;
+import com.ailms.entity.BaseStatusEnum;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
@@ -22,13 +21,11 @@ public class TeachingRateRequest {
     @NotNull(message = "Class ID is required")
     private Long classId;
 
-    private PaymentType paymentType;
-
     private BigDecimal rate;
 
     private LocalDateTime effectiveFrom;
 
     private LocalDateTime effectiveTo;
 
-    private RateStatus status;
+    private BaseStatusEnum status;
 }

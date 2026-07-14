@@ -1,6 +1,6 @@
 package com.ailms.response;
 
-import com.ailms.entity.SessionPaymentStatus;
+import com.ailms.entity.SessionPaymentStatusEnum;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.*;
 
@@ -28,7 +28,7 @@ public class TeachingSessionPaymentResponse {
 
     private BigDecimal amount;
 
-    private SessionPaymentStatus status;
+    private SessionPaymentStatusEnum status;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime createdAt;

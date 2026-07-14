@@ -1,6 +1,6 @@
 package com.ailms.response;
 
-import com.ailms.entity.AttendanceStatus;
+import com.ailms.entity.AttendanceStatusEnum;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.*;
 
@@ -26,7 +26,7 @@ public class AttendanceResponse {
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime checkOutTime;
 
-    private AttendanceStatus status;
+    private AttendanceStatusEnum status;
 
     private String note;
 
