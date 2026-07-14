@@ -10,6 +10,9 @@ import lombok.experimental.SuperBuilder;
 
 import java.time.LocalDateTime;
 
+/**
+ * Luu tru thong tin cham cong cua nhan vien fulltime
+ */
 @Entity
 @Table(name = "attendance")
 @Getter
@@ -24,23 +27,29 @@ public class AttendanceEntity extends BaseEntity {
     @Column(name = "id", updatable = false, nullable = false)
     private Long id;
 
+//    Nhan vien duoc cham cong
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "employee_id", nullable = false)
     private EmployeeEntity employee;
 
+//    Ngay lam viec
     @Column(name = "work_date", nullable = false)
     private LocalDateTime workDate;
 
+//    Thoi gian check in
     @Column(name = "check_in_time")
     private LocalDateTime checkInTime;
 
+//    Thoi gian check out
     @Column(name = "check_out_time")
     private LocalDateTime checkOutTime;
 
+//    Trang thai cham cong cua nhan vien
     @Column(name = "status")
-    @Enumerated(EnumType.ORDINAL)
-    private AttendanceStatus status;
+    @Enumerated(EnumType.STRING)
+    private AttendanceStatusEnum status;
 
+//    Note
     @Column(name = "note", columnDefinition = "TEXT")
     private String note;
 }

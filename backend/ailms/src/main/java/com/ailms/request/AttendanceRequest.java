@@ -1,6 +1,6 @@
 package com.ailms.request;
 
-import com.ailms.entity.AttendanceStatus;
+import com.ailms.entity.AttendanceStatusEnum;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 
@@ -23,7 +23,7 @@ public class AttendanceRequest {
 
     private LocalDateTime checkOutTime;
 
-    private AttendanceStatus status;
+    private AttendanceStatusEnum status;
 
     private String note;
 }

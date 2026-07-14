@@ -1,0 +1,76 @@
+package com.ailms.service;
+
+import com.ailms.entity.LearningActivityLogEntity;
+import com.ailms.exception.ResourceNotFoundException;
+import com.ailms.mapper.LearningActivityLogMapper;
+import com.ailms.repository.LearningActivityLogRepository;
+import com.ailms.request.LearningActivityLogRequest;
+import com.ailms.response.LearningActivityLogResponse;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+@Transactional(readOnly = true)
+public class LearningActivityLogService {
+
+    private final LearningActivityLogRepository learningActivityLogRepository;
+    private final LearningActivityLogMapper learningActivityLogMapper;
+
+    private static final String RESOURCE_NAME = "LearningActivityLog";
+
+    public List<LearningActivityLogResponse> getAll() {
+        log.info("Getting all learning activity logs");
+        return learningActivityLogMapper.toResponseList(learningActivityLogRepository.findAll());
+    }
+
+    public LearningActivityLogResponse getById(Long id) {
+        log.info("Getting learning activity log by id: {}", id);
+        LearningActivityLogEntity entity = learningActivityLogRepository.findById(id)
+                .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
+        return learningActivityLogMapper.toResponse(entity);
+    }
+
+    public List<LearningActivityLogResponse> getByUserId(Long userId) {
+        log.info("Getting learning activity logs by user id: {}", userId);
+        return learningActivityLogMapper.toResponseList(learningActivityLogRepository.findByUserId(userId));
+    }
+
+    public List<LearningActivityLogResponse> getByEntity(String entityType, Long entityId) {
+        log.info("Getting learning activity logs by entity: {} {}", entityType, entityId);
+        return learningActivityLogMapper.toResponseList(
+                learningActivityLogRepository.findByEntityTypeAndEntityId(entityType, entityId));
+    }
+
+    @Transactional
+    public LearningActivityLogResponse create(LearningActivityLogRequest request) {
+        log.info("Creating learning activity log for user: {}", request.getUserId());
+        LearningActivityLogEntity entity = learningActivityLogMapper.toEntity(request);
+        LearningActivityLogEntity saved = learningActivityLogRepository.save(entity);
+        return learningActivityLogMapper.toResponse(saved);
+    }
+
+    @Transactional
+    public LearningActivityLogResponse update(Long id, LearningActivityLogRequest request) {
+        log.info("Updating learning activity log: {}", id);
+        LearningActivityLogEntity existing = learningActivityLogRepository.findById(id)
+                .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
+        learningActivityLogMapper.updateFromRequest(request, existing);
+        LearningActivityLogEntity updated = learningActivityLogRepository.save(existing);
+        return learningActivityLogMapper.toResponse(updated);
+    }
+
+    @Transactional
+    public void delete(Long id) {
+        log.info("Deleting learning activity log: {}", id);
+        if (!learningActivityLogRepository.existsById(id)) {
+            throw ResourceNotFoundException.of(RESOURCE_NAME, id);
+        }
+        learningActivityLogRepository.deleteById(id);
+    }
+}

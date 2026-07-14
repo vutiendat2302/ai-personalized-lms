@@ -9,10 +9,10 @@ import com.ailms.repository.PermissionRepository;
 import com.ailms.repository.RolePermissionRepository;
 import com.ailms.repository.specification.PermissionSpecification;
 import com.ailms.request.PermissionRequest;
+import com.ailms.request.PermissionSearchRequest;
 import com.ailms.response.PermissionResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,11 +29,9 @@ public class PermissionService implements IPermissionService{
 
     @Transactional(readOnly = true)
     @Override
-    public Page<PermissionResponse> getPermissions(String entityFilter, String actionFilter, String search,
-            Pageable pageable) {
-        Specification<PermissionEntity> spec = PermissionSpecification.filterAndSearch(entityFilter, actionFilter,
-                search);
-        return permissionRepository.findAll(spec, pageable).map(permissionMapper::toPermissionResponse);
+    public Page<PermissionResponse> getPermissions(PermissionSearchRequest request) {
+        Specification<PermissionEntity> spec = PermissionSpecification.filterAndSearch(request);
+        return permissionRepository.findAll(spec, request.toPageable()).map(permissionMapper::toPermissionResponse);
     }
 
     @Transactional(readOnly = true)

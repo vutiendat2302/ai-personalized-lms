@@ -72,11 +72,10 @@ public class CategoryController {
 
     /**
      * Search + filter + phân trang.
-     * Vd: GET /api/categories/search?name=java&status=1&createdFrom=2026-06-01&createdTo=2026-06-30&page=0&size=10&sortBy=name&sortDirection=ASC
+     * Vd: GET /api/categories/search?keyword=java&status=1&createdFrom=2026-06-01&createdTo=2026-06-30&page=0&size=10&sortBy=name&sortDirection=ASC
      */
     @GetMapping("/search")
-    public ResponseEntity<ApiResponse<PageResponse<CategoryResponse>>> search(
-            @ModelAttribute CategorySearchRequest request) {
+    public ResponseEntity<ApiResponse<PageResponse<CategoryResponse>>> search(CategorySearchRequest request) {
         PageResponse<CategoryResponse> response = categoryService.search(request);
         return ResponseEntity.ok(ApiResponse.of(response));
     }

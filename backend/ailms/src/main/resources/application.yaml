@@ -32,7 +32,7 @@ spring:
             enable: true
   profiles:
     active: dev
-
+# active: seed -> run dataseeder
 server:
   port: 8080
 
@@ -54,3 +54,9 @@ app:
   cookie:
     secure: false
     same-site: Lax
+
+minio:
+  endpoint: http://localhost:9000
+  access-key: minioadmin
+  secret-key: minioadmin123
+  bucket-name: ailms-minio

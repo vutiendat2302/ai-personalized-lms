@@ -1,8 +1,8 @@
 package com.ailms.request;
 
-import com.ailms.entity.UserStatusEntity;
-import com.fasterxml.jackson.annotation.JsonFormat;
+import com.ailms.entity.UserStatusEnum;
 import lombok.*;
+import org.springframework.format.annotation.DateTimeFormat;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -19,11 +19,11 @@ public class UserSearchRequest extends BaseSearchRequest {
 
     private List<Long> roleIds;
 
-    private List<UserStatusEntity> statuses;
+    private List<UserStatusEnum> statuses;
 
-    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
+    @DateTimeFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime createdFrom;
 
-    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
+    @DateTimeFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime createdTo;
 }

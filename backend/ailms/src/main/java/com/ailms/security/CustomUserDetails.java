@@ -1,7 +1,7 @@
 package com.ailms.security;
 
 import com.ailms.entity.UserEntity;
-import com.ailms.entity.UserStatusEntity;
+import com.ailms.entity.UserStatusEnum;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -83,7 +83,7 @@ public class CustomUserDetails implements UserDetails {
      */
     @Override
     public boolean isAccountNonLocked() {
-        return user.getStatus() != UserStatusEntity.LOCKED;
+        return user.getStatus() != UserStatusEnum.LOCKED;
     }
 
     /**
@@ -103,6 +103,6 @@ public class CustomUserDetails implements UserDetails {
      */
     @Override
     public boolean isEnabled() {
-        return user.getStatus() == UserStatusEntity.ACTIVE;
+        return user.getStatus() == UserStatusEnum.ACTIVE;
     }
 }

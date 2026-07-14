@@ -1,6 +1,6 @@
 package com.ailms.request;
 
-import com.ailms.entity.UserStatusEntity;
+import com.ailms.entity.UserStatusEnum;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.validation.constraints.*;
 import lombok.*;
@@ -40,7 +40,7 @@ public class CreateUserRequest {
     @Max(value = 2, message = "Gender is invalid")
     private Integer gender;
 
-    private UserStatusEntity status;
+    private UserStatusEnum status;
 
     private List<Long> roleIds;
 }

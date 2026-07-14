@@ -6,7 +6,6 @@ import com.ailms.response.UserResponse;
 import com.ailms.response.EffectivePermissionResponse;
 import com.ailms.security.CustomUserDetails;
 import com.ailms.service.IUserService;
-import com.ailms.service.UserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -86,17 +85,29 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.of("Get all users successfully", users));
     }
 
+    @PostMapping("/invite")
+    public ResponseEntity<ApiResponse<Void>> inviteUser(@Valid @RequestBody InviteUserRequest request) {
+        userService.inviteUser(request);
+        return ResponseEntity.ok(ApiResponse.message("Invitation sent successfully"));
+    }
+
+    /**
+     * Lấy danh sách người dùng theo điều kiện tìm kiếm và phân trang.
+     * Các tham số trong UserSearchRequest có thể được truyền qua query string:
+     * - keyword: từ khóa tìm kiếm (username, email, ...)
+     * - page: số trang (bắt đầu từ 0)
+     * - size: số bản ghi trên mỗi trang
+     * - sortBy: trường sắp xếp
+     * - sortDir: hướng sắp xếp (ASC/DESC)
+     *
+     * @param request chứa các điều kiện tìm kiếm, phân trang và sắp xếp
+     * @return danh sách người dùng dạng Page<UserResponse>
+     */
     @GetMapping("/page")
     public ResponseEntity<ApiResponse<Page<UserResponse>>> getUsers(
             UserSearchRequest request) {
         Page<UserResponse> page = userService.getUsers(request);
         return ResponseEntity.ok(ApiResponse.of("Users retrieved successfully", page));
-    }
-
-    @PostMapping("/invite")
-    public ResponseEntity<ApiResponse<Void>> inviteUser(@Valid @RequestBody InviteUserRequest request) {
-        userService.inviteUser(request);
-        return ResponseEntity.ok(ApiResponse.message("Invitation sent successfully"));
     }
 
     @PostMapping("/bulk-delete")
@@ -105,6 +116,16 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.of("Bulk delete processed", response));
     }
 
+    /**
+     * Gán một role cho nhiều user cùng lúc.
+     * Request gồm:
+     * - Danh sách userIds cần gán role
+     * - roleId cần gán
+     * Kết quả trả về:
+     * - Số lượng gán thành công
+     * - Số lượng thất bại
+     * - Danh sách lỗi (nếu có)
+     */
     @PostMapping("/bulk-assign-role")
     public ResponseEntity<ApiResponse<Map<String, Object>>> bulkAssignRole(@Valid @RequestBody BulkAssignRoleRequest request) {
         Map<String, Object> response = userService.bulkAssignRole(request);
@@ -129,9 +150,9 @@ public class UserController {
      */
     @PostMapping("/profile/verify-email")
     public ResponseEntity<ApiResponse<Void>> verifyEmailChange(
-            @Valid @RequestBody com.ailms.request.VerifyEmailChangeRequest request,
-            org.springframework.security.core.Authentication authentication) {
-        com.ailms.security.CustomUserDetails userDetails = (com.ailms.security.CustomUserDetails) authentication.getPrincipal();
+            @Valid @RequestBody VerifyEmailChangeRequest request,
+            Authentication authentication) {
+        CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
         Long userId = userDetails.getUser().getId();
         userService.verifyEmailChange(userId, request);
         return ResponseEntity.ok(ApiResponse.message("Cập nhật địa chỉ email thành công."));

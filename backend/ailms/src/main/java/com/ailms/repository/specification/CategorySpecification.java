@@ -2,42 +2,42 @@ package com.ailms.repository.specification;
 
 import com.ailms.entity.CategoryEntity;
 import com.ailms.request.CategorySearchRequest;
-import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.jpa.domain.Specification;
-
-import java.util.ArrayList;
-import java.util.List;
-
+import org.springframework.util.StringUtils;
 
 public final class CategorySpecification {
-    private CategorySpecification() {
 
+    private CategorySpecification() {
     }
 
-    public static Specification<CategoryEntity> build(CategorySearchRequest request) {
-        return (root, query, cb) -> {
-            List<Predicate> predicates = new ArrayList<>();
+    public static Specification<CategoryEntity> filterAndSearch(CategorySearchRequest request) {
+        Specification<CategoryEntity> spec = (root, query, criteriaBuilder) -> criteriaBuilder.conjunction();
 
-            if (request.getName() != null && !request.getName().isBlank()) {
-                predicates.add(cb.like(
-                        cb.lower(root.get("name")),
-                        "%" + request.getName().trim().toLowerCase() + "%"
-                ));
-            }
+        if (request == null) {
+            return spec;
+        }
 
-            if (request.getStatus() != null) {
-                predicates.add(cb.equal(root.get("status"), request.getStatus()));
-            }
+        if (StringUtils.hasText(request.getKeyword())) {
+            String pattern = "%" + request.getKeyword().toLowerCase() + "%";
+            spec = spec.and((root, query, criteriaBuilder) ->
+                    criteriaBuilder.like(criteriaBuilder.lower(root.get("name")), pattern));
+        }
 
-            if (request.getCreatedFrom() != null) {
-                predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), request.getCreatedFrom()));
-            }
+        if (request.getStatus() != null) {
+            spec = spec.and((root, query, criteriaBuilder) ->
+                    criteriaBuilder.equal(root.get("status"), request.getStatus()));
+        }
 
-            if (request.getCreatedTo() != null) {
-                predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), request.getCreatedTo()));
-            }
+        if (request.getCreatedFrom() != null) {
+            spec = spec.and((root, query, criteriaBuilder) ->
+                    criteriaBuilder.greaterThanOrEqualTo(root.get("createdAt"), request.getCreatedFrom()));
+        }
 
-            return cb.and(predicates.toArray(new Predicate[0]));
-        };
+        if (request.getCreatedTo() != null) {
+            spec = spec.and((root, query, criteriaBuilder) ->
+                    criteriaBuilder.lessThanOrEqualTo(root.get("createdAt"), request.getCreatedTo()));
+        }
+
+        return spec;
     }
 }

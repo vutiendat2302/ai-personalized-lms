@@ -44,7 +44,7 @@ public class UserService implements IUserService {
     private final IAuditLogService auditLogService;
     private final JwtUtils jwtUtils;
 
-    @Value("${app.frontend.set-password}/api/auth")
+    @Value("${app.frontend.set-password}/api/auth/set-password")
     private String frontendUrl;
 
     @Transactional(readOnly = true)
@@ -84,10 +84,10 @@ public class UserService implements IUserService {
         boolean hasPassword = request.getPassword() != null && !request.getPassword().isBlank();
         if (hasPassword) {
             user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
-            user.setStatus(request.getStatus() != null ? request.getStatus() : UserStatusEntity.ACTIVE);
+            user.setStatus(request.getStatus() != null ? request.getStatus() : UserStatusEnum.ACTIVE);
         } else {
             user.setPasswordHash(passwordEncoder.encode("A" + UUID.randomUUID()));
-            user.setStatus(UserStatusEntity.PENDING_VERIFICATION);
+            user.setStatus(UserStatusEnum.PENDING_VERIFICATION);
         }
 
         user = userRepository.save(user);
@@ -140,13 +140,13 @@ public class UserService implements IUserService {
         UserEntity user = userRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of("User", id));
 
-        if (user.getStatus() == UserStatusEntity.DELETED) {
+        if (user.getStatus() == UserStatusEnum.DELETED) {
             return;
         }
 
         UserEntity oldState = userMapper.cloneUser(user);
 
-        user.setStatus(UserStatusEntity.DELETED);
+        user.setStatus(UserStatusEnum.DELETED);
         userRepository.save(user);
 
         // Invalidate token / revoke session
@@ -172,8 +172,8 @@ public class UserService implements IUserService {
         UserEntity user;
         if (existingUserOpt.isPresent()) {
             user = existingUserOpt.get();
-            if (user.getStatus() != UserStatusEntity.INACTIVE
-                    && user.getStatus() != UserStatusEntity.PENDING_VERIFICATION) {
+            if (user.getStatus() != UserStatusEnum.INACTIVE
+                    && user.getStatus() != UserStatusEnum.PENDING_VERIFICATION) {
                 throw new BusinessException("User account is already active or locked.");
             }
         } else {
@@ -182,7 +182,7 @@ public class UserService implements IUserService {
             user.setUsername(request.getEmail());
 
             user.setEmail(request.getEmail());
-            user.setStatus(UserStatusEntity.INACTIVE);
+            user.setStatus(UserStatusEnum.INACTIVE);
             user.setPasswordHash(passwordEncoder.encode(UUID.randomUUID().toString()));
             log.info("Luu User");
             user = userRepository.save(user);
@@ -228,7 +228,7 @@ public class UserService implements IUserService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + email));
 
         user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
-        user.setStatus(UserStatusEntity.ACTIVE);
+        user.setStatus(UserStatusEnum.ACTIVE);
         userRepository.save(user);
 
         // Assign Roles
@@ -247,7 +247,7 @@ public class UserService implements IUserService {
                 ur.setUserEntity(user);
                 ur.setRoleEntity(role);
                 ur.setAssignedBy(currentAdminId);
-                ur.setAssigned_at(LocalDateTime.now());
+                ur.setAssignedAt(LocalDateTime.now());
                 userRoleRepository.save(ur);
             }
         }
@@ -284,7 +284,7 @@ public class UserService implements IUserService {
             }
 
             UserEntity user = userOpt.get();
-            if (user.getStatus() == UserStatusEntity.DELETED) {
+            if (user.getStatus() == UserStatusEnum.DELETED) {
                 successCount++;
                 continue;
             }
@@ -292,7 +292,7 @@ public class UserService implements IUserService {
 
             try {
                 UserEntity oldState = userMapper.cloneUser(user);
-                user.setStatus(UserStatusEntity.DELETED);
+                user.setStatus(UserStatusEnum.DELETED);
                 userRepository.save(user);
 
                 redisTemplate.opsForValue().set("invalidate:token:user:" + userId,
@@ -364,10 +364,10 @@ public class UserService implements IUserService {
                     ur.setUserEntity(user);
                     ur.setRoleEntity(role);
                     ur.setAssignedBy(currentAdminId);
-                    ur.setAssigned_at(LocalDateTime.now());
+                    ur.setAssignedAt(LocalDateTime.now());
                     userRoleRepository.save(ur);
 
-                    auditLogService.log("grant_role", "user", userId, null, "Granted role " + role.getName());
+                    auditLogService.log("grant_role", "user", currentAdminId, null, "Granted role " + role.getName());
                 }
                 successCount++;
             } catch (Exception e) {
@@ -487,7 +487,7 @@ public class UserService implements IUserService {
                 .userEntity(user)
                 .roleEntity(role)
                 .assignedBy(adminId)
-                .assigned_at(LocalDateTime.now())
+                .assignedAt(LocalDateTime.now())
                 .build();
     }
 
@@ -546,7 +546,7 @@ public class UserService implements IUserService {
         UserResponse response = userMapper.toUserResponse(user);
         List<UserRoleEntity> userRoles = userRoleRepository.findByUserEntity_Id(user.getId());
         response.setRoles(userRoles.stream()
-                .filter(ur -> ur.getExpired_at() == null || ur.getExpired_at().isAfter(LocalDateTime.now()))
+                .filter(ur -> ur.getExpiredAt() == null || ur.getExpiredAt().isAfter(LocalDateTime.now()))
                 .map(ur -> ur.getRoleEntity().getName())
                 .collect(Collectors.toList()));
         return response;

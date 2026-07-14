@@ -90,7 +90,7 @@ public class DataSeeder {
         admin.setEmail(ADMIN_EMAIL);
         admin.setPasswordHash(passwordEncoder.encode(ADMIN_DEFAULT_PASSWORD));
         admin.setFullName("Default Administrator");
-        admin.setStatus(UserStatusEntity.ACTIVE);
+        admin.setStatus(UserStatusEnum.ACTIVE);
         admin = userRepository.save(admin);
 
         UserRoleEntity userRole = UserRoleEntity.builder()

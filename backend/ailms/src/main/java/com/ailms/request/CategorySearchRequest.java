@@ -13,10 +13,7 @@ import java.time.LocalDateTime;
 @EqualsAndHashCode(callSuper = false) // Khong so sanh in hoa voi in thuong
 public class CategorySearchRequest extends BaseSearchRequest {
 
-    /**
-     * Tìm kiếm gần đúng (LIKE, case-insensitive) theo name
-     */
-    private String name;
+    private String keyword;
 
     /**
      * Filter chính xác theo status: 1 = Active, 0 = Inactive. Null = lấy tất cả

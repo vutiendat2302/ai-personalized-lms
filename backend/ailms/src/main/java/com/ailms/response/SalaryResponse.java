@@ -1,11 +1,12 @@
 package com.ailms.response;
 
-import com.ailms.entity.SalaryStatus;
+import com.ailms.entity.SalaryStatusEnum;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 
 @Getter
 @Setter
@@ -18,7 +19,7 @@ public class SalaryResponse {
 
     private Long employeeId;
 
-    private String period;
+    private YearMonth period;
 
     private BigDecimal baseSalary;
 
@@ -28,7 +29,7 @@ public class SalaryResponse {
 
     private BigDecimal totalSalary;
 
-    private SalaryStatus status;
+    private SalaryStatusEnum status;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime paidAt;

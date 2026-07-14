@@ -97,7 +97,7 @@ public class UserEntity extends BaseEntity{
     @Column(name = "status")
     @Enumerated(EnumType.STRING)
     @Builder.Default
-    private UserStatusEntity status = UserStatusEntity.INACTIVE;
+    private UserStatusEnum status = UserStatusEnum.INACTIVE;
 
     /**
      * Thời điểm người dùng đăng nhập gần nhất.

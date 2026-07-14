@@ -89,7 +89,7 @@ public class CategoryService implements ICategoryService{
     @Override
     public PageResponse<CategoryResponse> search(CategorySearchRequest request) {
         Page<CategoryEntity> page = categoryRepository.findAll(
-                CategorySpecification.build(request),
+                CategorySpecification.filterAndSearch(request),
                 request.toPageable()
         );
 

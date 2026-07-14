@@ -1,13 +1,13 @@
 package com.ailms.controller;
 
 import com.ailms.request.PermissionRequest;
+import com.ailms.request.PermissionSearchRequest;
 import com.ailms.response.ApiResponse;
 import com.ailms.response.PermissionResponse;
 import com.ailms.service.PermissionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -23,12 +23,8 @@ public class PermissionController {
     private final PermissionService permissionService;
 
     @GetMapping("/page")
-    public ResponseEntity<ApiResponse<Page<PermissionResponse>>> getPermissions(
-            @RequestParam(required = false) String entity,
-            @RequestParam(required = false) String action,
-            @RequestParam(required = false) String search,
-            Pageable pageable) {
-        Page<PermissionResponse> response = permissionService.getPermissions(entity, action, search, pageable);
+    public ResponseEntity<ApiResponse<Page<PermissionResponse>>> getPermissions(PermissionSearchRequest request) {
+        Page<PermissionResponse> response = permissionService.getPermissions(request);
         return ResponseEntity.ok(ApiResponse.of("Permissions retrieved successfully", response));
     }
 

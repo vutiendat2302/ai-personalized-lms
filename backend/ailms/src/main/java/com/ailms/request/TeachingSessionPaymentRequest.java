@@ -1,6 +1,6 @@
 package com.ailms.request;
 
-import com.ailms.entity.SessionPaymentStatus;
+import com.ailms.entity.SessionPaymentStatusEnum;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 
@@ -27,5 +27,5 @@ public class TeachingSessionPaymentRequest {
 
     private BigDecimal amount;
 
-    private SessionPaymentStatus status;
+    private SessionPaymentStatusEnum status;
 }

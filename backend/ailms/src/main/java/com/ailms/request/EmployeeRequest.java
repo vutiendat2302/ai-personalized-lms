@@ -1,7 +1,7 @@
 package com.ailms.request;
 
-import com.ailms.entity.EmployeeStatus;
-import com.ailms.entity.EmploymentType;
+import com.ailms.entity.EmployeeStatusEnum;
+import com.ailms.entity.EmploymentTypeEnum;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
@@ -25,11 +25,11 @@ public class EmployeeRequest {
 
     private String position;
 
-    private EmploymentType employmentType;
+    private EmploymentTypeEnum employmentTypeEnum;
 
     private LocalDateTime startDate;
 
     private LocalDateTime endDate;
 
-    private EmployeeStatus status;
+    private EmployeeStatusEnum status;
 }

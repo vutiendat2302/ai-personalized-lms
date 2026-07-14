@@ -25,7 +25,8 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @SuperBuilder
-public class RolePermissionEntity extends BaseEntity {
+public class
+RolePermissionEntity extends BaseEntity {
 
     @Id
     @SnowflakeId

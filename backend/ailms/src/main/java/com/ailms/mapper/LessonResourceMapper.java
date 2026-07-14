@@ -29,6 +29,9 @@ public interface LessonResourceMapper {
     void updateEntityFromRequest(UpdateResourceRequest request, @MappingTarget LessonResourceEntity entity);
 
     @Mapping(target = "lessonId", source = "lessonEntity.id")
+    @Mapping(target = "fileUrl", expression = "java(entity.getFileMetadata() != null ? \"/api/v1/files/download?fileKey=\" + entity.getFileMetadata().getFileKey() : entity.getFileUrl())")
+    @Mapping(target = "fileType", expression = "java(entity.getFileMetadata() != null ? entity.getFileMetadata().getContentType() : entity.getFileType())")
+    @Mapping(target = "fileSize", expression = "java(entity.getFileMetadata() != null ? entity.getFileMetadata().getFileSize() : entity.getFileSize())")
     ResourceResponse toResponse(LessonResourceEntity entity);
 
 }

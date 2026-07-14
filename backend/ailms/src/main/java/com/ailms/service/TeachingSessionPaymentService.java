@@ -80,7 +80,7 @@ public class TeachingSessionPaymentService {
         TeachingSessionPaymentEntity existing = teachingSessionPaymentRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
 
-        if (!existing.getClassOnlineId().equals(request.getClassOnlineId()) &&
+        if (!existing.getClassOnline().getId().equals(request.getClassOnlineId()) &&
                 teachingSessionPaymentRepository.findByClassOnlineId(request.getClassOnlineId()).isPresent()) {
             throw DuplicateResourceException.of(RESOURCE_NAME, "classOnlineId", request.getClassOnlineId().toString());
         }

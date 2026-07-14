@@ -1,6 +1,7 @@
 package com.ailms.config;
 
 
+import com.ailms.common.converter.LongToStringSerializer;
 import tools.jackson.databind.module.SimpleModule;
 import org.springframework.boot.jackson.autoconfigure.JsonMapperBuilderCustomizer;
 import org.springframework.context.annotation.Bean;

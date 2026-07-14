@@ -64,8 +64,7 @@ public class CourseController {
     }
 
     @GetMapping("/search")
-    public ResponseEntity<ApiResponse<PageResponse<CourseResponse>>> searchCourse(
-            @ModelAttribute CourseSearchRequest request) {
+    public ResponseEntity<ApiResponse<PageResponse<CourseResponse>>> searchCourse(CourseSearchRequest request) {
         PageResponse<CourseResponse> response = courseService.search(request);
         return ResponseEntity.ok(ApiResponse.of("Courses retrieved successfully", response));
     }
