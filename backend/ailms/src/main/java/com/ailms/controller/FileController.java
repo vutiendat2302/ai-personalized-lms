@@ -10,7 +10,6 @@ import com.ailms.response.FileMetadataResponse;
 import com.ailms.service.IFileMetadataService;
 import com.ailms.service.IFileService;
 import com.ailms.service.IFileStorageService;
-import com.ailms.service.imp.MinioFileStorageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;

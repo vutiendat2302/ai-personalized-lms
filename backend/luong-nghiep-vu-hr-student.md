@@ -1,18 +1,4 @@
-# Luồng nghiệp vụ chi tiết — Module HR Management & Student Management
-
----
-- Lưu các file pdf, tài liệu tham khảo lưu trên MinIO chạy băng Docker. 
-User upload PDF
-      ↓
-Spring Boot
-      ↓
-MinIO
-      ↓
-Trả về objectName/fileKey
-      ↓
-Lưu fileKey vào MySQL
-
-- Tạo thêm một db lưu metadata rồi, sửa hết mấy cái cần upload file nhỉ. 
+# Module HR Management & Student Management
 
 # PHẦN 1. Module 4 — HR Management (Nhân sự)
 
@@ -38,11 +24,158 @@ Employee (hồ sơ nhân sự) ──┬──> Employee Contract (hợp đồng
 Có 2 nhóm nhân sự với luồng tính công/lương khác nhau:
 
 - **FULL_TIME** (HR, Accountant, Manager, Director...): chấm công qua `attendance` (check-in/check-out) → tính lương theo `base_salary` trong hợp đồng, trừ phạt đi muộn/nghỉ.
-- **PART_TIME** (giảng viên, trợ giảng dạy theo buổi): **không dùng `attendance`**. "Công" của nhóm này chính là số bản ghi trong `teaching_session_payment` — mỗi buổi dạy hoàn thành sinh ra 1 bản ghi, không có bản ghi tức là không dạy buổi đó.
+- **PART_TIME** (giảng viên, trợ giảng dạy theo buổi): chấm công qua `teaching_session_payment` tính lương qua số buổi dạy, số giờ dạy.
 
 ---
 
 ## 2. Luồng chi tiết từng bước
+
+1. Tạo Employee: 
+
+- `employeeCode` phải **unique tuyệt đối** trong toàn hệ thống, định dạng: `{PREFIX}-{yyMM}{sequence}` (VD: `EPHR-26070001`).
+- `employeeCode` phân biệt với `studentCode`. Employee (EP), Student (ST). EmployeeCode: EP + Role(HR, TC, TA, ...) + '-' {yyMM}{sequence}, sequence thì 'UUID(random(6 số)). Nhiều role thì role sẽ viết lần lượt theo thứ tự role, được thêm. EPHRTA-230123456 
+---
+
+
+```mermaid
+flowchart TD
+    A["HR or Admin tạo tài khoản user, mật khẩu tạm thời, gán role, permission<br/><small>fullName, email, role, department, employmentType...</small>"]
+    B{"Validate<br/><small>email chưa tồn tại, department hợp lệ...</small>"}
+    C["Tạo Employeee<br/>"]
+    D["Sinh employeeCode theo role<br/><small>(sơ đồ dưới)</small>"]
+    E["Tạo EmployeeEntity<br/><small>@MapsId → userId = user.id</small>"]
+    G{"Upload<br/>hợp đồng"}
+    H["Upload file lên MinIO<br/>→ Tạo EmployeeContractEntity"]
+    I["Lưu metadata hợp đồng"]
+    J["[AFTER COMMIT]<br/>Gửi email chào mừng + hợp đồng"]
+    K["Trả EmployeeResponse"]
+    X["Throw BusinessException<br/><small>Trả lỗi validate cho HR</small>"]
+ 
+    A --> B
+    B -->|Không hợp lệ| X
+    B -->|Hợp lệ| C
+    C --> D
+    D --> E
+    E --> G
+    G --> H
+    H --> I
+    I --> J
+    J --> K
+```
+ 
+---
+
+2. Gen `employeeCode`
+ 
+ 
+```mermaid
+flowchart TD
+    A["Xác định prefix theo roles<br/><small>HR→EPHR, TA→EPTA, TEACHER→EPTC...</small>"]
+    B["Tính yyMM hiện tại<br/><small>VD: EPHR-2607</small>"]
+    C["sequence: sinh random UUID 6 kí tự"]
+    D["SELECT ... FOR UPDATE<br/>trên bảng sequence_counter<br/>WHERE code_prefix = codePrefix"]
+    E{"Đã có row<br/>counter cho prefix này<br/>trong tháng chưa?"}
+    F["INSERT row mới<br/>sequence_counter(code_prefix, current_value=1)"]
+    G["UPDATE sequence_counter<br/>SET current_value = current_value + 1<br/>WHERE code_prefix = codePrefix"]
+    H["Lấy current_value vừa cập nhật"]
+    I["Ghép thành employeeCode<br/><small>codePrefix + LPAD(sequence, 4, '0')</small>"]
+    J["COMMIT transaction riêng<br/><small>→ nhả lock ngay, không giữ tới khi employee insert xong</small>"]
+    K["Trả employeeCode<br/>cho luồng tạo employee chính"]
+ 
+    A --> B --> C --> D --> E
+    E -->|Chưa có| F --> J
+    E -->|Đã có| G --> H --> J
+    J --> I --> K
+```
+ 
+### Vì sao dùng `SELECT ... FOR UPDATE` thay vì `COUNT(*) + 1`?
+ 
+| Cách | Vấn đề |
+|---|---|
+| `COUNT(employeeCode LIKE 'EPHR-2607%') + 1` | 2 request đọc cùng lúc → cùng thấy count = 5 → cả 2 cùng sinh `...0006` → trùng, 1 bên bị chặn bởi unique constraint và fail |
+| `SELECT ... FOR UPDATE` trên bảng counter riêng | Request thứ 2 phải **chờ** request thứ 1 commit xong mới đọc được giá trị mới nhất → không bao giờ trùng, vì DB tự xếp hàng (row lock) |
+ 
+### Vì sao tách `sequence_counter` thành bảng riêng, không lock trực tiếp trên bảng `employee`?
+ 
+- Nếu lock trực tiếp trên `employee` (VD: `SELECT ... FOR UPDATE` trên toàn bộ row có prefix đó), sẽ **khóa luôn** các thao tác đọc/ghi khác không liên quan trên bảng `employee` trong lúc chờ.
+- Bảng `sequence_counter` (chỉ có `code_prefix`, `current_value`) là bảng **nhỏ, thao tác cực nhanh** (1 UPDATE đơn giản) → giữ lock trong thời gian rất ngắn → transaction sinh code không làm nghẽn các HR khác đang thao tác trên bảng `employee`.
+- Transaction sinh code dùng `REQUIRES_NEW` (transaction con độc lập) → **commit ngay** sau khi lấy được số thứ tự, nhả lock lập tức, không phải chờ tới khi toàn bộ luồng tạo employee (insert user, employee, contract...) hoàn tất mới nhả lock.
+---
+ 
+## 4. Sequence diagram — Toàn bộ luồng tạo Employee (nhấn mạnh phần sinh code)
+ 
+```mermaid
+sequenceDiagram
+    actor HR
+    participant EmployeeService as EmployeeService
+    participant CodeGenerator as EmployeeCodeGenerator
+    participant DB as MySQL
+ 
+    HR->>EmployeeService: createEmployee(request)
+    EmployeeService->>EmployeeService: validate(request)
+ 
+    EmployeeService->>DB: INSERT INTO user (...)
+    DB-->>EmployeeService: user_id
+ 
+    Note over EmployeeService,CodeGenerator: Transaction con độc lập (REQUIRES_NEW)
+    EmployeeService->>CodeGenerator: generate(role = HR)
+    CodeGenerator->>DB: BEGIN transaction riêng
+    CodeGenerator->>DB: SELECT ... FOR UPDATE<br/>WHERE code_prefix = 'EPHR-2607'
+    DB-->>CodeGenerator: current_value = 5 (row bị lock)
+ 
+    Note over DB: Request khác (nếu có) phải CHỜ ở đây<br/>cho tới khi transaction này COMMIT
+ 
+    CodeGenerator->>DB: UPDATE sequence_counter<br/>SET current_value = 6
+    CodeGenerator->>DB: COMMIT transaction riêng
+    Note over DB: Nhả lock ngay — request khác được tiếp tục
+    CodeGenerator-->>EmployeeService: "EPHR-26070006"
+ 
+    EmployeeService->>DB: INSERT INTO employee (employee_code = 'EPHR-26070006', ...)
+    EmployeeService->>DB: INSERT INTO user_role (user_id, role = HR)
+ 
+    opt Có upload hợp đồng
+        EmployeeService->>DB: INSERT INTO employee_contract (...)
+    end
+ 
+    EmployeeService->>DB: COMMIT transaction chính
+    EmployeeService->>EmployeeService: publishEvent(EmployeeCreatedEvent)
+ 
+    Note over EmployeeService: [AFTER COMMIT]
+    EmployeeService->>HR: Gửi email chào mừng (async, không chặn response)
+ 
+    EmployeeService-->>HR: EmployeeResponse (employeeCode = EPHR-26070006)
+```
+ 
+---
+ 
+## 5. Bảng thiết kế đề xuất — `sequence_counter`
+ 
+Cần thêm 1 bảng mới để phục vụ cơ chế sinh code an toàn ở trên:
+ 
+| Column | Type | Description |
+|---|---|---|
+| `code_prefix` | VARCHAR(20) | PK — VD: `EPHR-2607` |
+| `current_value` | BIGINT | Số thứ tự hiện tại, tăng dần mỗi lần sinh code mới |
+| `updated_at` | DATETIME | Thời điểm cập nhật gần nhất |
+ 
+**Business rule:** `code_prefix` reset theo tháng (vì đã bao gồm `yyMM` trong chính giá trị prefix) — không cần job dọn dẹp gì thêm, mỗi tháng mới tự động tạo row mới bắt đầu từ `current_value = 1`.
+ 
+---
+ 
+## 6. Trường hợp lỗi cần xử lý thêm
+ 
+| Tình huống | Xử lý |
+|---|---|
+| Transaction sinh code bị timeout (DB deadlock hiếm gặp) | Retry tối đa 3 lần với backoff ngắn (`@Retryable`) |
+| `role` không map được prefix nào (enum thiếu case) | Throw `BusinessException` ngay từ bước đầu, không tạo `user` trước rồi mới fail giữa chừng |
+| Unique constraint `employee_code` vẫn bị vi phạm (trường hợp cực hiếm nếu có bug logic) | Bắt `DataIntegrityViolationException`, rollback toàn bộ transaction chính, trả lỗi rõ ràng cho HR để thử lại |
+ 
+---
+ 
+## 7. Câu hỏi cần xác nhận
+ 
+1. Bạn có đồng ý thêm bảng `sequence_counter` mới, hay muốn dùng cách khác (VD: DB auto-increment riêng theo prefix, hoặc dùng Redis `INCR` thay vì lock DB)?
+2. Nếu hệ thống có traffic tạo nhân viên **rất thấp** (vài người/ngày, không phải hệ thống lớn), cách `COUNT(*) + 1` đơn giản vẫn có thể chấp nhận được về mặt thực tế (rủi ro trùng gần như không xảy ra) — bạn có cần độ an toàn cao (`SELECT FOR UPDATE`) hay ưu tiên đơn giản hóa code?
 
 ### Bước 1 — Onboarding nhân viên (`employee` + `employee_contract`)
 

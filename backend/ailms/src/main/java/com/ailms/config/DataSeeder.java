@@ -45,7 +45,7 @@ public class DataSeeder {
     /** Khởi chạy quá trình seed dữ liệu khi ứng dụng khởi động. */
     @Bean
     CommandLineRunner seed() {
-        return args -> seedData();
+        return _ -> seedData();
     }
 
     /** Thực hiện khởi tạo toàn bộ dữ liệu mặc định. */

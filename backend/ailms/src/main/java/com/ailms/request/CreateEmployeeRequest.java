@@ -30,6 +30,4 @@ public class CreateEmployeeRequest {
     private LocalDateTime startDate;
 
     private LocalDateTime endDate;
-
-    private EmployeeStatusEnum status;
 }

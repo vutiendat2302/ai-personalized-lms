@@ -7,14 +7,12 @@ import com.ailms.response.UserResponse;
 
 import com.ailms.request.*;
 import com.ailms.response.ApiResponse;
-import com.ailms.response.UserResponse;
 import com.ailms.response.EffectivePermissionResponse;
 import com.ailms.security.CustomUserDetails;
 import com.ailms.service.IUserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;

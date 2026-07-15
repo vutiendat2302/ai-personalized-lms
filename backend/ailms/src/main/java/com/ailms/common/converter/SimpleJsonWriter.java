@@ -11,7 +11,6 @@ import java.util.Map;
  * Convert object sang chuỗi JSON đơn giản bằng reflection, Dùng cho mục đích ghi audit log (oldValue/
  * newValue) - không cần xử lý đầy đủ mọi edge case như thư viện JSON thật,
  * chỉ cần đủ để lưu lại "trạng thái" của entity dưới dạng đọc được.
- *   @ManyToOne...) nên được ignore từ trước khi truyền vào (VD qua cloneUser
  *   chỉ copy field scalar) để tránh lazy-loading exception.
  */
 public final class SimpleJsonWriter {

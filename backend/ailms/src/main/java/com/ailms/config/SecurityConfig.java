@@ -106,10 +106,9 @@ public class SecurityConfig {
      *
      * @param authConfig Cấu hình Authentication của Spring Security.
      * @return AuthenticationManager.
-     * @throws Exception Nếu không thể khởi tạo AuthenticationManager.
      */
     @Bean // Login
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration authConfig) throws Exception {
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration authConfig) {
         return authConfig.getAuthenticationManager();
     }
 
@@ -141,7 +140,7 @@ public class SecurityConfig {
      * @return SecurityFilterChain.
      */
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http) {
         // Cấu hình CORS
         http.cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(AbstractHttpConfigurer::disable) // Không sử dụng CSRF do xác thực bằng JWT

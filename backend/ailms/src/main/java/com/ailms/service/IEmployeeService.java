@@ -12,7 +12,7 @@ import com.ailms.response.EmployeeResponse;
 import java.util.List;
 
 public interface IEmployeeService {
-    Page<EmployeeResponse> search(EmployeeSearchRequest request);
+    Page<EmployeeResponse> search (EmployeeSearchRequest request);
     List<EmployeeResponse> getAll();
     EmployeeResponse getById(Long id);
     EmployeeResponse create(CreateEmployeeRequest request);

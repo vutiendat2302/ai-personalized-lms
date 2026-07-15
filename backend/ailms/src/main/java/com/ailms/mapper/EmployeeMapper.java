@@ -4,9 +4,7 @@ import com.ailms.entity.EmployeeEntity;
 import com.ailms.request.CreateEmployeeRequest;
 import com.ailms.request.UpdateEmployeeRequest;
 import com.ailms.response.EmployeeResponse;
-import org.mapstruct.Mapper;
-import org.mapstruct.Mapping;
-import org.mapstruct.MappingTarget;
+import org.mapstruct.*;
 
 import java.util.List;
 
@@ -25,8 +23,10 @@ public interface EmployeeMapper {
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
+    @Mapping(target = "status", ignore = true)
     EmployeeEntity toEntity(CreateEmployeeRequest request);
 
+    @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     @Mapping(target = "userId", ignore = true)
     @Mapping(target = "userEntity", ignore = true)
     @Mapping(target = "department", ignore = true)

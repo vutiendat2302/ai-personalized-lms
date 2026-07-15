@@ -3,13 +3,10 @@ import com.ailms.service.IAuditLogService;
 import com.ailms.service.IAuthService;
 import com.ailms.service.IEmailService;
 import com.ailms.service.IOtpService;
-import com.ailms.service.IUserService;
-
 
 import com.ailms.entity.UserEntity;
 import com.ailms.entity.enums.UserStatusEnum;
 import com.ailms.exception.*;
-import com.ailms.repository.AuditLogRepository;
 import com.ailms.repository.UserRepository;
 import com.ailms.request.*;
 import com.ailms.response.JwtAuthenticationResponse;
@@ -70,7 +67,6 @@ public class AuthService implements IAuthService { // login - register
 
     private final IOtpService otpService;
     private final IEmailService emailService;
-    private final AuditLogRepository auditLogRepository;
     private final RedisTemplate<String, String> redisTemplate;
 
     private static final String OTP_PURPOSE_REGISTER = "register";
@@ -81,7 +77,6 @@ public class AuthService implements IAuthService { // login - register
 
     private static final String INVALIDATE_TOKEN_PREFIX = "invalidate:token:user:";
     private final IAuditLogService auditLogService;
-    private final IUserService userService;
 
     /**
      * Đăng ký tài khoản mới.
