@@ -14,9 +14,8 @@ public interface IFileStorageService {
      *
      * @param file    file gốc từ request (multipart/form-data)
      * @param fileKey object key duy nhất trong bucket (do tầng gọi sinh ra trước)
-     * @return fileKey đã upload thành công (trùng với tham số đầu vào)
      */
-    String upload(MultipartFile file, String fileKey);
+    void upload(MultipartFile file, String fileKey);
 
     /**
      * Upload file từ InputStream (dùng khi file được generate động, không qua MultipartFile).
@@ -25,9 +24,8 @@ public interface IFileStorageService {
      * @param fileKey     object key duy nhất trong bucket
      * @param contentType MIME type của file
      * @param size        kích thước file (byte), bắt buộc phải biết trước với MinIO SDK
-     * @return fileKey đã upload thành công
      */
-    String upload(InputStream inputStream, String fileKey, String contentType, long size);
+    void upload(InputStream inputStream, String fileKey, String contentType, long size);
 
     /**
      * Tải nội dung file từ storage.

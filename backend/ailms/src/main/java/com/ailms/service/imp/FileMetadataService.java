@@ -146,6 +146,7 @@ public class FileMetadataService implements IFileMetadataService {
     }
 
     @Override
+
     @Transactional
     public FileMetadataResponse updateStatus(String fileKey, BaseStatusEnum status) {
         if (status == null) {

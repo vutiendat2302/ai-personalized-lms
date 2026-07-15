@@ -1,5 +1,5 @@
 package com.ailms.service.imp;
-import com.ailms.service.IMinioFileStorageService;
+import com.ailms.service.IFileStorageService;
 
 
 import com.ailms.exception.FileStorageException;
@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class MinioFileStorageService implements IMinioFileStorageService {
+public class MinioFileStorageService implements IFileStorageService {
 
     private final MinioClient minioClient;
 
