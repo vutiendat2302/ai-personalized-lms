@@ -1,7 +1,7 @@
 package com.ailms.service;
 
 import com.ailms.entity.FileMetadataEntity;
-import com.ailms.entity.FileTypeEnum;
+import com.ailms.entity.enums.FileTypeEnum;
 import com.ailms.response.FileMetadataResponse;
 import org.springframework.web.multipart.MultipartFile;
 import java.io.InputStream;
@@ -26,9 +26,10 @@ public interface IFileService {
     String getDownloadUrl(String fileKey);
 
     /**
-     * Xóa file hoàn chỉnh: xóa file vật lý trên storage rồi xóa/soft-delete metadata.
+     * Xóa hard file
      *
      * @param fileKey object key cần xóa
      */
-    void deleteFile(String fileKey);
+    void deleteHardFile(String fileKey);
+
 }

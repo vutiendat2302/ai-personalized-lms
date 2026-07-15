@@ -7,7 +7,7 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 @Repository
-public interface StudyGoalRepository extends JpaRepository<StudyGoalEntity, Long> {
+public interface StudyGoalRepository extends JpaRepository<StudyGoalEntity, Long>, org.springframework.data.jpa.repository.JpaSpecificationExecutor<StudyGoalEntity> {
     List<StudyGoalEntity> findByUserId(Long userId);
     List<StudyGoalEntity> findByCourseId(Long courseId);
 }

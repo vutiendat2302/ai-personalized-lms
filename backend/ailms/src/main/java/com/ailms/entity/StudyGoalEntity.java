@@ -1,6 +1,8 @@
 package com.ailms.entity;
 
 import com.ailms.common.snowflake.SnowflakeId;
+import com.ailms.entity.enums.StudyGoalSatusEnum;
+import com.ailms.entity.enums.StudyGoalTypeEnum;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;

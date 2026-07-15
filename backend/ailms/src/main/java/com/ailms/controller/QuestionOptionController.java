@@ -1,9 +1,14 @@
 package com.ailms.controller;
 
+import org.springframework.data.domain.Page;
+import com.ailms.request.QuestionOptionSearchRequest;
+import com.ailms.response.QuestionOptionResponse;
+
+
 import com.ailms.request.QuestionOptionRequest;
 import com.ailms.response.ApiResponse;
 import com.ailms.response.QuestionOptionResponse;
-import com.ailms.service.QuestionOptionService;
+import com.ailms.service.IQuestionOptionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -17,7 +22,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class QuestionOptionController {
 
-    private final QuestionOptionService questionOptionService;
+    private final IQuestionOptionService questionOptionService;
 
     @PostMapping
     public ResponseEntity<ApiResponse<QuestionOptionResponse>> create(@Valid @RequestBody QuestionOptionRequest request) {
@@ -55,5 +60,11 @@ public class QuestionOptionController {
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         questionOptionService.delete(id);
         return ResponseEntity.ok(ApiResponse.message("Question option deleted successfully"));
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<Page<QuestionOptionResponse>>> search(QuestionOptionSearchRequest request) {
+        Page<QuestionOptionResponse> result = questionOptionService.search(request);
+        return ResponseEntity.ok(ApiResponse.of("Search QuestionOption successfully", result));
     }
 }

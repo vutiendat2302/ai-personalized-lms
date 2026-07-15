@@ -1,7 +1,7 @@
 package com.ailms.response;
 
-import com.ailms.entity.BaseStatusEnum;
-import com.ailms.entity.FileTypeEnum;
+import com.ailms.entity.enums.BaseStatusEnum;
+import com.ailms.entity.enums.FileTypeEnum;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

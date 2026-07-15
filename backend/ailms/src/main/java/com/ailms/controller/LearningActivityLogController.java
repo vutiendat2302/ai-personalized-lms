@@ -1,9 +1,14 @@
 package com.ailms.controller;
 
+import org.springframework.data.domain.Page;
+import com.ailms.request.LearningActivityLogSearchRequest;
+import com.ailms.response.LearningActivityLogResponse;
+
+
 import com.ailms.request.LearningActivityLogRequest;
 import com.ailms.response.ApiResponse;
 import com.ailms.response.LearningActivityLogResponse;
-import com.ailms.service.LearningActivityLogService;
+import com.ailms.service.ILearningActivityLogService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -17,7 +22,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class LearningActivityLogController {
 
-    private final LearningActivityLogService learningActivityLogService;
+    private final ILearningActivityLogService learningActivityLogService;
 
     @PostMapping
     public ResponseEntity<ApiResponse<LearningActivityLogResponse>> create(@Valid @RequestBody LearningActivityLogRequest request) {
@@ -63,5 +68,11 @@ public class LearningActivityLogController {
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         learningActivityLogService.delete(id);
         return ResponseEntity.ok(ApiResponse.message("Learning activity log deleted successfully"));
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<Page<LearningActivityLogResponse>>> search(LearningActivityLogSearchRequest request) {
+        Page<LearningActivityLogResponse> result = learningActivityLogService.search(request);
+        return ResponseEntity.ok(ApiResponse.of("Search LearningActivityLog successfully", result));
     }
 }

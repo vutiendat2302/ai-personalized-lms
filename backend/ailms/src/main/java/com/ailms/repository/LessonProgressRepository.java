@@ -7,7 +7,7 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 @Repository
-public interface LessonProgressRepository extends JpaRepository<LessonProgressEntity, Long> {
+public interface LessonProgressRepository extends JpaRepository<LessonProgressEntity, Long>, org.springframework.data.jpa.repository.JpaSpecificationExecutor<LessonProgressEntity> {
     List<LessonProgressEntity> findByUserId(Long userId);
     List<LessonProgressEntity> findByLessonId(Long lessonId);
     List<LessonProgressEntity> findByEnrollmentId(Long enrollmentId);

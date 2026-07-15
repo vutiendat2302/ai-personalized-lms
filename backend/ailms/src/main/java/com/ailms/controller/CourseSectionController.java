@@ -1,5 +1,9 @@
 package com.ailms.controller;
 
+import org.springframework.data.domain.Page;
+import com.ailms.request.CourseSectionSearchRequest;
+
+
 import com.ailms.response.ApiResponse;
 import com.ailms.request.CreateSectionRequest;
 import com.ailms.request.UpdateSectionRequest;
@@ -66,5 +70,11 @@ public class CourseSectionController {
     public ResponseEntity<ApiResponse<List<SectionResponse>>> getAll() {
         List<SectionResponse> response= courseSectionService.getAll();
         return ResponseEntity.ok(ApiResponse.of("Sections retrieved successfully", response));
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<Page<SectionResponse>>> search(CourseSectionSearchRequest request) {
+        Page<SectionResponse> result = courseSectionService.search(request);
+        return ResponseEntity.ok(ApiResponse.of("Search CourseSection successfully", result));
     }
 }

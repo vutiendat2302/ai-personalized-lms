@@ -1,16 +1,17 @@
 package com.ailms.controller;
 
-import com.ailms.request.PermissionRequest;
+import com.ailms.service.IPermissionService;
+import org.springframework.data.domain.Page;
 import com.ailms.request.PermissionSearchRequest;
-import com.ailms.response.ApiResponse;
 import com.ailms.response.PermissionResponse;
-import com.ailms.service.PermissionService;
+
+
+import com.ailms.request.PermissionRequest;
+import com.ailms.response.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -20,7 +21,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class PermissionController {
 
-    private final PermissionService permissionService;
+    private final IPermissionService permissionService;
 
     @GetMapping("/page")
     public ResponseEntity<ApiResponse<Page<PermissionResponse>>> getPermissions(PermissionSearchRequest request) {

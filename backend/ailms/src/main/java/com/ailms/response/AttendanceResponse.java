@@ -1,6 +1,6 @@
 package com.ailms.response;
 
-import com.ailms.entity.AttendanceStatusEnum;
+import com.ailms.entity.enums.AttendanceStatusEnum;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.*;
 

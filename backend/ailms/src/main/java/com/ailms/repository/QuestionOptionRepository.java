@@ -7,6 +7,6 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 @Repository
-public interface QuestionOptionRepository extends JpaRepository<QuestionOptionEntity, Long> {
+public interface QuestionOptionRepository extends JpaRepository<QuestionOptionEntity, Long>, org.springframework.data.jpa.repository.JpaSpecificationExecutor<QuestionOptionEntity> {
     List<QuestionOptionEntity> findByQuestionId(Long questionId);
 }

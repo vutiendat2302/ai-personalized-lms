@@ -1,9 +1,14 @@
 package com.ailms.controller;
 
+import org.springframework.data.domain.Page;
+import com.ailms.request.AttendanceSearchRequest;
+import com.ailms.response.AttendanceResponse;
+
+
 import com.ailms.request.AttendanceRequest;
 import com.ailms.response.ApiResponse;
 import com.ailms.response.AttendanceResponse;
-import com.ailms.service.AttendanceService;
+import com.ailms.service.IAttendanceService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -17,7 +22,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AttendanceController {
 
-    private final AttendanceService attendanceService;
+    private final IAttendanceService attendanceService;
 
     @PostMapping
     public ResponseEntity<ApiResponse<AttendanceResponse>> create(@Valid @RequestBody AttendanceRequest request) {
@@ -55,5 +60,11 @@ public class AttendanceController {
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         attendanceService.delete(id);
         return ResponseEntity.ok(ApiResponse.message("Attendance record deleted successfully"));
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<Page<AttendanceResponse>>> search(AttendanceSearchRequest request) {
+        Page<AttendanceResponse> result = attendanceService.search(request);
+        return ResponseEntity.ok(ApiResponse.of("Search Attendance successfully", result));
     }
 }

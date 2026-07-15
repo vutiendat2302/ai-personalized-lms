@@ -1,9 +1,14 @@
 package com.ailms.controller;
 
+import org.springframework.data.domain.Page;
+import com.ailms.request.AssignmentSearchRequest;
+import com.ailms.response.AssignmentResponse;
+
+
 import com.ailms.request.AssignmentRequest;
 import com.ailms.response.ApiResponse;
 import com.ailms.response.AssignmentResponse;
-import com.ailms.service.AssignmentService;
+import com.ailms.service.IAssignmentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -17,7 +22,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AssignmentController {
 
-    private final AssignmentService assignmentService;
+    private final IAssignmentService assignmentService;
 
     @PostMapping
     public ResponseEntity<ApiResponse<AssignmentResponse>> create(@Valid @RequestBody AssignmentRequest request) {
@@ -67,5 +72,11 @@ public class AssignmentController {
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         assignmentService.delete(id);
         return ResponseEntity.ok(ApiResponse.message("Assignment deleted successfully"));
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<Page<AssignmentResponse>>> search(AssignmentSearchRequest request) {
+        Page<AssignmentResponse> result = assignmentService.search(request);
+        return ResponseEntity.ok(ApiResponse.of("Search Assignment successfully", result));
     }
 }

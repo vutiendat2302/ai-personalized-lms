@@ -1,5 +1,10 @@
 package com.ailms.service;
 
+import org.springframework.data.domain.Page;
+import com.ailms.request.CourseSectionSearchRequest;
+
+
+
 import com.ailms.request.CreateSectionRequest;
 import com.ailms.request.UpdateSectionRequest;
 import com.ailms.request.ReorderRequest;
@@ -8,6 +13,7 @@ import com.ailms.response.SectionResponse;
 import java.util.List;
 
 public interface ICourseSectionService {
+    Page<SectionResponse> search(CourseSectionSearchRequest request);
 
     SectionResponse create(CreateSectionRequest request);
 

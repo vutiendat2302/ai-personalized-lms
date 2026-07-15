@@ -1,7 +1,7 @@
 package com.ailms.controller;
 
-import com.ailms.entity.BaseStatusEnum;
-import com.ailms.entity.FileTypeEnum;
+import com.ailms.entity.enums.BaseStatusEnum;
+import com.ailms.entity.enums.FileTypeEnum;
 import com.ailms.exception.BusinessException;
 import com.ailms.request.FileSearchRequest;
 import com.ailms.response.ApiResponse;
@@ -9,6 +9,7 @@ import com.ailms.response.FileMetadataResponse;
 import com.ailms.service.IFileMetadataService;
 import com.ailms.service.IFileService;
 import com.ailms.service.IFileStorageService;
+import com.ailms.service.imp.MinioFileStorageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
@@ -31,7 +32,7 @@ public class FileController {
 
     private final IFileService fileService;
     private final IFileMetadataService fileMetadataService;
-    private final IFileStorageService fileStorageService;
+    private final MinioFileStorageService fileStorageService;
 
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<FileMetadataResponse>> uploadFile(
@@ -78,7 +79,7 @@ public class FileController {
 
     @DeleteMapping
     public ResponseEntity<ApiResponse<Void>> deleteFile(@RequestParam("fileKey") String fileKey) {
-        fileService.deleteFile(fileKey);
+        fileService.deleteHardFile(fileKey);
         return ResponseEntity.ok(ApiResponse.message("File deleted successfully from storage"));
     }
 }

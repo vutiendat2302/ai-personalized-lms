@@ -1,6 +1,6 @@
 package com.ailms.request;
 
-import com.ailms.entity.BaseStatusEnum;
+import com.ailms.entity.enums.BaseStatusEnum;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 import lombok.experimental.SuperBuilder;

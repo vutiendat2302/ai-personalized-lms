@@ -3,7 +3,6 @@ package com.ailms.repository.specification;
 import com.ailms.entity.FileMetadataEntity;
 import com.ailms.request.FileSearchRequest;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
 public final class FileSpecification {
@@ -20,25 +19,21 @@ public final class FileSpecification {
 
         if (StringUtils.hasText(request.getKeyword())) {
             String pattern = "%" + request.getKeyword().toLowerCase() + "%";
-            spec = spec.and((root, query, criteriaBuilder) -> criteriaBuilder.or(
-                    criteriaBuilder.like(criteriaBuilder.lower(root.get("originalName")), pattern),
-                    criteriaBuilder.like(criteriaBuilder.lower(root.get("fileKey")), pattern)
-            ));
+            spec = spec.and((root, query, criteriaBuilder) ->
+                    criteriaBuilder.or(
+                            criteriaBuilder.like(criteriaBuilder.lower(root.get("originalName")), pattern),
+                            criteriaBuilder.like(criteriaBuilder.lower(root.get("fileKey")), pattern)
+                    ));
         }
 
-        if (!CollectionUtils.isEmpty(request.getFileTypes())) {
+        if (request.getStatus() != null) {
             spec = spec.and((root, query, criteriaBuilder) ->
-                    root.get("fileType").in(request.getFileTypes()));
+                    criteriaBuilder.equal(root.get("status"), request.getStatus()));
         }
 
-        if (!CollectionUtils.isEmpty(request.getStatuses())) {
+        if (request.getFileType() != null) {
             spec = spec.and((root, query, criteriaBuilder) ->
-                    root.get("status").in(request.getStatuses()));
-        }
-
-        if (StringUtils.hasText(request.getContentType())) {
-            spec = spec.and((root, query, criteriaBuilder) ->
-                    criteriaBuilder.equal(root.get("contentType"), request.getContentType()));
+                    criteriaBuilder.equal(root.get("fileType"), request.getFileType()));
         }
 
         if (request.getCreatedFrom() != null) {

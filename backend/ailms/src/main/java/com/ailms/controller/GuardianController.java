@@ -1,9 +1,14 @@
 package com.ailms.controller;
 
+import org.springframework.data.domain.Page;
+import com.ailms.request.GuardianSearchRequest;
+import com.ailms.response.GuardianResponse;
+
+
 import com.ailms.request.GuardianRequest;
 import com.ailms.response.ApiResponse;
 import com.ailms.response.GuardianResponse;
-import com.ailms.service.GuardianService;
+import com.ailms.service.IGuardianService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -17,7 +22,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class GuardianController {
 
-    private final GuardianService guardianService;
+    private final IGuardianService guardianService;
 
     @PostMapping
     public ResponseEntity<ApiResponse<GuardianResponse>> create(@Valid @RequestBody GuardianRequest request) {
@@ -55,5 +60,11 @@ public class GuardianController {
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         guardianService.delete(id);
         return ResponseEntity.ok(ApiResponse.message("Guardian deleted successfully"));
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<Page<GuardianResponse>>> search(GuardianSearchRequest request) {
+        Page<GuardianResponse> result = guardianService.search(request);
+        return ResponseEntity.ok(ApiResponse.of("Search Guardian successfully", result));
     }
 }

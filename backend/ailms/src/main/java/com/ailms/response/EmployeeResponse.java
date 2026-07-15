@@ -1,7 +1,7 @@
 package com.ailms.response;
 
-import com.ailms.entity.EmployeeStatusEnum;
-import com.ailms.entity.EmploymentTypeEnum;
+import com.ailms.entity.enums.EmployeeStatusEnum;
+import com.ailms.entity.enums.EmploymentTypeEnum;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.*;
 

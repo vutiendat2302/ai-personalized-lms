@@ -1,9 +1,14 @@
 package com.ailms.controller;
 
+import org.springframework.data.domain.Page;
+import com.ailms.request.SalarySearchRequest;
+import com.ailms.response.SalaryResponse;
+
+
 import com.ailms.request.SalaryRequest;
 import com.ailms.response.ApiResponse;
 import com.ailms.response.SalaryResponse;
-import com.ailms.service.SalaryService;
+import com.ailms.service.ISalaryService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -17,7 +22,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class SalaryController {
 
-    private final SalaryService salaryService;
+    private final ISalaryService salaryService;
 
     @PostMapping
     public ResponseEntity<ApiResponse<SalaryResponse>> create(@Valid @RequestBody SalaryRequest request) {
@@ -55,5 +60,11 @@ public class SalaryController {
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         salaryService.delete(id);
         return ResponseEntity.ok(ApiResponse.message("Salary record deleted successfully"));
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<Page<SalaryResponse>>> search(SalarySearchRequest request) {
+        Page<SalaryResponse> result = salaryService.search(request);
+        return ResponseEntity.ok(ApiResponse.of("Search Salary successfully", result));
     }
 }

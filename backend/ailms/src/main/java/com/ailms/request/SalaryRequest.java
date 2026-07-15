@@ -1,6 +1,6 @@
 package com.ailms.request;
 
-import com.ailms.entity.SalaryStatusEnum;
+import com.ailms.entity.enums.SalaryStatusEnum;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;

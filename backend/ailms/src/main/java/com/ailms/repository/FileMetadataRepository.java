@@ -1,7 +1,7 @@
 package com.ailms.repository;
 
 import com.ailms.entity.FileMetadataEntity;
-import com.ailms.entity.FileTypeEnum;
+import com.ailms.entity.enums.FileTypeEnum;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 

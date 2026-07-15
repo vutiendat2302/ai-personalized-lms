@@ -7,6 +7,6 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 @Repository
-public interface QuestionRepository extends JpaRepository<QuestionEntity, Long> {
+public interface QuestionRepository extends JpaRepository<QuestionEntity, Long>, org.springframework.data.jpa.repository.JpaSpecificationExecutor<QuestionEntity> {
     List<QuestionEntity> findByQuizId(Long quizId);
 }

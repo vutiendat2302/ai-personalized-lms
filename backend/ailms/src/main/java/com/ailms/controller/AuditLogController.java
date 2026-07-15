@@ -1,9 +1,14 @@
 package com.ailms.controller;
 
+import com.ailms.service.IAuditLogService;
+import org.springframework.data.domain.Page;
+import com.ailms.request.AuditLogSearchRequest;
+import com.ailms.response.AuditLogResponse;
+
+
 import com.ailms.request.AuditLogSearchRequest;
 import com.ailms.response.ApiResponse;
 import com.ailms.response.AuditLogResponse;
-import com.ailms.service.AuditLogService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
@@ -16,7 +21,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AuditLogController {
 
-    private final AuditLogService auditLogService;
+    private final IAuditLogService auditLogService;
 
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<AuditLogResponse>> getByLogId(@PathVariable Long id) {

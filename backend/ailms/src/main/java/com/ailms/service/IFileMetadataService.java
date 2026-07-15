@@ -1,5 +1,6 @@
 package com.ailms.service;
-import com.ailms.entity.FileTypeEnum;
+import com.ailms.entity.enums.BaseStatusEnum;
+import com.ailms.entity.enums.FileTypeEnum;
 import com.ailms.request.CreateFileMetadataRequest;
 import com.ailms.request.FileSearchRequest;
 import com.ailms.response.FileMetadataResponse;
@@ -70,5 +71,29 @@ public interface IFileMetadataService {
      * @return trang kết quả metadata phù hợp
      */
     Page<FileMetadataResponse> search(FileSearchRequest request);
+
+    /**
+     * Đổi origin name
+     *
+     * @param fileKey object key can doi ten
+     * @param newOriginalName ten moi
+     * @return metadata vua doi ten
+     */
+    FileMetadataResponse updateOriginalName(String fileKey, String newOriginalName);
+
+    /**
+     * Updata status (dung khi xoa mem muon khoi phuc lai file)
+     *
+     * @param fileKey object key can doi ten
+     * @param status trang thai moi
+     * @return metadata vua cap nhat
+     */
+    FileMetadataResponse updateStatus(String fileKey, BaseStatusEnum status);
+
+    /**
+     * Lay tat ca cac file
+     */
+    List<FileMetadataResponse> getAllFiles();
+
 
 }

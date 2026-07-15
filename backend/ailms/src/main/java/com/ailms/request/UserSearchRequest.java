@@ -1,6 +1,6 @@
 package com.ailms.request;
 
-import com.ailms.entity.UserStatusEnum;
+import com.ailms.entity.enums.UserStatusEnum;
 import lombok.*;
 import org.springframework.format.annotation.DateTimeFormat;
 

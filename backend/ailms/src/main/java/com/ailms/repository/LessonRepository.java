@@ -7,7 +7,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface LessonRepository extends JpaRepository<LessonEntity, Long> {
+public interface LessonRepository extends JpaRepository<LessonEntity, Long>, org.springframework.data.jpa.repository.JpaSpecificationExecutor<LessonEntity> {
     
     int countByCourseSectionEntityCourseEntityId(Long courseId);
 

@@ -1,27 +1,21 @@
 package com.ailms.request;
 
-import com.ailms.entity.BaseStatusEnum;
-import com.ailms.entity.FileTypeEnum;
+import com.ailms.entity.enums.BaseStatusEnum;
+import com.ailms.entity.enums.FileTypeEnum;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.*;
-
 import java.time.LocalDateTime;
-import java.util.List;
 
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@EqualsAndHashCode(callSuper = false) // Khong so sanh in hoa voi in thuong
+@EqualsAndHashCode(callSuper = false)
 public class FileSearchRequest extends BaseSearchRequest {
     private String keyword;
-
-    private List<FileTypeEnum> fileTypes;
-
-    private List<BaseStatusEnum> statuses;
-
-    private String contentType;
+    private BaseStatusEnum status;
+    private FileTypeEnum fileType;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime createdFrom;

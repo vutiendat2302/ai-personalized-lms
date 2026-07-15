@@ -7,7 +7,7 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 @Repository
-public interface ClassOnlineRepository extends JpaRepository<ClassOnlineEntity, Long> {
+public interface ClassOnlineRepository extends JpaRepository<ClassOnlineEntity, Long>, org.springframework.data.jpa.repository.JpaSpecificationExecutor<ClassOnlineEntity> {
     List<ClassOnlineEntity> findByClassEntity_Id(Long classId);
     List<ClassOnlineEntity> findByTeacherEntity_Id(Long teacherId);
 }

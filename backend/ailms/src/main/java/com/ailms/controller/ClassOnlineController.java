@@ -1,9 +1,14 @@
 package com.ailms.controller;
 
+import org.springframework.data.domain.Page;
+import com.ailms.request.ClassOnlineSearchRequest;
+import com.ailms.response.ClassOnlineResponse;
+
+
 import com.ailms.request.ClassOnlineRequest;
 import com.ailms.response.ApiResponse;
 import com.ailms.response.ClassOnlineResponse;
-import com.ailms.service.ClassOnlineService;
+import com.ailms.service.IClassOnlineService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -17,7 +22,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ClassOnlineController {
 
-    private final ClassOnlineService classOnlineService;
+    private final IClassOnlineService classOnlineService;
 
     @PostMapping
     public ResponseEntity<ApiResponse<ClassOnlineResponse>> create(@Valid @RequestBody ClassOnlineRequest request) {
@@ -61,5 +66,11 @@ public class ClassOnlineController {
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         classOnlineService.delete(id);
         return ResponseEntity.ok(ApiResponse.message("Online class deleted successfully"));
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<Page<ClassOnlineResponse>>> search(ClassOnlineSearchRequest request) {
+        Page<ClassOnlineResponse> result = classOnlineService.search(request);
+        return ResponseEntity.ok(ApiResponse.of("Search ClassOnline successfully", result));
     }
 }

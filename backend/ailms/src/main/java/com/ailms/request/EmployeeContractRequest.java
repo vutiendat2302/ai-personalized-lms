@@ -1,7 +1,7 @@
 package com.ailms.request;
 
-import com.ailms.entity.BaseStatusEnum;
-import com.ailms.entity.ContractTypeEnum;
+import com.ailms.entity.enums.BaseStatusEnum;
+import com.ailms.entity.enums.ContractTypeEnum;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 

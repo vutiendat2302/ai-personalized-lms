@@ -1,5 +1,10 @@
 package com.ailms.controller;
 
+import org.springframework.data.domain.Page;
+import com.ailms.request.LessonSearchRequest;
+import com.ailms.response.LessonResponse;
+
+
 import com.ailms.response.ApiResponse;
 import com.ailms.request.CreateLessonRequest;
 import com.ailms.request.UpdateLessonRequest;
@@ -15,7 +20,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1")
+@RequestMapping("${api.prefix}/lessons")
 @RequiredArgsConstructor
 public class LessonController {
 
@@ -60,5 +65,11 @@ public class LessonController {
     public ResponseEntity<ApiResponse<Void>> reorder(@Valid @RequestBody ReorderRequest request) {
         lessonService.reorder(request);
         return ResponseEntity.ok(ApiResponse.message("Lessons reordered successfully"));
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<Page<LessonResponse>>> search(LessonSearchRequest request) {
+        Page<LessonResponse> result = lessonService.search(request);
+        return ResponseEntity.ok(ApiResponse.of("Search Lesson successfully", result));
     }
 }

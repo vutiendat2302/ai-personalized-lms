@@ -1,9 +1,14 @@
 package com.ailms.controller;
 
+import org.springframework.data.domain.Page;
+import com.ailms.request.CourseMemberSearchRequest;
+import com.ailms.response.CourseMemberResponse;
+
+
 import com.ailms.request.CourseMemberRequest;
 import com.ailms.response.ApiResponse;
 import com.ailms.response.CourseMemberResponse;
-import com.ailms.service.CourseMemberService;
+import com.ailms.service.ICourseMemberService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -17,7 +22,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class CourseMemberController {
 
-    private final CourseMemberService courseMemberService;
+    private final ICourseMemberService courseMemberService;
 
     @PostMapping
     public ResponseEntity<ApiResponse<CourseMemberResponse>> create(@Valid @RequestBody CourseMemberRequest request) {
@@ -66,5 +71,11 @@ public class CourseMemberController {
             @PathVariable Long userId) {
         courseMemberService.delete(courseId, userId);
         return ResponseEntity.ok(ApiResponse.message("Course member deleted successfully"));
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<Page<CourseMemberResponse>>> search(CourseMemberSearchRequest request) {
+        Page<CourseMemberResponse> result = courseMemberService.search(request);
+        return ResponseEntity.ok(ApiResponse.of("Search CourseMember successfully", result));
     }
 }

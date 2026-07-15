@@ -1,5 +1,7 @@
 package com.ailms.entity;
 
+import com.ailms.entity.enums.EmployeeStatusEnum;
+import com.ailms.entity.enums.EmploymentTypeEnum;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;

@@ -1,6 +1,6 @@
 package com.ailms.request;
 
-import com.ailms.entity.GuardianRelationship;
+import com.ailms.entity.enums.GuardianRelationship;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;

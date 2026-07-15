@@ -1,9 +1,14 @@
 package com.ailms.controller;
 
+import org.springframework.data.domain.Page;
+import com.ailms.request.StudentProfileSearchRequest;
+import com.ailms.response.StudentProfileResponse;
+
+
 import com.ailms.request.StudentProfileRequest;
 import com.ailms.response.ApiResponse;
 import com.ailms.response.StudentProfileResponse;
-import com.ailms.service.StudentProfileService;
+import com.ailms.service.IStudentProfileService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -17,7 +22,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class StudentProfileController {
 
-    private final StudentProfileService studentProfileService;
+    private final IStudentProfileService studentProfileService;
 
     @PostMapping
     public ResponseEntity<ApiResponse<StudentProfileResponse>> create(@Valid @RequestBody StudentProfileRequest request) {
@@ -49,5 +54,11 @@ public class StudentProfileController {
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         studentProfileService.delete(id);
         return ResponseEntity.ok(ApiResponse.message("Student profile deleted successfully"));
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<Page<StudentProfileResponse>>> search(StudentProfileSearchRequest request) {
+        Page<StudentProfileResponse> result = studentProfileService.search(request);
+        return ResponseEntity.ok(ApiResponse.of("Search StudentProfile successfully", result));
     }
 }

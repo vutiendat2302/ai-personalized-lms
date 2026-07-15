@@ -1,9 +1,14 @@
 package com.ailms.controller;
 
+import org.springframework.data.domain.Page;
+import com.ailms.request.EnrollmentSearchRequest;
+import com.ailms.response.EnrollmentResponse;
+
+
 import com.ailms.request.EnrollmentRequest;
 import com.ailms.response.ApiResponse;
 import com.ailms.response.EnrollmentResponse;
-import com.ailms.service.EnrollmentService;
+import com.ailms.service.IEnrollmentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -17,7 +22,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class EnrollmentController {
 
-    private final EnrollmentService enrollmentService;
+    private final IEnrollmentService enrollmentService;
 
     @PostMapping
     public ResponseEntity<ApiResponse<EnrollmentResponse>> create(@Valid @RequestBody EnrollmentRequest request) {
@@ -67,5 +72,11 @@ public class EnrollmentController {
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         enrollmentService.delete(id);
         return ResponseEntity.ok(ApiResponse.message("Enrollment deleted successfully"));
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<Page<EnrollmentResponse>>> search(EnrollmentSearchRequest request) {
+        Page<EnrollmentResponse> result = enrollmentService.search(request);
+        return ResponseEntity.ok(ApiResponse.of("Search Enrollment successfully", result));
     }
 }

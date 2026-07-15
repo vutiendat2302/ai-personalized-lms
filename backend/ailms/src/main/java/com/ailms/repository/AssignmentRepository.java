@@ -7,7 +7,7 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 @Repository
-public interface AssignmentRepository extends JpaRepository<AssignmentEntity, Long> {
+public interface AssignmentRepository extends JpaRepository<AssignmentEntity, Long>, org.springframework.data.jpa.repository.JpaSpecificationExecutor<AssignmentEntity> {
     List<AssignmentEntity> findByLessonId(Long lessonId);
     List<AssignmentEntity> findByCourseId(Long courseId);
     List<AssignmentEntity> findBySectionId(Long sectionId);

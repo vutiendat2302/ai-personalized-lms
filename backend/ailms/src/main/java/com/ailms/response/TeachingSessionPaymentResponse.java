@@ -1,6 +1,6 @@
 package com.ailms.response;
 
-import com.ailms.entity.SessionPaymentStatusEnum;
+import com.ailms.entity.enums.SessionPaymentStatusEnum;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.*;
 

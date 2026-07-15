@@ -1,6 +1,6 @@
 package com.ailms.request;
 
-import com.ailms.entity.AttendanceStatusEnum;
+import com.ailms.entity.enums.AttendanceStatusEnum;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 

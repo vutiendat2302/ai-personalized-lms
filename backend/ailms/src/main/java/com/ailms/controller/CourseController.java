@@ -1,5 +1,10 @@
 package com.ailms.controller;
 
+import org.springframework.data.domain.Page;
+import com.ailms.request.CourseSearchRequest;
+import com.ailms.response.CourseResponse;
+
+
 import com.ailms.response.ApiResponse;
 import com.ailms.response.PageResponse;
 import com.ailms.request.CourseSearchRequest;
@@ -68,5 +73,4 @@ public class CourseController {
         PageResponse<CourseResponse> response = courseService.search(request);
         return ResponseEntity.ok(ApiResponse.of("Courses retrieved successfully", response));
     }
-
 }

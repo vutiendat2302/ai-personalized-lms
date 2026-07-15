@@ -1,9 +1,14 @@
 package com.ailms.controller;
 
+import org.springframework.data.domain.Page;
+import com.ailms.request.TeachingSessionPaymentSearchRequest;
+import com.ailms.response.TeachingSessionPaymentResponse;
+
+
 import com.ailms.request.TeachingSessionPaymentRequest;
 import com.ailms.response.ApiResponse;
 import com.ailms.response.TeachingSessionPaymentResponse;
-import com.ailms.service.TeachingSessionPaymentService;
+import com.ailms.service.ITeachingSessionPaymentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -17,7 +22,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class TeachingSessionPaymentController {
 
-    private final TeachingSessionPaymentService teachingSessionPaymentService;
+    private final ITeachingSessionPaymentService teachingSessionPaymentService;
 
     @PostMapping
     public ResponseEntity<ApiResponse<TeachingSessionPaymentResponse>> create(@Valid @RequestBody TeachingSessionPaymentRequest request) {
@@ -55,5 +60,11 @@ public class TeachingSessionPaymentController {
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         teachingSessionPaymentService.delete(id);
         return ResponseEntity.ok(ApiResponse.message("Teaching session payment deleted successfully"));
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<Page<TeachingSessionPaymentResponse>>> search(TeachingSessionPaymentSearchRequest request) {
+        Page<TeachingSessionPaymentResponse> result = teachingSessionPaymentService.search(request);
+        return ResponseEntity.ok(ApiResponse.of("Search TeachingSessionPayment successfully", result));
     }
 }

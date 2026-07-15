@@ -1,6 +1,7 @@
 package com.ailms.config;
 
 import com.ailms.entity.*;
+import com.ailms.entity.enums.UserStatusEnum;
 import com.ailms.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

@@ -1,7 +1,8 @@
 package com.ailms.mapper;
 
 import com.ailms.entity.EmployeeEntity;
-import com.ailms.request.EmployeeRequest;
+import com.ailms.request.CreateEmployeeRequest;
+import com.ailms.request.UpdateEmployeeRequest;
 import com.ailms.response.EmployeeResponse;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
@@ -24,7 +25,7 @@ public interface EmployeeMapper {
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
-    EmployeeEntity toEntity(EmployeeRequest request);
+    EmployeeEntity toEntity(CreateEmployeeRequest request);
 
     @Mapping(target = "userId", ignore = true)
     @Mapping(target = "userEntity", ignore = true)
@@ -33,5 +34,5 @@ public interface EmployeeMapper {
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
-    void updateFromRequest(EmployeeRequest request, @MappingTarget EmployeeEntity entity);
+    void updateFromRequest(UpdateEmployeeRequest request, @MappingTarget EmployeeEntity entity);
 }

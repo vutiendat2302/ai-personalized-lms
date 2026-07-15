@@ -1,6 +1,6 @@
 package com.ailms.request;
 
-import com.ailms.entity.SessionPaymentStatusEnum;
+import com.ailms.entity.enums.SessionPaymentStatusEnum;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 

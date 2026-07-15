@@ -1,9 +1,14 @@
 package com.ailms.controller;
 
+import org.springframework.data.domain.Page;
+import com.ailms.request.StudyGoalSearchRequest;
+import com.ailms.response.StudyGoalResponse;
+
+
 import com.ailms.request.StudyGoalRequest;
 import com.ailms.response.ApiResponse;
 import com.ailms.response.StudyGoalResponse;
-import com.ailms.service.StudyGoalService;
+import com.ailms.service.IStudyGoalService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -17,7 +22,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class StudyGoalController {
 
-    private final StudyGoalService studyGoalService;
+    private final IStudyGoalService studyGoalService;
 
     @PostMapping
     public ResponseEntity<ApiResponse<StudyGoalResponse>> create(@Valid @RequestBody StudyGoalRequest request) {
@@ -61,5 +66,11 @@ public class StudyGoalController {
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         studyGoalService.delete(id);
         return ResponseEntity.ok(ApiResponse.message("Study goal deleted successfully"));
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<Page<StudyGoalResponse>>> search(StudyGoalSearchRequest request) {
+        Page<StudyGoalResponse> result = studyGoalService.search(request);
+        return ResponseEntity.ok(ApiResponse.of("Search StudyGoal successfully", result));
     }
 }

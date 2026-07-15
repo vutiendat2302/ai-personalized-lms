@@ -1,9 +1,14 @@
 package com.ailms.controller;
 
+import org.springframework.data.domain.Page;
+import com.ailms.request.ClassSearchRequest;
+import com.ailms.response.ClassResponse;
+
+
 import com.ailms.request.ClassRequest;
 import com.ailms.response.ApiResponse;
 import com.ailms.response.ClassResponse;
-import com.ailms.service.ClassService;
+import com.ailms.service.IClassService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -17,7 +22,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ClassController {
 
-    private final ClassService classService;
+    private final IClassService classService;
 
     @PostMapping
     public ResponseEntity<ApiResponse<ClassResponse>> create(@Valid @RequestBody ClassRequest request) {
@@ -55,5 +60,11 @@ public class ClassController {
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         classService.delete(id);
         return ResponseEntity.ok(ApiResponse.message("Class deleted successfully"));
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<Page<ClassResponse>>> search(ClassSearchRequest request) {
+        Page<ClassResponse> result = classService.search(request);
+        return ResponseEntity.ok(ApiResponse.of("Search Class successfully", result));
     }
 }

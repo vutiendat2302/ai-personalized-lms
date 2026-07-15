@@ -1,6 +1,6 @@
 package com.ailms.request;
 
-import com.ailms.entity.ClassMemberRole;
+import com.ailms.entity.enums.ClassMemberRole;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 
