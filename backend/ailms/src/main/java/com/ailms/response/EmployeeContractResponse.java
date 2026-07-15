@@ -2,6 +2,7 @@ package com.ailms.response;
 
 import com.ailms.entity.enums.BaseStatusEnum;
 import com.ailms.entity.enums.ContractTypeEnum;
+import com.ailms.entity.enums.SalaryTypeEnum;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.*;
 
@@ -30,7 +31,9 @@ public class EmployeeContractResponse {
 
     private BigDecimal baseSalary;
 
-    private String fileUrl;
+    private SalaryTypeEnum salaryTypeEnum;
+
+    private String fileKey;
 
     private BaseStatusEnum status;
 
@@ -42,4 +45,7 @@ public class EmployeeContractResponse {
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime updatedAt;
+
+    private Long createdBy;
+    private Long updatedBy;
 }

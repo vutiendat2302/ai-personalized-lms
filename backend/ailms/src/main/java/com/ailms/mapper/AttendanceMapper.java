@@ -1,11 +1,10 @@
 package com.ailms.mapper;
 
 import com.ailms.entity.AttendanceEntity;
-import com.ailms.request.AttendanceRequest;
+import com.ailms.request.CreateAttendanceRequest;
+import com.ailms.request.UpdateAttendanceRequest;
 import com.ailms.response.AttendanceResponse;
-import org.mapstruct.Mapper;
-import org.mapstruct.Mapping;
-import org.mapstruct.MappingTarget;
+import org.mapstruct.*;
 
 import java.util.List;
 
@@ -23,13 +22,14 @@ public interface AttendanceMapper {
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
-    AttendanceEntity toEntity(AttendanceRequest request);
+    AttendanceEntity toEntity(CreateAttendanceRequest request);
 
+    @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "employee", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
-    void updateFromRequest(AttendanceRequest request, @MappingTarget AttendanceEntity entity);
+    void updateFromRequest(UpdateAttendanceRequest request, @MappingTarget AttendanceEntity entity);
 }

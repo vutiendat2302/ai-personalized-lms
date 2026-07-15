@@ -1,6 +1,8 @@
 package com.ailms.service.imp;
 import com.ailms.repository.specification.SalarySpecification;
+import com.ailms.request.CreateSalaryRequest;
 import com.ailms.request.SalarySearchRequest;
+import com.ailms.request.UpdateSalaryRequest;
 import com.ailms.service.ISalaryService;
 
 
@@ -11,7 +13,6 @@ import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.mapper.SalaryMapper;
 import com.ailms.repository.EmployeeRepository;
 import com.ailms.repository.SalaryRepository;
-import com.ailms.request.SalaryRequest;
 import com.ailms.response.SalaryResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,15 +29,6 @@ import java.util.List;
 @Slf4j
 @Transactional(readOnly = true)
 public class SalaryService implements ISalaryService {
-    @Override
-    public Page<SalaryResponse> search(SalarySearchRequest request) {
-        log.info("Searching Salary via specification");
-        Specification<SalaryEntity> spec = SalarySpecification.filterAndSearch(request);
-        Pageable pageable = request.toPageable();
-        Page<SalaryEntity> page = salaryRepository.findAll(spec, pageable);
-        return page.map(salaryMapper::toResponse);
-    }
-
 
     private final SalaryRepository salaryRepository;
     private final EmployeeRepository employeeRepository;
@@ -62,7 +54,7 @@ public class SalaryService implements ISalaryService {
     }
 
     @Transactional
-    public SalaryResponse create(SalaryRequest request) {
+    public SalaryResponse create(CreateSalaryRequest request) {
         log.info("Creating salary record for employee: {} and period: {}", request.getEmployeeId(), request.getPeriod());
 
         if (salaryRepository.existsByEmployee_UserIdAndPeriod(request.getEmployeeId(), request.getPeriod())) {
@@ -80,22 +72,13 @@ public class SalaryService implements ISalaryService {
     }
 
     @Transactional
-    public SalaryResponse update(Long id, SalaryRequest request) {
+    public SalaryResponse update(Long id, UpdateSalaryRequest request) {
         log.info("Updating salary record: {}", id);
 
         SalaryEntity existing = salaryRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
 
-        if ((!existing.getEmployee().getUserId().equals(request.getEmployeeId()) || !existing.getPeriod().equals(request.getPeriod())) &&
-                salaryRepository.existsByEmployee_UserIdAndPeriod(request.getEmployeeId(), request.getPeriod())) {
-            throw new DuplicateResourceException("Salary record already exists for employee ID: " + request.getEmployeeId() + " and period: " + request.getPeriod());
-        }
-
-        EmployeeEntity employee = employeeRepository.findById(request.getEmployeeId())
-                .orElseThrow(() -> ResourceNotFoundException.of("Employee", request.getEmployeeId()));
-
         salaryMapper.updateFromRequest(request, existing);
-        existing.setEmployee(employee);
 
         SalaryEntity updated = salaryRepository.save(existing);
         return salaryMapper.toResponse(updated);
@@ -108,5 +91,14 @@ public class SalaryService implements ISalaryService {
             throw ResourceNotFoundException.of(RESOURCE_NAME, id);
         }
         salaryRepository.deleteById(id);
+    }
+
+    @Override
+    public Page<SalaryResponse> search(SalarySearchRequest request) {
+        log.info("Searching Salary via specification");
+        Specification<SalaryEntity> spec = SalarySpecification.filterAndSearch(request);
+        Pageable pageable = request.toPageable();
+        Page<SalaryEntity> page = salaryRepository.findAll(spec, pageable);
+        return page.map(salaryMapper::toResponse);
     }
 }

@@ -21,6 +21,4 @@ public class CreateDepartmentRequest {
 
     @Size(max = 3000, message = "Description must not exceed 3000 characters")
     private String description;
-
-    private Long parentId;
 }

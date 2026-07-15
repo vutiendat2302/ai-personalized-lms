@@ -3,10 +3,7 @@ package com.ailms.entity;
 import com.ailms.common.snowflake.SnowflakeId;
 import com.ailms.entity.enums.AttendanceStatusEnum;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 import lombok.experimental.SuperBuilder;
 
 import java.time.LocalDateTime;
@@ -33,10 +30,6 @@ public class AttendanceEntity extends BaseEntity {
     @JoinColumn(name = "employee_id", nullable = false)
     private EmployeeEntity employee;
 
-//    Ngay lam viec
-    @Column(name = "work_date", nullable = false)
-    private LocalDateTime workDate;
-
 //    Thoi gian check in
     @Column(name = "check_in_time")
     private LocalDateTime checkInTime;
@@ -48,7 +41,8 @@ public class AttendanceEntity extends BaseEntity {
 //    Trang thai cham cong cua nhan vien
     @Column(name = "status")
     @Enumerated(EnumType.STRING)
-    private AttendanceStatusEnum status;
+    @Builder.Default
+    private AttendanceStatusEnum status = AttendanceStatusEnum.PRESENT;
 
 //    Note
     @Column(name = "note", columnDefinition = "TEXT")

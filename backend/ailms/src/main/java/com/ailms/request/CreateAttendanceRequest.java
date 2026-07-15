@@ -1,6 +1,7 @@
 package com.ailms.request;
 
 import com.ailms.entity.enums.AttendanceStatusEnum;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 
@@ -11,14 +12,12 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class AttendanceRequest {
+public class CreateAttendanceRequest {
 
     @NotNull(message = "Employee ID is required")
     private Long employeeId;
 
-    @NotNull(message = "Work date is required")
-    private LocalDateTime workDate;
-
+    @NotBlank(message = "Check in is not null)")
     private LocalDateTime checkInTime;
 
     private LocalDateTime checkOutTime;

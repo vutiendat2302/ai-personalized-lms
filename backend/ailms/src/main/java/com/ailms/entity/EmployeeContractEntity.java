@@ -3,11 +3,9 @@ package com.ailms.entity;
 import com.ailms.common.snowflake.SnowflakeId;
 import com.ailms.entity.enums.BaseStatusEnum;
 import com.ailms.entity.enums.ContractTypeEnum;
+import com.ailms.entity.enums.SalaryTypeEnum;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 import lombok.experimental.SuperBuilder;
 
 import java.math.BigDecimal;
@@ -50,9 +48,13 @@ public class EmployeeContractEntity extends BaseEntity {
     @Column(name = "base_salary", precision = 12, scale = 2)
     private BigDecimal baseSalary;
 
-//    Duong dan toi tep hop dong da luu tru
-    @Column(name = "file_url")
-    private String fileUrl;
+    @Column(name = "salary_type")
+    @Enumerated(EnumType.STRING)
+    @Builder.Default
+    private SalaryTypeEnum salaryTypeEnum = SalaryTypeEnum.DAILY;
+
+    @Column(name = "file_key")
+    private String fileKey;
 
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "file_metadata_id")
@@ -61,7 +63,7 @@ public class EmployeeContractEntity extends BaseEntity {
 //    Trang thai hop dong
     @Column(name = "status")
     @Enumerated(EnumType.STRING)
-    private BaseStatusEnum baseStatusEnum;
+    private BaseStatusEnum status;
 
 //    Thoi diem duoc ky ket
     @Column(name = "signed_at")

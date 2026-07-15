@@ -1,4 +1,5 @@
 package com.ailms.service.imp;
+import com.ailms.entity.CategoryEntity;
 import com.ailms.service.IDepartmentService;
 
 
@@ -39,7 +40,6 @@ public class DepartmentService implements IDepartmentService {
         }
 
         DepartmentEntity entity = departmentMapper.toDepartmentEntity(request);
-        entity.setParent(resolveParent(null, request.getParentId()));
 
         return departmentMapper.toDepartmentResponse(departmentRepository.save(entity));
     }
@@ -49,21 +49,8 @@ public class DepartmentService implements IDepartmentService {
     public DepartmentResponse updateDepartment(Long id, UpdateDepartmentRequest request) {
         DepartmentEntity entity = findEntityById(id);
 
-        if (departmentRepository.existsByCodeIgnoreCaseAndIdNot(request.getCode(), id)) {
-            throw DuplicateResourceException.of(RESOURCE_NAME, "code", request.getCode());
-        }
-
         departmentMapper.updateDepartmentEntity(entity, request);
-        entity.setParent(resolveParent(id, request.getParentId()));
 
-        return departmentMapper.toDepartmentResponse(departmentRepository.save(entity));
-    }
-
-    @Override
-    @Transactional
-    public DepartmentResponse updateStatus(Long id, DepartmentStatusRequest request) {
-        DepartmentEntity entity = findEntityById(id);
-        entity.setStatus(request.getStatus());
         return departmentMapper.toDepartmentResponse(departmentRepository.save(entity));
     }
 
@@ -72,9 +59,6 @@ public class DepartmentService implements IDepartmentService {
     public void delete(Long id) {
         DepartmentEntity entity = findEntityById(id);
 
-        if (departmentRepository.existsByParent_Id(id)) {
-            throw new BusinessException("Cannot delete department that has child departments");
-        }
         if (employeeRepository.existsByDepartment_Id(id)) {
             throw new BusinessException("Cannot delete department that has employees");
         }
@@ -107,30 +91,5 @@ public class DepartmentService implements IDepartmentService {
     private DepartmentEntity findEntityById(Long id) {
         return departmentRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
-    }
-
-    private DepartmentEntity resolveParent(Long departmentId, Long parentId) {
-        if (parentId == null) {
-            return null;
-        }
-
-        if (departmentId != null && departmentId.equals(parentId)) {
-            throw new BusinessException("Department cannot be its own parent");
-        }
-
-        DepartmentEntity parent = departmentRepository.findById(parentId)
-                .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, parentId));
-
-        if (departmentId != null) {
-            DepartmentEntity current = parent;
-            while (current.getParent() != null) {
-                if (current.getParent().getId().equals(departmentId)) {
-                    throw new BusinessException("Circular department hierarchy is not allowed");
-                }
-                current = current.getParent();
-            }
-        }
-
-        return parent;
     }
 }

@@ -1,7 +1,8 @@
-package com.ailms.response;
+package com.ailms.request;
 
 import com.ailms.entity.enums.SalaryStatusEnum;
-import com.fasterxml.jackson.annotation.JsonFormat;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.*;
 
 import java.math.BigDecimal;
@@ -13,12 +14,9 @@ import java.time.YearMonth;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class SalaryResponse {
+public class UpdateSalaryRequest {
 
-    private Long id;
-
-    private Long employeeId;
-
+    @NotBlank(message = "Salary period is required")
     private YearMonth period;
 
     private BigDecimal baseSalary;
@@ -31,17 +29,7 @@ public class SalaryResponse {
 
     private SalaryStatusEnum status;
 
-    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime paidAt;
 
     private String description;
-
-    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
-    private LocalDateTime createdAt;
-
-    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
-    private LocalDateTime updatedAt;
-
-    private Long createdBy;
-    private Long updatedBy;
 }

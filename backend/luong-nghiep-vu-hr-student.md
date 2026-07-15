@@ -28,21 +28,27 @@ Có 2 nhóm nhân sự với luồng tính công/lương khác nhau:
 
 ---
 
-## 2. Luồng chi tiết từng bước
+### 5.1. Tạo Employee:
 
-1. Tạo Employee: 
+1. HR tạo tài khoản `user` (nếu chưa có) → tạo `employee` gắn `user_id`, sinh `employee_code` tự động (unique).
+2. HR tạo `employee_contract` đầu tiên:
+   - Upload `file_url` hợp đồng scan/ký số, `signed_at` = thời điểm ký, `status = ACTIVE`.
+   - Tạo xong hợp đồng thì phải gửi mail  thông báo tới user cùng với hợp đồng.
+3. Khi hết hạn thử việc, hệ thống phải thông báo cho admin, hr trước 1 tuần → HR tạo hợp đồng mới `contract_type = OFFICIAL`, hoặc không nhận nhân viên này, đồng thời set hợp đồng cũ `status = EXPIRED`. Tạo xong thì gửi thông báo tới email + hợp đồng cho user. 
 
-- `employeeCode` phải **unique tuyệt đối** trong toàn hệ thống, định dạng: `{PREFIX}-{yyMM}{sequence}` (VD: `EPHR-26070001`).
-- `employeeCode` phân biệt với `studentCode`. Employee (EP), Student (ST). EmployeeCode: EP + Role(HR, TC, TA, ...) + '-' {yyMM}{sequence}, sequence thì 'UUID(random(6 số)). Nhiều role thì role sẽ viết lần lượt theo thứ tự role, được thêm. EPHRTA-230123456 
+- 1 employee có thể có **nhiều `employee_contract` theo thời gian** nhưng chỉ **1 hợp đồng `ACTIVE` tại 1 thời điểm**.
+- `base_salary` dùng để tính lương FULL_TIME lấy từ **hợp đồng đang ACTIVE**.
+
+- `employeeCode` phải **unique tuyệt đối** trong toàn hệ thống, định dạng: `{PREFIX}-{yyMM}{sequence}` (VD: `EP-26070001`).
+- `employeeCode` phân biệt với `studentCode`. Employee (EP), Student (ST). EmployeeCode: EP + '-' {yyMM}{sequence}, sequence thì 'UUID(random(6 số)).
 ---
-
 
 ```mermaid
 flowchart TD
     A["HR or Admin tạo tài khoản user, mật khẩu tạm thời, gán role, permission<br/><small>fullName, email, role, department, employmentType...</small>"]
     B{"Validate<br/><small>email chưa tồn tại, department hợp lệ...</small>"}
     C["Tạo Employeee<br/>"]
-    D["Sinh employeeCode theo role<br/><small>(sơ đồ dưới)</small>"]
+    D["Sinh employeeCode<br/><small>(sơ đồ dưới)</small>"]
     E["Tạo EmployeeEntity<br/><small>@MapsId → userId = user.id</small>"]
     G{"Upload<br/>hợp đồng"}
     H["Upload file lên MinIO<br/>→ Tạo EmployeeContractEntity"]
@@ -65,45 +71,27 @@ flowchart TD
  
 ---
 
-2. Gen `employeeCode`
+- Gen `employeeCode`
  
  
 ```mermaid
 flowchart TD
-    A["Xác định prefix theo roles<br/><small>HR→EPHR, TA→EPTA, TEACHER→EPTC...</small>"]
-    B["Tính yyMM hiện tại<br/><small>VD: EPHR-2607</small>"]
-    C["sequence: sinh random UUID 6 kí tự"]
-    D["SELECT ... FOR UPDATE<br/>trên bảng sequence_counter<br/>WHERE code_prefix = codePrefix"]
-    E{"Đã có row<br/>counter cho prefix này<br/>trong tháng chưa?"}
-    F["INSERT row mới<br/>sequence_counter(code_prefix, current_value=1)"]
-    G["UPDATE sequence_counter<br/>SET current_value = current_value + 1<br/>WHERE code_prefix = codePrefix"]
-    H["Lấy current_value vừa cập nhật"]
-    I["Ghép thành employeeCode<br/><small>codePrefix + LPAD(sequence, 4, '0')</small>"]
-    J["COMMIT transaction riêng<br/><small>→ nhả lock ngay, không giữ tới khi employee insert xong</small>"]
-    K["Trả employeeCode<br/>cho luồng tạo employee chính"]
- 
+    A["Prefix = EP"]
+    B["Lấy yyMM hiện tại<br/>VD: 2607"]
+    C["Sinh RANDOM_6 từ UUID<br/>VD: A3F9C1"]
+    D["Ghép code<br/>EP-2607A3F9C1"]
+    E{"Đã tồn tại?"}
+    F["Sinh lại"]
+    G["Trả employeeCode"]
+
     A --> B --> C --> D --> E
-    E -->|Chưa có| F --> J
-    E -->|Đã có| G --> H --> J
-    J --> I --> K
+    E -->|Có| F
+    F --> C
+    E -->|Không| G
 ```
  
-### Vì sao dùng `SELECT ... FOR UPDATE` thay vì `COUNT(*) + 1`?
- 
-| Cách | Vấn đề |
-|---|---|
-| `COUNT(employeeCode LIKE 'EPHR-2607%') + 1` | 2 request đọc cùng lúc → cùng thấy count = 5 → cả 2 cùng sinh `...0006` → trùng, 1 bên bị chặn bởi unique constraint và fail |
-| `SELECT ... FOR UPDATE` trên bảng counter riêng | Request thứ 2 phải **chờ** request thứ 1 commit xong mới đọc được giá trị mới nhất → không bao giờ trùng, vì DB tự xếp hàng (row lock) |
- 
-### Vì sao tách `sequence_counter` thành bảng riêng, không lock trực tiếp trên bảng `employee`?
- 
-- Nếu lock trực tiếp trên `employee` (VD: `SELECT ... FOR UPDATE` trên toàn bộ row có prefix đó), sẽ **khóa luôn** các thao tác đọc/ghi khác không liên quan trên bảng `employee` trong lúc chờ.
-- Bảng `sequence_counter` (chỉ có `code_prefix`, `current_value`) là bảng **nhỏ, thao tác cực nhanh** (1 UPDATE đơn giản) → giữ lock trong thời gian rất ngắn → transaction sinh code không làm nghẽn các HR khác đang thao tác trên bảng `employee`.
-- Transaction sinh code dùng `REQUIRES_NEW` (transaction con độc lập) → **commit ngay** sau khi lấy được số thứ tự, nhả lock lập tức, không phải chờ tới khi toàn bộ luồng tạo employee (insert user, employee, contract...) hoàn tất mới nhả lock.
----
- 
-## 4. Sequence diagram — Toàn bộ luồng tạo Employee (nhấn mạnh phần sinh code)
- 
+- Sequence diagram — Toàn bộ luồng tạo Employee
+  
 ```mermaid
 sequenceDiagram
     actor HR
@@ -117,101 +105,84 @@ sequenceDiagram
     EmployeeService->>DB: INSERT INTO user (...)
     DB-->>EmployeeService: user_id
  
-    Note over EmployeeService,CodeGenerator: Transaction con độc lập (REQUIRES_NEW)
-    EmployeeService->>CodeGenerator: generate(role = HR)
-    CodeGenerator->>DB: BEGIN transaction riêng
-    CodeGenerator->>DB: SELECT ... FOR UPDATE<br/>WHERE code_prefix = 'EPHR-2607'
-    DB-->>CodeGenerator: current_value = 5 (row bị lock)
+    EmployeeService->>CodeGenerator: generate()
+    loop Tối đa 5 lần (thực tế thường chỉ 1 lần)
+        CodeGenerator->>CodeGenerator: sinh RANDOM_6 từ UUID
+        CodeGenerator->>CodeGenerator: ghép "EP-" + yyMM + "-" + RANDOM_6
+        CodeGenerator->>DB: SELECT EXISTS(...) WHERE employee_code = candidateCode
+        DB-->>CodeGenerator: false (không trùng)
+    end
+    CodeGenerator-->>EmployeeService: "EP-2607-A3F9C1"
  
-    Note over DB: Request khác (nếu có) phải CHỜ ở đây<br/>cho tới khi transaction này COMMIT
- 
-    CodeGenerator->>DB: UPDATE sequence_counter<br/>SET current_value = 6
-    CodeGenerator->>DB: COMMIT transaction riêng
-    Note over DB: Nhả lock ngay — request khác được tiếp tục
-    CodeGenerator-->>EmployeeService: "EPHR-26070006"
- 
-    EmployeeService->>DB: INSERT INTO employee (employee_code = 'EPHR-26070006', ...)
+    EmployeeService->>DB: INSERT INTO employee (employee_code = 'EP-2607-A3F9C1', ...)
     EmployeeService->>DB: INSERT INTO user_role (user_id, role = HR)
  
     opt Có upload hợp đồng
         EmployeeService->>DB: INSERT INTO employee_contract (...)
     end
  
-    EmployeeService->>DB: COMMIT transaction chính
+    EmployeeService->>DB: COMMIT transaction
     EmployeeService->>EmployeeService: publishEvent(EmployeeCreatedEvent)
  
     Note over EmployeeService: [AFTER COMMIT]
     EmployeeService->>HR: Gửi email chào mừng (async, không chặn response)
  
-    EmployeeService-->>HR: EmployeeResponse (employeeCode = EPHR-26070006)
+    EmployeeService-->>HR: EmployeeResponse (employeeCode = EP-2607-A3F9C1)
 ```
- 
 ---
- 
-## 5. Bảng thiết kế đề xuất — `sequence_counter`
- 
-Cần thêm 1 bảng mới để phục vụ cơ chế sinh code an toàn ở trên:
- 
-| Column | Type | Description |
-|---|---|---|
-| `code_prefix` | VARCHAR(20) | PK — VD: `EPHR-2607` |
-| `current_value` | BIGINT | Số thứ tự hiện tại, tăng dần mỗi lần sinh code mới |
-| `updated_at` | DATETIME | Thời điểm cập nhật gần nhất |
- 
-**Business rule:** `code_prefix` reset theo tháng (vì đã bao gồm `yyMM` trong chính giá trị prefix) — không cần job dọn dẹp gì thêm, mỗi tháng mới tự động tạo row mới bắt đầu từ `current_value = 1`.
- 
+
+- Mối quan hệ giữa file và employee contrac 
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Admin as Người Quản trị (Client)
+    participant Ctrl as File & Contract Controller
+    participant FileSvc as FileService (Điều phối)
+    participant Storage as MinioFileStorageService
+    participant MetaSvc as FileMetadataService
+    participant ContractSvc as EmployeeContractService
+    participant Repo as Database (MySQL)
+
+    Note over Admin,Storage: GIAI ĐOẠN 1: TẢI FILE PDF HỢP ĐỒNG LÊN HỆ THỐNG
+    Admin->>Ctrl: POST /api/v1/files/upload (file, fileType=CERTIFICATION)
+    Ctrl->>FileSvc: uploadFile(file, CERTIFICATION)
+    FileSvc->>Storage: upload(inputStream, fileKey, contentType, size)
+    Note over Storage: Lưu file vật lý vào MinIO
+    Storage-->>FileSvc: Trả về fileKey thành công
+    FileSvc->>MetaSvc: create(CreateFileMetadataRequest)
+    MetaSvc->>Repo: Lưu bản ghi metadata vào bảng file_metadata
+    Repo-->>MetaSvc: Trả về FileMetadataEntity
+    MetaSvc-->>FileSvc: Trả về FileMetadataResponse
+    FileSvc-->>Ctrl: Trả về FileMetadataResponse
+    Ctrl-->>Admin: HTTP 201 Created (Chứa fileKey)
+
+    Note over Admin,Repo: GIAI ĐOẠN 2: LƯU HỢP ĐỒNG KÈM FILE LIÊN KẾT
+    Admin->>Ctrl: POST /api/v1/employee-contracts (CreateEmployeeContractRequest gồm fileKey)
+    Ctrl->>ContractSvc: create(CreateEmployeeContractRequest)
+    ContractSvc->>Repo: Tìm kiếm file_metadata theo fileKey (Qua default method findByFileKey)
+    Repo-->>ContractSvc: Trả về FileMetadataEntity (Nếu có)
+    ContractSvc->>ContractSvc: Thiết lập liên kết: contract.setFileMetadata(metadata)
+    ContractSvc->>Repo: Lưu hợp đồng vào bảng employee_contract
+    Repo-->>ContractSvc: Trả về EmployeeContractEntity đã lưu
+    ContractSvc-->>Ctrl: Trả về EmployeeContractResponse (Mapper sinh url download động)
+    Ctrl-->>Admin: HTTP 200 OK (Hợp đồng đã tạo thành công kèm file)
+```
+
 ---
- 
-## 6. Trường hợp lỗi cần xử lý thêm
- 
-| Tình huống | Xử lý |
-|---|---|
-| Transaction sinh code bị timeout (DB deadlock hiếm gặp) | Retry tối đa 3 lần với backoff ngắn (`@Retryable`) |
-| `role` không map được prefix nào (enum thiếu case) | Throw `BusinessException` ngay từ bước đầu, không tạo `user` trước rồi mới fail giữa chừng |
-| Unique constraint `employee_code` vẫn bị vi phạm (trường hợp cực hiếm nếu có bug logic) | Bắt `DataIntegrityViolationException`, rollback toàn bộ transaction chính, trả lỗi rõ ràng cho HR để thử lại |
- 
----
- 
-## 7. Câu hỏi cần xác nhận
- 
-1. Bạn có đồng ý thêm bảng `sequence_counter` mới, hay muốn dùng cách khác (VD: DB auto-increment riêng theo prefix, hoặc dùng Redis `INCR` thay vì lock DB)?
-2. Nếu hệ thống có traffic tạo nhân viên **rất thấp** (vài người/ngày, không phải hệ thống lớn), cách `COUNT(*) + 1` đơn giản vẫn có thể chấp nhận được về mặt thực tế (rủi ro trùng gần như không xảy ra) — bạn có cần độ an toàn cao (`SELECT FOR UPDATE`) hay ưu tiên đơn giản hóa code?
 
-### Bước 1 — Onboarding nhân viên (`employee` + `employee_contract`)
+### 5.2 Probation Review (Đánh giá thử việc, hợp đồng)
 
-1. HR tạo tài khoản `user` (nếu chưa có) → tạo `employee` gắn `user_id`, sinh `employee_code` tự động (unique) (cái này sẽ là thêm nhân viên - thì lúc đó sẽ đưa tới tạo tài khoản, xong rồi đến điền các thông tin nhân viên) - Mã sẽ kểu EPHR-2301, phải dựa cả vào role nữa, role là HR thì gán EPHR, nếu là TA thì EPTA-2031, gán `department_id`, `position`, `employment_type` (FULL_TIME/PART_TIME), `start_date`, `status = ACTIVE`. 
-2. HR tạo `employee_contract` đầu tiên:
-   - `contract_type = PROBATION` (thử việc) thường tạo trước, `base_salary` thử việc thấp hơn chính thức.
-   - Upload `file_url` hợp đồng scan/ký số, `signed_at` = thời điểm ký, `status = ACTIVE`.
-   - Tạo xong hợp đồng thì phải gửi mail  thông báo tới user cùng với hợp đồng (hoặc link hợp đồng vì lưu trữ ở MInio rồi)
-3. Khi hết hạn thử việc phải thông báo cho admin, hr trước 1 tuần → HR tạo hợp đồng mới `contract_type = OFFICIAL`, hoặc không nhận nhân viên này, đồng thời set hợp đồng cũ `status = EXPIRED`. Tạo xong thì gửi thông báo tới email + hợp đồng cho user. 
-4. Nếu nhân viên nghỉ việc:
-   - `employee.status = TERMINATED`, `end_date` = ngày nghỉ.
-   - Hợp đồng hiện hành `employee_contract.status = TERMINATED`.
-
-**Business rule:**
-- 1 employee có thể có **nhiều `employee_contract` theo thời gian** (lịch sử: thử việc → chính thức → gia hạn...) nhưng chỉ **1 hợp đồng `ACTIVE` tại 1 thời điểm**.
-- `base_salary` dùng để tính lương FULL_TIME lấy từ **hợp đồng đang ACTIVE**, không lấy từ hợp đồng đã `EXPIRED`.
-
-
-## Flowchart
  
 ```mermaid
 flowchart TD
-    A["Thêm nhân viên<br/><small>Tạo tài khoản user</small>"]
-    B["Điền thông tin nhân viên<br/><small>Sinh employee_code theo role (EPHR-2301, EPTA-2031...), department, position, employment_type, status = ACTIVE</small>"]
-    C["Tạo hợp đồng PROBATION<br/><small>Upload file lên MinIO, status = ACTIVE</small>"]
-    D["Gửi email thông báo<br/><small>Kèm link hợp đồng cho user</small>"]
-    E["Trước 1 tuần hết hạn thử việc<br/><small>Thông báo Admin + HR</small>"]
-    F{"Đạt thử việc?"}
+    E["Trước 1 tuần hết hạn thử việc, hoặc hết hợp đồng<br/><small>Thông báo Admin + HR</small>"]
+    F{"Đạt thử việc, hoàn thành tốt?"}
     G["Tạo hợp đồng OFFICIAL<br/><small>Hợp đồng cũ → EXPIRED, gửi email + hợp đồng mới</small>"]
-    H["Không nhận nhân viên<br/><small>employee.status = TERMINATED,  hết thời gian thử việc sẽ gửi mail thông báo. </small>"]
+    H["Không nhận nhân viên, kết thúc hợp đồng<br/><small>employee.status = TERMINATED,  hết thời gian thử việc sẽ gửi mail thông báo. </small>"]
     I["Nhân viên nghỉ việc<br/><small>employee & hợp đồng hiện hành → TERMINATED</small>"]
  
-    A --> B
-    B --> C
-    C --> D
-    D --> E
+
     E --> F
     F -->|"Đạt"| G
     F -->|"Không đạt"| H
@@ -219,46 +190,7 @@ flowchart TD
 ```
  
 ---
- 
-## Sequence diagram
- 
-```mermaid
-sequenceDiagram
-    actor HR
-    participant System as Hệ thống
-    participant Storage as MinIO
-    actor Employee as Nhân viên
- 
-    HR->>System: Thêm nhân viên (tạo user)
-    System-->>HR: user_id
- 
-    HR->>System: Điền thông tin employee (role, department, position...)
-    System->>System: Sinh employee_code theo role (EPHR-2301 / EPTA-2031...)
-    System-->>HR: employee_code, status = ACTIVE
- 
-    HR->>System: Tạo employee_contract (PROBATION)
-    System->>Storage: Lưu file hợp đồng
-    Storage-->>System: file_url
-    System-->>HR: contract ACTIVE
-    System->>Employee: Gửi email + link hợp đồng
- 
-    Note over HR,System: Trước 1 tuần hết hạn thử việc
-    System->>HR: Thông báo nhắc nhở
- 
-    alt Đạt thử việc
-        HR->>System: Tạo hợp đồng OFFICIAL
-        System->>System: Set hợp đồng cũ → EXPIRED
-        System->>Employee: Gửi email + hợp đồng mới
-    else Không đạt
-        HR->>System: Không gia hạn hợp đồng
-        System->>System: employee.status = TERMINATED, hết thời gian thử việc sẽ gửi mail thông báo. 
-    end
- 
-    opt Nhân viên nghỉ việc (bất kỳ lúc nào)
-        HR->>System: Cập nhật employee.status = TERMINATED
-        System->>System: Set hợp đồng hiện hành → TERMINATED
-    end
-```
+
 
 ### Bước 2A — Chấm công nhân viên FULL_TIME (`attendance`)
 

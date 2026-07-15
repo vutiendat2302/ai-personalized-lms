@@ -10,5 +10,7 @@ public enum AttendanceStatusEnum {
 //    Nghi phep duoc phe duyet
     ON_LEAVE,
 //     lam viec nua ngay
-    HALF_DAY
+    HALF_DAY,
+
+    Day
 }

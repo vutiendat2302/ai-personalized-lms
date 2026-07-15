@@ -18,9 +18,6 @@ public class AttendanceResponse {
     private Long employeeId;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
-    private LocalDateTime workDate;
-
-    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime checkInTime;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")

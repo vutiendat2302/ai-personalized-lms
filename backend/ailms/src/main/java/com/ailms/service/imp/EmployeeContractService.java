@@ -1,6 +1,8 @@
 package com.ailms.service.imp;
 import com.ailms.repository.specification.EmployeeContractSpecification;
+import com.ailms.request.CreateEmployeeContractRequest;
 import com.ailms.request.EmployeeContractSearchRequest;
+import com.ailms.request.UpdateEmployeeContractRequest;
 import com.ailms.service.IEmployeeContractService;
 
 
@@ -11,7 +13,6 @@ import com.ailms.mapper.EmployeeContractMapper;
 import com.ailms.repository.EmployeeContractRepository;
 import com.ailms.repository.EmployeeRepository;
 import com.ailms.repository.FileMetadataRepository;
-import com.ailms.request.EmployeeContractRequest;
 import com.ailms.response.EmployeeContractResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -63,7 +64,7 @@ public class EmployeeContractService implements IEmployeeContractService {
     }
 
     @Transactional
-    public EmployeeContractResponse create(EmployeeContractRequest request) {
+    public EmployeeContractResponse create(CreateEmployeeContractRequest request) {
         log.info("Creating contract for employee: {}", request.getEmployeeId());
 
         EmployeeEntity employee = employeeRepository.findById(request.getEmployeeId())
@@ -72,8 +73,8 @@ public class EmployeeContractService implements IEmployeeContractService {
         EmployeeContractEntity entity = employeeContractMapper.toEntity(request);
         entity.setEmployee(employee);
 
-        if (request.getFileUrl() != null) {
-            fileMetadataRepository.findByFileKey(request.getFileUrl())
+        if (request.getFileKey() != null) {
+            fileMetadataRepository.findByFileKey(request.getFileKey())
                     .ifPresent(entity::setFileMetadata);
         }
 
@@ -82,27 +83,13 @@ public class EmployeeContractService implements IEmployeeContractService {
     }
 
     @Transactional
-    public EmployeeContractResponse update(Long id, EmployeeContractRequest request) {
+    public EmployeeContractResponse update(Long id, UpdateEmployeeContractRequest request) {
         log.info("Updating contract: {}", id);
 
         EmployeeContractEntity existing = employeeContractRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
 
-        EmployeeEntity employee = employeeRepository.findById(request.getEmployeeId())
-                .orElseThrow(() -> ResourceNotFoundException.of("Employee", request.getEmployeeId()));
-
         employeeContractMapper.updateFromRequest(request, existing);
-        existing.setEmployee(employee);
-
-        if (request.getFileUrl() != null) {
-            fileMetadataRepository.findByFileKey(request.getFileUrl())
-                    .ifPresentOrElse(
-                            existing::setFileMetadata,
-                            () -> existing.setFileMetadata(null)
-                    );
-        } else {
-            existing.setFileMetadata(null);
-        }
 
         EmployeeContractEntity updated = employeeContractRepository.save(existing);
         return employeeContractMapper.toResponse(updated);

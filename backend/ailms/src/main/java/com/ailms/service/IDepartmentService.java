@@ -12,8 +12,6 @@ public interface IDepartmentService {
 
     DepartmentResponse updateDepartment(Long id, UpdateDepartmentRequest request);
 
-    DepartmentResponse updateStatus(Long id, DepartmentStatusRequest request);
-
     void delete(Long id);
 
     DepartmentResponse getDepartmentById(Long id);

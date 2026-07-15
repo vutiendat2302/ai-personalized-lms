@@ -25,11 +25,6 @@ public class DepartmentEntity extends BaseEntity {
     @Column(name = "id", updatable = false, nullable = false)
     private Long id;
 
-    /** * Phòng ban cha của phòng ban hiện tại. * Null nếu là phòng ban cấp cao nhất. */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "parent_id")
-    private DepartmentEntity parent;
-
     /** * Mã phòng ban duy nhất trong hệ thống. */
     @Column(name = "code", nullable = false, unique = true, length = 50)
     private String code;
@@ -47,12 +42,8 @@ public class DepartmentEntity extends BaseEntity {
      */
     @Column(name = "status")
     @Enumerated(EnumType.STRING)
-    private BaseStatusEnum status;
-
-    /** * Danh sách các phòng ban con trực thuộc. */
-    @OneToMany(mappedBy = "parent", fetch = FetchType.LAZY)
     @Builder.Default
-    private List<DepartmentEntity> children = new ArrayList<>();
+    private BaseStatusEnum status = BaseStatusEnum.ACTIVE;
 
     /** * Danh sách nhân viên thuộc phòng ban. */
     @OneToMany(mappedBy = "department", fetch = FetchType.LAZY)

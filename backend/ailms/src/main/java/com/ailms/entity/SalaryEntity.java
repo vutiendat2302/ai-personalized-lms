@@ -2,11 +2,9 @@ package com.ailms.entity;
 
 import com.ailms.common.snowflake.SnowflakeId;
 import com.ailms.entity.enums.SalaryStatusEnum;
+import com.ailms.entity.enums.SalaryTypeEnum;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 import lombok.experimental.SuperBuilder;
 
 import java.math.BigDecimal;
@@ -44,6 +42,10 @@ public class SalaryEntity extends BaseEntity {
     @Column(name = "base_salary", precision = 12, scale = 2)
     private BigDecimal baseSalary;
 
+    @Column(name = "salary_type")
+    @Enumerated(EnumType.STRING)
+    private SalaryTypeEnum salaryTypeEnum;
+
     /** * Khoản thưởng trong kỳ lương. */
     @Column(name = "bonus", precision = 12, scale = 2)
     private BigDecimal bonus;
@@ -59,9 +61,13 @@ public class SalaryEntity extends BaseEntity {
     /** * Trạng thái xử lý và thanh toán lương. */
     @Column(name = "status")
     @Enumerated(EnumType.STRING)
-    private SalaryStatusEnum status;
+    @Builder.Default
+    private SalaryStatusEnum status = SalaryStatusEnum.DRAFT;
 
     /** * Thời điểm hoàn tất thanh toán lương. */
     @Column(name = "paid_at")
     private LocalDateTime paidAt;
+
+    @Column(name = "description")
+    private String description;
 }

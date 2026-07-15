@@ -1,13 +1,12 @@
 package com.ailms.controller;
 
+import com.ailms.request.CreateAttendanceRequest;
+import com.ailms.request.UpdateAttendanceRequest;
 import org.springframework.data.domain.Page;
 import com.ailms.request.AttendanceSearchRequest;
 import com.ailms.response.AttendanceResponse;
 
-
-import com.ailms.request.AttendanceRequest;
 import com.ailms.response.ApiResponse;
-import com.ailms.response.AttendanceResponse;
 import com.ailms.service.IAttendanceService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +24,7 @@ public class AttendanceController {
     private final IAttendanceService attendanceService;
 
     @PostMapping
-    public ResponseEntity<ApiResponse<AttendanceResponse>> create(@Valid @RequestBody AttendanceRequest request) {
+    public ResponseEntity<ApiResponse<AttendanceResponse>> create(@Valid @RequestBody CreateAttendanceRequest request) {
         AttendanceResponse response = attendanceService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of("Attendance record created successfully", response));
     }
@@ -33,7 +32,7 @@ public class AttendanceController {
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<AttendanceResponse>> update(
             @PathVariable Long id,
-            @Valid @RequestBody AttendanceRequest request) {
+            @Valid @RequestBody UpdateAttendanceRequest request) {
         AttendanceResponse response = attendanceService.update(id, request);
         return ResponseEntity.ok(ApiResponse.of("Attendance record updated successfully", response));
     }

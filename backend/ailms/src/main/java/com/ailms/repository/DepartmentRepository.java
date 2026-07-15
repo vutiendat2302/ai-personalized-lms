@@ -10,5 +10,4 @@ public interface DepartmentRepository extends JpaRepository<DepartmentEntity, Lo
 
     boolean existsByCodeIgnoreCaseAndIdNot(String code, Long id);
 
-    boolean existsByParent_Id(Long parentId);
 }

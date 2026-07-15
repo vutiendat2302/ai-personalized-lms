@@ -23,7 +23,7 @@ import java.math.BigDecimal;
 @NoArgsConstructor
 @AllArgsConstructor
 @SuperBuilder
-public class TeachingSessionPaymentEntity extends BaseEntity {
+public class  TeachingSessionPaymentEntity extends BaseEntity {
 
     @Id
     @SnowflakeId

@@ -1,4 +1,6 @@
 package com.ailms.service.imp;
+import com.ailms.request.CreateAttendanceRequest;
+import com.ailms.request.UpdateAttendanceRequest;
 import com.ailms.service.IAttendanceService;
 
 
@@ -9,7 +11,6 @@ import com.ailms.mapper.AttendanceMapper;
 import com.ailms.repository.AttendanceRepository;
 import com.ailms.repository.EmployeeRepository;
 import com.ailms.repository.specification.AttendanceSpecification;
-import com.ailms.request.AttendanceRequest;
 import com.ailms.request.AttendanceSearchRequest;
 import com.ailms.response.AttendanceResponse;
 import lombok.RequiredArgsConstructor;
@@ -61,7 +62,7 @@ public class AttendanceService implements IAttendanceService {
     }
 
     @Transactional
-    public AttendanceResponse create(AttendanceRequest request) {
+    public AttendanceResponse create(CreateAttendanceRequest request) {
         log.info("Creating attendance for employee: {}", request.getEmployeeId());
 
         EmployeeEntity employee = employeeRepository.findById(request.getEmployeeId())
@@ -75,17 +76,13 @@ public class AttendanceService implements IAttendanceService {
     }
 
     @Transactional
-    public AttendanceResponse update(Long id, AttendanceRequest request) {
+    public AttendanceResponse update(Long id, UpdateAttendanceRequest request) {
         log.info("Updating attendance record: {}", id);
 
         AttendanceEntity existing = attendanceRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
 
-        EmployeeEntity employee = employeeRepository.findById(request.getEmployeeId())
-                .orElseThrow(() -> ResourceNotFoundException.of("Employee", request.getEmployeeId()));
-
         attendanceMapper.updateFromRequest(request, existing);
-        existing.setEmployee(employee);
 
         AttendanceEntity updated = attendanceRepository.save(existing);
         return attendanceMapper.toResponse(updated);

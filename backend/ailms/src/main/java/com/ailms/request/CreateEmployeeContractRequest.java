@@ -2,6 +2,7 @@ package com.ailms.request;
 
 import com.ailms.entity.enums.BaseStatusEnum;
 import com.ailms.entity.enums.ContractTypeEnum;
+import com.ailms.entity.enums.SalaryTypeEnum;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 
@@ -14,7 +15,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class EmployeeContractRequest {
+public class CreateEmployeeContractRequest {
 
     @NotNull(message = "Employee ID is required")
     private Long employeeId;
@@ -27,7 +28,9 @@ public class EmployeeContractRequest {
 
     private BigDecimal baseSalary;
 
-    private String fileUrl;
+    private SalaryTypeEnum salaryTypeEnum;
+
+    private String fileKey;
 
     private BaseStatusEnum status;
 

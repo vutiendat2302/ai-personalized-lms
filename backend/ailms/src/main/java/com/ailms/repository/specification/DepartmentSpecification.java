@@ -25,11 +25,6 @@ public final class DepartmentSpecification {
             ));
         }
 
-        if (request.getParentId() != null) {
-            spec = spec.and((root, query, criteriaBuilder) ->
-                    criteriaBuilder.equal(root.get("parent").get("id"), request.getParentId()));
-        }
-
         if (request.getStatus() != null) {
             spec = spec.and((root, query, criteriaBuilder) ->
                     criteriaBuilder.equal(root.get("status"), request.getStatus()));
