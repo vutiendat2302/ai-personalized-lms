@@ -17,6 +17,7 @@ public interface EmployeeMapper {
 
     List<EmployeeResponse> toResponseList(List<EmployeeEntity> list);
 
+    @Mapping(target = "userId", ignore = true)
     @Mapping(target = "userEntity", ignore = true)
     @Mapping(target = "department", ignore = true)
     @Mapping(target = "createdAt", ignore = true)

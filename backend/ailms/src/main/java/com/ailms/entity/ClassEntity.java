@@ -26,11 +26,11 @@ public class ClassEntity extends BaseEntity {
     @Column(name = "id", updatable = false, nullable = false)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "course_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "course_id")
     private CourseEntity courseEntity;
 
-    @Column(name = "name", nullable = false)
+    @Column(name = "name")
     private String name;
 
     @Column(name = "type")

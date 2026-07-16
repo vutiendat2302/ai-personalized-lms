@@ -17,6 +17,11 @@ public final class TeachingSessionPaymentSpecification {
             return spec;
         }
 
+        if (StringUtils.hasText(request.getKeyword())) {
+            String pattern = "%" + request.getKeyword().toLowerCase() + "%";
+            spec = spec.and((root, query, criteriaBuilder) ->
+                    criteriaBuilder.like(criteriaBuilder.lower(root.get("employee").get("employeeCode")), pattern));
+        }
 
         if (request.getCreatedFrom() != null) {
             spec = spec.and((root, query, criteriaBuilder) ->

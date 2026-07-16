@@ -1,5 +1,6 @@
 package com.ailms.request;
  
+import com.ailms.entity.enums.BaseStatusEnum;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.*;
 import java.time.LocalDateTime;
@@ -12,7 +13,7 @@ import java.time.LocalDateTime;
 @EqualsAndHashCode(callSuper = false)
 public class TeachingRateSearchRequest extends BaseSearchRequest {
     private String keyword;
-    private Byte status;
+    private BaseStatusEnum status;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime createdFrom;

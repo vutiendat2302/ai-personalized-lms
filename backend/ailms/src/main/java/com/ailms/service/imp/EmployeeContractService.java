@@ -29,15 +29,6 @@ import java.util.List;
 @Slf4j
 @Transactional(readOnly = true)
 public class EmployeeContractService implements IEmployeeContractService {
-    @Override
-    public Page<EmployeeContractResponse> search(EmployeeContractSearchRequest request) {
-        log.info("Searching EmployeeContract via specification");
-        Specification<EmployeeContractEntity> spec = EmployeeContractSpecification.filterAndSearch(request);
-        Pageable pageable = request.toPageable();
-        Page<EmployeeContractEntity> page = employeeContractRepository.findAll(spec, pageable);
-        return page.map(employeeContractMapper::toResponse);
-    }
-
 
     private final EmployeeContractRepository employeeContractRepository;
     private final EmployeeRepository employeeRepository;
@@ -103,4 +94,15 @@ public class EmployeeContractService implements IEmployeeContractService {
         }
         employeeContractRepository.deleteById(id);
     }
+
+    @Override
+    public Page<EmployeeContractResponse> search(EmployeeContractSearchRequest request) {
+        log.info("Searching EmployeeContract via specification");
+        Specification<EmployeeContractEntity> spec = EmployeeContractSpecification.filterAndSearch(request);
+        Pageable pageable = request.toPageable();
+        Page<EmployeeContractEntity> page = employeeContractRepository.findAll(spec, pageable);
+        return page.map(employeeContractMapper::toResponse);
+    }
+
+
 }

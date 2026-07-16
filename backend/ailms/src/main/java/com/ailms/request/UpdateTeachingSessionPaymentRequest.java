@@ -1,7 +1,6 @@
 package com.ailms.request;
 
 import com.ailms.entity.enums.SessionPaymentStatusEnum;
-import jakarta.validation.constraints.NotNull;
 import lombok.*;
 
 import java.math.BigDecimal;
@@ -11,21 +10,21 @@ import java.math.BigDecimal;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class TeachingSessionPaymentRequest {
+public class UpdateTeachingSessionPaymentRequest {
 
-    @NotNull(message = "Class online ID is required")
     private Long classOnlineId;
 
-    @NotNull(message = "Employee ID is required")
     private Long employeeId;
 
     private Long rateId;
 
     private BigDecimal rateApplied;
 
-    private Integer actualDurationMin;
+    private int actualDurationMin;
 
     private BigDecimal amount;
 
     private SessionPaymentStatusEnum status;
+
+    private String description;
 }

@@ -17,5 +17,5 @@ public interface IEmployeeService {
     EmployeeResponse getById(Long id);
     EmployeeResponse create(CreateEmployeeRequest request);
     EmployeeResponse update(Long id, UpdateEmployeeRequest request);
-    void delete(Long id);
+    void softDelete(Long id);
 }

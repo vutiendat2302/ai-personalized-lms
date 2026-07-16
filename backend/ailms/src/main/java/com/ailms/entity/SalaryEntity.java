@@ -55,7 +55,7 @@ public class SalaryEntity extends BaseEntity {
     private BigDecimal deduction;
 
     /** * Tổng lương thực nhận. totalSalary = baseSalary + bonus - deduction. */
-    @Column(name = "total_salary", precision = 12, scale = 2)
+    @Column(name = "total_salary", precision = 19, scale = 2)
     private BigDecimal totalSalary;
 
     /** * Trạng thái xử lý và thanh toán lương. */

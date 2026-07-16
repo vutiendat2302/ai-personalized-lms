@@ -6,5 +6,7 @@ public enum SalaryStatusEnum {
 //    Da duoc phe duyet va san sang thanh toan
     APPROVED,
 //    Da thanh toan cho nhan vien
-    PAID
+    PAID,
+
+    PENDING
 }

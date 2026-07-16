@@ -13,12 +13,11 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @SuperBuilder
-public class TeachingRateRequest {
+public class CreateTeachingRateRequest {
 
     @NotNull(message = "Employee ID is required")
     private Long employeeId;
 
-    @NotNull(message = "Class ID is required")
     private Long classId;
 
     private BigDecimal rate;
@@ -27,5 +26,5 @@ public class TeachingRateRequest {
 
     private LocalDateTime effectiveTo;
 
-    private BaseStatusEnum status;
+    private String description;
 }

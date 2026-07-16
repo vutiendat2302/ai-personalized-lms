@@ -1,13 +1,13 @@
 package com.ailms.controller;
 
+import com.ailms.request.CreateTeachingRateRequest;
+import com.ailms.request.UpdateTeachingRateRequest;
 import org.springframework.data.domain.Page;
 import com.ailms.request.TeachingRateSearchRequest;
 import com.ailms.response.TeachingRateResponse;
 
 
-import com.ailms.request.TeachingRateRequest;
 import com.ailms.response.ApiResponse;
-import com.ailms.response.TeachingRateResponse;
 import com.ailms.service.ITeachingRateService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -18,14 +18,14 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/teaching-rates")
+@RequestMapping("${api.prefix}/teaching-rates")
 @RequiredArgsConstructor
 public class TeachingRateController {
 
     private final ITeachingRateService teachingRateService;
 
     @PostMapping
-    public ResponseEntity<ApiResponse<TeachingRateResponse>> create(@Valid @RequestBody TeachingRateRequest request) {
+    public ResponseEntity<ApiResponse<TeachingRateResponse>> create(@Valid @RequestBody CreateTeachingRateRequest request) {
         TeachingRateResponse response = teachingRateService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of("Teaching rate created successfully", response));
     }
@@ -33,7 +33,7 @@ public class TeachingRateController {
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<TeachingRateResponse>> update(
             @PathVariable Long id,
-            @Valid @RequestBody TeachingRateRequest request) {
+            @Valid @RequestBody UpdateTeachingRateRequest request) {
         TeachingRateResponse response = teachingRateService.update(id, request);
         return ResponseEntity.ok(ApiResponse.of("Teaching rate updated successfully", response));
     }

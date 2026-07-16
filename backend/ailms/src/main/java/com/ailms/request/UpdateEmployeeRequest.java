@@ -16,10 +16,8 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 public class UpdateEmployeeRequest {
-    @NotNull(message = "User ID is required")
     private Long userId;
 
-    @NotBlank(message = "Employee code must not be blank")
     private String employeeCode;
 
     private Long departmentId;

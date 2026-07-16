@@ -16,7 +16,6 @@ import java.time.YearMonth;
 @Builder
 public class UpdateSalaryRequest {
 
-    @NotBlank(message = "Salary period is required")
     private YearMonth period;
 
     private BigDecimal baseSalary;

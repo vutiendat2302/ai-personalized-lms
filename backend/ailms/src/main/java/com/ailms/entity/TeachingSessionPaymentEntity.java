@@ -3,10 +3,7 @@ package com.ailms.entity;
 import com.ailms.common.snowflake.SnowflakeId;
 import com.ailms.entity.enums.SessionPaymentStatusEnum;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 import lombok.experimental.SuperBuilder;
 
 import java.math.BigDecimal;
@@ -31,13 +28,13 @@ public class  TeachingSessionPaymentEntity extends BaseEntity {
     private Long id;
 
 //    lop hoc truc tuyen
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "class_online_id")
     private ClassOnlineEntity classOnline;
 
 //    Giang vien
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "employee_id", nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "employee_id")
     private EmployeeEntity employee;
 
 //    Bang don gia duoc ap dung
@@ -51,7 +48,8 @@ public class  TeachingSessionPaymentEntity extends BaseEntity {
 
 //    Thoi luong giang day thuc te
     @Column(name = "actual_duration_min")
-    private Integer actualDurationMin;
+    @Builder.Default
+    private int actualDurationMin = 0;
 
 //    So tien thanh toan cho buoi day
     @Column(name = "amount", precision = 12, scale = 2)
@@ -60,5 +58,9 @@ public class  TeachingSessionPaymentEntity extends BaseEntity {
 //    Trang thai
     @Column(name = "status")
     @Enumerated(EnumType.STRING)
-    private SessionPaymentStatusEnum status;
+    @Builder.Default
+    private SessionPaymentStatusEnum status = SessionPaymentStatusEnum.PENDING;
+
+    @Column(name = "description")
+    private String description;
 }

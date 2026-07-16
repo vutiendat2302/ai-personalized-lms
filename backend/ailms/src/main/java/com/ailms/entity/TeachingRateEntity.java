@@ -3,10 +3,7 @@ package com.ailms.entity;
 import com.ailms.common.snowflake.SnowflakeId;
 import com.ailms.entity.enums.BaseStatusEnum;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 import lombok.experimental.SuperBuilder;
 
 import java.math.BigDecimal;
@@ -29,12 +26,13 @@ public class TeachingRateEntity extends BaseEntity {
     @Column(name = "id", updatable = false, nullable = false)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "employee_id", nullable = false)
-    private EmployeeEntity employee;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "employee_id")
+    private EmployeeEntity employeeEntity;
 
-    @Column(name = "class_id", nullable = false)
-    private Long classId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "class_id")
+    private ClassEntity classEntity;
 
 //    Don gia duoc ap dung
     @Column(name = "rate", precision = 12, scale = 2)
@@ -51,5 +49,9 @@ public class TeachingRateEntity extends BaseEntity {
 //    Trang thai cua ban ghi don gia
     @Column(name = "status")
     @Enumerated(EnumType.STRING)
-    private BaseStatusEnum status;
+    @Builder.Default
+    private BaseStatusEnum status = BaseStatusEnum.ACTIVE;
+
+    @Column(name = "description")
+    private String description;
 }

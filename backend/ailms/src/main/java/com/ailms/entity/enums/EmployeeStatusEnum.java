@@ -9,5 +9,6 @@ package com.ailms.entity.enums;
 public enum EmployeeStatusEnum {
     ACTIVE,
     ON_LEAVE,
-    TERMINATED
+    TERMINATED,
+    DELETE
 }

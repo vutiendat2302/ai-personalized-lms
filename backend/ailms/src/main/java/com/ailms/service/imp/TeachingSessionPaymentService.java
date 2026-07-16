@@ -1,6 +1,10 @@
 package com.ailms.service.imp;
+import com.ailms.entity.ClassOnlineEntity;
+import com.ailms.repository.ClassOnlineRepository;
 import com.ailms.repository.specification.TeachingSessionPaymentSpecification;
+import com.ailms.request.CreateTeachingSessionPaymentRequest;
 import com.ailms.request.TeachingSessionPaymentSearchRequest;
+import com.ailms.request.UpdateTeachingSessionPaymentRequest;
 import com.ailms.service.ITeachingSessionPaymentService;
 
 
@@ -13,7 +17,6 @@ import com.ailms.mapper.TeachingSessionPaymentMapper;
 import com.ailms.repository.EmployeeRepository;
 import com.ailms.repository.TeachingRateRepository;
 import com.ailms.repository.TeachingSessionPaymentRepository;
-import com.ailms.request.TeachingSessionPaymentRequest;
 import com.ailms.response.TeachingSessionPaymentResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,15 +33,6 @@ import java.util.List;
 @Slf4j
 @Transactional(readOnly = true)
 public class TeachingSessionPaymentService implements ITeachingSessionPaymentService {
-    @Override
-    public Page<TeachingSessionPaymentResponse> search(TeachingSessionPaymentSearchRequest request) {
-        log.info("Searching TeachingSessionPayment via specification");
-        Specification<TeachingSessionPaymentEntity> spec = TeachingSessionPaymentSpecification.filterAndSearch(request);
-        Pageable pageable = request.toPageable();
-        Page<TeachingSessionPaymentEntity> page = teachingSessionPaymentRepository.findAll(spec, pageable);
-        return page.map(teachingSessionPaymentMapper::toResponse);
-    }
-
 
     private final TeachingSessionPaymentRepository teachingSessionPaymentRepository;
     private final EmployeeRepository employeeRepository;
@@ -46,6 +40,7 @@ public class TeachingSessionPaymentService implements ITeachingSessionPaymentSer
     private final TeachingSessionPaymentMapper teachingSessionPaymentMapper;
 
     private static final String RESOURCE_NAME = "TeachingSessionPayment";
+    private final ClassOnlineRepository classOnlineRepository;
 
     public List<TeachingSessionPaymentResponse> getAll() {
         log.info("Getting all session payments");
@@ -65,12 +60,9 @@ public class TeachingSessionPaymentService implements ITeachingSessionPaymentSer
     }
 
     @Transactional
-    public TeachingSessionPaymentResponse create(TeachingSessionPaymentRequest request) {
+    public TeachingSessionPaymentResponse create(CreateTeachingSessionPaymentRequest request) {
         log.info("Creating session payment for employee: {} and class online: {}", request.getEmployeeId(), request.getClassOnlineId());
 
-        if (teachingSessionPaymentRepository.findByClassOnlineId(request.getClassOnlineId()).isPresent()) {
-            throw DuplicateResourceException.of(RESOURCE_NAME, "classOnlineId", request.getClassOnlineId().toString());
-        }
 
         EmployeeEntity employee = employeeRepository.findById(request.getEmployeeId())
                 .orElseThrow(() -> ResourceNotFoundException.of("Employee", request.getEmployeeId()));
@@ -81,38 +73,52 @@ public class TeachingSessionPaymentService implements ITeachingSessionPaymentSer
                     .orElseThrow(() -> ResourceNotFoundException.of("TeachingRate", request.getRateId()));
         }
 
+        ClassOnlineEntity classOnline = null;
+        if (request.getClassOnlineId() != null) {
+            classOnline = classOnlineRepository.findById(request.getClassOnlineId())
+                    .orElseThrow(() -> ResourceNotFoundException.of("ClassOnline", request.getClassOnlineId()));
+        }
+
         TeachingSessionPaymentEntity entity = teachingSessionPaymentMapper.toEntity(request);
         entity.setEmployee(employee);
         entity.setTeachingRate(rate);
+        entity.setClassOnline(classOnline);
 
         TeachingSessionPaymentEntity saved = teachingSessionPaymentRepository.save(entity);
         return teachingSessionPaymentMapper.toResponse(saved);
     }
 
     @Transactional
-    public TeachingSessionPaymentResponse update(Long id, TeachingSessionPaymentRequest request) {
+    public TeachingSessionPaymentResponse update(Long id, UpdateTeachingSessionPaymentRequest request) {
         log.info("Updating session payment: {}", id);
-
         TeachingSessionPaymentEntity existing = teachingSessionPaymentRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
 
-        if (!existing.getClassOnline().getId().equals(request.getClassOnlineId()) &&
-                teachingSessionPaymentRepository.findByClassOnlineId(request.getClassOnlineId()).isPresent()) {
+        if (request.getClassOnlineId() != null
+                && !existing.getClassOnline().getId().equals(request.getClassOnlineId())
+                && teachingSessionPaymentRepository.findByClassOnlineId(request.getClassOnlineId()).isPresent()) {
             throw DuplicateResourceException.of(RESOURCE_NAME, "classOnlineId", request.getClassOnlineId().toString());
         }
 
-        EmployeeEntity employee = employeeRepository.findById(request.getEmployeeId())
-                .orElseThrow(() -> ResourceNotFoundException.of("Employee", request.getEmployeeId()));
+        if (request.getEmployeeId() != null) {
+            EmployeeEntity employee = employeeRepository.findById(request.getEmployeeId())
+                    .orElseThrow(() -> ResourceNotFoundException.of("Employee", request.getEmployeeId()));
+            existing.setEmployee(employee);
+        }
 
-        TeachingRateEntity rate = null;
         if (request.getRateId() != null) {
-            rate = teachingRateRepository.findById(request.getRateId())
+            TeachingRateEntity rate = teachingRateRepository.findById(request.getRateId())
                     .orElseThrow(() -> ResourceNotFoundException.of("TeachingRate", request.getRateId()));
+            existing.setTeachingRate(rate);
+        }
+
+        if (request.getClassOnlineId() != null) {
+            ClassOnlineEntity classOnline = classOnlineRepository.findById(request.getClassOnlineId())
+                    .orElseThrow(() -> ResourceNotFoundException.of("ClassOnline", request.getClassOnlineId()));
+            existing.setClassOnline(classOnline);
         }
 
         teachingSessionPaymentMapper.updateFromRequest(request, existing);
-        existing.setEmployee(employee);
-        existing.setTeachingRate(rate);
 
         TeachingSessionPaymentEntity updated = teachingSessionPaymentRepository.save(existing);
         return teachingSessionPaymentMapper.toResponse(updated);
@@ -125,5 +131,14 @@ public class TeachingSessionPaymentService implements ITeachingSessionPaymentSer
             throw ResourceNotFoundException.of(RESOURCE_NAME, id);
         }
         teachingSessionPaymentRepository.deleteById(id);
+    }
+
+    @Override
+    public Page<TeachingSessionPaymentResponse> search(TeachingSessionPaymentSearchRequest request) {
+        log.info("Searching TeachingSessionPayment via specification");
+        Specification<TeachingSessionPaymentEntity> spec = TeachingSessionPaymentSpecification.filterAndSearch(request);
+        Pageable pageable = request.toPageable();
+        Page<TeachingSessionPaymentEntity> page = teachingSessionPaymentRepository.findAll(spec, pageable);
+        return page.map(teachingSessionPaymentMapper::toResponse);
     }
 }

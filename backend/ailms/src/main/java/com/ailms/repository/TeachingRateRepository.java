@@ -9,5 +9,6 @@ import java.util.List;
 
 @Repository
 public interface TeachingRateRepository extends JpaRepository<TeachingRateEntity, Long>, JpaSpecificationExecutor<TeachingRateEntity> {
-    List<TeachingRateEntity> findByEmployee_UserId(Long userId);
+
+    List<TeachingRateEntity> findByEmployeeEntity_UserId(Long employeeId);
 }

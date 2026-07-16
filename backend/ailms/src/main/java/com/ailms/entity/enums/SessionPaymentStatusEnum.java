@@ -6,5 +6,7 @@ public enum SessionPaymentStatusEnum {
 //    Da duoc xac nhan
     CONFIRMED,
 //    Da duoc thanh toan
-    PAID
+    PAID,
+
+    DELETE
 }

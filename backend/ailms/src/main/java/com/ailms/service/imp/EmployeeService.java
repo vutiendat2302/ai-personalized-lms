@@ -1,5 +1,6 @@
 package com.ailms.service.imp;
 
+import com.ailms.entity.enums.EmployeeStatusEnum;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -34,15 +35,6 @@ import java.util.List;
 @Slf4j
 @Transactional(readOnly = true)
 public class EmployeeService implements IEmployeeService {
-    @Override
-    public Page<EmployeeResponse> search(EmployeeSearchRequest request) {
-        log.info("Searching Employee via specification");
-        Specification<EmployeeEntity> spec = EmployeeSpecification.filterAndSearch(request);
-        Pageable pageable = request.toPageable();
-        Page<EmployeeEntity> page = employeeRepository.findAll(spec, pageable);
-        return page.map(employeeMapper::toResponse);
-    }
-
 
     private final EmployeeRepository employeeRepository;
     private final DepartmentRepository departmentRepository;
@@ -84,8 +76,11 @@ public class EmployeeService implements IEmployeeService {
         EmployeeEntity entity = employeeMapper.toEntity(request);
         entity.setUserEntity(user);
         entity.setDepartment(resolveDepartment(request.getDepartmentId()));
-
+        log.info("id {}", user.getId());
+        log.info("Employee created successfully");
         EmployeeEntity saved = employeeRepository.save(entity);
+
+        log.info("Employee created successfully");
         return employeeMapper.toResponse(saved);
     }
 
@@ -103,19 +98,26 @@ public class EmployeeService implements IEmployeeService {
         }
 
         employeeMapper.updateFromRequest(request, existing);
-        existing.setDepartment(resolveDepartment(request.getDepartmentId()));
+        if (request.getDepartmentId() != null) {
+            existing.setDepartment(resolveDepartment(request.getDepartmentId()));
+        }
         EmployeeEntity updated = employeeRepository.save(existing);
         return employeeMapper.toResponse(updated);
     }
 
     @Transactional
     @Override
-    public void delete(Long id) {
+    public void softDelete(Long id) {
         log.info("Deleting employee: {}", id);
-        if (!employeeRepository.existsById(id)) {
-            throw ResourceNotFoundException.of(RESOURCE_NAME, id);
+        EmployeeEntity entity = employeeRepository.findById(id)
+                .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
+
+        if (entity.getStatus() == EmployeeStatusEnum.DELETE) {
+            throw new DuplicateResourceException("Employee already deleted: " + id);
         }
-        employeeRepository.deleteById(id);
+
+        entity.setStatus(EmployeeStatusEnum.DELETE);
+        employeeRepository.save(entity);
     }
 
     private DepartmentEntity resolveDepartment(Long departmentId) {
@@ -125,4 +127,14 @@ public class EmployeeService implements IEmployeeService {
         return departmentRepository.findById(departmentId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Department", departmentId));
     }
+
+    @Override
+    public Page<EmployeeResponse> search(EmployeeSearchRequest request) {
+        log.info("Searching Employee via specification");
+        Specification<EmployeeEntity> spec = EmployeeSpecification.filterAndSearch(request);
+        Pageable pageable = request.toPageable();
+        Page<EmployeeEntity> page = employeeRepository.findAll(spec, pageable);
+        return page.map(employeeMapper::toResponse);
+    }
+
 }

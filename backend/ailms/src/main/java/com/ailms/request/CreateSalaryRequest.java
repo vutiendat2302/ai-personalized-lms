@@ -20,7 +20,7 @@ public class CreateSalaryRequest {
     @NotNull(message = "Employee ID is required")
     private Long employeeId;
 
-    @NotBlank(message = "Salary period is required")
+    @NotNull(message = "Salary period is required")
     private YearMonth period;
 
     private BigDecimal baseSalary;

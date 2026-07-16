@@ -1,13 +1,12 @@
 package com.ailms.controller;
 
+import com.ailms.request.CreateTeachingSessionPaymentRequest;
+import com.ailms.request.UpdateTeachingSessionPaymentRequest;
 import org.springframework.data.domain.Page;
 import com.ailms.request.TeachingSessionPaymentSearchRequest;
 import com.ailms.response.TeachingSessionPaymentResponse;
 
-
-import com.ailms.request.TeachingSessionPaymentRequest;
 import com.ailms.response.ApiResponse;
-import com.ailms.response.TeachingSessionPaymentResponse;
 import com.ailms.service.ITeachingSessionPaymentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -18,14 +17,14 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/teaching-session-payments")
+@RequestMapping("${api.prefix}/teaching-session-payments")
 @RequiredArgsConstructor
 public class TeachingSessionPaymentController {
 
     private final ITeachingSessionPaymentService teachingSessionPaymentService;
 
     @PostMapping
-    public ResponseEntity<ApiResponse<TeachingSessionPaymentResponse>> create(@Valid @RequestBody TeachingSessionPaymentRequest request) {
+    public ResponseEntity<ApiResponse<TeachingSessionPaymentResponse>> create(@Valid @RequestBody CreateTeachingSessionPaymentRequest request) {
         TeachingSessionPaymentResponse response = teachingSessionPaymentService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of("Teaching session payment created successfully", response));
     }
@@ -33,7 +32,7 @@ public class TeachingSessionPaymentController {
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<TeachingSessionPaymentResponse>> update(
             @PathVariable Long id,
-            @Valid @RequestBody TeachingSessionPaymentRequest request) {
+            @Valid @RequestBody UpdateTeachingSessionPaymentRequest request) {
         TeachingSessionPaymentResponse response = teachingSessionPaymentService.update(id, request);
         return ResponseEntity.ok(ApiResponse.of("Teaching session payment updated successfully", response));
     }

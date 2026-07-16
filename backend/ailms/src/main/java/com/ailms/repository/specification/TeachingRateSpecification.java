@@ -17,6 +17,12 @@ public final class TeachingRateSpecification {
             return spec;
         }
 
+        if (StringUtils.hasText(request.getKeyword())) {
+            String pattern = "%" + request.getKeyword().toLowerCase() + "%";
+            spec = spec.and((root, query, criteriaBuilder) ->
+                    criteriaBuilder.like(criteriaBuilder.lower(root.get("employeeEntity").get("employeeCode")), pattern));
+        }
+
 
         if (request.getStatus() != null) {
             spec = spec.and((root, query, criteriaBuilder) ->

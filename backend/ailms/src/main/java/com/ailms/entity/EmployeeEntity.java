@@ -3,10 +3,7 @@ package com.ailms.entity;
 import com.ailms.entity.enums.EmployeeStatusEnum;
 import com.ailms.entity.enums.EmploymentTypeEnum;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 import lombok.experimental.SuperBuilder;
 
 import java.time.LocalDateTime;
@@ -65,5 +62,11 @@ public class EmployeeEntity extends BaseEntity {
     /** * Trạng thái hiện tại của nhân viên. */
     @Column(name = "status")
     @Enumerated(EnumType.STRING)
-    private EmployeeStatusEnum status;
+    @Builder.Default
+    private EmployeeStatusEnum status = EmployeeStatusEnum.ACTIVE;
+
+    @Transient
+    public Long getId() {
+        return userId;
+    }
 }
