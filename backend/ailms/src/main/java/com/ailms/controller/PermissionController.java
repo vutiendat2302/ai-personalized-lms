@@ -1,7 +1,7 @@
 package com.ailms.controller;
 
 import com.ailms.service.IPermissionService;
-import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import com.ailms.request.PermissionSearchRequest;
 import com.ailms.response.PermissionResponse;
 
@@ -17,15 +17,15 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/permissions")
+@RequestMapping("${api.prefix}/permissions")
 @RequiredArgsConstructor
 public class PermissionController {
 
     private final IPermissionService permissionService;
 
     @GetMapping("/page")
-    public ResponseEntity<ApiResponse<Page<PermissionResponse>>> getPermissions(PermissionSearchRequest request) {
-        Page<PermissionResponse> response = permissionService.getPermissions(request);
+    public ResponseEntity<ApiResponse<PageResponse<PermissionResponse>>> getPermissions(PermissionSearchRequest request) {
+        PageResponse<PermissionResponse> response = permissionService.getPermissions(request);
         return ResponseEntity.ok(ApiResponse.of("Permissions retrieved successfully", response));
     }
 

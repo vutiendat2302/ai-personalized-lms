@@ -1,12 +1,17 @@
 package com.ailms.entity.enums;
 
+/**
+ * Trạng thái thanh toán của buổi học.
+ * PENDING   : Chưa được xác nhận.
+ * CONFIRMED : Đã được xác nhận.
+ * PAID      : Đã thanh toán.
+ * DELETE    : Đã đánh dấu xóa.
+ * CANCELLED : Đã hủy.
+ */
 public enum SessionPaymentStatusEnum {
-//    Chua duoc xac nhan
     PENDING,
-//    Da duoc xac nhan
     CONFIRMED,
-//    Da duoc thanh toan
     PAID,
-
-    DELETE
+    DELETE,
+    CANCELLED
 }

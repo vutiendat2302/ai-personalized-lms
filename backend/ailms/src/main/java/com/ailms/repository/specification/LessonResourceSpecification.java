@@ -1,9 +1,9 @@
 package com.ailms.repository.specification;
- 
+
 import com.ailms.entity.LessonResourceEntity;
+import com.ailms.common.util.SpecificationBuilder;
 import com.ailms.request.LessonResourceSearchRequest;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.util.StringUtils;
 
 public final class LessonResourceSpecification {
 
@@ -11,28 +11,16 @@ public final class LessonResourceSpecification {
     }
 
     public static Specification<LessonResourceEntity> filterAndSearch(LessonResourceSearchRequest request) {
-        Specification<LessonResourceEntity> spec = (root, query, criteriaBuilder) -> criteriaBuilder.conjunction();
+        SpecificationBuilder<LessonResourceEntity> builder = SpecificationBuilder.of();
 
         if (request == null) {
-            return spec;
+            return builder.build();
         }
 
-        if (StringUtils.hasText(request.getKeyword())) {
-            String pattern = "%" + request.getKeyword().toLowerCase() + "%";
-            spec = spec.and((root, query, criteriaBuilder) ->
-                    criteriaBuilder.like(criteriaBuilder.lower(root.get("name")), pattern));
-        }
+        builder.likeIfPresent("name", request.getKeyword());
+        builder.greaterOrEqualIfPresent("createdAt", request.getCreatedFrom());
+        builder.lessOrEqualIfPresent("createdAt", request.getCreatedTo());
 
-        if (request.getCreatedFrom() != null) {
-            spec = spec.and((root, query, criteriaBuilder) ->
-                    criteriaBuilder.greaterThanOrEqualTo(root.get("createdAt"), request.getCreatedFrom()));
-        }
-
-        if (request.getCreatedTo() != null) {
-            spec = spec.and((root, query, criteriaBuilder) ->
-                    criteriaBuilder.lessThanOrEqualTo(root.get("createdAt"), request.getCreatedTo()));
-        }
-
-        return spec;
+        return builder.build();
     }
 }

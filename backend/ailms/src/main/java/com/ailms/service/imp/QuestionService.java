@@ -1,8 +1,8 @@
 package com.ailms.service.imp;
+
 import com.ailms.repository.specification.QuestionSpecification;
 import com.ailms.request.QuestionSearchRequest;
 import com.ailms.service.IQuestionService;
-
 
 import com.ailms.entity.QuestionEntity;
 import com.ailms.exception.ResourceNotFoundException;
@@ -13,6 +13,7 @@ import com.ailms.response.QuestionResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -26,14 +27,13 @@ import java.util.List;
 @Transactional(readOnly = true)
 public class QuestionService implements IQuestionService {
     @Override
-    public Page<QuestionResponse> search(QuestionSearchRequest request) {
+    public PageResponse<QuestionResponse> search(QuestionSearchRequest request) {
         log.info("Searching Question via specification");
         Specification<QuestionEntity> spec = QuestionSpecification.filterAndSearch(request);
         Pageable pageable = request.toPageable();
         Page<QuestionEntity> page = questionRepository.findAll(spec, pageable);
-        return page.map(questionMapper::toResponse);
+        return PageResponse.from(page.map(questionMapper::toResponse));
     }
-
 
     private final QuestionRepository questionRepository;
     private final QuestionMapper questionMapper;

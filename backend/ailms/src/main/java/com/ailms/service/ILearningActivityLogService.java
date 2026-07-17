@@ -1,6 +1,6 @@
 package com.ailms.service;
 
-import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import com.ailms.request.LearningActivityLogSearchRequest;
 import com.ailms.response.LearningActivityLogResponse;
 
@@ -18,7 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 public interface ILearningActivityLogService {
-    Page<LearningActivityLogResponse> search(LearningActivityLogSearchRequest request);
+    PageResponse<LearningActivityLogResponse> search(LearningActivityLogSearchRequest request);
     List<LearningActivityLogResponse> getAll();
     LearningActivityLogResponse getById(Long id);
     List<LearningActivityLogResponse> getByUserId(Long userId);

@@ -1,9 +1,8 @@
 package com.ailms.service;
 
-import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import com.ailms.request.StudyGoalSearchRequest;
 import com.ailms.response.StudyGoalResponse;
-
 
 import com.ailms.entity.StudyGoalEntity;
 import com.ailms.exception.ResourceNotFoundException;
@@ -18,12 +17,19 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 public interface IStudyGoalService {
-    Page<StudyGoalResponse> search(StudyGoalSearchRequest request);
+    PageResponse<StudyGoalResponse> search(StudyGoalSearchRequest request);
+
     List<StudyGoalResponse> getAll();
+
     StudyGoalResponse getById(Long id);
+
     List<StudyGoalResponse> getByUserId(Long userId);
+
     List<StudyGoalResponse> getByCourseId(Long courseId);
+
     StudyGoalResponse create(StudyGoalRequest request);
+
     StudyGoalResponse update(Long id, StudyGoalRequest request);
+
     void delete(Long id);
 }

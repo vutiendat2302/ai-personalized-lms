@@ -10,6 +10,8 @@ import lombok.experimental.SuperBuilder;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Luu tru bang luong cua nhan vien theo tung ky thanh toan
@@ -70,4 +72,8 @@ public class SalaryEntity extends BaseEntity {
 
     @Column(name = "description")
     private String description;
+
+    @OneToMany(mappedBy = "salary", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @Builder.Default
+    private List<SalaryDetailEntity> details = new ArrayList<>();
 }

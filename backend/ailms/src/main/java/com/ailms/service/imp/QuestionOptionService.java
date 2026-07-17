@@ -1,8 +1,8 @@
 package com.ailms.service.imp;
+
 import com.ailms.repository.specification.QuestionOptionSpecification;
 import com.ailms.request.QuestionOptionSearchRequest;
 import com.ailms.service.IQuestionOptionService;
-
 
 import com.ailms.entity.QuestionOptionEntity;
 import com.ailms.exception.ResourceNotFoundException;
@@ -13,6 +13,7 @@ import com.ailms.response.QuestionOptionResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -26,14 +27,13 @@ import java.util.List;
 @Transactional(readOnly = true)
 public class QuestionOptionService implements IQuestionOptionService {
     @Override
-    public Page<QuestionOptionResponse> search(QuestionOptionSearchRequest request) {
+    public PageResponse<QuestionOptionResponse> search(QuestionOptionSearchRequest request) {
         log.info("Searching QuestionOption via specification");
         Specification<QuestionOptionEntity> spec = QuestionOptionSpecification.filterAndSearch(request);
         Pageable pageable = request.toPageable();
         Page<QuestionOptionEntity> page = questionOptionRepository.findAll(spec, pageable);
-        return page.map(questionOptionMapper::toResponse);
+        return PageResponse.from(page.map(questionOptionMapper::toResponse));
     }
-
 
     private final QuestionOptionRepository questionOptionRepository;
     private final QuestionOptionMapper questionOptionMapper;

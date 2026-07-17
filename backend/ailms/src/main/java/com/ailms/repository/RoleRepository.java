@@ -1,6 +1,7 @@
 package com.ailms.repository;
 
 import com.ailms.entity.RoleEntity;
+import com.ailms.repository.base.BaseRepository;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
@@ -8,7 +9,7 @@ import org.springframework.stereotype.Repository;
 import java.util.Optional;
 
 @Repository
-public interface RoleRepository extends JpaRepository<RoleEntity, Long>, JpaSpecificationExecutor<RoleEntity> {
+public interface RoleRepository extends BaseRepository<RoleEntity, Long> {
     Optional<RoleEntity> findByName(String name);
     Optional<RoleEntity> findByCode(String code);
     boolean existsByCode(String code);

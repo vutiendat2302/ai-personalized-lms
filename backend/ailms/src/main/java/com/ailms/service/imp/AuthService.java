@@ -1,8 +1,9 @@
 package com.ailms.service.imp;
-import com.ailms.service.IAuditLogService;
+import com.ailms.event.AuditLogEvent;
 import com.ailms.service.IAuthService;
 import com.ailms.service.IEmailService;
 import com.ailms.service.IOtpService;
+import org.springframework.context.ApplicationEventPublisher;
 
 import com.ailms.entity.UserEntity;
 import com.ailms.entity.enums.UserStatusEnum;
@@ -76,7 +77,7 @@ public class AuthService implements IAuthService { // login - register
     private static final Duration FORGOT_PASSWORD_OTP_TTL = Duration.ofMinutes(3);
 
     private static final String INVALIDATE_TOKEN_PREFIX = "invalidate:token:user:";
-    private final IAuditLogService auditLogService;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * Đăng ký tài khoản mới.
@@ -184,7 +185,7 @@ public class AuthService implements IAuthService { // login - register
         // Lấy thông tin người dùng đã xác thực
         CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
         userDetails.getUser().setLastLoginAt(LocalDateTime.now());
-        auditLogService.log("Login", "user", userDetails.getUser().getId(), null, null);
+        eventPublisher.publishEvent(new AuditLogEvent(this, "Login", "user", userDetails.getUser().getId(), null, null));
         return buildAuthResponse(userDetails, jwt, refreshToken);
     }
 
@@ -294,7 +295,7 @@ public class AuthService implements IAuthService { // login - register
         userEntity.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(userEntity);
 
-        auditLogService.log("Change Password", "User", userId, null, null);
+        eventPublisher.publishEvent(new AuditLogEvent(this, "Change Password", "User", userId, null, null));
         invalidateAllTokens(userEntity.getEmail());
 
         // Gửi email thông báo đổi mật khẩu thành công
@@ -319,7 +320,7 @@ public class AuthService implements IAuthService { // login - register
                             FORGOT_PASSWORD_OTP_TTL
                     );
                     emailService.sendResetPasswordOtpEmail(user.getEmail(), otp);
-                    auditLogService.log("Forgot Password", "User", user.getId(), null, null);
+                    eventPublisher.publishEvent(new AuditLogEvent(this, "Forgot Password", "User", user.getId(), null, null));
                 });
     }
 
@@ -357,7 +358,7 @@ public class AuthService implements IAuthService { // login - register
         otpService.invalidateOtp(user.getEmail(), OTP_PURPOSE_FORGOT_PASSWORD);
 
         // Ghi nhận lịch sử thao tác
-        auditLogService.log("Reset Password", "User", user.getId(), null, null);
+        eventPublisher.publishEvent(new AuditLogEvent(this, "Reset Password", "User", user.getId(), null, null));
 
         invalidateAllTokens(user.getEmail());
 
@@ -410,6 +411,6 @@ public class AuthService implements IAuthService { // login - register
         userRepository.save(user);
 
 
-        auditLogService.log("Set Password", "User", user.getId(), null, null);
+        eventPublisher.publishEvent(new AuditLogEvent(this, "Set Password", "User", user.getId(), null, null));
     }
 }

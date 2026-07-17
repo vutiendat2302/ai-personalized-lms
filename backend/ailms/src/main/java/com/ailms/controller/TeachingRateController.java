@@ -2,7 +2,7 @@ package com.ailms.controller;
 
 import com.ailms.request.CreateTeachingRateRequest;
 import com.ailms.request.UpdateTeachingRateRequest;
-import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import com.ailms.request.TeachingRateSearchRequest;
 import com.ailms.response.TeachingRateResponse;
 
@@ -63,8 +63,8 @@ public class TeachingRateController {
     }
 
     @GetMapping("/search")
-    public ResponseEntity<ApiResponse<Page<TeachingRateResponse>>> search(TeachingRateSearchRequest request) {
-        Page<TeachingRateResponse> result = teachingRateService.search(request);
+    public ResponseEntity<ApiResponse<PageResponse<TeachingRateResponse>>> search(TeachingRateSearchRequest request) {
+        PageResponse<TeachingRateResponse> result = teachingRateService.search(request);
         return ResponseEntity.ok(ApiResponse.of("Search TeachingRate successfully", result));
     }
 }

@@ -15,6 +15,7 @@ import com.ailms.response.ClassResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -28,12 +29,12 @@ import java.util.List;
 @Transactional(readOnly = true)
 public class ClassService implements IClassService {
     @Override
-    public Page<ClassResponse> search(ClassSearchRequest request) {
+    public PageResponse<ClassResponse> search(ClassSearchRequest request) {
         log.info("Searching Class via specification");
         Specification<ClassEntity> spec = ClassSpecification.filterAndSearch(request);
         Pageable pageable = request.toPageable();
         Page<ClassEntity> page = classRepository.findAll(spec, pageable);
-        return page.map(classMapper::toResponse);
+        return PageResponse.from(page.map(classMapper::toResponse));
     }
 
 

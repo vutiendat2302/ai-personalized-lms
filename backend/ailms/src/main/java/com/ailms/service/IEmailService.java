@@ -45,4 +45,22 @@ public interface IEmailService {
      */
     void sendInviteEmail(String toEmail, String inviteLink);
 
+    /**
+     * Gửi email thông báo ký kết hợp đồng lao động mới.
+     * @param toEmail Email nhân viên.
+     * @param fullName Họ tên nhân viên.
+     * @param contractType Loại hợp đồng.
+     * @param downloadUrl Đường dẫn tải file hợp đồng.
+     */
+    void sendContractNotificationEmail(String toEmail, String fullName, String contractType, String downloadUrl);
+
+    /**
+     * Gửi email cảnh báo hợp đồng lao động sắp hết hạn.
+     * @param toEmail Email HR/Admin nhận.
+     * @param employeeName Tên nhân viên sở hữu hợp đồng.
+     * @param contractCode Mã/Loại hợp đồng.
+     * @param endDate Ngày hết hạn.
+     */
+    void sendContractExpirationAlertEmail(String toEmail, String employeeName, String contractCode, java.time.LocalDate endDate);
+
 }

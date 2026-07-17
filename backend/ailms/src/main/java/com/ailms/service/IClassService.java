@@ -1,6 +1,6 @@
 package com.ailms.service;
 
-import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import com.ailms.request.ClassSearchRequest;
 import com.ailms.response.ClassResponse;
 
@@ -20,7 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 public interface IClassService {
-    Page<ClassResponse> search(ClassSearchRequest request);
+    PageResponse<ClassResponse> search(ClassSearchRequest request);
     List<ClassResponse> getAll();
     ClassResponse getById(Long id);
     List<ClassResponse> getByCourseId(Long courseId);

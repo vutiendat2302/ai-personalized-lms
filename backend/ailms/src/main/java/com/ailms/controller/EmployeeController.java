@@ -2,7 +2,7 @@ package com.ailms.controller;
 
 import com.ailms.request.CreateEmployeeRequest;
 import com.ailms.request.UpdateEmployeeRequest;
-import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import com.ailms.request.EmployeeSearchRequest;
 import com.ailms.response.EmployeeResponse;
 import com.ailms.response.ApiResponse;
@@ -55,8 +55,14 @@ public class EmployeeController {
     }
 
     @GetMapping("/search")
-    public ResponseEntity<ApiResponse<Page<EmployeeResponse>>> search(EmployeeSearchRequest request) {
-        Page<EmployeeResponse> result = employeeService.search(request);
+    public ResponseEntity<ApiResponse<PageResponse<EmployeeResponse>>> search(EmployeeSearchRequest request) {
+        PageResponse<EmployeeResponse> result = employeeService.search(request);
         return ResponseEntity.ok(ApiResponse.of("Search Employee successfully", result));
+    }
+
+    @PutMapping("/{id}/terminate")
+    public ResponseEntity<ApiResponse<EmployeeResponse>> terminate(@PathVariable Long id) {
+        EmployeeResponse response = employeeService.terminate(id);
+        return ResponseEntity.ok(ApiResponse.of("Employee terminated successfully", response));
     }
 }

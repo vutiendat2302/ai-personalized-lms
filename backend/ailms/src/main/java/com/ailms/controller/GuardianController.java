@@ -1,6 +1,6 @@
 package com.ailms.controller;
 
-import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import com.ailms.request.GuardianSearchRequest;
 import com.ailms.response.GuardianResponse;
 
@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/guardians")
+@RequestMapping("${api.prefix}/guardians")
 @RequiredArgsConstructor
 public class GuardianController {
 
@@ -63,8 +63,8 @@ public class GuardianController {
     }
 
     @GetMapping("/search")
-    public ResponseEntity<ApiResponse<Page<GuardianResponse>>> search(GuardianSearchRequest request) {
-        Page<GuardianResponse> result = guardianService.search(request);
+    public ResponseEntity<ApiResponse<PageResponse<GuardianResponse>>> search(GuardianSearchRequest request) {
+        PageResponse<GuardianResponse> result = guardianService.search(request);
         return ResponseEntity.ok(ApiResponse.of("Search Guardian successfully", result));
     }
 }

@@ -1,6 +1,6 @@
 package com.ailms.service;
 
-import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import com.ailms.request.GuardianSearchRequest;
 import com.ailms.response.GuardianResponse;
 
@@ -20,7 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 public interface IGuardianService {
-    Page<GuardianResponse> search(GuardianSearchRequest request);
+    PageResponse<GuardianResponse> search(GuardianSearchRequest request);
     List<GuardianResponse> getAll();
     GuardianResponse getById(Long id);
     List<GuardianResponse> getByStudentUserId(Long studentUserId);

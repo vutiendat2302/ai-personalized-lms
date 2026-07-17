@@ -17,6 +17,7 @@ import com.ailms.response.SectionResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -31,15 +32,6 @@ import java.util.stream.Collectors;
 @Slf4j
 @Transactional(readOnly = true)
 public class CourseSectionService implements ICourseSectionService {
-    @Override
-    public Page<SectionResponse> search(CourseSectionSearchRequest request) {
-        log.info("Searching CourseSection via specification");
-        Specification<CourseSectionEntity> spec = CourseSectionSpecification.filterAndSearch(request);
-        Pageable pageable = request.toPageable();
-        Page<CourseSectionEntity> page = courseSectionRepository.findAll(spec, pageable);
-        return page.map(courseSectionMapper::toResponse);
-    }
-
 
     private final CourseSectionRepository courseSectionRepository;
     private final CourseRepository courseRepository;
@@ -152,5 +144,14 @@ public class CourseSectionService implements ICourseSectionService {
                 .stream()
                 .map(courseSectionMapper::toResponse)
                 .toList();
+    }
+
+    @Override
+    public PageResponse<SectionResponse> search(CourseSectionSearchRequest request) {
+        log.info("Searching CourseSection via specification");
+        Specification<CourseSectionEntity> spec = CourseSectionSpecification.filterAndSearch(request);
+        Pageable pageable = request.toPageable();
+        Page<CourseSectionEntity> page = courseSectionRepository.findAll(spec, pageable);
+        return PageResponse.from(page.map(courseSectionMapper::toResponse));
     }
 }

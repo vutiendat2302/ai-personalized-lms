@@ -1,7 +1,8 @@
 package com.ailms.service.imp;
-import com.ailms.service.IAuditLogService;
+import com.ailms.event.AuditLogEvent;
 import com.ailms.service.IEmailService;
 import com.ailms.service.IUserService;
+import org.springframework.context.ApplicationEventPublisher;
 
 
 import com.ailms.entity.*;
@@ -19,6 +20,7 @@ import com.ailms.security.JwtUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import com.ailms.response.PageResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -46,7 +48,7 @@ public class UserService implements IUserService {
     private final IEmailService emailService;
     private final RedisTemplate<String, String> redisTemplate;
     private final PasswordEncoder passwordEncoder;
-    private final IAuditLogService auditLogService;
+    private final ApplicationEventPublisher eventPublisher;
     private final JwtUtils jwtUtils;
 
     @Value("${app.frontend.set-password}/api/auth/set-password")
@@ -54,9 +56,10 @@ public class UserService implements IUserService {
 
     @Transactional(readOnly = true)
     @Override
-    public Page<UserResponse> getUsers(UserSearchRequest request) {
+    public PageResponse<UserResponse> getUsers(UserSearchRequest request) {
         Specification<UserEntity> spec = UserSpecification.filterAndSearch(request);
-        return userRepository.findAll(spec, request.toPageable()).map(this::mapToUserResponse);
+        Page<UserEntity> page = userRepository.findAll(spec, request.toPageable());
+        return PageResponse.from(page.map(this::mapToUserResponse));
     }
 
     @Override
@@ -105,7 +108,7 @@ public class UserService implements IUserService {
             emailService.sendInviteEmail(user.getEmail(), token);
         }
 
-        auditLogService.log("create_user", "user", adminId, null, user);
+        eventPublisher.publishEvent(new AuditLogEvent(this, "create_user", "user", adminId, null, user));
 
         return mapToUserResponse(user);
     }
@@ -120,7 +123,7 @@ public class UserService implements IUserService {
         userMapper.updateUserProfile(user, request);
         user = userRepository.save(user);
 
-        auditLogService.log("update_profile", "user", userId, oldUser, user);
+        eventPublisher.publishEvent(new AuditLogEvent(this, "update_profile", "user", userId, oldUser, user));
         return mapToUserResponse(user);
     }
 
@@ -135,7 +138,7 @@ public class UserService implements IUserService {
         user = userRepository.save(user);
 
         // Log audit
-        auditLogService.log("update_user", "user", id, null, user);
+        eventPublisher.publishEvent(new AuditLogEvent(this, "update_user", "user", id, null, user));
         return mapToUserResponse(user);
     }
 
@@ -157,7 +160,7 @@ public class UserService implements IUserService {
         // Invalidate token / revoke session
         redisTemplate.opsForValue().set("invalidate:token:user:" + id, String.valueOf(System.currentTimeMillis()));
 
-        auditLogService.log("delete_user", "user", id, oldState, user);
+        eventPublisher.publishEvent(new AuditLogEvent(this, "delete_user", "user", id, oldState, user));
     }
 
     /**
@@ -202,7 +205,7 @@ public class UserService implements IUserService {
         emailService.sendInviteEmail(request.getEmail(), inviteLink);
 
         log.info("Audit log");
-        auditLogService.log("user_invited", "user", user.getId(), null, user);
+        eventPublisher.publishEvent(new AuditLogEvent(this, "user_invited", "user", user.getId(), null, user));
     }
 
     /**
@@ -261,7 +264,7 @@ public class UserService implements IUserService {
         redisTemplate.delete(tokenKey);
         redisTemplate.delete("invite:email:" + email);
 
-        auditLogService.log("user_activated", "user", user.getId(), null, user);
+        eventPublisher.publishEvent(new AuditLogEvent(this, "user_activated", "user", user.getId(), null, user));
     }
 
     /**
@@ -302,7 +305,7 @@ public class UserService implements IUserService {
 
                 redisTemplate.opsForValue().set("invalidate:token:user:" + userId,
                         String.valueOf(System.currentTimeMillis()));
-                auditLogService.log("delete_user", "user", adminId, oldState, user);
+                eventPublisher.publishEvent(new AuditLogEvent(this, "delete_user", "user", adminId, oldState, user));
 
                 successCount++;
             } catch (Exception e) {
@@ -372,7 +375,7 @@ public class UserService implements IUserService {
                     ur.setAssignedAt(LocalDateTime.now());
                     userRoleRepository.save(ur);
 
-                    auditLogService.log("grant_role", "user", currentAdminId, null, "Granted role " + role.getName());
+                    eventPublisher.publishEvent(new AuditLogEvent(this, "grant_role", "user", currentAdminId, null, "Granted role " + role.getName()));
                 }
                 successCount++;
             } catch (Exception e) {
@@ -403,7 +406,7 @@ public class UserService implements IUserService {
             RoleEntity role = ur.getRoleEntity();
             for (RolePermissionEntity rp : role.getRolePermissions()) {
                 PermissionEntity perm = rp.getPermissionEntity();
-                EffectivePermissionResponse resp = permMap.computeIfAbsent(perm.getId(), _ -> {
+                EffectivePermissionResponse resp = permMap.computeIfAbsent(perm.getId(), id -> {
                     EffectivePermissionResponse r = new EffectivePermissionResponse();
                     r.setPermissionId(perm.getId());
                     r.setPermissionName(perm.getName());
@@ -455,7 +458,7 @@ public class UserService implements IUserService {
             userRoleRepository.save(ur);
         }
 
-        auditLogService.log("assign_roles", "user", currentAdminId, null, request.getRoleIds());
+        eventPublisher.publishEvent(new AuditLogEvent(this, "assign_roles", "user", currentAdminId, null, request.getRoleIds()));
     }
 
     /**
@@ -529,7 +532,7 @@ public class UserService implements IUserService {
         user.setEmail(newEmail);
         userRepository.save(user);
         redisTemplate.delete(redisKey);
-        auditLogService.log("verify_email_change", "user", userId, oldState, user);
+        eventPublisher.publishEvent(new AuditLogEvent(this, "verify_email_change", "user", userId, oldState, user));
     }
 
     /**

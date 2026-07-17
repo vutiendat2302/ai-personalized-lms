@@ -4,7 +4,7 @@ import com.ailms.entity.enums.FileTypeEnum;
 import com.ailms.request.CreateFileMetadataRequest;
 import com.ailms.request.FileSearchRequest;
 import com.ailms.response.FileMetadataResponse;
-import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 
 import java.util.List;
 
@@ -70,7 +70,7 @@ public interface IFileMetadataService {
      * @param request điều kiện tìm kiếm
      * @return trang kết quả metadata phù hợp
      */
-    Page<FileMetadataResponse> search(FileSearchRequest request);
+    PageResponse<FileMetadataResponse> search(FileSearchRequest request);
 
     /**
      * Đổi origin name

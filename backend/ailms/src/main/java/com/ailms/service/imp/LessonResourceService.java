@@ -17,6 +17,7 @@ import com.ailms.response.ResourceResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -30,12 +31,12 @@ import java.util.stream.Collectors;
 @Slf4j
 public class LessonResourceService implements ILessonResourceService {
     @Override
-    public Page<ResourceResponse> search(LessonResourceSearchRequest request) {
+    public PageResponse<ResourceResponse> search(LessonResourceSearchRequest request) {
         log.info("Searching LessonResource via specification");
         Specification<LessonResourceEntity> spec = LessonResourceSpecification.filterAndSearch(request);
         Pageable pageable = request.toPageable();
         Page<LessonResourceEntity> page = lessonResourceRepository.findAll(spec, pageable);
-        return page.map(lessonResourceMapper::toResponse);
+        return PageResponse.from(page.map(lessonResourceMapper::toResponse));
     }
 
 

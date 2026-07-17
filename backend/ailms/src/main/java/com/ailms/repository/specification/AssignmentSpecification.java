@@ -1,9 +1,9 @@
 package com.ailms.repository.specification;
- 
+
 import com.ailms.entity.AssignmentEntity;
+import com.ailms.common.util.SpecificationBuilder;
 import com.ailms.request.AssignmentSearchRequest;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.util.StringUtils;
 
 public final class AssignmentSpecification {
 
@@ -11,32 +11,17 @@ public final class AssignmentSpecification {
     }
 
     public static Specification<AssignmentEntity> filterAndSearch(AssignmentSearchRequest request) {
-        Specification<AssignmentEntity> spec = (root, query, criteriaBuilder) -> criteriaBuilder.conjunction();
+        SpecificationBuilder<AssignmentEntity> builder = SpecificationBuilder.of();
 
         if (request == null) {
-            return spec;
+            return builder.build();
         }
 
-        if (StringUtils.hasText(request.getKeyword())) {
-            String pattern = "%" + request.getKeyword().toLowerCase() + "%";
-            spec = spec.and((root, query, criteriaBuilder) ->
-                    criteriaBuilder.like(criteriaBuilder.lower(root.get("title")), pattern));
-        }
+        builder.likeIfPresent("title", request.getKeyword());
+        builder.equalIfPresent("status", request.getStatus());
+        builder.greaterOrEqualIfPresent("createdAt", request.getCreatedFrom());
+        builder.lessOrEqualIfPresent("createdAt", request.getCreatedTo());
 
-        if (request.getStatus() != null) {
-            spec = spec.and((root, query, criteriaBuilder) ->
-                    criteriaBuilder.equal(root.get("status"), request.getStatus()));
-        }
-        if (request.getCreatedFrom() != null) {
-            spec = spec.and((root, query, criteriaBuilder) ->
-                    criteriaBuilder.greaterThanOrEqualTo(root.get("createdAt"), request.getCreatedFrom()));
-        }
-
-        if (request.getCreatedTo() != null) {
-            spec = spec.and((root, query, criteriaBuilder) ->
-                    criteriaBuilder.lessThanOrEqualTo(root.get("createdAt"), request.getCreatedTo()));
-        }
-
-        return spec;
+        return builder.build();
     }
 }

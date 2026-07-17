@@ -14,6 +14,7 @@ import com.ailms.response.SubmissionResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -27,12 +28,12 @@ import java.util.List;
 @Transactional(readOnly = true)
 public class SubmissionService implements ISubmissionService {
     @Override
-    public Page<SubmissionResponse> search(SubmissionSearchRequest request) {
+    public PageResponse<SubmissionResponse> search(SubmissionSearchRequest request) {
         log.info("Searching Submission via specification");
         Specification<SubmissionEntity> spec = SubmissionSpecification.filterAndSearch(request);
         Pageable pageable = request.toPageable();
         Page<SubmissionEntity> page = submissionRepository.findAll(spec, pageable);
-        return page.map(submissionMapper::toResponse);
+        return PageResponse.from(page.map(submissionMapper::toResponse));
     }
 
 

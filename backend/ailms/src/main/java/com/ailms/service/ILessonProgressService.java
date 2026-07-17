@@ -1,6 +1,6 @@
 package com.ailms.service;
 
-import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import com.ailms.request.LessonProgressSearchRequest;
 import com.ailms.response.LessonProgressResponse;
 
@@ -18,7 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 public interface ILessonProgressService {
-    Page<LessonProgressResponse> search(LessonProgressSearchRequest request);
+    PageResponse<LessonProgressResponse> search(LessonProgressSearchRequest request);
     List<LessonProgressResponse> getAll();
     LessonProgressResponse getById(Long id);
     List<LessonProgressResponse> getByUserId(Long userId);

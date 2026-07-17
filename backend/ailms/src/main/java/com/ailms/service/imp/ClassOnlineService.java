@@ -17,6 +17,7 @@ import com.ailms.response.ClassOnlineResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -29,15 +30,6 @@ import java.util.List;
 @Slf4j
 @Transactional(readOnly = true)
 public class ClassOnlineService implements IClassOnlineService {
-    @Override
-    public Page<ClassOnlineResponse> search(ClassOnlineSearchRequest request) {
-        log.info("Searching ClassOnline via specification");
-        Specification<ClassOnlineEntity> spec = ClassOnlineSpecification.filterAndSearch(request);
-        Pageable pageable = request.toPageable();
-        Page<ClassOnlineEntity> page = classOnlineRepository.findAll(spec, pageable);
-        return page.map(classOnlineMapper::toResponse);
-    }
-
 
     private final ClassOnlineRepository classOnlineRepository;
     private final ClassRepository classRepository;
@@ -108,5 +100,14 @@ public class ClassOnlineService implements IClassOnlineService {
 
         entity.setClassEntity(classEntity);
         entity.setTeacherEntity(teacher);
+    }
+
+    @Override
+    public PageResponse<ClassOnlineResponse> search(ClassOnlineSearchRequest request) {
+        log.info("Searching ClassOnline via specification");
+        Specification<ClassOnlineEntity> spec = ClassOnlineSpecification.filterAndSearch(request);
+        Pageable pageable = request.toPageable();
+        Page<ClassOnlineEntity> page = classOnlineRepository.findAll(spec, pageable);
+        return PageResponse.from(page.map(classOnlineMapper::toResponse));
     }
 }

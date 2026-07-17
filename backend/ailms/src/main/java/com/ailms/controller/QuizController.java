@@ -1,9 +1,8 @@
 package com.ailms.controller;
 
-import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import com.ailms.request.QuizSearchRequest;
 import com.ailms.response.QuizResponse;
-
 
 import com.ailms.request.QuizRequest;
 import com.ailms.response.ApiResponse;
@@ -75,8 +74,8 @@ public class QuizController {
     }
 
     @GetMapping("/search")
-    public ResponseEntity<ApiResponse<Page<QuizResponse>>> search(QuizSearchRequest request) {
-        Page<QuizResponse> result = quizService.search(request);
+    public ResponseEntity<ApiResponse<PageResponse<QuizResponse>>> search(QuizSearchRequest request) {
+        PageResponse<QuizResponse> result = quizService.search(request);
         return ResponseEntity.ok(ApiResponse.of("Search Quiz successfully", result));
     }
 }

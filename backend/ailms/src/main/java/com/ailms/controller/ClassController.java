@@ -1,6 +1,6 @@
 package com.ailms.controller;
 
-import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import com.ailms.request.ClassSearchRequest;
 import com.ailms.response.ClassResponse;
 
@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/classes")
+@RequestMapping("${api.prefix}/classes")
 @RequiredArgsConstructor
 public class ClassController {
 
@@ -63,8 +63,8 @@ public class ClassController {
     }
 
     @GetMapping("/search")
-    public ResponseEntity<ApiResponse<Page<ClassResponse>>> search(ClassSearchRequest request) {
-        Page<ClassResponse> result = classService.search(request);
+    public ResponseEntity<ApiResponse<PageResponse<ClassResponse>>> search(ClassSearchRequest request) {
+        PageResponse<ClassResponse> result = classService.search(request);
         return ResponseEntity.ok(ApiResponse.of("Search Class successfully", result));
     }
 }

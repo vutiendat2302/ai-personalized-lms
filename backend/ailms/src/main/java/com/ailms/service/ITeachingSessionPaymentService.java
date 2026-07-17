@@ -2,14 +2,14 @@ package com.ailms.service;
 
 import com.ailms.request.CreateTeachingSessionPaymentRequest;
 import com.ailms.request.UpdateTeachingSessionPaymentRequest;
-import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import com.ailms.request.TeachingSessionPaymentSearchRequest;
 import com.ailms.response.TeachingSessionPaymentResponse;
 
 import java.util.List;
 
 public interface ITeachingSessionPaymentService {
-    Page<TeachingSessionPaymentResponse> search(TeachingSessionPaymentSearchRequest request);
+    PageResponse<TeachingSessionPaymentResponse> search(TeachingSessionPaymentSearchRequest request);
     List<TeachingSessionPaymentResponse> getAll();
     TeachingSessionPaymentResponse getById(Long id);
     List<TeachingSessionPaymentResponse> getByEmployeeId(Long employeeId);

@@ -1,13 +1,14 @@
 package com.ailms.repository;
 
 import com.ailms.entity.ClassOnlineEntity;
+import com.ailms.repository.base.BaseRepository;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
 @Repository
-public interface ClassOnlineRepository extends JpaRepository<ClassOnlineEntity, Long>, org.springframework.data.jpa.repository.JpaSpecificationExecutor<ClassOnlineEntity> {
+public interface ClassOnlineRepository extends BaseRepository<ClassOnlineEntity, Long> {
     List<ClassOnlineEntity> findByClassEntity_Id(Long classId);
     List<ClassOnlineEntity> findByTeacherEntity_Id(Long teacherId);
 }

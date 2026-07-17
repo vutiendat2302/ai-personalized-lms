@@ -1,6 +1,6 @@
 package com.ailms.controller;
 
-import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import com.ailms.request.CourseSectionSearchRequest;
 
 
@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/sections")
+@RequestMapping("${api.prefix}/sections")
 @RequiredArgsConstructor
 public class CourseSectionController {
 
@@ -73,8 +73,8 @@ public class CourseSectionController {
     }
 
     @GetMapping("/search")
-    public ResponseEntity<ApiResponse<Page<SectionResponse>>> search(CourseSectionSearchRequest request) {
-        Page<SectionResponse> result = courseSectionService.search(request);
+    public ResponseEntity<ApiResponse<PageResponse<SectionResponse>>> search(CourseSectionSearchRequest request) {
+        PageResponse<SectionResponse> result = courseSectionService.search(request);
         return ResponseEntity.ok(ApiResponse.of("Search CourseSection successfully", result));
     }
 }

@@ -1,9 +1,8 @@
 package com.ailms.controller;
 
-import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import com.ailms.request.QuizAttemptSearchRequest;
 import com.ailms.response.QuizAttemptResponse;
-
 
 import com.ailms.request.QuizAttemptRequest;
 import com.ailms.response.ApiResponse;
@@ -27,7 +26,8 @@ public class QuizAttemptController {
     @PostMapping
     public ResponseEntity<ApiResponse<QuizAttemptResponse>> create(@Valid @RequestBody QuizAttemptRequest request) {
         QuizAttemptResponse response = quizAttemptService.create(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of("Quiz attempt created successfully", response));
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.of("Quiz attempt created successfully", response));
     }
 
     @PutMapping("/{id}")
@@ -75,8 +75,8 @@ public class QuizAttemptController {
     }
 
     @GetMapping("/search")
-    public ResponseEntity<ApiResponse<Page<QuizAttemptResponse>>> search(QuizAttemptSearchRequest request) {
-        Page<QuizAttemptResponse> result = quizAttemptService.search(request);
+    public ResponseEntity<ApiResponse<PageResponse<QuizAttemptResponse>>> search(QuizAttemptSearchRequest request) {
+        PageResponse<QuizAttemptResponse> result = quizAttemptService.search(request);
         return ResponseEntity.ok(ApiResponse.of("Search QuizAttempt successfully", result));
     }
 }

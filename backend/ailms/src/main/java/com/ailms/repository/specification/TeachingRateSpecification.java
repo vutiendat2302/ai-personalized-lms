@@ -1,9 +1,9 @@
 package com.ailms.repository.specification;
- 
+
 import com.ailms.entity.TeachingRateEntity;
+import com.ailms.common.util.SpecificationBuilder;
 import com.ailms.request.TeachingRateSearchRequest;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.util.StringUtils;
 
 public final class TeachingRateSpecification {
 
@@ -11,33 +11,17 @@ public final class TeachingRateSpecification {
     }
 
     public static Specification<TeachingRateEntity> filterAndSearch(TeachingRateSearchRequest request) {
-        Specification<TeachingRateEntity> spec = (root, query, criteriaBuilder) -> criteriaBuilder.conjunction();
+        SpecificationBuilder<TeachingRateEntity> builder = SpecificationBuilder.of();
 
         if (request == null) {
-            return spec;
+            return builder.build();
         }
 
-        if (StringUtils.hasText(request.getKeyword())) {
-            String pattern = "%" + request.getKeyword().toLowerCase() + "%";
-            spec = spec.and((root, query, criteriaBuilder) ->
-                    criteriaBuilder.like(criteriaBuilder.lower(root.get("employeeEntity").get("employeeCode")), pattern));
-        }
+        builder.likeIfPresent("employeeEntity.employeeCode", request.getKeyword());
+        builder.equalIfPresent("status", request.getStatus());
+        builder.greaterOrEqualIfPresent("createdAt", request.getCreatedFrom());
+        builder.lessOrEqualIfPresent("createdAt", request.getCreatedTo());
 
-
-        if (request.getStatus() != null) {
-            spec = spec.and((root, query, criteriaBuilder) ->
-                    criteriaBuilder.equal(root.get("status"), request.getStatus()));
-        }
-        if (request.getCreatedFrom() != null) {
-            spec = spec.and((root, query, criteriaBuilder) ->
-                    criteriaBuilder.greaterThanOrEqualTo(root.get("createdAt"), request.getCreatedFrom()));
-        }
-
-        if (request.getCreatedTo() != null) {
-            spec = spec.and((root, query, criteriaBuilder) ->
-                    criteriaBuilder.lessThanOrEqualTo(root.get("createdAt"), request.getCreatedTo()));
-        }
-
-        return spec;
+        return builder.build();
     }
 }

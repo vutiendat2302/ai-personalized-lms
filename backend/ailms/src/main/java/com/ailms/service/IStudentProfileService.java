@@ -1,6 +1,6 @@
 package com.ailms.service;
 
-import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import com.ailms.request.StudentProfileSearchRequest;
 import com.ailms.response.StudentProfileResponse;
 
@@ -21,7 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 public interface IStudentProfileService {
-    Page<StudentProfileResponse> search(StudentProfileSearchRequest request);
+    PageResponse<StudentProfileResponse> search(StudentProfileSearchRequest request);
     List<StudentProfileResponse> getAll();
     StudentProfileResponse getById(Long id);
     StudentProfileResponse create(StudentProfileRequest request);

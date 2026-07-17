@@ -1,6 +1,6 @@
 package com.ailms.controller;
 
-import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import com.ailms.request.LearningActivityLogSearchRequest;
 import com.ailms.response.LearningActivityLogResponse;
 
@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/learning-activity-logs")
+@RequestMapping("${api.prefix}/learning-activity-logs")
 @RequiredArgsConstructor
 public class LearningActivityLogController {
 
@@ -71,8 +71,8 @@ public class LearningActivityLogController {
     }
 
     @GetMapping("/search")
-    public ResponseEntity<ApiResponse<Page<LearningActivityLogResponse>>> search(LearningActivityLogSearchRequest request) {
-        Page<LearningActivityLogResponse> result = learningActivityLogService.search(request);
+    public ResponseEntity<ApiResponse<PageResponse<LearningActivityLogResponse>>> search(LearningActivityLogSearchRequest request) {
+        PageResponse<LearningActivityLogResponse> result = learningActivityLogService.search(request);
         return ResponseEntity.ok(ApiResponse.of("Search LearningActivityLog successfully", result));
     }
 }

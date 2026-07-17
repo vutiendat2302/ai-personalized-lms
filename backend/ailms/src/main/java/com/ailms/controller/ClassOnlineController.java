@@ -1,6 +1,6 @@
 package com.ailms.controller;
 
-import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import com.ailms.request.ClassOnlineSearchRequest;
 import com.ailms.response.ClassOnlineResponse;
 
@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/class-online")
+@RequestMapping("${api.prefix}/class-online")
 @RequiredArgsConstructor
 public class ClassOnlineController {
 
@@ -69,8 +69,8 @@ public class ClassOnlineController {
     }
 
     @GetMapping("/search")
-    public ResponseEntity<ApiResponse<Page<ClassOnlineResponse>>> search(ClassOnlineSearchRequest request) {
-        Page<ClassOnlineResponse> result = classOnlineService.search(request);
+    public ResponseEntity<ApiResponse<PageResponse<ClassOnlineResponse>>> search(ClassOnlineSearchRequest request) {
+        PageResponse<ClassOnlineResponse> result = classOnlineService.search(request);
         return ResponseEntity.ok(ApiResponse.of("Search ClassOnline successfully", result));
     }
 }

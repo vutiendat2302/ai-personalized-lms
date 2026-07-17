@@ -97,35 +97,39 @@ public final class SimpleJsonWriter {
         boolean first = true;
         Class<?> clazz = obj.getClass();
 
-        for (Field field : clazz.getDeclaredFields()) {
-            if (Modifier.isStatic(field.getModifiers()) || field.isSynthetic()) {
-                continue;
-            }
-            field.setAccessible(true);
-            Object fieldValue;
-            try {
-                fieldValue = field.get(obj);
-            } catch (Exception e) {
-                // Field không đọc được (lazy proxy, security manager...) -> bỏ qua field này
-                continue;
-            }
+        while (clazz != null && clazz != Object.class) {
+            for (Field field : clazz.getDeclaredFields()) {
+                if (Modifier.isStatic(field.getModifiers()) || field.isSynthetic()) {
+                    continue;
+                }
+                field.setAccessible(true);
+                Object fieldValue;
+                try {
+                    fieldValue = field.get(obj);
+                } catch (Exception e) {
+                    // Field không đọc được (lazy proxy, security manager...) -> bỏ qua field này
+                    continue;
+                }
 
-            // Bỏ qua các quan hệ entity dạng collection để tránh lazy-loading/vòng lặp
-            if (fieldValue instanceof Collection<?> || (fieldValue != null && fieldValue.getClass().isArray())) {
-                continue;
-            }
+                // Bỏ qua các quan hệ entity dạng collection để tránh lazy-loading/vòng lặp
+                if (fieldValue instanceof Collection<?> || (fieldValue != null && fieldValue.getClass().isArray())) {
+                    continue;
+                }
 
-            if (!first) sb.append(',');
-            first = false;
-            writeString(field.getName(), sb);
-            sb.append(':');
+                if (!first) sb.append(',');
+                first = false;
+                writeString(field.getName(), sb);
+                sb.append(':');
 
-            try {
-                writeValue(fieldValue, sb);
-            } catch (Exception e) {
-                sb.append("null");
+                try {
+                    writeValue(fieldValue, sb);
+                } catch (Exception e) {
+                    sb.append("null");
+                }
             }
+            clazz = clazz.getSuperclass();
         }
+
         sb.append('}');
     }
 }

@@ -18,12 +18,18 @@ import com.ailms.response.TeachingRateResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.time.LocalDateTime;
+import com.ailms.entity.enums.EmployeeStatusEnum;
+import com.ailms.entity.enums.BaseStatusEnum;
+import com.ailms.exception.BusinessException;
+import com.ailms.repository.TeachingSessionPaymentRepository;
 
 @Service
 @RequiredArgsConstructor
@@ -34,9 +40,10 @@ public class TeachingRateService implements ITeachingRateService {
     private final TeachingRateRepository teachingRateRepository;
     private final EmployeeRepository employeeRepository;
     private final TeachingRateMapper teachingRateMapper;
+    private final ClassRepository classRepository;
+    private final TeachingSessionPaymentRepository teachingSessionPaymentRepository;
 
     private static final String RESOURCE_NAME = "TeachingRate";
-    private final ClassRepository classRepository;
 
     public List<TeachingRateResponse> getAll() {
         log.info("Getting all teaching rates");
@@ -62,11 +69,32 @@ public class TeachingRateService implements ITeachingRateService {
         EmployeeEntity employee = employeeRepository.findById(request.getEmployeeId())
                 .orElseThrow(() -> ResourceNotFoundException.of("Employee", request.getEmployeeId()));
 
+        if (employee.getStatus() == EmployeeStatusEnum.DELETE) {
+            throw new BusinessException("Employee is deleted. Cannot create teaching rate.");
+        }
+
         ClassEntity classEntity = classRepository.findById(request.getClassId())
                 .orElseThrow(() -> ResourceNotFoundException.of("Class", request.getClassId()));
+
+        if (request.getRate() == null || request.getRate().compareTo(java.math.BigDecimal.ZERO) <= 0) {
+            throw new BusinessException("Rate must be greater than 0.");
+        }
+
+        if (request.getEffectiveFrom() == null) {
+            throw new BusinessException("Effective From date-time is required.");
+        }
+
+        if (request.getEffectiveTo() != null && !request.getEffectiveTo().isAfter(request.getEffectiveFrom())) {
+            throw new BusinessException("Effective To must be after Effective From.");
+        }
+
+        BaseStatusEnum status = BaseStatusEnum.ACTIVE;
+        validateAndManageRateOverlap(request.getEmployeeId(), request.getClassId(), request.getEffectiveFrom(), request.getEffectiveTo(), null);
+
         TeachingRateEntity entity = teachingRateMapper.toEntity(request);
         entity.setEmployeeEntity(employee);
         entity.setClassEntity(classEntity);
+        entity.setStatus(status);
 
         TeachingRateEntity saved = teachingRateRepository.save(entity);
         return teachingRateMapper.toResponse(saved);
@@ -79,18 +107,31 @@ public class TeachingRateService implements ITeachingRateService {
         TeachingRateEntity existing = teachingRateRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
 
-        teachingRateMapper.updateFromRequest(request, existing);
-        if (request.getEmployeeId() != null) {
-            EmployeeEntity employee = employeeRepository.findById(request.getEmployeeId())
-                    .orElseThrow(() -> ResourceNotFoundException.of("Employee", request.getEmployeeId()));
-            existing.setEmployeeEntity(employee);
+        if (request.getEmployeeId() != null && !request.getEmployeeId().equals(existing.getEmployeeEntity().getUserId())) {
+            throw new BusinessException("Cannot change employee ID of a teaching rate.");
         }
 
-        if (request.getClassId() != null) {
-            ClassEntity classEntity = classRepository.findById(request.getClassId())
-                    .orElseThrow(() -> ResourceNotFoundException.of("Class", request.getClassId()));
-            existing.setClassEntity(classEntity);
+        if (request.getClassId() != null && !request.getClassId().equals(existing.getClassEntity().getId())) {
+            throw new BusinessException("Cannot change class ID of a teaching rate.");
         }
+
+        if (request.getRate() != null && request.getRate().compareTo(java.math.BigDecimal.ZERO) <= 0) {
+            throw new BusinessException("Rate must be greater than 0.");
+        }
+
+        LocalDateTime newFrom = request.getEffectiveFrom() != null ? request.getEffectiveFrom() : existing.getEffectiveFrom();
+        LocalDateTime newTo = request.getEffectiveTo() != null ? request.getEffectiveTo() : existing.getEffectiveTo();
+
+        if (newTo != null && !newTo.isAfter(newFrom)) {
+            throw new BusinessException("Effective To must be after Effective From.");
+        }
+
+        BaseStatusEnum status = request.getStatus() != null ? request.getStatus() : existing.getStatus();
+        if (status == BaseStatusEnum.ACTIVE) {
+            validateAndManageRateOverlap(existing.getEmployeeEntity().getUserId(), existing.getClassEntity().getId(), newFrom, newTo, existing.getId());
+        }
+
+        teachingRateMapper.updateFromRequest(request, existing);
 
         TeachingRateEntity updated = teachingRateRepository.save(existing);
         return teachingRateMapper.toResponse(updated);
@@ -99,19 +140,53 @@ public class TeachingRateService implements ITeachingRateService {
     @Transactional
     public void delete(Long id) {
         log.info("Deleting teaching rate: {}", id);
-        if (!teachingRateRepository.existsById(id)) {
-            throw ResourceNotFoundException.of(RESOURCE_NAME, id);
+        TeachingRateEntity rate = teachingRateRepository.findById(id)
+                .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
+
+        boolean isUsed = teachingSessionPaymentRepository.existsByTeachingRate_Id(id);
+        if (isUsed) {
+            // Soft delete
+            rate.setStatus(BaseStatusEnum.INACTIVE);
+            teachingRateRepository.save(rate);
+            log.info("Teaching rate is in use by payments. Soft deleted (status set to INACTIVE).");
+        } else {
+            // Hard delete
+            teachingRateRepository.delete(rate);
+            log.info("Teaching rate is not in use. Hard deleted from database.");
         }
-        teachingRateRepository.deleteById(id);
     }
 
     @Override
-    public Page<TeachingRateResponse> search(TeachingRateSearchRequest request) {
+    public PageResponse<TeachingRateResponse> search(TeachingRateSearchRequest request) {
         log.info("Searching TeachingRate via specification");
         Specification<TeachingRateEntity> spec = TeachingRateSpecification.filterAndSearch(request);
         Pageable pageable = request.toPageable();
         Page<TeachingRateEntity> page = teachingRateRepository.findAll(spec, pageable);
-        return page.map(teachingRateMapper::toResponse);
+        return PageResponse.from(page.map(teachingRateMapper::toResponse));
+    }
+
+    private void validateAndManageRateOverlap(Long employeeId, Long classId, LocalDateTime newFrom, LocalDateTime newTo, Long currentRateId) {
+        List<TeachingRateEntity> activeRates = teachingRateRepository.findByEmployeeEntity_UserId(employeeId).stream()
+                .filter(r -> r.getClassEntity() != null && r.getClassEntity().getId().equals(classId))
+                .filter(r -> r.getStatus() == BaseStatusEnum.ACTIVE)
+                .filter(r -> currentRateId == null || !r.getId().equals(currentRateId))
+                .toList();
+
+        for (TeachingRateEntity r : activeRates) {
+            boolean overlaps = (r.getEffectiveTo() == null || !newFrom.isAfter(r.getEffectiveTo()))
+                    && (newTo == null || !newTo.isBefore(r.getEffectiveFrom()));
+
+            if (overlaps) {
+                if (r.getEffectiveFrom().isBefore(newFrom)) {
+                    // Auto-close the old rate
+                    r.setEffectiveTo(newFrom.minusSeconds(1));
+                    r.setStatus(BaseStatusEnum.INACTIVE);
+                    teachingRateRepository.save(r);
+                } else {
+                    throw new BusinessException("Trùng lấn thời gian với đơn giá hiệu lực khác.");
+                }
+            }
+        }
     }
 
 }

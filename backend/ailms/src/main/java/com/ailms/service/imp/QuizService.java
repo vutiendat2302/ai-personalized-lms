@@ -1,8 +1,8 @@
 package com.ailms.service.imp;
+
 import com.ailms.repository.specification.QuizSpecification;
 import com.ailms.request.QuizSearchRequest;
 import com.ailms.service.IQuizService;
-
 
 import com.ailms.entity.QuizEntity;
 import com.ailms.exception.ResourceNotFoundException;
@@ -13,6 +13,7 @@ import com.ailms.response.QuizResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -26,14 +27,13 @@ import java.util.List;
 @Transactional(readOnly = true)
 public class QuizService implements IQuizService {
     @Override
-    public Page<QuizResponse> search(QuizSearchRequest request) {
+    public PageResponse<QuizResponse> search(QuizSearchRequest request) {
         log.info("Searching Quiz via specification");
         Specification<QuizEntity> spec = QuizSpecification.filterAndSearch(request);
         Pageable pageable = request.toPageable();
         Page<QuizEntity> page = quizRepository.findAll(spec, pageable);
-        return page.map(quizMapper::toResponse);
+        return PageResponse.from(page.map(quizMapper::toResponse));
     }
-
 
     private final QuizRepository quizRepository;
     private final QuizMapper quizMapper;

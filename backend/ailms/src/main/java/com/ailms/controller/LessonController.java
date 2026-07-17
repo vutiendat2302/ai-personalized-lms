@@ -1,6 +1,6 @@
 package com.ailms.controller;
 
-import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import com.ailms.request.LessonSearchRequest;
 import com.ailms.response.LessonResponse;
 
@@ -68,8 +68,8 @@ public class LessonController {
     }
 
     @GetMapping("/search")
-    public ResponseEntity<ApiResponse<Page<LessonResponse>>> search(LessonSearchRequest request) {
-        Page<LessonResponse> result = lessonService.search(request);
+    public ResponseEntity<ApiResponse<PageResponse<LessonResponse>>> search(LessonSearchRequest request) {
+        PageResponse<LessonResponse> result = lessonService.search(request);
         return ResponseEntity.ok(ApiResponse.of("Search Lesson successfully", result));
     }
 }

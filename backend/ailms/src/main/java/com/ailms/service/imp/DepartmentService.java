@@ -20,6 +20,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import com.ailms.entity.enums.BaseStatusEnum;
+import com.ailms.entity.enums.EmployeeStatusEnum;
+
+import com.ailms.common.util.SortFieldResolver;
 
 @Service
 @RequiredArgsConstructor
@@ -31,15 +35,23 @@ public class DepartmentService implements IDepartmentService {
     private final DepartmentRepository departmentRepository;
     private final EmployeeRepository employeeRepository;
     private final DepartmentMapper departmentMapper;
+    private final SortFieldResolver sortFieldResolver;
 
     @Override
     @Transactional
     public DepartmentResponse createDepartment(CreateDepartmentRequest request) {
-        if (departmentRepository.existsByCodeIgnoreCase(request.getCode())) {
-            throw DuplicateResourceException.of(RESOURCE_NAME, "code", request.getCode());
+        String code = request.getCode();
+        if (code == null || code.trim().isEmpty()) {
+            code = com.ailms.common.util.CodeGenerator.generate("DP", departmentRepository::existsByCodeIgnoreCase);
+        } else {
+            if (departmentRepository.existsByCodeIgnoreCase(code)) {
+                throw DuplicateResourceException.of(RESOURCE_NAME, "code", code);
+            }
         }
 
         DepartmentEntity entity = departmentMapper.toDepartmentEntity(request);
+        entity.setCode(code);
+        entity.setStatus(BaseStatusEnum.ACTIVE);
 
         return departmentMapper.toDepartmentResponse(departmentRepository.save(entity));
     }
@@ -48,6 +60,13 @@ public class DepartmentService implements IDepartmentService {
     @Transactional
     public DepartmentResponse updateDepartment(Long id, UpdateDepartmentRequest request) {
         DepartmentEntity entity = findEntityById(id);
+
+        if (request.getStatus() == BaseStatusEnum.INACTIVE) {
+            boolean hasActiveEmployees = employeeRepository.existsByDepartment_IdAndStatusNot(id, EmployeeStatusEnum.DELETE);
+            if (hasActiveEmployees) {
+                throw new BusinessException("Cannot set department to INACTIVE while it still has active employees.");
+            }
+        }
 
         departmentMapper.updateDepartmentEntity(entity, request);
 
@@ -59,8 +78,9 @@ public class DepartmentService implements IDepartmentService {
     public void delete(Long id) {
         DepartmentEntity entity = findEntityById(id);
 
-        if (employeeRepository.existsByDepartment_Id(id)) {
-            throw new BusinessException("Cannot delete department that has employees");
+        boolean hasActiveEmployees = employeeRepository.existsByDepartment_IdAndStatusNot(id, EmployeeStatusEnum.DELETE);
+        if (hasActiveEmployees) {
+            throw new BusinessException("Cannot delete department that has active employees");
         }
 
         departmentRepository.delete(entity);
@@ -80,9 +100,17 @@ public class DepartmentService implements IDepartmentService {
 
     @Override
     public PageResponse<DepartmentResponse> search(DepartmentSearchRequest request) {
+        org.springframework.data.domain.Pageable pageable = request.toPageable();
+        if (pageable.getSort().isSorted()) {
+            pageable = org.springframework.data.domain.PageRequest.of(
+                    pageable.getPageNumber(),
+                    pageable.getPageSize(),
+                    sortFieldResolver.resolve(pageable.getSort(), DepartmentEntity.class)
+            );
+        }
         Page<DepartmentEntity> page = departmentRepository.findAll(
                 DepartmentSpecification.filterAndSearch(request),
-                request.toPageable()
+                pageable
         );
 
         return PageResponse.from(page.map(departmentMapper::toDepartmentResponse));

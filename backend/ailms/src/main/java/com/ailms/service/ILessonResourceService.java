@@ -1,6 +1,6 @@
 package com.ailms.service;
 
-import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import com.ailms.request.LessonResourceSearchRequest;
 
 
@@ -12,7 +12,7 @@ import com.ailms.response.ResourceResponse;
 import java.util.List;
 
 public interface ILessonResourceService {
-    Page<ResourceResponse> search(LessonResourceSearchRequest request);
+    PageResponse<ResourceResponse> search(LessonResourceSearchRequest request);
 
     ResourceResponse create(Long lessonId, CreateResourceRequest request);
 

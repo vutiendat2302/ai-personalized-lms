@@ -2,7 +2,7 @@ package com.ailms.controller;
 
 import com.ailms.request.CreateSalaryRequest;
 import com.ailms.request.UpdateSalaryRequest;
-import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import com.ailms.request.SalarySearchRequest;
 import com.ailms.response.SalaryResponse;
 
@@ -62,8 +62,20 @@ public class SalaryController {
     }
 
     @GetMapping("/search")
-    public ResponseEntity<ApiResponse<Page<SalaryResponse>>> search(SalarySearchRequest request) {
-        Page<SalaryResponse> result = salaryService.search(request);
-        return ResponseEntity.ok(ApiResponse.of("Search Salary successfully", result));
+    public ResponseEntity<ApiResponse<PageResponse<SalaryResponse>>> search(SalarySearchRequest request) {
+         PageResponse<SalaryResponse> result = salaryService.search(request);
+         return ResponseEntity.ok(ApiResponse.of("Search Salary successfully", result));
+    }
+
+    @PutMapping("/{id}/approve")
+    public ResponseEntity<ApiResponse<SalaryResponse>> approve(@PathVariable Long id) {
+        SalaryResponse response = salaryService.approve(id);
+        return ResponseEntity.ok(ApiResponse.of("Salary approved successfully", response));
+    }
+
+    @PutMapping("/{id}/pay")
+    public ResponseEntity<ApiResponse<SalaryResponse>> pay(@PathVariable Long id) {
+        SalaryResponse response = salaryService.pay(id);
+        return ResponseEntity.ok(ApiResponse.of("Salary paid successfully", response));
     }
 }

@@ -20,6 +20,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -33,12 +34,12 @@ import java.util.List;
 @Transactional(readOnly = true)
 public class CourseMemberService implements ICourseMemberService {
     @Override
-    public Page<CourseMemberResponse> search(CourseMemberSearchRequest request) {
+    public PageResponse<CourseMemberResponse> search(CourseMemberSearchRequest request) {
         log.info("Searching CourseMember via specification");
         Specification<CourseMemberEntity> spec = CourseMemberSpecification.filterAndSearch(request);
         Pageable pageable = request.toPageable();
         Page<CourseMemberEntity> page = courseMemberRepository.findAll(spec, pageable);
-        return page.map(courseMemberMapper::toResponse);
+        return PageResponse.from(page.map(courseMemberMapper::toResponse));
     }
 
 

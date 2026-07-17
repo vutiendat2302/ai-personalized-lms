@@ -2,7 +2,7 @@ package com.ailms.controller;
 
 import com.ailms.request.CreateAttendanceRequest;
 import com.ailms.request.UpdateAttendanceRequest;
-import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import com.ailms.request.AttendanceSearchRequest;
 import com.ailms.response.AttendanceResponse;
 
@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/attendance")
+@RequestMapping("${api.prefix}/attendance")
 @RequiredArgsConstructor
 public class AttendanceController {
 
@@ -62,8 +62,8 @@ public class AttendanceController {
     }
 
     @GetMapping("/search")
-    public ResponseEntity<ApiResponse<Page<AttendanceResponse>>> search(AttendanceSearchRequest request) {
-        Page<AttendanceResponse> result = attendanceService.search(request);
+    public ResponseEntity<ApiResponse<PageResponse<AttendanceResponse>>> search(AttendanceSearchRequest request) {
+        PageResponse<AttendanceResponse> result = attendanceService.search(request);
         return ResponseEntity.ok(ApiResponse.of("Search Attendance successfully", result));
     }
 }

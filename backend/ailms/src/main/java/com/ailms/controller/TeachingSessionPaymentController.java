@@ -2,7 +2,7 @@ package com.ailms.controller;
 
 import com.ailms.request.CreateTeachingSessionPaymentRequest;
 import com.ailms.request.UpdateTeachingSessionPaymentRequest;
-import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import com.ailms.request.TeachingSessionPaymentSearchRequest;
 import com.ailms.response.TeachingSessionPaymentResponse;
 
@@ -62,8 +62,8 @@ public class TeachingSessionPaymentController {
     }
 
     @GetMapping("/search")
-    public ResponseEntity<ApiResponse<Page<TeachingSessionPaymentResponse>>> search(TeachingSessionPaymentSearchRequest request) {
-        Page<TeachingSessionPaymentResponse> result = teachingSessionPaymentService.search(request);
+    public ResponseEntity<ApiResponse<PageResponse<TeachingSessionPaymentResponse>>> search(TeachingSessionPaymentSearchRequest request) {
+        PageResponse<TeachingSessionPaymentResponse> result = teachingSessionPaymentService.search(request);
         return ResponseEntity.ok(ApiResponse.of("Search TeachingSessionPayment successfully", result));
     }
 }

@@ -23,19 +23,30 @@ public class CreateSalaryRequest {
     @NotNull(message = "Salary period is required")
     private YearMonth period;
 
-    private BigDecimal baseSalary;
+    /** Phụ cấp ăn trưa */
+    private BigDecimal mealAllowance;
 
-    private SalaryTypeEnum salaryTypeEnum;
+    /** Phụ cấp điện thoại */
+    private BigDecimal phoneAllowance;
+
+    /** Phụ cấp trang phục */
+    private BigDecimal uniformAllowance;
+
+    /** Phụ cấp trách nhiệm */
+    private BigDecimal responsibilityAllowance;
+
+    /** Phụ cấp hiệu suất */
+    private BigDecimal performanceAllowance;
+
+    /** Lương đóng bảo hiểm (nếu không nhập, mặc định = baseSalary + responsibility) */
+    private BigDecimal insuranceSalary;
+
+    /** Số người phụ thuộc để tính giảm trừ gia cảnh */
+    private Integer dependents;
 
     private BigDecimal bonus;
 
     private BigDecimal deduction;
-
-    private BigDecimal totalSalary;
-
-    private SalaryStatusEnum status;
-
-    private LocalDateTime paidAt;
 
     private String description;
 }

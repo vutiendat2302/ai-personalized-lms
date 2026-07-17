@@ -1,9 +1,8 @@
 package com.ailms.controller;
 
-import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import com.ailms.request.QuestionSearchRequest;
 import com.ailms.response.QuestionResponse;
-
 
 import com.ailms.request.QuestionRequest;
 import com.ailms.response.ApiResponse;
@@ -27,7 +26,8 @@ public class QuestionController {
     @PostMapping
     public ResponseEntity<ApiResponse<QuestionResponse>> create(@Valid @RequestBody QuestionRequest request) {
         QuestionResponse response = questionService.create(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of("Question created successfully", response));
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.of("Question created successfully", response));
     }
 
     @PutMapping("/{id}")
@@ -63,8 +63,8 @@ public class QuestionController {
     }
 
     @GetMapping("/search")
-    public ResponseEntity<ApiResponse<Page<QuestionResponse>>> search(QuestionSearchRequest request) {
-        Page<QuestionResponse> result = questionService.search(request);
+    public ResponseEntity<ApiResponse<PageResponse<QuestionResponse>>> search(QuestionSearchRequest request) {
+        PageResponse<QuestionResponse> result = questionService.search(request);
         return ResponseEntity.ok(ApiResponse.of("Search Question successfully", result));
     }
 }

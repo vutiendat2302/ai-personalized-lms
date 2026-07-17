@@ -1,9 +1,8 @@
 package com.ailms.service;
 
-import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import com.ailms.request.QuestionOptionSearchRequest;
 import com.ailms.response.QuestionOptionResponse;
-
 
 import com.ailms.entity.QuestionOptionEntity;
 import com.ailms.exception.ResourceNotFoundException;
@@ -18,11 +17,17 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 public interface IQuestionOptionService {
-    Page<QuestionOptionResponse> search(QuestionOptionSearchRequest request);
+    PageResponse<QuestionOptionResponse> search(QuestionOptionSearchRequest request);
+
     List<QuestionOptionResponse> getAll();
+
     QuestionOptionResponse getById(Long id);
+
     List<QuestionOptionResponse> getByQuestionId(Long questionId);
+
     QuestionOptionResponse create(QuestionOptionRequest request);
+
     QuestionOptionResponse update(Long id, QuestionOptionRequest request);
+
     void delete(Long id);
 }

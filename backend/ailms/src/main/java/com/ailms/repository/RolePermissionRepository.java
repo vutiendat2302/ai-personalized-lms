@@ -1,6 +1,7 @@
 package com.ailms.repository;
 
 import com.ailms.entity.RolePermissionEntity;
+import com.ailms.repository.base.BaseRepository;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -12,7 +13,7 @@ import java.util.List;
 import java.util.Set;
 
 @Repository
-public interface RolePermissionRepository extends JpaRepository<RolePermissionEntity, Long> {
+public interface RolePermissionRepository extends BaseRepository<RolePermissionEntity, Long> {
     List<RolePermissionEntity> findByRoleEntity_Id(Long roleId);
 
     @Query("""

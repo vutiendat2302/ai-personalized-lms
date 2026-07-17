@@ -1,9 +1,9 @@
 package com.ailms.repository.specification;
- 
+
 import com.ailms.entity.QuestionOptionEntity;
+import com.ailms.common.util.SpecificationBuilder;
 import com.ailms.request.QuestionOptionSearchRequest;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.util.StringUtils;
 
 public final class QuestionOptionSpecification {
 
@@ -11,23 +11,15 @@ public final class QuestionOptionSpecification {
     }
 
     public static Specification<QuestionOptionEntity> filterAndSearch(QuestionOptionSearchRequest request) {
-        Specification<QuestionOptionEntity> spec = (root, query, criteriaBuilder) -> criteriaBuilder.conjunction();
+        SpecificationBuilder<QuestionOptionEntity> builder = SpecificationBuilder.of();
 
         if (request == null) {
-            return spec;
+            return builder.build();
         }
 
+        builder.greaterOrEqualIfPresent("createdAt", request.getCreatedFrom());
+        builder.lessOrEqualIfPresent("createdAt", request.getCreatedTo());
 
-        if (request.getCreatedFrom() != null) {
-            spec = spec.and((root, query, criteriaBuilder) ->
-                    criteriaBuilder.greaterThanOrEqualTo(root.get("createdAt"), request.getCreatedFrom()));
-        }
-
-        if (request.getCreatedTo() != null) {
-            spec = spec.and((root, query, criteriaBuilder) ->
-                    criteriaBuilder.lessThanOrEqualTo(root.get("createdAt"), request.getCreatedTo()));
-        }
-
-        return spec;
+        return builder.build();
     }
 }

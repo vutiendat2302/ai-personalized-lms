@@ -1,6 +1,6 @@
 package com.ailms.controller;
 
-import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import com.ailms.request.RoleSearchRequest;
 import com.ailms.response.RoleResponse;
 
@@ -21,15 +21,15 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/roles")
+@RequestMapping("${api.prefix}/roles")
 @RequiredArgsConstructor
 public class RoleController {
 
     private final IRoleService roleService;
 
     @GetMapping("/page")
-    public ResponseEntity<ApiResponse<Page<RoleResponse>>> getRoles(RoleSearchRequest request) {
-        Page<RoleResponse> response = roleService.getRoles(request);
+    public ResponseEntity<ApiResponse<PageResponse<RoleResponse>>> getRoles(RoleSearchRequest request) {
+        PageResponse<RoleResponse> response = roleService.getRoles(request);
         return ResponseEntity.ok(ApiResponse.of("Roles retrieved successfully", response));
     }
 

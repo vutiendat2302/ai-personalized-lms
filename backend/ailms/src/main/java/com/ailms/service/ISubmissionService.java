@@ -1,6 +1,6 @@
 package com.ailms.service;
 
-import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import com.ailms.request.SubmissionSearchRequest;
 import com.ailms.response.SubmissionResponse;
 
@@ -19,7 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 public interface ISubmissionService {
-    Page<SubmissionResponse> search(SubmissionSearchRequest request);
+    PageResponse<SubmissionResponse> search(SubmissionSearchRequest request);
     List<SubmissionResponse> getAll();
     SubmissionResponse getById(Long id);
     List<SubmissionResponse> getByAssignmentId(Long assignmentId);

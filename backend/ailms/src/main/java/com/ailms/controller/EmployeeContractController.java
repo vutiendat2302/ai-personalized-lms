@@ -2,7 +2,7 @@ package com.ailms.controller;
 
 import com.ailms.request.CreateEmployeeContractRequest;
 import com.ailms.request.UpdateEmployeeContractRequest;
-import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import com.ailms.request.EmployeeContractSearchRequest;
 import com.ailms.response.EmployeeContractResponse;
 
@@ -63,8 +63,8 @@ public class EmployeeContractController {
     }
 
     @GetMapping("/search")
-    public ResponseEntity<ApiResponse<Page<EmployeeContractResponse>>> search(EmployeeContractSearchRequest request) {
-        Page<EmployeeContractResponse> result = employeeContractService.search(request);
+    public ResponseEntity<ApiResponse<PageResponse<EmployeeContractResponse>>> search(EmployeeContractSearchRequest request) {
+        PageResponse<EmployeeContractResponse> result = employeeContractService.search(request);
         return ResponseEntity.ok(ApiResponse.of("Search EmployeeContract successfully", result));
     }
 }

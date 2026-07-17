@@ -18,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FilenameUtils;
 import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -95,12 +96,12 @@ public class FileMetadataService implements IFileMetadataService {
     }
 
     @Override
-    public Page<FileMetadataResponse> search(FileSearchRequest request) {
+    public PageResponse<FileMetadataResponse> search(FileSearchRequest request) {
         log.info("Searching file metadata via specification");
         Specification<FileMetadataEntity> spec = FileSpecification.filterAndSearch(request);
         Pageable pageable = request.toPageable();
         Page<FileMetadataEntity> page = fileMetadataRepository.findAll(spec, pageable);
-        return page.map(fileMetadataMapper::toResponse);
+        return PageResponse.from(page.map(fileMetadataMapper::toResponse));
     }
 
     @Override

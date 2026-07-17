@@ -11,6 +11,7 @@ import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import com.ailms.exception.EmailSendException;
@@ -236,6 +237,91 @@ public class EmailService implements IEmailService {
         </body>
         </html>
         """.formatted(setPasswordLink, setPasswordLink);
+    }
+
+    @Override
+    public void sendContractNotificationEmail(String toEmail, String fullName, String contractType, String downloadUrl) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setTo(toEmail);
+            helper.setSubject("Thông báo ký kết hợp đồng lao động mới - AILMS");
+            helper.setText(buildContractNotificationEmailContent(fullName, contractType, downloadUrl), true);
+            mailSender.send(message);
+            log.info("Contract email notification sent successfully to {}", toEmail);
+        } catch (Exception e) {
+            log.error("Failed to send contract notification email to {}", toEmail, e);
+        }
+    }
+
+    private String buildContractNotificationEmailContent(String fullName, String contractType, String downloadUrl) {
+        return """
+        <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6;">
+            <h2>Kính chào anh/chị %s,</h2>
+            <p>AILMS xin thông báo hợp đồng lao động của anh/chị đã được cập nhật thành công trên hệ thống:</p>
+            <ul>
+                <li><strong>Loại hợp đồng:</strong> %s</li>
+                <li><strong>Trạng thái:</strong> Đang hoạt động (ACTIVE)</li>
+            </ul>
+            <p>Anh/chị có thể xem chi tiết và tải xuống file hợp đồng qua liên kết bên dưới:</p>
+            <p style="margin: 24px 0;">
+                <a href="%s"
+                   style="
+                       background-color:#2563eb;
+                       color:white;
+                       padding:12px 24px;
+                       text-decoration:none;
+                       border-radius:6px;
+                       display:inline-block;">
+                    Xem hợp đồng lao động
+                </a>
+            </p>
+            <p>Hoặc sao chép liên kết sau vào trình duyệt:</p>
+            <p>%s</p>
+            <br>
+            <p>Trân trọng,<br>
+            AILMS HR Team</p>
+        </body>
+        </html>
+        """.formatted(fullName, contractType, downloadUrl, downloadUrl);
+    }
+
+    @Override
+    public void sendContractExpirationAlertEmail(String toEmail, String employeeName, String contractCode, LocalDate endDate) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setTo(toEmail);
+            helper.setSubject("Cảnh báo: Hợp đồng lao động sắp hết hạn - AILMS");
+            helper.setText(buildContractExpirationAlertEmailContent(employeeName, contractCode, endDate), true);
+            mailSender.send(message);
+            log.info("Contract expiration alert sent to {}", toEmail);
+        } catch (Exception e) {
+            log.error("Failed to send contract expiration alert email to {}", toEmail, e);
+        }
+    }
+
+    private String buildContractExpirationAlertEmailContent(String employeeName, String contractCode, LocalDate endDate) {
+        String formattedDate = endDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+        return """
+        <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6;">
+            <h3>Thông báo hệ thống: Hợp đồng lao động sắp hết hạn</h3>
+            <p>Kính gửi bộ phận nhân sự và quản trị viên,</p>
+            <p>Hệ thống AILMS ghi nhận hợp đồng lao động sau đây sẽ hết hiệu lực trong vòng <strong>1 tuần nữa (vào ngày %s)</strong>:</p>
+            <ul>
+                <li><strong>Nhân viên:</strong> %s</li>
+                <li><strong>Mã/Loại hợp đồng:</strong> %s</li>
+                <li><strong>Ngày hết hạn:</strong> %s</li>
+            </ul>
+            <p>Vui lòng xem xét gia hạn hợp đồng mới hoặc thực hiện các nghiệp vụ liên quan.</p>
+            <br>
+            <p>Trân trọng,<br>
+            AILMS System Notification Service</p>
+        </body>
+        </html>
+        """.formatted(formattedDate, employeeName, contractCode, formattedDate);
     }
 }
 

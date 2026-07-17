@@ -1,9 +1,8 @@
 package com.ailms.controller;
 
-import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import com.ailms.request.StudyGoalSearchRequest;
 import com.ailms.response.StudyGoalResponse;
-
 
 import com.ailms.request.StudyGoalRequest;
 import com.ailms.response.ApiResponse;
@@ -27,7 +26,8 @@ public class StudyGoalController {
     @PostMapping
     public ResponseEntity<ApiResponse<StudyGoalResponse>> create(@Valid @RequestBody StudyGoalRequest request) {
         StudyGoalResponse response = studyGoalService.create(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of("Study goal created successfully", response));
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.of("Study goal created successfully", response));
     }
 
     @PutMapping("/{id}")
@@ -69,8 +69,8 @@ public class StudyGoalController {
     }
 
     @GetMapping("/search")
-    public ResponseEntity<ApiResponse<Page<StudyGoalResponse>>> search(StudyGoalSearchRequest request) {
-        Page<StudyGoalResponse> result = studyGoalService.search(request);
+    public ResponseEntity<ApiResponse<PageResponse<StudyGoalResponse>>> search(StudyGoalSearchRequest request) {
+        PageResponse<StudyGoalResponse> result = studyGoalService.search(request);
         return ResponseEntity.ok(ApiResponse.of("Search StudyGoal successfully", result));
     }
 }

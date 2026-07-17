@@ -16,6 +16,7 @@ import com.ailms.response.StudentProfileResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -29,12 +30,12 @@ import java.util.List;
 @Transactional(readOnly = true)
 public class StudentProfileService implements IStudentProfileService {
     @Override
-    public Page<StudentProfileResponse> search(StudentProfileSearchRequest request) {
+    public PageResponse<StudentProfileResponse> search(StudentProfileSearchRequest request) {
         log.info("Searching StudentProfile via specification");
         Specification<StudentProfileEntity> spec = StudentProfileSpecification.filterAndSearch(request);
         Pageable pageable = request.toPageable();
         Page<StudentProfileEntity> page = studentProfileRepository.findAll(spec, pageable);
-        return page.map(studentProfileMapper::toResponse);
+        return PageResponse.from(page.map(studentProfileMapper::toResponse));
     }
 
 

@@ -1,6 +1,6 @@
 package com.ailms.service;
 
-import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import com.ailms.request.CourseTeacherSearchRequest;
 import com.ailms.response.CourseTeacherResponse;
 
@@ -24,7 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 public interface ICourseTeacherService {
-    Page<CourseTeacherResponse> search(CourseTeacherSearchRequest request);
+    PageResponse<CourseTeacherResponse> search(CourseTeacherSearchRequest request);
     List<CourseTeacherResponse> getAll();
     CourseTeacherResponse getById(Long courseId, Long userId);
     List<CourseTeacherResponse> getByCourseId(Long courseId);

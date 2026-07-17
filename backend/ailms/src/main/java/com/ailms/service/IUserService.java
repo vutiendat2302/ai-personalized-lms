@@ -3,7 +3,7 @@ package com.ailms.service;
 import com.ailms.request.*;
 import com.ailms.response.EffectivePermissionResponse;
 import com.ailms.response.UserResponse;
-import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import java.util.List;
 import java.util.Map;
 
@@ -22,7 +22,7 @@ public interface IUserService {
      * @param request điều kiện tìm kiếm, lọc và thông tin phân trang
      * @return danh sách user đã phân trang
      */
-    Page<UserResponse> getUsers(UserSearchRequest request);
+    PageResponse<UserResponse> getUsers(UserSearchRequest request);
 
     List<UserResponse> getAllUsers();
     UserResponse getUserById(Long id);

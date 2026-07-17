@@ -13,6 +13,7 @@ import com.ailms.response.LearningActivityLogResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -26,12 +27,12 @@ import java.util.List;
 @Transactional(readOnly = true)
 public class LearningActivityLogService implements ILearningActivityLogService {
     @Override
-    public Page<LearningActivityLogResponse> search(LearningActivityLogSearchRequest request) {
+    public PageResponse<LearningActivityLogResponse> search(LearningActivityLogSearchRequest request) {
         log.info("Searching LearningActivityLog via specification");
         Specification<LearningActivityLogEntity> spec = LearningActivityLogSpecification.filterAndSearch(request);
         Pageable pageable = request.toPageable();
         Page<LearningActivityLogEntity> page = learningActivityLogRepository.findAll(spec, pageable);
-        return page.map(learningActivityLogMapper::toResponse);
+        return PageResponse.from(page.map(learningActivityLogMapper::toResponse));
     }
 
 

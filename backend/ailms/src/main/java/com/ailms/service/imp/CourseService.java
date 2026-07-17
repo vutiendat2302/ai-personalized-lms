@@ -145,9 +145,7 @@ public class CourseService implements ICourseService {
                 request.toPageable()
         );
 
-        Page<CourseResponse> responsePage = page.map(courseMapper::toResponse);
-
-        return PageResponse.from(responsePage);
+        return PageResponse.from(page.map(courseMapper::toResponse));
     }
 
     private String generateSlug(String input) {

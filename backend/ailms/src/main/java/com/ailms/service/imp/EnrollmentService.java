@@ -19,6 +19,7 @@ import com.ailms.response.EnrollmentResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -32,12 +33,12 @@ import java.util.List;
 @Transactional(readOnly = true)
 public class EnrollmentService implements IEnrollmentService {
     @Override
-    public Page<EnrollmentResponse> search(EnrollmentSearchRequest request) {
+    public PageResponse<EnrollmentResponse> search(EnrollmentSearchRequest request) {
         log.info("Searching Enrollment via specification");
         Specification<EnrollmentEntity> spec = EnrollmentSpecification.filterAndSearch(request);
         Pageable pageable = request.toPageable();
         Page<EnrollmentEntity> page = enrollmentRepository.findAll(spec, pageable);
-        return page.map(enrollmentMapper::toResponse);
+        return PageResponse.from(page.map(enrollmentMapper::toResponse));
     }
 
 

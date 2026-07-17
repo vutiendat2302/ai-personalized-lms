@@ -1,13 +1,14 @@
 package com.ailms.repository;
 
 import com.ailms.entity.QuizAnswerEntity;
-import org.springframework.data.jpa.repository.JpaRepository;
+import com.ailms.repository.base.BaseRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
 @Repository
-public interface QuizAnswerRepository extends JpaRepository<QuizAnswerEntity, Long>, org.springframework.data.jpa.repository.JpaSpecificationExecutor<QuizAnswerEntity> {
+public interface QuizAnswerRepository extends BaseRepository<QuizAnswerEntity, Long> {
     List<QuizAnswerEntity> findByAttemptId(Long attemptId);
+
     List<QuizAnswerEntity> findByQuestionId(Long questionId);
 }

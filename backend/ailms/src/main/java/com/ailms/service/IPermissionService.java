@@ -3,13 +3,13 @@ package com.ailms.service;
 import com.ailms.request.PermissionRequest;
 import com.ailms.request.PermissionSearchRequest;
 import com.ailms.response.PermissionResponse;
-import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 
 import java.util.List;
 
 public interface IPermissionService {
 
-    Page<PermissionResponse> getPermissions(PermissionSearchRequest request);
+    PageResponse<PermissionResponse> getPermissions(PermissionSearchRequest request);
 
     // Get all
     List<PermissionResponse> getAllPermissions();

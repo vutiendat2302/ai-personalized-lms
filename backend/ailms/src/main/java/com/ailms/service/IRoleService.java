@@ -8,14 +8,14 @@ import com.ailms.request.RoleSearchRequest;
 import com.ailms.response.PermissionResponse;
 import com.ailms.response.RoleResponse;
 import com.ailms.response.UserResponse;
-import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 
 
 import java.util.List;
 
 public interface IRoleService {
 
-    Page<RoleResponse> getRoles(RoleSearchRequest request);
+    PageResponse<RoleResponse> getRoles(RoleSearchRequest request);
 
     List<RoleResponse> getAllRoles();
 

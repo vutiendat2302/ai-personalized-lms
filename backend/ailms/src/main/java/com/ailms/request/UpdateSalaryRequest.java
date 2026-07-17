@@ -20,15 +20,18 @@ public class UpdateSalaryRequest {
 
     private BigDecimal baseSalary;
 
+    private BigDecimal mealAllowance;
+    private BigDecimal phoneAllowance;
+    private BigDecimal uniformAllowance;
+    private BigDecimal responsibilityAllowance;
+    private BigDecimal performanceAllowance;
+    private BigDecimal insuranceSalary;
+    private Integer dependents;
+
     private BigDecimal bonus;
-
     private BigDecimal deduction;
-
     private BigDecimal totalSalary;
-
     private SalaryStatusEnum status;
-
     private LocalDateTime paidAt;
-
     private String description;
 }

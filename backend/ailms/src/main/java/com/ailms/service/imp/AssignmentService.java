@@ -1,6 +1,6 @@
 package com.ailms.service.imp;
-import com.ailms.service.IAssignmentService;
 
+import com.ailms.service.IAssignmentService;
 
 import com.ailms.entity.AssignmentEntity;
 import com.ailms.exception.ResourceNotFoundException;
@@ -13,6 +13,7 @@ import com.ailms.response.AssignmentResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -25,15 +26,6 @@ import java.util.List;
 @Slf4j
 @Transactional(readOnly = true)
 public class AssignmentService implements IAssignmentService {
-    @Override
-    public Page<AssignmentResponse> search(AssignmentSearchRequest request) {
-        log.info("Searching Assignment via specification");
-        Specification<AssignmentEntity> spec = AssignmentSpecification.filterAndSearch(request);
-        Pageable pageable = request.toPageable();
-        Page<AssignmentEntity> page = assignmentRepository.findAll(spec, pageable);
-        return page.map(assignmentMapper::toResponse);
-    }
-
 
     private final AssignmentRepository assignmentRepository;
     private final AssignmentMapper assignmentMapper;
@@ -92,5 +84,14 @@ public class AssignmentService implements IAssignmentService {
             throw ResourceNotFoundException.of(RESOURCE_NAME, id);
         }
         assignmentRepository.deleteById(id);
+    }
+
+    @Override
+    public PageResponse<AssignmentResponse> search(AssignmentSearchRequest request) {
+        log.info("Searching Assignment via specification");
+        Specification<AssignmentEntity> spec = AssignmentSpecification.filterAndSearch(request);
+        Pageable pageable = request.toPageable();
+        Page<AssignmentEntity> page = assignmentRepository.findAll(spec, pageable);
+        return PageResponse.from(page.map(assignmentMapper::toResponse));
     }
 }

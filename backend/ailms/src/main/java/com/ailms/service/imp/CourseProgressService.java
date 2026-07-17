@@ -13,6 +13,7 @@ import com.ailms.response.CourseProgressResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -26,12 +27,12 @@ import java.util.List;
 @Transactional(readOnly = true)
 public class CourseProgressService implements ICourseProgressService {
     @Override
-    public Page<CourseProgressResponse> search(CourseProgressSearchRequest request) {
+    public PageResponse<CourseProgressResponse> search(CourseProgressSearchRequest request) {
         log.info("Searching CourseProgress via specification");
         Specification<CourseProgressEntity> spec = CourseProgressSpecification.filterAndSearch(request);
         Pageable pageable = request.toPageable();
         Page<CourseProgressEntity> page = courseProgressRepository.findAll(spec, pageable);
-        return page.map(courseProgressMapper::toResponse);
+        return PageResponse.from(page.map(courseProgressMapper::toResponse));
     }
 
 

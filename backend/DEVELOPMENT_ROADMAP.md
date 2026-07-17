@@ -52,13 +52,7 @@ Xây dựng LMS thông minh hỗ trợ:
 - API composite (course tree, student dashboard)
 - Tích hợp AI (Phase 3 theo README gốc)
 
-### 2.4 Vấn đề kỹ thuật cần xử lý sớm
 
-- **API path không thống nhất:** `/api/users`, `/api/roles` vs `/api/v1/...`
-- **Thiếu `@PreAuthorize`:** Hầu hết controller learning mới chưa gắn permission
-- **Progress đang là CRUD thủ công:** Nên chuyển sang cập nhật tự động từ sự kiện học tập
-
----
 
 ## 3. Nguyên tắc ưu tiên
 
@@ -339,17 +333,3 @@ AI Recommendation Service (Python)
 
 ---
 
-## 9. Tài liệu liên quan
-
-- [README.md](../README.md) — Tổng quan dự án
-- [BACKEND.md](./BACKEND.md) — Auth, JWT, RBAC chi tiết
-- [module2_course_management.md](./module2_course_management.md) — Thiết kế Course Management
-- [DATABASE.md](../database/DATABASE.md) — Schema database
-
----
-
-## 10. Ghi chú
-
-- Backend hiện đã có **đủ xương** (entity + repository + service + controller). Việc tiếp theo chủ yếu là **business logic + composite APIs + RBAC**, không phải scaffold thêm module.
-- Ưu tiên làm **1 flow hoàn chỉnh** (ví dụ: enroll → xem lesson → nộp assignment) trước khi mở rộng sang flow khác.
-- Mỗi phase nên có **demo được với Frontend** trước khi chuyển phase tiếp theo.

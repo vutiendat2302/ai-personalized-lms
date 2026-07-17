@@ -1,6 +1,6 @@
 package com.ailms.controller;
 
-import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import com.ailms.request.EnrollmentSearchRequest;
 import com.ailms.response.EnrollmentResponse;
 
@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/enrollments")
+@RequestMapping("${api.prefix}/enrollments")
 @RequiredArgsConstructor
 public class EnrollmentController {
 
@@ -75,8 +75,8 @@ public class EnrollmentController {
     }
 
     @GetMapping("/search")
-    public ResponseEntity<ApiResponse<Page<EnrollmentResponse>>> search(EnrollmentSearchRequest request) {
-        Page<EnrollmentResponse> result = enrollmentService.search(request);
+    public ResponseEntity<ApiResponse<PageResponse<EnrollmentResponse>>> search(EnrollmentSearchRequest request) {
+        PageResponse<EnrollmentResponse> result = enrollmentService.search(request);
         return ResponseEntity.ok(ApiResponse.of("Search Enrollment successfully", result));
     }
 }

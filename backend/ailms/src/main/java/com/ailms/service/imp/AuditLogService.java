@@ -15,6 +15,7 @@ import com.ailms.security.CustomUserDetails;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import com.ailms.response.PageResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.Authentication;
@@ -109,9 +110,10 @@ public class AuditLogService implements IAuditLogService{
 
     @Transactional(readOnly = true)
     @Override
-    public Page<AuditLogResponse> getAuditLogs(AuditLogSearchRequest request) {
+    public PageResponse<AuditLogResponse> getAuditLogs(AuditLogSearchRequest request) {
         Specification<AuditLogEntity> spec = AuditLogSpecification.filterAndSearch(request);
-        return auditLogRepository.findAll(spec, request.toPageable()).map(auditLogMapper::toResponse);
+        Page<AuditLogEntity> page = auditLogRepository.findAll(spec, request.toPageable());
+        return PageResponse.from(page.map(auditLogMapper::toResponse));
     }
 
     @Override
@@ -121,7 +123,7 @@ public class AuditLogService implements IAuditLogService{
 
     @Transactional(readOnly = true)
     @Override
-    public Page<AuditLogResponse> getAuditLogsByUserId(Long userId, AuditLogSearchRequest request) {
+    public PageResponse<AuditLogResponse> getAuditLogsByUserId(Long userId, AuditLogSearchRequest request) {
         if (!userRepository.existsById(userId)) {
             throw ResourceNotFoundException.of("User", userId);
         }

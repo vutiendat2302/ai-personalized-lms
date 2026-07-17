@@ -1,8 +1,8 @@
 package com.ailms.service.imp;
+
 import com.ailms.repository.specification.QuizAttemptSpecification;
 import com.ailms.request.QuizAttemptSearchRequest;
 import com.ailms.service.IQuizAttemptService;
-
 
 import com.ailms.entity.QuizAttemptEntity;
 import com.ailms.exception.ResourceNotFoundException;
@@ -13,6 +13,7 @@ import com.ailms.response.QuizAttemptResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -26,14 +27,13 @@ import java.util.List;
 @Transactional(readOnly = true)
 public class QuizAttemptService implements IQuizAttemptService {
     @Override
-    public Page<QuizAttemptResponse> search(QuizAttemptSearchRequest request) {
+    public PageResponse<QuizAttemptResponse> search(QuizAttemptSearchRequest request) {
         log.info("Searching QuizAttempt via specification");
         Specification<QuizAttemptEntity> spec = QuizAttemptSpecification.filterAndSearch(request);
         Pageable pageable = request.toPageable();
         Page<QuizAttemptEntity> page = quizAttemptRepository.findAll(spec, pageable);
-        return page.map(quizAttemptMapper::toResponse);
+        return PageResponse.from(page.map(quizAttemptMapper::toResponse));
     }
-
 
     private final QuizAttemptRepository quizAttemptRepository;
     private final QuizAttemptMapper quizAttemptMapper;

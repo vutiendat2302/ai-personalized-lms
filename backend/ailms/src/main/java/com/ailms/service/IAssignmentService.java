@@ -1,9 +1,8 @@
 package com.ailms.service;
 
-import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import com.ailms.request.AssignmentSearchRequest;
 import com.ailms.response.AssignmentResponse;
-
 
 import com.ailms.entity.AssignmentEntity;
 import com.ailms.exception.ResourceNotFoundException;
@@ -18,13 +17,21 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 public interface IAssignmentService {
-    Page<AssignmentResponse> search(AssignmentSearchRequest request);
+    PageResponse<AssignmentResponse> search(AssignmentSearchRequest request);
+
     List<AssignmentResponse> getAll();
+
     AssignmentResponse getById(Long id);
+
     List<AssignmentResponse> getByLessonId(Long lessonId);
+
     List<AssignmentResponse> getByCourseId(Long courseId);
+
     List<AssignmentResponse> getBySectionId(Long sectionId);
+
     AssignmentResponse create(AssignmentRequest request);
+
     AssignmentResponse update(Long id, AssignmentRequest request);
+
     void delete(Long id);
 }

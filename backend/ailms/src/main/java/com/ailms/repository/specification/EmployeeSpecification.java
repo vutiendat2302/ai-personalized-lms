@@ -1,9 +1,10 @@
 package com.ailms.repository.specification;
- 
+
 import com.ailms.entity.EmployeeEntity;
+import com.ailms.entity.enums.EmployeeStatusEnum;
 import com.ailms.request.EmployeeSearchRequest;
+import com.ailms.common.util.SpecificationBuilder;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.util.StringUtils;
 
 public final class EmployeeSpecification {
 
@@ -11,51 +12,22 @@ public final class EmployeeSpecification {
     }
 
     public static Specification<EmployeeEntity> filterAndSearch(EmployeeSearchRequest request) {
-        Specification<EmployeeEntity> spec = (root, query, criteriaBuilder) -> criteriaBuilder.conjunction();
+        SpecificationBuilder<EmployeeEntity> builder = SpecificationBuilder.of();
+
+        builder.custom((root, query, cb) -> cb.notEqual(root.get("status"), EmployeeStatusEnum.DELETE));
 
         if (request == null) {
-            return spec;
+            return builder.build();
         }
 
-        if (StringUtils.hasText(request.getKeyword())) {
-            String pattern = "%" + request.getKeyword().toLowerCase() + "%";
-            spec = spec.and(((root, query, criteriaBuilder) ->
-                    criteriaBuilder.or(
-                            criteriaBuilder.like(criteriaBuilder.lower(root.get("employeeCode")), pattern),
-                            criteriaBuilder.like(criteriaBuilder.lower(root.get("position")), pattern),
-                            criteriaBuilder.like(criteriaBuilder.lower(root.get("userEntity").get("username")), pattern))
-                    ));
-        }
+        builder.likeAnyIfPresent(request.getKeyword(), "employeeCode", "position", "userEntity.username");
+        builder.equalIfPresent("employmentTypeEnum", request.getEmploymentTypeEnum());
+        builder.greaterOrEqualIfPresent("startDate", request.getStartDateFrom());
+        builder.lessOrEqualIfPresent("endDate", request.getEndDateTo());
+        builder.greaterOrEqualIfPresent("createdAt", request.getCreatedFrom());
+        builder.lessOrEqualIfPresent("createdAt", request.getCreatedTo());
+        builder.equalIfPresent("status", request.getStatus());
 
-        if (request.getEmploymentTypeEnum() != null) {
-            spec = spec.and((root, query, criteriaBuilder) ->
-                    criteriaBuilder.equal(
-                            root.get("employmentTypeEnum"),
-                            request.getEmploymentTypeEnum()
-                    ));
-        }
-
-        if (request.getStartDateFrom() != null) {
-            spec = spec.and((root, query, criteriaBuilder) ->
-                    criteriaBuilder.greaterThanOrEqualTo(root.get("startDate"), request.getStartDateFrom()));
-        }
-
-        if (request.getEndDateTo() != null) {
-            spec = spec.and((root, query, criteriaBuilder) ->
-                    criteriaBuilder.lessThanOrEqualTo(root.get("endDate"), request.getEndDateTo()));
-        }
-
-
-        if (request.getCreatedFrom() != null) {
-            spec = spec.and((root, query, criteriaBuilder) ->
-                    criteriaBuilder.greaterThanOrEqualTo(root.get("createdAt"), request.getCreatedFrom()));
-        }
-
-        if (request.getCreatedTo() != null) {
-            spec = spec.and((root, query, criteriaBuilder) ->
-                    criteriaBuilder.lessThanOrEqualTo(root.get("createdAt"), request.getCreatedTo()));
-        }
-
-        return spec;
+        return builder.build();
     }
 }

@@ -19,6 +19,7 @@ import com.ailms.response.CourseTeacherResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -31,15 +32,6 @@ import java.util.List;
 @Slf4j
 @Transactional(readOnly = true)
 public class CourseTeacherService implements ICourseTeacherService {
-    @Override
-    public Page<CourseTeacherResponse> search(CourseTeacherSearchRequest request) {
-        log.info("Searching CourseTeacher via specification");
-        Specification<CourseTeacherEntity> spec = CourseTeacherSpecification.filterAndSearch(request);
-        Pageable pageable = request.toPageable();
-        Page<CourseTeacherEntity> page = courseTeacherRepository.findAll(spec, pageable);
-        return page.map(courseTeacherMapper::toResponse);
-    }
-
 
     private final CourseTeacherRepository courseTeacherRepository;
     private final CourseRepository courseRepository;
@@ -125,5 +117,14 @@ public class CourseTeacherService implements ICourseTeacherService {
     private ResourceNotFoundException notFound(Long courseId, Long userId) {
         return new ResourceNotFoundException(RESOURCE_NAME + " not found with course ID "
                 + courseId + " and user ID " + userId);
+    }
+
+    @Override
+    public PageResponse<CourseTeacherResponse> search(CourseTeacherSearchRequest request) {
+        log.info("Searching CourseTeacher via specification");
+        Specification<CourseTeacherEntity> spec = CourseTeacherSpecification.filterAndSearch(request);
+        Pageable pageable = request.toPageable();
+        Page<CourseTeacherEntity> page = courseTeacherRepository.findAll(spec, pageable);
+        return PageResponse.from(page.map(courseTeacherMapper::toResponse));
     }
 }

@@ -13,7 +13,7 @@ import com.ailms.service.IFileStorageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
-import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -27,7 +27,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/files")
+@RequestMapping("${api.prefix}/files")
 @RequiredArgsConstructor
 public class FileController {
 
@@ -73,8 +73,8 @@ public class FileController {
     }
 
     @GetMapping("/search")
-    public ResponseEntity<ApiResponse<Page<FileMetadataResponse>>> searchFiles(FileSearchRequest request) {
-        Page<FileMetadataResponse> result = fileMetadataService.search(request);
+    public ResponseEntity<ApiResponse<PageResponse<FileMetadataResponse>>> searchFiles(FileSearchRequest request) {
+        PageResponse<FileMetadataResponse> result = fileMetadataService.search(request);
         return ResponseEntity.ok(ApiResponse.of("Files searched successfully", result));
     }
 

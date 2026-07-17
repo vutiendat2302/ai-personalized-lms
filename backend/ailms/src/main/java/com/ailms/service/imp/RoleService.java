@@ -28,6 +28,7 @@ import com.ailms.response.RoleResponse;
 import com.ailms.response.UserResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import com.ailms.response.PageResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -55,9 +56,10 @@ public class RoleService implements IRoleService {
 
     @Transactional(readOnly = true)
     @Override
-    public Page<RoleResponse> getRoles(RoleSearchRequest request) {
+    public PageResponse<RoleResponse> getRoles(RoleSearchRequest request) {
         Specification<RoleEntity> spec = RoleSpecification.filterAndSearch(request);
-        return roleRepository.findAll(spec, request.toPageable()).map(roleMapper::toRoleResponse);
+        Page<RoleEntity> page= roleRepository.findAll(spec, request.toPageable());
+        return PageResponse.from(page.map(roleMapper::toRoleResponse));
     }
 
     @Transactional(readOnly = true)

@@ -1,6 +1,6 @@
 package com.ailms.controller;
 
-import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import com.ailms.request.LessonProgressSearchRequest;
 import com.ailms.response.LessonProgressResponse;
 
@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/lesson-progress")
+@RequestMapping("${api.prefix}/lesson-progress")
 @RequiredArgsConstructor
 public class LessonProgressController {
 
@@ -75,8 +75,8 @@ public class LessonProgressController {
     }
 
     @GetMapping("/search")
-    public ResponseEntity<ApiResponse<Page<LessonProgressResponse>>> search(LessonProgressSearchRequest request) {
-        Page<LessonProgressResponse> result = lessonProgressService.search(request);
+    public ResponseEntity<ApiResponse<PageResponse<LessonProgressResponse>>> search(LessonProgressSearchRequest request) {
+        PageResponse<LessonProgressResponse> result = lessonProgressService.search(request);
         return ResponseEntity.ok(ApiResponse.of("Search LessonProgress successfully", result));
     }
 }

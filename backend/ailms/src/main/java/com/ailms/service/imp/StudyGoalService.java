@@ -1,8 +1,8 @@
 package com.ailms.service.imp;
+
 import com.ailms.repository.specification.StudyGoalSpecification;
 import com.ailms.request.StudyGoalSearchRequest;
 import com.ailms.service.IStudyGoalService;
-
 
 import com.ailms.entity.StudyGoalEntity;
 import com.ailms.exception.ResourceNotFoundException;
@@ -13,6 +13,7 @@ import com.ailms.response.StudyGoalResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -26,14 +27,13 @@ import java.util.List;
 @Transactional(readOnly = true)
 public class StudyGoalService implements IStudyGoalService {
     @Override
-    public Page<StudyGoalResponse> search(StudyGoalSearchRequest request) {
+    public PageResponse<StudyGoalResponse> search(StudyGoalSearchRequest request) {
         log.info("Searching StudyGoal via specification");
         Specification<StudyGoalEntity> spec = StudyGoalSpecification.filterAndSearch(request);
         Pageable pageable = request.toPageable();
         Page<StudyGoalEntity> page = studyGoalRepository.findAll(spec, pageable);
-        return page.map(studyGoalMapper::toResponse);
+        return PageResponse.from(page.map(studyGoalMapper::toResponse));
     }
-
 
     private final StudyGoalRepository studyGoalRepository;
     private final StudyGoalMapper studyGoalMapper;

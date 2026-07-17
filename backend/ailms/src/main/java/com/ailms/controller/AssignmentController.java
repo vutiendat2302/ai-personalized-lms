@@ -1,9 +1,8 @@
 package com.ailms.controller;
 
-import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import com.ailms.request.AssignmentSearchRequest;
 import com.ailms.response.AssignmentResponse;
-
 
 import com.ailms.request.AssignmentRequest;
 import com.ailms.response.ApiResponse;
@@ -27,7 +26,8 @@ public class AssignmentController {
     @PostMapping
     public ResponseEntity<ApiResponse<AssignmentResponse>> create(@Valid @RequestBody AssignmentRequest request) {
         AssignmentResponse response = assignmentService.create(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of("Assignment created successfully", response));
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.of("Assignment created successfully", response));
     }
 
     @PutMapping("/{id}")
@@ -75,8 +75,8 @@ public class AssignmentController {
     }
 
     @GetMapping("/search")
-    public ResponseEntity<ApiResponse<Page<AssignmentResponse>>> search(AssignmentSearchRequest request) {
-        Page<AssignmentResponse> result = assignmentService.search(request);
+    public ResponseEntity<ApiResponse<PageResponse<AssignmentResponse>>> search(AssignmentSearchRequest request) {
+        PageResponse<AssignmentResponse> result = assignmentService.search(request);
         return ResponseEntity.ok(ApiResponse.of("Search Assignment successfully", result));
     }
 }

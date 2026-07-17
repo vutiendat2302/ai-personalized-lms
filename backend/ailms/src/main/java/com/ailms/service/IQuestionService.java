@@ -1,9 +1,8 @@
 package com.ailms.service;
 
-import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import com.ailms.request.QuestionSearchRequest;
 import com.ailms.response.QuestionResponse;
-
 
 import com.ailms.entity.QuestionEntity;
 import com.ailms.exception.ResourceNotFoundException;
@@ -18,11 +17,17 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 public interface IQuestionService {
-    Page<QuestionResponse> search(QuestionSearchRequest request);
+    PageResponse<QuestionResponse> search(QuestionSearchRequest request);
+
     List<QuestionResponse> getAll();
+
     QuestionResponse getById(Long id);
+
     List<QuestionResponse> getByQuizId(Long quizId);
+
     QuestionResponse create(QuestionRequest request);
+
     QuestionResponse update(Long id, QuestionRequest request);
+
     void delete(Long id);
 }

@@ -14,6 +14,7 @@ import com.ailms.request.PermissionRequest;
 import com.ailms.request.PermissionSearchRequest;
 import com.ailms.response.PermissionResponse;
 import lombok.RequiredArgsConstructor;
+import com.ailms.response.PageResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -31,9 +32,10 @@ public class PermissionService implements IPermissionService{
 
     @Transactional(readOnly = true)
     @Override
-    public Page<PermissionResponse> getPermissions(PermissionSearchRequest request) {
+    public PageResponse<PermissionResponse> getPermissions(PermissionSearchRequest request) {
         Specification<PermissionEntity> spec = PermissionSpecification.filterAndSearch(request);
-        return permissionRepository.findAll(spec, request.toPageable()).map(permissionMapper::toPermissionResponse);
+        Page<PermissionEntity> page = permissionRepository.findAll(spec, request.toPageable());
+        return PageResponse.from(page.map(permissionMapper::toPermissionResponse));
     }
 
     @Transactional(readOnly = true)

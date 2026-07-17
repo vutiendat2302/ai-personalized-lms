@@ -1,6 +1,6 @@
 package com.ailms.service;
 
-import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import com.ailms.request.EnrollmentSearchRequest;
 import com.ailms.response.EnrollmentResponse;
 
@@ -24,7 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 public interface IEnrollmentService {
-    Page<EnrollmentResponse> search(EnrollmentSearchRequest request);
+    PageResponse<EnrollmentResponse> search(EnrollmentSearchRequest request);
     List<EnrollmentResponse> getAll();
     EnrollmentResponse getById(Long id);
     List<EnrollmentResponse> getByUserId(Long userId);

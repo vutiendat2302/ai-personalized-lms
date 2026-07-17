@@ -1,6 +1,6 @@
 package com.ailms.service;
 
-import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import com.ailms.request.ClassOnlineSearchRequest;
 import com.ailms.response.ClassOnlineResponse;
 
@@ -22,7 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 public interface IClassOnlineService {
-    Page<ClassOnlineResponse> search(ClassOnlineSearchRequest request);
+    PageResponse<ClassOnlineResponse> search(ClassOnlineSearchRequest request);
     List<ClassOnlineResponse> getAll();
     ClassOnlineResponse getById(Long id);
     List<ClassOnlineResponse> getByClassId(Long classId);

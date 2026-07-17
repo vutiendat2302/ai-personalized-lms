@@ -19,6 +19,22 @@
  
 ---
 
+### 1.2 Generic Base Layer
+- Tách phần CRUD thuần và find-sort-page thành lớp base generic, entity nào không có business logic đặc biệt thì kế thừa và dùng thẳng. Entity có rule riêng (enroll, publish, permission check...) thì override hoặc viết method riêng ngoài base.
+
+
+- Audit log qua Event, không gọi trực tiếp, `@EventListener` riêng ghi `audit_log` — tách khỏi business logic chính.
+
+- Patterns: 
+1. Facade: Cung cấp một giao diện đơn giản và thống nhất để truy cập một hệ thống phức tạp gồm nhiều lớp hoặc service bên trong.
+2. Strategy: Định nghĩa nhiều thuật toán có thể thay thế cho nhau
+3. Factory: Đóng gói việc khởi tạo đối tượng
+4. State: Cho phép đối tượng thay đổi hành vi dựa trên trạng thái hiện tại, đồng thời kiểm soát các quy tắc chuyển đổi giữa các trạng thái.
+5. Decorator: Bổ sung chức năng cho đối tượng một cách linh hoạt mà không cần sửa đổi mã nguồn gốc
+6. Observer: 1 hành động xảy ra cần kích hoạt nhiều việc khác, nhưng các việc đó không nên phụ thuộc cứng vào nhau. 
+
+--- 
+
 ## 2. Module Security
 
 ### 2.1. Các thành phần bảo mật chính

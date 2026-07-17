@@ -13,6 +13,7 @@ import com.ailms.response.LessonProgressResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import com.ailms.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -26,12 +27,12 @@ import java.util.List;
 @Transactional(readOnly = true)
 public class LessonProgressService implements ILessonProgressService {
     @Override
-    public Page<LessonProgressResponse> search(LessonProgressSearchRequest request) {
+    public PageResponse<LessonProgressResponse> search(LessonProgressSearchRequest request) {
         log.info("Searching LessonProgress via specification");
         Specification<LessonProgressEntity> spec = LessonProgressSpecification.filterAndSearch(request);
         Pageable pageable = request.toPageable();
         Page<LessonProgressEntity> page = lessonProgressRepository.findAll(spec, pageable);
-        return page.map(lessonProgressMapper::toResponse);
+        return PageResponse.from(page.map(lessonProgressMapper::toResponse));
     }
 
 
