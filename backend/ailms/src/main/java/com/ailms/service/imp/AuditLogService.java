@@ -38,6 +38,9 @@ public class AuditLogService implements IAuditLogService{
     private final HttpServletRequest request;
     private final AuditLogMapper auditLogMapper;
 
+
+    // Tạo transaction mới độc lập để đảm bảo Audit Log vẫn được lưu
+    // ngay cả khi transaction nghiệp vụ chính bị rollback.
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     @Override
     public void log(String action, String entityType, Long entityId, Object oldValue, Object newValue) {
@@ -70,6 +73,9 @@ public class AuditLogService implements IAuditLogService{
         return null;
     }
 
+    /**
+     * Thu thập metadata từ HTTP request.
+     */
     private void enrichRequestMetadata(AuditLogEntity auditLog) {
         if (RequestContextHolder.getRequestAttributes() == null) {
             return;
@@ -82,6 +88,10 @@ public class AuditLogService implements IAuditLogService{
         auditLog.setUserAgent(request.getHeader("User-Agent"));
     }
 
+    /**
+     * Chuyển đổi dữ liệu trước và sau thay đổi thành JSON
+     * để lưu vào Audit Log.
+     */
     private void serializeChanges(AuditLogEntity auditLog, Object oldValue, Object newValue) {
         if (oldValue != null) {
             auditLog.setOldValue(safeWriteValueAsString(oldValue));
@@ -91,6 +101,12 @@ public class AuditLogService implements IAuditLogService{
         }
     }
 
+    /**
+     * Chuyển đổi đối tượng thành chuỗi JSON an toàn.
+     *
+     * @param value Đối tượng cần serialize
+     * @return Chuỗi JSON hoặc null nếu xảy ra lỗi.
+     */
     private String safeWriteValueAsString(Object value) {
         try {
             return SimpleJsonWriter.toJson(value);

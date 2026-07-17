@@ -1,5 +1,7 @@
 package com.ailms.service.imp;
+import com.ailms.common.converter.SimpleJsonWriter;
 import com.ailms.entity.ClassEntity;
+import com.ailms.event.AuditLogEvent;
 import com.ailms.repository.ClassRepository;
 import com.ailms.repository.specification.TeachingRateSpecification;
 import com.ailms.request.CreateTeachingRateRequest;
@@ -17,6 +19,7 @@ import com.ailms.repository.TeachingRateRepository;
 import com.ailms.response.TeachingRateResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import com.ailms.response.PageResponse;
 import org.springframework.data.domain.Pageable;
@@ -44,6 +47,7 @@ public class TeachingRateService implements ITeachingRateService {
     private final TeachingSessionPaymentRepository teachingSessionPaymentRepository;
 
     private static final String RESOURCE_NAME = "TeachingRate";
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     public List<TeachingRateResponse> getAll() {
         log.info("Getting all teaching rates");
@@ -97,6 +101,7 @@ public class TeachingRateService implements ITeachingRateService {
         entity.setStatus(status);
 
         TeachingRateEntity saved = teachingRateRepository.save(entity);
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CREATE", "TEACHING_RATE", saved.getId(), null, saved));
         return teachingRateMapper.toResponse(saved);
     }
 
@@ -106,7 +111,7 @@ public class TeachingRateService implements ITeachingRateService {
 
         TeachingRateEntity existing = teachingRateRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
-
+        String oldValue = SimpleJsonWriter.toJson(existing);
         if (request.getEmployeeId() != null && !request.getEmployeeId().equals(existing.getEmployeeEntity().getUserId())) {
             throw new BusinessException("Cannot change employee ID of a teaching rate.");
         }
@@ -134,6 +139,7 @@ public class TeachingRateService implements ITeachingRateService {
         teachingRateMapper.updateFromRequest(request, existing);
 
         TeachingRateEntity updated = teachingRateRepository.save(existing);
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "UPDATE", "TEACHING_RATE", id, oldValue, updated));
         return teachingRateMapper.toResponse(updated);
     }
 
@@ -143,6 +149,7 @@ public class TeachingRateService implements ITeachingRateService {
         TeachingRateEntity rate = teachingRateRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
 
+        String oldValue = SimpleJsonWriter.toJson(rate);
         boolean isUsed = teachingSessionPaymentRepository.existsByTeachingRate_Id(id);
         if (isUsed) {
             // Soft delete
@@ -154,6 +161,8 @@ public class TeachingRateService implements ITeachingRateService {
             teachingRateRepository.delete(rate);
             log.info("Teaching rate is not in use. Hard deleted from database.");
         }
+
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "DELETE", "TEACHING_RATE", id, oldValue, null));
     }
 
     @Override

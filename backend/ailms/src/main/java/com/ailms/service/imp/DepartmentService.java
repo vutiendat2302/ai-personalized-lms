@@ -1,5 +1,8 @@
 package com.ailms.service.imp;
+import com.ailms.common.converter.SimpleJsonWriter;
+import com.ailms.common.util.CodeGenerator;
 import com.ailms.entity.CategoryEntity;
+import com.ailms.event.AuditLogEvent;
 import com.ailms.service.IDepartmentService;
 
 
@@ -15,6 +18,7 @@ import com.ailms.request.*;
 import com.ailms.response.DepartmentResponse;
 import com.ailms.response.PageResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,13 +40,14 @@ public class DepartmentService implements IDepartmentService {
     private final EmployeeRepository employeeRepository;
     private final DepartmentMapper departmentMapper;
     private final SortFieldResolver sortFieldResolver;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     @Override
     @Transactional
     public DepartmentResponse createDepartment(CreateDepartmentRequest request) {
         String code = request.getCode();
         if (code == null || code.trim().isEmpty()) {
-            code = com.ailms.common.util.CodeGenerator.generate("DP", departmentRepository::existsByCodeIgnoreCase);
+            code = CodeGenerator.generate("DP", departmentRepository::existsByCodeIgnoreCase);
         } else {
             if (departmentRepository.existsByCodeIgnoreCase(code)) {
                 throw DuplicateResourceException.of(RESOURCE_NAME, "code", code);
@@ -53,6 +58,7 @@ public class DepartmentService implements IDepartmentService {
         entity.setCode(code);
         entity.setStatus(BaseStatusEnum.ACTIVE);
 
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CREATE", "DEPARTMENT", entity.getId(), null, entity));
         return departmentMapper.toDepartmentResponse(departmentRepository.save(entity));
     }
 
@@ -60,7 +66,7 @@ public class DepartmentService implements IDepartmentService {
     @Transactional
     public DepartmentResponse updateDepartment(Long id, UpdateDepartmentRequest request) {
         DepartmentEntity entity = findEntityById(id);
-
+        String oldValue = SimpleJsonWriter.toJson(entity);
         if (request.getStatus() == BaseStatusEnum.INACTIVE) {
             boolean hasActiveEmployees = employeeRepository.existsByDepartment_IdAndStatusNot(id, EmployeeStatusEnum.DELETE);
             if (hasActiveEmployees) {
@@ -69,21 +75,23 @@ public class DepartmentService implements IDepartmentService {
         }
 
         departmentMapper.updateDepartmentEntity(entity, request);
-
-        return departmentMapper.toDepartmentResponse(departmentRepository.save(entity));
+        DepartmentEntity save = departmentRepository.save(entity);
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "UPDATE", "DEPARTMENT", id, oldValue, save));
+        return departmentMapper.toDepartmentResponse(save);
     }
 
     @Override
     @Transactional
     public void delete(Long id) {
         DepartmentEntity entity = findEntityById(id);
-
+        String oldValue = SimpleJsonWriter.toJson(entity);
         boolean hasActiveEmployees = employeeRepository.existsByDepartment_IdAndStatusNot(id, EmployeeStatusEnum.DELETE);
         if (hasActiveEmployees) {
             throw new BusinessException("Cannot delete department that has active employees");
         }
 
         departmentRepository.delete(entity);
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "DELETE", "DEPARTMENT", id, oldValue, null));
     }
 
     @Override

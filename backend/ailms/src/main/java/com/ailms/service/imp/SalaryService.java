@@ -1,38 +1,40 @@
 package com.ailms.service.imp;
-import com.ailms.entity.SalaryDetailEntity;
+import com.ailms.common.converter.SimpleJsonWriter;
+import com.ailms.entity.*;
+import com.ailms.entity.enums.*;
+import com.ailms.event.AuditLogEvent;
+import com.ailms.repository.*;
 import com.ailms.repository.specification.SalarySpecification;
 import com.ailms.request.CreateSalaryRequest;
 import com.ailms.request.SalarySearchRequest;
 import com.ailms.request.UpdateSalaryRequest;
+import com.ailms.security.CustomUserDetails;
 import com.ailms.service.ISalaryService;
 
 
-import com.ailms.entity.EmployeeEntity;
-import com.ailms.entity.SalaryEntity;
 import com.ailms.exception.DuplicateResourceException;
 import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.mapper.SalaryMapper;
-import com.ailms.repository.EmployeeRepository;
-import com.ailms.repository.SalaryRepository;
 import com.ailms.response.SalaryResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import com.ailms.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.RoundingMode;
 import java.util.List;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import com.ailms.entity.enums.BaseStatusEnum;
-import com.ailms.entity.enums.EmployeeStatusEnum;
-import com.ailms.entity.enums.SalaryStatusEnum;
+
 import com.ailms.exception.BusinessException;
-import com.ailms.repository.EmployeeContractRepository;
-import com.ailms.entity.EmployeeContractEntity;
 
 @Service
 @RequiredArgsConstructor
@@ -45,11 +47,11 @@ public class SalaryService implements ISalaryService {
     private final SalaryMapper salaryMapper;
     private final EmployeeContractRepository employeeContractRepository;
     private final com.ailms.service.IApprovalRequestService approvalRequestService;
-    private final com.ailms.repository.SalaryDetailRepository salaryDetailRepository;
-    private final com.ailms.repository.AttendanceRepository attendanceRepository;
-    private final com.ailms.repository.TeachingSessionPaymentRepository teachingSessionPaymentRepository;
+    private final AttendanceRepository attendanceRepository;
+    private final TeachingSessionPaymentRepository teachingSessionPaymentRepository;
 
     private static final String RESOURCE_NAME = "Salary";
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     public List<SalaryResponse> getAll() {
         log.info("Getting all salary records");
@@ -125,6 +127,8 @@ public class SalaryService implements ISalaryService {
         );
 
         SalaryEntity saved = salaryRepository.save(entity);
+
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CREATE", "SALARY", entity.getId(), null, entity));
         return salaryMapper.toResponse(saved);
     }
 
@@ -139,6 +143,7 @@ public class SalaryService implements ISalaryService {
         SalaryEntity existing = salaryRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
 
+        String oldValue = SimpleJsonWriter.toJson(existing);
         if (existing.getStatus() != SalaryStatusEnum.DRAFT) {
             throw new BusinessException("Only draft salaries can be updated.");
         }
@@ -193,6 +198,8 @@ public class SalaryService implements ISalaryService {
         );
 
         SalaryEntity updated = salaryRepository.save(existing);
+
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "UPDATE", "SALARY", id, oldValue, existing));
         return salaryMapper.toResponse(updated);
     }
 
@@ -229,45 +236,43 @@ public class SalaryService implements ISalaryService {
                                            Integer dependents,
                                            BigDecimal bonus,
                                            BigDecimal otherDeduction) {
-        boolean isFullTime = employee.getEmploymentTypeEnum() == com.ailms.entity.enums.EmploymentTypeEnum.FULL_TIME;
+        boolean isFullTime = employee.getEmploymentTypeEnum() == EmploymentTypeEnum.FULL_TIME;
         
         BigDecimal baseSalary = contract.getBaseSalary();
         BigDecimal absentDeduct = BigDecimal.ZERO;
         BigDecimal halfDayDeduct = BigDecimal.ZERO;
         BigDecimal lateDeduct = BigDecimal.ZERO;
 
+        LocalDateTime start = period.atDay(1).atStartOfDay();
+        LocalDateTime end = period.atEndOfMonth().atTime(23, 59, 59);
         if (isFullTime) {
-            java.time.LocalDateTime start = period.atDay(1).atStartOfDay();
-            java.time.LocalDateTime end = period.atEndOfMonth().atTime(23, 59, 59);
-            List<com.ailms.entity.AttendanceEntity> attendances = attendanceRepository.findByEmployeeAndDateRange(employee.getUserId(), start, end);
+            List<AttendanceEntity> attendances = attendanceRepository.findByEmployeeAndDateRange(employee.getUserId(), start, end);
             int absentCount = 0;
             int halfDayCount = 0;
             int lateCount = 0;
-            for (com.ailms.entity.AttendanceEntity att : attendances) {
-                if (att.getStatus() == com.ailms.entity.enums.AttendanceStatusEnum.ABSENT) {
+            for (AttendanceEntity att : attendances) {
+                if (att.getStatus() == AttendanceStatusEnum.ABSENT) {
                     absentCount++;
-                } else if (att.getStatus() == com.ailms.entity.enums.AttendanceStatusEnum.HALF_DAY) {
+                } else if (att.getStatus() == AttendanceStatusEnum.HALF_DAY) {
                     halfDayCount++;
-                } else if (att.getStatus() == com.ailms.entity.enums.AttendanceStatusEnum.LATE) {
+                } else if (att.getStatus() == AttendanceStatusEnum.LATE) {
                     lateCount++;
                 }
             }
-            BigDecimal dailyWage = contract.getBaseSalary().divide(new BigDecimal("22"), 2, java.math.RoundingMode.HALF_UP);
+            BigDecimal dailyWage = contract.getBaseSalary().divide(new BigDecimal("22"), 2, RoundingMode.HALF_UP);
             absentDeduct = dailyWage.multiply(BigDecimal.valueOf(absentCount));
             halfDayDeduct = dailyWage.multiply(new BigDecimal("0.5")).multiply(BigDecimal.valueOf(halfDayCount));
             lateDeduct = dailyWage.multiply(new BigDecimal("0.1")).multiply(BigDecimal.valueOf(lateCount));
         } else {
             // PART_TIME: baseSalary = SUM(teaching_session_payment.amount)
-            java.time.LocalDateTime start = period.atDay(1).atStartOfDay();
-            java.time.LocalDateTime end = period.atEndOfMonth().atTime(23, 59, 59);
-            List<com.ailms.entity.TeachingSessionPaymentEntity> payments = teachingSessionPaymentRepository.findByEmployeeAndStatusAndPeriod(
+            List<TeachingSessionPaymentEntity> payments = teachingSessionPaymentRepository.findByEmployeeAndStatusAndPeriod(
                 employee.getUserId(),
-                com.ailms.entity.enums.SessionPaymentStatusEnum.CONFIRMED,
+                SessionPaymentStatusEnum.CONFIRMED,
                 start,
                 end
             );
             baseSalary = payments.stream()
-                .map(com.ailms.entity.TeachingSessionPaymentEntity::getAmount)
+                .map(TeachingSessionPaymentEntity::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
             
             // Allowances for part-time are 0 by default
@@ -342,9 +347,9 @@ public class SalaryService implements ISalaryService {
             if (insBase.compareTo(insCeiling) > 0) {
                 insBase = insCeiling;
             }
-            bhxh = insBase.multiply(new BigDecimal("0.08")).setScale(2, java.math.RoundingMode.HALF_UP);
-            bhyt = insBase.multiply(new BigDecimal("0.015")).setScale(2, java.math.RoundingMode.HALF_UP);
-            bhtn = insBase.multiply(new BigDecimal("0.01")).setScale(2, java.math.RoundingMode.HALF_UP);
+            bhxh = insBase.multiply(new BigDecimal("0.08")).setScale(2, RoundingMode.HALF_UP);
+            bhyt = insBase.multiply(new BigDecimal("0.015")).setScale(2, RoundingMode.HALF_UP);
+            bhtn = insBase.multiply(new BigDecimal("0.01")).setScale(2, RoundingMode.HALF_UP);
             totalIns = bhxh.add(bhyt).add(bhtn);
         }
 
@@ -429,7 +434,7 @@ public class SalaryService implements ISalaryService {
 
     private BigDecimal calculatePit(BigDecimal assessedIncome) {
         double income = assessedIncome.doubleValue();
-        double tax = 0;
+        double tax;
         if (income <= 5000000) {
             tax = income * 0.05;
         } else if (income <= 10000000) {
@@ -445,7 +450,7 @@ public class SalaryService implements ISalaryService {
         } else {
             tax = income * 0.35 - 9850000;
         }
-        return BigDecimal.valueOf(tax).setScale(2, java.math.RoundingMode.HALF_UP);
+        return BigDecimal.valueOf(tax).setScale(2, RoundingMode.HALF_UP);
     }
 
     @Transactional
@@ -459,11 +464,13 @@ public class SalaryService implements ISalaryService {
         SalaryEntity existing = salaryRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
 
+        String oldValue = SimpleJsonWriter.toJson(existing);
         if (existing.getStatus() != SalaryStatusEnum.DRAFT) {
             throw new BusinessException("Bảng lương đã duyệt hoặc đã thanh toán. Không thể xóa.");
         }
 
         salaryRepository.delete(existing);
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "DELETE", "SALARY", id, oldValue, null));
     }
 
     @Transactional
@@ -494,6 +501,7 @@ public class SalaryService implements ISalaryService {
         existing.setStatus(SalaryStatusEnum.PAID);
         existing.setPaidAt(LocalDateTime.now());
         SalaryEntity saved = salaryRepository.save(existing);
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "PAY", "SALARY", id, saved, null));
         return salaryMapper.toResponse(saved);
     }
 
@@ -508,20 +516,20 @@ public class SalaryService implements ISalaryService {
     }
 
     private Long getCurrentUserId() {
-        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
-        if (auth != null && auth.isAuthenticated() && auth.getPrincipal() instanceof com.ailms.security.CustomUserDetails userDetails) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated() && auth.getPrincipal() instanceof CustomUserDetails userDetails) {
             return userDetails.getUser().getId();
         }
         throw new BusinessException("User is not authenticated");
     }
 
     private List<String> getCurrentUserRoles() {
-        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated()) {
             return java.util.Collections.emptyList();
         }
         return auth.getAuthorities().stream()
-                .map(org.springframework.security.core.GrantedAuthority::getAuthority)
+                .map(GrantedAuthority::getAuthority)
                 .toList();
     }
 
@@ -529,27 +537,12 @@ public class SalaryService implements ISalaryService {
         Long currentUserId = getCurrentUserId();
         List<String> roles = getCurrentUserRoles();
 
-        if (roles.contains("ROLE_PAYROLL") || roles.contains("ROLE_HR")) {
+        if (roles.contains("ROLE_ADMIN") || roles.contains("ROLE_HR")) {
             return; // HR and Payroll can access all
-        }
-
-        if (roles.contains("ROLE_ADMIN")) {
-            throw new BusinessException("Admin does not have access to contract/salary details.");
         }
 
         if (currentUserId.equals(employeeId)) {
             return; // Self access
-        }
-
-        if (roles.contains("ROLE_MANAGER")) {
-            EmployeeEntity managerEmp = employeeRepository.findById(currentUserId).orElse(null);
-            EmployeeEntity targetEmp = employeeRepository.findById(employeeId).orElse(null);
-            if (managerEmp != null && targetEmp != null 
-                    && managerEmp.getDepartment() != null 
-                    && targetEmp.getDepartment() != null
-                    && managerEmp.getDepartment().getId().equals(targetEmp.getDepartment().getId())) {
-                return; // Manager of the same department
-            }
         }
 
         throw new BusinessException("Access denied to requested employee data");
@@ -563,23 +556,11 @@ public class SalaryService implements ISalaryService {
         Long currentUserId = getCurrentUserId();
         List<String> roles = getCurrentUserRoles();
 
-        if (roles.contains("ROLE_PAYROLL") || roles.contains("ROLE_HR")) {
+        if (roles.contains("ROLE_ADMIN") || roles.contains("ROLE_HR")) {
             return (root, query, cb) -> cb.conjunction();
         }
 
-        if (roles.contains("ROLE_ADMIN")) {
-            return (root, query, cb) -> cb.disjunction();
-        }
-
         Specification<SalaryEntity> spec = (root, query, cb) -> cb.disjunction();
-
-        if (roles.contains("ROLE_MANAGER")) {
-            EmployeeEntity managerEmp = employeeRepository.findById(currentUserId).orElse(null);
-            if (managerEmp != null && managerEmp.getDepartment() != null) {
-                Long deptId = managerEmp.getDepartment().getId();
-                spec = spec.or((root, query, cb) -> cb.equal(root.get("employee").get("department").get("id"), deptId));
-            }
-        }
 
         spec = spec.or((root, query, cb) -> cb.equal(root.get("employee").get("userId"), currentUserId));
 

@@ -1,4 +1,7 @@
 package com.ailms.service.imp;
+import com.ailms.common.converter.SimpleJsonWriter;
+import com.ailms.event.AuditLogEvent;
+import com.ailms.exception.ForbiddenException;
 import com.ailms.request.CreateAttendanceRequest;
 import com.ailms.request.UpdateAttendanceRequest;
 import com.ailms.service.IAttendanceService;
@@ -15,10 +18,13 @@ import com.ailms.request.AttendanceSearchRequest;
 import com.ailms.response.AttendanceResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import com.ailms.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,6 +45,7 @@ public class AttendanceService implements IAttendanceService {
     private final AttendanceMapper attendanceMapper;
 
     private static final String RESOURCE_NAME = "Attendance";
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     public List<AttendanceResponse> getAll() {
         log.info("Getting all attendance records");
@@ -81,16 +88,25 @@ public class AttendanceService implements IAttendanceService {
         entity.setCheckInTime(LocalDateTime.now());
 
         AttendanceEntity saved = attendanceRepository.save(entity);
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CREATE", "ATTENDANCE", saved.getId(), null, saved));
         return attendanceMapper.toResponse(saved);
     }
 
+    /**
+     * Cập nhật bản ghi chấm công.
+     * - Bản ghi chấm công phải tồn tại.
+     * - Thời gian check-out phải sau thời gian check-in.
+     * - Chỉ ADMIN hoặc HR được phép điều chỉnh thời gian chấm công.
+     * - Khi điều chỉnh thời gian chấm công phải ghi rõ lý do (note).
+     * - Mọi thay đổi được lưu phục vụ Audit Logging.
+     */
     @Transactional
     public AttendanceResponse update(Long id, UpdateAttendanceRequest request) {
         log.info("Updating attendance record: {}", id);
 
         AttendanceEntity existing = attendanceRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
-
+        String oldValue = SimpleJsonWriter.toJson(existing);
         LocalDateTime checkIn = request.getCheckInTime() != null ? request.getCheckInTime() : existing.getCheckInTime();
         LocalDateTime checkOut = request.getCheckOutTime() != null ? request.getCheckOutTime() : existing.getCheckOutTime();
         if (checkOut != null && checkIn != null && !checkOut.isAfter(checkIn)) {
@@ -106,7 +122,7 @@ public class AttendanceService implements IAttendanceService {
         }
 
         if (isAdjustment) {
-            org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
             boolean isAdminOrHr = false;
             if (auth != null && auth.isAuthenticated()) {
                 isAdminOrHr = auth.getAuthorities().stream()
@@ -114,7 +130,7 @@ public class AttendanceService implements IAttendanceService {
                         .anyMatch(a -> a.equals("ROLE_ADMIN") || a.equals("ROLE_HR"));
             }
             if (!isAdminOrHr) {
-                throw new com.ailms.exception.ForbiddenException("Only admin or HR can adjust attendance records.");
+                throw new ForbiddenException("Only admin or HR can adjust attendance records.");
             }
             if (request.getNote() == null || request.getNote().isBlank()) {
                 throw new BusinessException("Note is required for adjusting attendance records.");
@@ -122,8 +138,9 @@ public class AttendanceService implements IAttendanceService {
         }
 
         attendanceMapper.updateFromRequest(request, existing);
-
         AttendanceEntity updated = attendanceRepository.save(existing);
+
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "UPDATE", "ATTENDANCE", id, oldValue, updated));
         return attendanceMapper.toResponse(updated);
     }
 
@@ -132,10 +149,12 @@ public class AttendanceService implements IAttendanceService {
         log.info("Deleting (cancelling) attendance record: {}", id);
         AttendanceEntity entity = attendanceRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
-
+        String oldValue = SimpleJsonWriter.toJson(entity);
         entity.setStatus(AttendanceStatusEnum.CANCELLED);
         entity.setNote(entity.getNote() != null ? entity.getNote() + " [Cancelled]" : "Cancelled");
         attendanceRepository.save(entity);
+
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "DELETE", "ATTENDANCE",id, oldValue, null));
     }
 
     @Override

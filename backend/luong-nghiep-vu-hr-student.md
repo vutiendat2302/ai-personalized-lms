@@ -30,7 +30,7 @@ Có 2 nhóm nhân sự với luồng tính công/lương khác nhau:
 
 ### 5.1. Tạo Employee:
 
-1. HR tạo tài khoản `user` (nếu chưa có) → tạo `employee` gắn `user_id`, sinh `employee_code` tự động (unique).
+1. HR tạo tài khoản `user` → tạo `employee` gắn `user_id`, sinh `employee_code` tự động (unique).
 2. HR tạo `employee_contract` đầu tiên:
    - Upload `file_url` hợp đồng scan/ký số, `signed_at` = thời điểm ký, `status = ACTIVE`.
    - Tạo xong hợp đồng thì phải gửi mail  thông báo tới user cùng với hợp đồng.

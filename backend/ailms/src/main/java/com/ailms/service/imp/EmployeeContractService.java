@@ -1,8 +1,14 @@
 package com.ailms.service.imp;
+import com.ailms.common.converter.SimpleJsonWriter;
+import com.ailms.entity.FileMetadataEntity;
+import com.ailms.event.AuditLogEvent;
 import com.ailms.repository.specification.EmployeeContractSpecification;
 import com.ailms.request.CreateEmployeeContractRequest;
 import com.ailms.request.EmployeeContractSearchRequest;
 import com.ailms.request.UpdateEmployeeContractRequest;
+import com.ailms.security.CustomUserDetails;
+import com.ailms.service.IApprovalRequestService;
+import com.ailms.service.IEmailService;
 import com.ailms.service.IEmployeeContractService;
 
 
@@ -16,15 +22,23 @@ import com.ailms.repository.FileMetadataRepository;
 import com.ailms.response.EmployeeContractResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import com.ailms.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.time.LocalDate;
+import java.util.Locale;
+import java.util.concurrent.CompletableFuture;
+
 import com.ailms.entity.enums.BaseStatusEnum;
 import com.ailms.entity.enums.EmployeeStatusEnum;
 import com.ailms.exception.BusinessException;
@@ -42,10 +56,12 @@ public class EmployeeContractService implements IEmployeeContractService {
     private final EmployeeContractMapper employeeContractMapper;
     private final FileMetadataRepository fileMetadataRepository;
     private final SalaryRepository salaryRepository;
-    private final com.ailms.service.IApprovalRequestService approvalRequestService;
-    private final com.ailms.service.IEmailService emailService;
+    private final IApprovalRequestService approvalRequestService;
+    private final IEmailService emailService;
+    private final FileService fileService;
 
     private static final String RESOURCE_NAME = "EmployeeContract";
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     public List<EmployeeContractResponse> getAll() {
         log.info("Getting all employee contracts");
@@ -66,6 +82,14 @@ public class EmployeeContractService implements IEmployeeContractService {
         return employeeContractMapper.toResponseList(employeeContractRepository.findByEmployee_UserId(employeeId));
     }
 
+    /**
+     * Tạo hợp đồng lao động mới cho nhân viên.
+     * Business Rules:
+     * - Nhân viên phải tồn tại và chưa bị xóa.
+     * - Lương cơ bản phải lớn hơn 0.
+     * - Không cho phép tồn tại nhiều hợp đồng ACTIVE bị chồng lấn thời gian.
+     * - Tự động gửi email thông báo sau khi tạo thành công.
+     */
     @Transactional
     public EmployeeContractResponse create(CreateEmployeeContractRequest request) {
         log.info("Creating contract for employee: {}", request.getEmployeeId());
@@ -77,7 +101,7 @@ public class EmployeeContractService implements IEmployeeContractService {
             throw new BusinessException("Employee is deleted. Cannot create contract.");
         }
 
-        if (request.getBaseSalary() == null || request.getBaseSalary().compareTo(java.math.BigDecimal.ZERO) <= 0) {
+        if (request.getBaseSalary() == null || request.getBaseSalary().compareTo(BigDecimal.ZERO) <= 0) {
             throw new BusinessException("Base salary must be greater than 0.");
         }
 
@@ -99,20 +123,23 @@ public class EmployeeContractService implements IEmployeeContractService {
         entity.setStatus(status);
 
         if (request.getFileKey() != null) {
-            com.ailms.entity.FileMetadataEntity fileMetadata = fileMetadataRepository.findByFileKey(request.getFileKey())
+            FileMetadataEntity fileMetadata = fileMetadataRepository.findByFileKey(request.getFileKey())
                     .orElseThrow(() -> new BusinessException("File not found or not uploaded successfully: " + request.getFileKey()));
             entity.setFileMetadata(fileMetadata);
         }
 
         EmployeeContractEntity saved = employeeContractRepository.save(entity);
 
-        java.util.concurrent.CompletableFuture.runAsync(() -> {
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CREATE", "EMPLOYEE_CONTRACT", saved.getId(), null, saved));
+
+        // Gửi email thông báo bất đồng bộ
+        CompletableFuture.runAsync(() -> {
             try {
                 String toEmail = employee.getUserEntity().getEmail();
                 String fullName = employee.getUserEntity().getFullName();
                 String contractType = saved.getContractTypeEnum() != null ? saved.getContractTypeEnum().name() : "N/A";
                 String fileKey = saved.getFileMetadata() != null ? saved.getFileMetadata().getFileKey() : null;
-                String downloadUrl = fileKey != null ? "/api/v1/files/download?fileKey=" + fileKey : "";
+                String downloadUrl = fileKey != null ? fileService.getDownloadUrl(fileKey) : null;
 
                 emailService.sendContractNotificationEmail(toEmail, fullName, contractType, downloadUrl);
             } catch (Exception e) {
@@ -123,6 +150,14 @@ public class EmployeeContractService implements IEmployeeContractService {
         return employeeContractMapper.toResponse(saved);
     }
 
+    /**
+     * Cập nhật thông tin hợp đồng.
+     * Business Rules:
+     * - Không được sửa hợp đồng đang chờ phê duyệt.
+     * - Lương cơ bản phải hợp lệ.
+     * - Khi chuyển ACTIVE -> INACTIVE phải có ngày kết thúc.
+     * - Không được tạo khoảng thời gian chồng lấn với hợp đồng ACTIVE khác.
+     */
     @Transactional
     public EmployeeContractResponse update(Long id, UpdateEmployeeContractRequest request) {
         log.info("Updating contract: {}", id);
@@ -133,8 +168,9 @@ public class EmployeeContractService implements IEmployeeContractService {
 
         EmployeeContractEntity existing = employeeContractRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
+        String oldValue = SimpleJsonWriter.toJson(existing);
 
-        if (request.getBaseSalary() != null && request.getBaseSalary().compareTo(java.math.BigDecimal.ZERO) <= 0) {
+        if (request.getBaseSalary() != null && request.getBaseSalary().compareTo(BigDecimal.ZERO) <= 0) {
             throw new BusinessException("Base salary must be greater than 0.");
         }
 
@@ -159,6 +195,8 @@ public class EmployeeContractService implements IEmployeeContractService {
         employeeContractMapper.updateFromRequest(request, existing);
 
         EmployeeContractEntity updated = employeeContractRepository.save(existing);
+
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "UPDATE", "EMPLOYEE_CONTRACT", id, oldValue, updated));
         return employeeContractMapper.toResponse(updated);
     }
 
@@ -173,6 +211,7 @@ public class EmployeeContractService implements IEmployeeContractService {
         EmployeeContractEntity contract = employeeContractRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
 
+        String oldValue = SimpleJsonWriter.toJson(contract);
         List<SalaryEntity> salaries = salaryRepository.findByEmployee_UserId(contract.getEmployee().getUserId());
         for (SalaryEntity salary : salaries) {
             boolean overlaps = !salary.getPeriod().atEndOfMonth().isBefore(contract.getStartDate())
@@ -183,6 +222,7 @@ public class EmployeeContractService implements IEmployeeContractService {
         }
 
         employeeContractRepository.delete(contract);
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "DELETE", "EMPLOYEE_CONTRACT", id, oldValue, null));
     }
 
     @Override
@@ -195,6 +235,12 @@ public class EmployeeContractService implements IEmployeeContractService {
         return PageResponse.from(page.map(employeeContractMapper::toResponse));
     }
 
+    /**
+     * Kiểm tra chồng lấn thời gian giữa các hợp đồng ACTIVE.
+     * Quy tắc:
+     * - Một nhân viên chỉ được có tối đa một hợp đồng ACTIVE
+     *   tại cùng một thời điểm.
+     */
     private void validateAndManageContractOverlap(Long employeeId, LocalDate newStart, LocalDate newEnd, Long currentContractId) {
         List<EmployeeContractEntity> activeContracts = employeeContractRepository.findByEmployee_UserId(employeeId).stream()
                 .filter(c -> c.getStatus() == BaseStatusEnum.ACTIVE)
@@ -219,20 +265,20 @@ public class EmployeeContractService implements IEmployeeContractService {
     }
 
     private Long getCurrentUserId() {
-        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
-        if (auth != null && auth.isAuthenticated() && auth.getPrincipal() instanceof com.ailms.security.CustomUserDetails userDetails) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated() && auth.getPrincipal() instanceof CustomUserDetails userDetails) {
             return userDetails.getUser().getId();
         }
         throw new BusinessException("User is not authenticated");
     }
 
     private List<String> getCurrentUserRoles() {
-        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+       Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated()) {
             return java.util.Collections.emptyList();
         }
         return auth.getAuthorities().stream()
-                .map(org.springframework.security.core.GrantedAuthority::getAuthority)
+                .map(GrantedAuthority::getAuthority)
                 .toList();
     }
 
@@ -240,27 +286,12 @@ public class EmployeeContractService implements IEmployeeContractService {
         Long currentUserId = getCurrentUserId();
         List<String> roles = getCurrentUserRoles();
 
-        if (roles.contains("ROLE_HR") || roles.contains("ROLE_PAYROLL")) {
+        if (roles.contains("ROLE_HR") || roles.contains("ROLE_ADMIN")) {
             return; // HR and Payroll can access all
-        }
-
-        if (roles.contains("ROLE_ADMIN")) {
-            throw new BusinessException("Admin does not have access to contract/salary details.");
         }
 
         if (currentUserId.equals(employeeId)) {
             return; // Self access
-        }
-
-        if (roles.contains("ROLE_MANAGER")) {
-            EmployeeEntity managerEmp = employeeRepository.findById(currentUserId).orElse(null);
-            EmployeeEntity targetEmp = employeeRepository.findById(employeeId).orElse(null);
-            if (managerEmp != null && targetEmp != null
-                    && managerEmp.getDepartment() != null
-                    && targetEmp.getDepartment() != null
-                    && managerEmp.getDepartment().getId().equals(targetEmp.getDepartment().getId())) {
-                return; // Manager of the same department
-            }
         }
 
         throw new BusinessException("Access denied to requested employee data");
@@ -270,27 +301,19 @@ public class EmployeeContractService implements IEmployeeContractService {
         verifyEmployeeAccess(contract.getEmployee().getUserId());
     }
 
+
+    /**
+     * Xây dựng Data Access Control bằng Specification Pattern.
+     */
     private Specification<EmployeeContractEntity> getContractSecuritySpecification() {
         Long currentUserId = getCurrentUserId();
         List<String> roles = getCurrentUserRoles();
 
-        if (roles.contains("ROLE_HR") || roles.contains("ROLE_PAYROLL")) {
+        if (roles.contains("ROLE_HR") || roles.contains("ROLE_ADMIN")) {
             return (root, query, cb) -> cb.conjunction();
         }
 
-        if (roles.contains("ROLE_ADMIN")) {
-            return (root, query, cb) -> cb.disjunction();
-        }
-
         Specification<EmployeeContractEntity> spec = (root, query, cb) -> cb.disjunction();
-
-        if (roles.contains("ROLE_MANAGER")) {
-            EmployeeEntity managerEmp = employeeRepository.findById(currentUserId).orElse(null);
-            if (managerEmp != null && managerEmp.getDepartment() != null) {
-                Long deptId = managerEmp.getDepartment().getId();
-                spec = spec.or((root, query, cb) -> cb.equal(root.get("employee").get("department").get("id"), deptId));
-            }
-        }
 
         spec = spec.or((root, query, cb) -> cb.equal(root.get("employee").get("userId"), currentUserId));
 

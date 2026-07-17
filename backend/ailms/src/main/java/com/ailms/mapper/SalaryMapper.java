@@ -22,6 +22,12 @@ public interface SalaryMapper {
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
+    @Mapping(target = "baseSalary", ignore = true)
+    @Mapping(target = "salaryTypeEnum", ignore = true)
+    @Mapping(target = "totalSalary", ignore = true)
+    @Mapping(target = "status", ignore = true)
+    @Mapping(target = "paidAt", ignore = true)
+    @Mapping(target = "details", ignore = true)
     SalaryEntity toEntity(CreateSalaryRequest request);
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
@@ -33,5 +39,6 @@ public interface SalaryMapper {
     @Mapping(target = "updatedBy", ignore = true)
     @Mapping(target = "baseSalary", ignore = true)
     @Mapping(target = "salaryTypeEnum", ignore = true)
+    @Mapping(target = "details", ignore = true)
     void updateFromRequest(UpdateSalaryRequest request, @MappingTarget SalaryEntity entity);
 }

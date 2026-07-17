@@ -1,4 +1,6 @@
 package com.ailms.service.imp;
+import com.ailms.common.converter.SimpleJsonWriter;
+import com.ailms.event.AuditLogEvent;
 import com.ailms.service.IRoleService;
 
 
@@ -29,6 +31,7 @@ import com.ailms.response.UserResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import com.ailms.response.PageResponse;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -53,6 +56,7 @@ public class RoleService implements IRoleService {
     private final UserRoleRepository userRoleRepository;
     private final UserMapper userMapper;
     private final PermissionMapper permissionMapper;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     @Transactional(readOnly = true)
     @Override
@@ -82,6 +86,7 @@ public class RoleService implements IRoleService {
 
         RoleEntity roleEntity = roleMapper.toRoleEntity(request);
         roleEntity = roleRepository.save(roleEntity);
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CREATE", "ROLE", roleEntity.getId(), null, roleEntity));
         return roleMapper.toRoleResponse(roleEntity);
     }
 
@@ -107,6 +112,7 @@ public class RoleService implements IRoleService {
         RoleEntity roleEntity = roleRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of("Role", id));
 
+        String oldValue = SimpleJsonWriter.toJson(roleEntity);
         if (Boolean.TRUE.equals(roleEntity.getIsSystem())) {
             throw new BusinessException("Cannot update system role");
         }
@@ -120,6 +126,7 @@ public class RoleService implements IRoleService {
 
         roleMapper.updateRoleFromRequest(request, roleEntity);
         roleEntity = roleRepository.save(roleEntity);
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "UPDATE", "ROLE", id, oldValue, roleEntity));
         return roleMapper.toRoleResponse(roleEntity);
     }
 

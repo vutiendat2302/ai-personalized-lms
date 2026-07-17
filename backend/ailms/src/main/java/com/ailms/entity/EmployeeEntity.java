@@ -65,8 +65,4 @@ public class EmployeeEntity extends BaseEntity {
     @Builder.Default
     private EmployeeStatusEnum status = EmployeeStatusEnum.ACTIVE;
 
-    @Transient
-    public Long getId() {
-        return userId;
-    }
 }

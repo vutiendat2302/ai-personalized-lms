@@ -25,6 +25,21 @@
 
 - Audit log qua Event, không gọi trực tiếp, `@EventListener` riêng ghi `audit_log` — tách khỏi business logic chính.
 
+```mermaid
+flowchart TD
+    A["Service nghiệp vụ<br/>(ClassMemberService, SalaryService...)<br/>thực hiện hành động"] -->|publishEvent| B["AuditLogEvent<br/>action, entityType, entityId,<br/>oldValue, newValue"]
+    B --> C["Spring Event Bus<br/>(đồng bộ, cùng thread)"]
+    C --> D["AuditLogListener<br/>handleAuditLogEvent()"]
+    D -->|try| E["AuditLogService.log()<br/>@Transactional(REQUIRES_NEW)"]
+    D -->|catch lỗi| D1["log.error<br/>không throw tiếp"]
+ 
+    E --> F["Lấy actorId từ<br/>SecurityContext"]
+    F --> G["Enrich metadata<br/>(IP, user-agent...)"]
+    G --> H["Serialize<br/>oldValue / newValue"]
+    H --> I[("AuditLogEntity<br/>lưu vào bảng audit_log")]
+    E -->|catch lỗi| E1["log.error<br/>không throw tiếp"]
+```
+
 - Patterns: 
 1. Facade: Cung cấp một giao diện đơn giản và thống nhất để truy cập một hệ thống phức tạp gồm nhiều lớp hoặc service bên trong.
 2. Strategy: Định nghĩa nhiều thuật toán có thể thay thế cho nhau

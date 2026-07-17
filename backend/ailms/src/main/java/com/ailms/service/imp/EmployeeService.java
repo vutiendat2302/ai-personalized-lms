@@ -1,19 +1,21 @@
 package com.ailms.service.imp;
 
+import com.ailms.common.converter.SimpleJsonWriter;
+import com.ailms.common.util.CodeGenerator;
+import com.ailms.entity.*;
 import com.ailms.entity.enums.EmployeeStatusEnum;
+import com.ailms.event.AuditLogEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import com.ailms.response.PageResponse;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import com.ailms.request.EmployeeSearchRequest;
 import com.ailms.repository.specification.EmployeeSpecification;
-import com.ailms.entity.EmployeeEntity;
 import com.ailms.response.EmployeeResponse;
 
 
-import com.ailms.entity.DepartmentEntity;
-import com.ailms.entity.EmployeeEntity;
-import com.ailms.entity.UserEntity;
 import com.ailms.exception.DuplicateResourceException;
 import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.mapper.EmployeeMapper;
@@ -35,9 +37,7 @@ import com.ailms.repository.TeachingRateRepository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
-import com.ailms.entity.EmployeeContractEntity;
-import com.ailms.entity.SalaryEntity;
-import com.ailms.entity.TeachingRateEntity;
+
 import com.ailms.entity.enums.BaseStatusEnum;
 import com.ailms.exception.BusinessException;
 
@@ -59,6 +59,7 @@ public class EmployeeService implements IEmployeeService {
     private final SortFieldResolver sortFieldResolver;
 
     private static final String RESOURCE_NAME = "Employee";
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     @Override
     public List<EmployeeResponse> getAll() {
@@ -91,11 +92,12 @@ public class EmployeeService implements IEmployeeService {
 
         EmployeeEntity entity = employeeMapper.toEntity(request);
         entity.setUserEntity(user);
-        entity.setEmployeeCode(com.ailms.common.util.CodeGenerator.generate("EP", employeeRepository::existsByEmployeeCode));
+        entity.setEmployeeCode(CodeGenerator.generate("EP", employeeRepository::existsByEmployeeCode));
         entity.setStatus(EmployeeStatusEnum.ACTIVE);
         entity.setDepartment(resolveDepartment(request.getDepartmentId()));
 
         EmployeeEntity saved = employeeRepository.save(entity);
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CREATE", "EMPLOYEE", saved.getUserId(), null, saved));
         log.info("Employee created successfully");
         return employeeMapper.toResponse(saved);
     }
@@ -108,6 +110,7 @@ public class EmployeeService implements IEmployeeService {
         EmployeeEntity existing = employeeRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
 
+        String oldValue = SimpleJsonWriter.toJson(existing);
         if (existing.getStatus() == EmployeeStatusEnum.DELETE) {
             throw new BusinessException("Cannot update a deleted employee.");
         }
@@ -131,6 +134,7 @@ public class EmployeeService implements IEmployeeService {
             existing.setDepartment(resolveDepartment(request.getDepartmentId()));
         }
         EmployeeEntity updated = employeeRepository.save(existing);
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "UPDATE", "EMPLOYEE", id, oldValue, updated));
         return employeeMapper.toResponse(updated);
     }
 
@@ -140,12 +144,12 @@ public class EmployeeService implements IEmployeeService {
         log.info("Deleting employee: {}", id);
         EmployeeEntity entity = employeeRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
-
+        String oldValue = SimpleJsonWriter.toJson(entity);
         if (entity.getStatus() == EmployeeStatusEnum.DELETE) {
             throw new DuplicateResourceException("Employee already deleted: " + id);
         }
 
-        // Check active contracts
+        // Không cho phép xóa nếu còn hợp đồng đang hiệu lực
         List<EmployeeContractEntity> activeContracts = employeeContractRepository.findByEmployee_UserId(id).stream()
                 .filter(c -> c.getStatus() == BaseStatusEnum.ACTIVE)
                 .filter(c -> (c.getStartDate() == null || !LocalDate.now().isBefore(c.getStartDate()))
@@ -155,7 +159,7 @@ public class EmployeeService implements IEmployeeService {
             throw new BusinessException("Cannot delete employee: Employee has active contracts.");
         }
 
-        // Check unfinalized (DRAFT) salaries
+        // Không cho phép xóa nếu còn bảng lương chưa được chốt
         List<SalaryEntity> draftSalaries = salaryRepository.findByEmployee_UserId(id).stream()
                 .filter(s -> s.getStatus() == com.ailms.entity.enums.SalaryStatusEnum.DRAFT)
                 .toList();
@@ -164,9 +168,16 @@ public class EmployeeService implements IEmployeeService {
         }
 
         entity.setStatus(EmployeeStatusEnum.DELETE);
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "DELETE", "EMPLOYEE", id, oldValue, null));
         employeeRepository.save(entity);
     }
 
+    /**
+     * Chấm dứt nhân viên.
+     *
+     * @param id ID nhân viên
+     * @return Thông tin nhân viên sau khi chấm dứt
+     */
     @Transactional
     @Override
     public EmployeeResponse terminate(Long id) {
@@ -184,7 +195,7 @@ public class EmployeeService implements IEmployeeService {
         employee.setStatus(EmployeeStatusEnum.TERMINATED);
         employee.setEndDate(LocalDateTime.now());
 
-        // Set endDate of any currently ACTIVE EmployeeContractEntity to terminate it
+        // Kết thúc toàn bộ hợp đồng còn hiệu lực
         List<EmployeeContractEntity> contracts = employeeContractRepository.findByEmployee_UserId(id);
         for (EmployeeContractEntity contract : contracts) {
             if (contract.getStatus() == BaseStatusEnum.ACTIVE) {
@@ -194,7 +205,7 @@ public class EmployeeService implements IEmployeeService {
             }
         }
 
-        // Set effectiveTo of all active TeachingRateEntity to termination date
+        // Vô hiệu hóa các mức lương giảng dạy đang áp dụng
         List<TeachingRateEntity> rates = teachingRateRepository.findByEmployeeEntity_UserId(id);
         for (TeachingRateEntity rate : rates) {
             if (rate.getStatus() == BaseStatusEnum.ACTIVE) {
@@ -205,6 +216,8 @@ public class EmployeeService implements IEmployeeService {
         }
 
         EmployeeEntity saved = employeeRepository.save(employee);
+
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "TERMINATE", "EMPLOYEE", id, null, null));
         return employeeMapper.toResponse(saved);
     }
 
@@ -222,7 +235,7 @@ public class EmployeeService implements IEmployeeService {
         Specification<EmployeeEntity> spec = EmployeeSpecification.filterAndSearch(request);
         Pageable pageable = request.toPageable();
         if (pageable.getSort().isSorted()) {
-            pageable = org.springframework.data.domain.PageRequest.of(
+            pageable = PageRequest.of(
                     pageable.getPageNumber(),
                     pageable.getPageSize(),
                     sortFieldResolver.resolve(pageable.getSort(), EmployeeEntity.class)

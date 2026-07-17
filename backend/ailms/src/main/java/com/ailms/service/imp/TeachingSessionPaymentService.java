@@ -1,17 +1,19 @@
 package com.ailms.service.imp;
+import com.ailms.common.converter.SimpleJsonWriter;
 import com.ailms.entity.ClassOnlineEntity;
+import com.ailms.event.AuditLogEvent;
 import com.ailms.repository.ClassOnlineRepository;
 import com.ailms.repository.specification.TeachingSessionPaymentSpecification;
 import com.ailms.request.CreateTeachingSessionPaymentRequest;
 import com.ailms.request.TeachingSessionPaymentSearchRequest;
 import com.ailms.request.UpdateTeachingSessionPaymentRequest;
+import com.ailms.security.CustomUserDetails;
 import com.ailms.service.ITeachingSessionPaymentService;
 
 
 import com.ailms.entity.EmployeeEntity;
 import com.ailms.entity.TeachingRateEntity;
 import com.ailms.entity.TeachingSessionPaymentEntity;
-import com.ailms.exception.DuplicateResourceException;
 import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.mapper.TeachingSessionPaymentMapper;
 import com.ailms.repository.EmployeeRepository;
@@ -20,17 +22,20 @@ import com.ailms.repository.TeachingSessionPaymentRepository;
 import com.ailms.response.TeachingSessionPaymentResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import com.ailms.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.LocalDateTime;
 import com.ailms.entity.enums.EmployeeStatusEnum;
 import com.ailms.entity.enums.BaseStatusEnum;
 import com.ailms.entity.enums.SessionPaymentStatusEnum;
@@ -50,6 +55,7 @@ public class TeachingSessionPaymentService implements ITeachingSessionPaymentSer
     private final com.ailms.service.IApprovalRequestService approvalRequestService;
 
     private static final String RESOURCE_NAME = "TeachingSessionPayment";
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     public List<TeachingSessionPaymentResponse> getAll() {
         log.info("Getting all session payments");
@@ -118,6 +124,7 @@ public class TeachingSessionPaymentService implements ITeachingSessionPaymentSer
         entity.setStatus(SessionPaymentStatusEnum.PENDING);
 
         TeachingSessionPaymentEntity saved = teachingSessionPaymentRepository.save(entity);
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CREATE", "TEACHING_SESSION_PAYMENT", entity.getId(), null, entity));
         return teachingSessionPaymentMapper.toResponse(saved);
     }
 
@@ -131,6 +138,7 @@ public class TeachingSessionPaymentService implements ITeachingSessionPaymentSer
 
         TeachingSessionPaymentEntity existing = teachingSessionPaymentRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
+        String oldValue = SimpleJsonWriter.toJson(existing);
 
         if (existing.getStatus() != SessionPaymentStatusEnum.PENDING) {
             throw new BusinessException("Only pending payments can be updated.");
@@ -183,6 +191,7 @@ public class TeachingSessionPaymentService implements ITeachingSessionPaymentSer
         existing.setAmount(amount);
 
         TeachingSessionPaymentEntity updated = teachingSessionPaymentRepository.save(existing);
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "UPDATE", "TEACHING_SESSION_PAYMENT", id, oldValue, updated));
         return teachingSessionPaymentMapper.toResponse(updated);
     }
 
@@ -196,12 +205,13 @@ public class TeachingSessionPaymentService implements ITeachingSessionPaymentSer
 
         TeachingSessionPaymentEntity existing = teachingSessionPaymentRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
-
+        String oldValue = SimpleJsonWriter.toJson(existing);
         if (existing.getStatus() != SessionPaymentStatusEnum.PENDING) {
             throw new BusinessException("Only pending payments can be deleted/cancelled.");
         }
 
         existing.setStatus(SessionPaymentStatusEnum.CANCELLED);
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "DELETE", "TEACHING_SESSION_PAYMENT", id, oldValue, null));
         teachingSessionPaymentRepository.save(existing);
     }
 
@@ -216,20 +226,20 @@ public class TeachingSessionPaymentService implements ITeachingSessionPaymentSer
     }
 
     private Long getCurrentUserId() {
-        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
-        if (auth != null && auth.isAuthenticated() && auth.getPrincipal() instanceof com.ailms.security.CustomUserDetails userDetails) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated() && auth.getPrincipal() instanceof CustomUserDetails userDetails) {
             return userDetails.getUser().getId();
         }
         throw new BusinessException("User is not authenticated");
     }
 
     private List<String> getCurrentUserRoles() {
-        org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+       Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated()) {
             return java.util.Collections.emptyList();
         }
         return auth.getAuthorities().stream()
-                .map(org.springframework.security.core.GrantedAuthority::getAuthority)
+                .map(GrantedAuthority::getAuthority)
                 .toList();
     }
 
@@ -237,27 +247,12 @@ public class TeachingSessionPaymentService implements ITeachingSessionPaymentSer
         Long currentUserId = getCurrentUserId();
         List<String> roles = getCurrentUserRoles();
 
-        if (roles.contains("ROLE_PAYROLL") || roles.contains("ROLE_HR")) {
+        if (roles.contains("ROLE_ADMIN") || roles.contains("ROLE_HR")) {
             return; // HR and Payroll can access all
-        }
-
-        if (roles.contains("ROLE_ADMIN")) {
-            throw new BusinessException("Admin does not have access to contract/salary details.");
         }
 
         if (currentUserId.equals(employeeId)) {
             return; // Self access
-        }
-
-        if (roles.contains("ROLE_MANAGER")) {
-            EmployeeEntity managerEmp = employeeRepository.findById(currentUserId).orElse(null);
-            EmployeeEntity targetEmp = employeeRepository.findById(employeeId).orElse(null);
-            if (managerEmp != null && targetEmp != null 
-                    && managerEmp.getDepartment() != null 
-                    && targetEmp.getDepartment() != null
-                    && managerEmp.getDepartment().getId().equals(targetEmp.getDepartment().getId())) {
-                return; // Manager of the same department
-            }
         }
 
         throw new BusinessException("Access denied to requested employee data");
@@ -271,23 +266,11 @@ public class TeachingSessionPaymentService implements ITeachingSessionPaymentSer
         Long currentUserId = getCurrentUserId();
         List<String> roles = getCurrentUserRoles();
 
-        if (roles.contains("ROLE_PAYROLL") || roles.contains("ROLE_HR")) {
+        if (roles.contains("ROLE_ADMIN") || roles.contains("ROLE_HR")) {
             return (root, query, cb) -> cb.conjunction();
         }
 
-        if (roles.contains("ROLE_ADMIN")) {
-            return (root, query, cb) -> cb.disjunction();
-        }
-
         Specification<TeachingSessionPaymentEntity> spec = (root, query, cb) -> cb.disjunction();
-
-        if (roles.contains("ROLE_MANAGER")) {
-            EmployeeEntity managerEmp = employeeRepository.findById(currentUserId).orElse(null);
-            if (managerEmp != null && managerEmp.getDepartment() != null) {
-                Long deptId = managerEmp.getDepartment().getId();
-                spec = spec.or((root, query, cb) -> cb.equal(root.get("employee").get("department").get("id"), deptId));
-            }
-        }
 
         spec = spec.or((root, query, cb) -> cb.equal(root.get("employee").get("userId"), currentUserId));
 
