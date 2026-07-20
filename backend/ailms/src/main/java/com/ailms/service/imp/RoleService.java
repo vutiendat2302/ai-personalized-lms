@@ -152,6 +152,7 @@ public class RoleService implements IRoleService {
     public void deleteRole(Long id) {
         RoleEntity roleEntity = roleRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of("Role", id));
+        String oldValue = SimpleJsonWriter.toJson(roleEntity);
         if (Boolean.TRUE.equals(roleEntity.getIsSystem())) {
             throw new BusinessException("Cannot delete system role");
         }
@@ -160,6 +161,7 @@ public class RoleService implements IRoleService {
             throw new BusinessException("Role is assigned to " + count + " user(s), please remove it before deleting");
         }
         roleRepository.delete(roleEntity);
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "DELETE", "ROLE", id, oldValue, null));
     }
 
     @Transactional(readOnly = true)
@@ -223,6 +225,7 @@ public class RoleService implements IRoleService {
                         .toList();
 
         rolePermissionRepository.saveAll(newRolePermissions);
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "UPDATE", "ROLE_PERMISSION", roleId, null, null));
     }
 
     private RolePermissionEntity buildRolePermission(RoleEntity role, PermissionEntity permission) {
@@ -292,6 +295,7 @@ public class RoleService implements IRoleService {
         RolePermissionEntity rolePermission = buildRolePermission(role, permission);
         rolePermissionRepository.save(rolePermission);
 
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CREATE_AND_ASSIGN_PERMISSION", "ROLE", roleId, null, null));
         return permissionMapper.toPermissionResponse(permission);
     }
 

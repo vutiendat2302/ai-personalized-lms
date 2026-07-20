@@ -78,6 +78,7 @@ public class AuthService implements IAuthService { // login - register
 
     private static final String INVALIDATE_TOKEN_PREFIX = "invalidate:token:user:";
     private final ApplicationEventPublisher eventPublisher;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     /**
      * Đăng ký tài khoản mới.
@@ -119,6 +120,7 @@ public class AuthService implements IAuthService { // login - register
         // Sinh OTP + gửi email xác thực
         String otp = otpService.generateAndStoreOtp(request.getEmail(), OTP_PURPOSE_REGISTER, REGISTER_OTP_TTL);
         emailService.sendOtpEmail(request.getEmail(), otp);
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "REGISTER", "AUTH", userEntity.getId(), null, null));
     }
 
     /**
@@ -139,6 +141,7 @@ public class AuthService implements IAuthService { // login - register
 
         // Xoá OTP sau khi dùng, tránh verify lại nhiều lần bằng mã cũ
         otpService.invalidateOtp(email, OTP_PURPOSE_REGISTER);
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "VERIFY_REGISTER", "AUTH", userEntity.getId(), null, null));
     }
 
     /**
@@ -300,6 +303,7 @@ public class AuthService implements IAuthService { // login - register
 
         // Gửi email thông báo đổi mật khẩu thành công
         emailService.sendPasswordChangedNotification(userEntity.getEmail(), LocalDateTime.now());
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CHANGE_PASSWORD", "AUTH", userEntity.getId(), null, null));
     }
 
     /**

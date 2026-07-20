@@ -1,4 +1,6 @@
 package com.ailms.service.imp;
+import com.ailms.common.converter.SimpleJsonWriter;
+import com.ailms.event.AuditLogEvent;
 import com.ailms.service.IPermissionService;
 
 
@@ -15,6 +17,7 @@ import com.ailms.request.PermissionSearchRequest;
 import com.ailms.response.PermissionResponse;
 import lombok.RequiredArgsConstructor;
 import com.ailms.response.PageResponse;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -29,6 +32,7 @@ public class PermissionService implements IPermissionService{
     private final PermissionRepository permissionRepository;
     private final PermissionMapper permissionMapper;
     private final RolePermissionRepository rolePermissionRepository;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     @Transactional(readOnly = true)
     @Override
@@ -57,6 +61,7 @@ public class PermissionService implements IPermissionService{
 
         PermissionEntity entity = permissionMapper.toPermissionEntity(request);
         entity = permissionRepository.save(entity);
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CREATE", "PERMISSION", entity.getId(), null, entity));
         return permissionMapper.toPermissionResponse(entity);
     }
 
@@ -65,7 +70,7 @@ public class PermissionService implements IPermissionService{
     public PermissionResponse updatePermission(Long id, PermissionRequest request) {
         PermissionEntity entity = permissionRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of("Permission", id));
-
+        String oldValue = SimpleJsonWriter.toJson(entity);
         if (!entity.getName().equalsIgnoreCase(request.getName()) && permissionRepository.existsByName(request.getName())) {
             throw DuplicateResourceException.of("Permission", "name", request.getName());
         }
@@ -75,6 +80,7 @@ public class PermissionService implements IPermissionService{
 
         permissionMapper.updatePermissionFromRequest(request, entity);
         entity = permissionRepository.save(entity);
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "UPDATE", "PERMISSION", id, oldValue, entity));
         return permissionMapper.toPermissionResponse(entity);
     }
 
@@ -83,11 +89,13 @@ public class PermissionService implements IPermissionService{
     public void deletePermission(Long id) {
         PermissionEntity entity = permissionRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of("Permission", id));
+        String oldValue = SimpleJsonWriter.toJson(entity);
         if (rolePermissionRepository.existsByPermissionEntity_Id(id)) {
             long count = rolePermissionRepository.countByPermissionEntity_Id(id);
             throw new BusinessException("Permission is assigned to " + count + " role(s), cannot delete");
         }
         permissionRepository.delete(entity);
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "DELETE", "PERMISSION", id, oldValue, null));
     }
 
     @Override

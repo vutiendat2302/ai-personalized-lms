@@ -9,6 +9,7 @@ package com.ailms.entity.enums;
  * CANCELLED : Đã hủy.
  */
 public enum SessionPaymentStatusEnum {
+    DRAFT,
     PENDING,
     CONFIRMED,
     PAID,
