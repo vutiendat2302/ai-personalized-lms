@@ -2,15 +2,16 @@ package com.ailms.service.imp;
 
 import com.ailms.dto.GoalProgress;
 import com.ailms.entity.StudyGoalEntity;
-import com.ailms.entity.enums.StudyGoalSatusEnum;
+import com.ailms.entity.enums.StudyGoalStatusEnum;
 import com.ailms.entity.enums.StudyGoalTypeEnum;
 import com.ailms.event.AuditLogEvent;
 import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.mapper.StudyGoalMapper;
 import com.ailms.repository.StudyGoalRepository;
 import com.ailms.repository.specification.StudyGoalSpecification;
-import com.ailms.request.StudyGoalRequest;
+import com.ailms.request.CreateStudyGoalRequest;
 import com.ailms.request.StudyGoalSearchRequest;
+import com.ailms.request.UpdateStudyGoalRequest;
 import com.ailms.response.PageResponse;
 import com.ailms.response.StudyGoalResponse;
 import com.ailms.service.IStudyGoalService;
@@ -46,6 +47,10 @@ public class StudyGoalService implements IStudyGoalService {
     private Map<StudyGoalTypeEnum, StudyGoalProgressCalculator> calculatorMap;
     private static final String RESOURCE_NAME = "StudyGoal";
 
+    /**
+     * Gọi sau khi spring khởi tạo bean
+     * Ánh xạ giữa từng loại mục tiêu học tập và tính toán tiến độ tương tứng
+     */
     @PostConstruct
     public void init() {
         calculatorMap = new EnumMap<>(StudyGoalTypeEnum.class);
@@ -92,12 +97,9 @@ public class StudyGoalService implements IStudyGoalService {
 
     @Transactional
     @Override
-    public StudyGoalResponse create(StudyGoalRequest request) {
+    public StudyGoalResponse create(CreateStudyGoalRequest request) {
         log.info("Creating study goal for user: {}", request.getUserId());
         StudyGoalEntity entity = studyGoalMapper.toEntity(request);
-        if (entity.getGoalSatusEnum() == null) {
-            entity.setGoalSatusEnum(StudyGoalSatusEnum.IN_PROGRESS);
-        }
         StudyGoalEntity saved = studyGoalRepository.save(entity);
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CREATE", "STUDY_GOAL", saved.getId(), null, saved));
         return studyGoalMapper.toResponse(saved);
@@ -105,7 +107,7 @@ public class StudyGoalService implements IStudyGoalService {
 
     @Transactional
     @Override
-    public StudyGoalResponse update(Long id, StudyGoalRequest request) {
+    public StudyGoalResponse update(Long id, UpdateStudyGoalRequest request) {
         log.info("Updating study goal: {}", id);
         StudyGoalEntity existing = studyGoalRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
@@ -126,6 +128,7 @@ public class StudyGoalService implements IStudyGoalService {
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "DELETE", "STUDY_GOAL", id, null, null));
     }
 
+    // Đánh giá tiến độ và mục tiêu học tập
     @Transactional
     @Override
     public GoalProgress evaluateGoal(Long goalId) {
@@ -133,28 +136,38 @@ public class StudyGoalService implements IStudyGoalService {
         StudyGoalEntity goal = studyGoalRepository.findById(goalId)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, goalId));
 
+
         StudyGoalProgressCalculator calc = calculatorMap.get(goal.getStudyGoalTypeEnum());
+
+        // Nếu chưa đăng ký mục tiêu, trả về tiến độ mặc định
         if (calc == null) {
             log.warn("No calculator registered for goal type: {}", goal.getStudyGoalTypeEnum());
             return GoalProgress.builder().currentValue(0).targetValue(goal.getTargetValue()).isAchieved(false).build();
         }
 
+        // Thực hiện tính toán tiến độ bằng Strategy tương ứng.
         GoalProgress progress = calc.calculateProgress(goal, LocalDateTime.now());
 
         // Update streak & status
         goal.setCurrentStreak(progress.getCurrentStreak());
         goal.setLongestStreak(progress.getLongestStreak());
 
-        if (progress.isAchieved() && goal.getGoalSatusEnum() != StudyGoalSatusEnum.COMPLETED) {
-            goal.setGoalSatusEnum(StudyGoalSatusEnum.COMPLETED);
+        // Nếu đã đạt mục tiêu và trước đó chưa hoàn thành thì
+        // cập nhật trạng thái sang COMPLETED.
+        if (progress.isAchieved() && goal.getStatus() != StudyGoalStatusEnum.COMPLETED) {
+            goal.setStatus(StudyGoalStatusEnum.COMPLETED);
             log.info("Study goal {} completed for user {}! Reward event published.", goalId, goal.getUserId());
-            applicationEventPublisher.publishEvent(new AuditLogEvent(this, "GOAL_COMPLETED", "STUDY_GOAL", goalId, null, goal));
         }
 
         studyGoalRepository.save(goal);
         return progress;
     }
 
+    /**
+     * Đánh giá lai tất cả mục tiêu của một người hcoj
+     * @param userId
+     * @return
+     */
     @Transactional
     @Override
     public List<GoalProgress> evaluateUserGoals(Long userId) {

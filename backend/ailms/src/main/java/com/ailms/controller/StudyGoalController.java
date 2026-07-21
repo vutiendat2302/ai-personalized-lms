@@ -1,8 +1,9 @@
 package com.ailms.controller;
 
 import com.ailms.dto.GoalProgress;
-import com.ailms.request.StudyGoalRequest;
+import com.ailms.request.CreateStudyGoalRequest;
 import com.ailms.request.StudyGoalSearchRequest;
+import com.ailms.request.UpdateStudyGoalRequest;
 import com.ailms.response.ApiResponse;
 import com.ailms.response.PageResponse;
 import com.ailms.response.StudyGoalResponse;
@@ -23,7 +24,7 @@ public class StudyGoalController {
     private final IStudyGoalService studyGoalService;
 
     @PostMapping
-    public ResponseEntity<ApiResponse<StudyGoalResponse>> create(@Valid @RequestBody StudyGoalRequest request) {
+    public ResponseEntity<ApiResponse<StudyGoalResponse>> create(@Valid @RequestBody CreateStudyGoalRequest request) {
         StudyGoalResponse response = studyGoalService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.of("Study goal created successfully", response));
@@ -32,7 +33,7 @@ public class StudyGoalController {
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<StudyGoalResponse>> update(
             @PathVariable Long id,
-            @Valid @RequestBody StudyGoalRequest request) {
+            @Valid @RequestBody UpdateStudyGoalRequest request) {
         StudyGoalResponse response = studyGoalService.update(id, request);
         return ResponseEntity.ok(ApiResponse.of("Study goal updated successfully", response));
     }

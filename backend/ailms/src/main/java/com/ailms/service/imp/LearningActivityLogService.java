@@ -1,5 +1,6 @@
 package com.ailms.service.imp;
 import com.ailms.repository.specification.LearningActivityLogSpecification;
+import com.ailms.request.CreateLearningActivityLogRequest;
 import com.ailms.request.LearningActivityLogSearchRequest;
 import com.ailms.service.ILearningActivityLogService;
 
@@ -8,7 +9,6 @@ import com.ailms.entity.LearningActivityLogEntity;
 import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.mapper.LearningActivityLogMapper;
 import com.ailms.repository.LearningActivityLogRepository;
-import com.ailms.request.LearningActivityLogRequest;
 import com.ailms.response.LearningActivityLogResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,15 +26,6 @@ import java.util.List;
 @Slf4j
 @Transactional(readOnly = true)
 public class LearningActivityLogService implements ILearningActivityLogService {
-    @Override
-    public PageResponse<LearningActivityLogResponse> search(LearningActivityLogSearchRequest request) {
-        log.info("Searching LearningActivityLog via specification");
-        Specification<LearningActivityLogEntity> spec = LearningActivityLogSpecification.filterAndSearch(request);
-        Pageable pageable = request.toPageable();
-        Page<LearningActivityLogEntity> page = learningActivityLogRepository.findAll(spec, pageable);
-        return PageResponse.from(page.map(learningActivityLogMapper::toResponse));
-    }
-
 
     private final LearningActivityLogRepository learningActivityLogRepository;
     private final LearningActivityLogMapper learningActivityLogMapper;
@@ -65,21 +56,11 @@ public class LearningActivityLogService implements ILearningActivityLogService {
     }
 
     @Transactional
-    public LearningActivityLogResponse create(LearningActivityLogRequest request) {
+    public LearningActivityLogResponse create(CreateLearningActivityLogRequest request) {
         log.info("Creating learning activity log for user: {}", request.getUserId());
         LearningActivityLogEntity entity = learningActivityLogMapper.toEntity(request);
         LearningActivityLogEntity saved = learningActivityLogRepository.save(entity);
         return learningActivityLogMapper.toResponse(saved);
-    }
-
-    @Transactional
-    public LearningActivityLogResponse update(Long id, LearningActivityLogRequest request) {
-        log.info("Updating learning activity log: {}", id);
-        LearningActivityLogEntity existing = learningActivityLogRepository.findById(id)
-                .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
-        learningActivityLogMapper.updateFromRequest(request, existing);
-        LearningActivityLogEntity updated = learningActivityLogRepository.save(existing);
-        return learningActivityLogMapper.toResponse(updated);
     }
 
     @Transactional
@@ -90,4 +71,14 @@ public class LearningActivityLogService implements ILearningActivityLogService {
         }
         learningActivityLogRepository.deleteById(id);
     }
+
+    @Override
+    public PageResponse<LearningActivityLogResponse> search(LearningActivityLogSearchRequest request) {
+        log.info("Searching LearningActivityLog via specification");
+        Specification<LearningActivityLogEntity> spec = LearningActivityLogSpecification.filterAndSearch(request);
+        Pageable pageable = request.toPageable();
+        Page<LearningActivityLogEntity> page = learningActivityLogRepository.findAll(spec, pageable);
+        return PageResponse.from(page.map(learningActivityLogMapper::toResponse));
+    }
+
 }

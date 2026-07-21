@@ -38,7 +38,7 @@ public class GuardianEntity extends BaseEntity {
 
     /** Mối quan hệ với học viên (FATHER, MOTHER, GUARDIAN, OTHER). */
     @Column(name = "relationship")
-    @Enumerated(EnumType.ORDINAL)
+    @Enumerated(EnumType.STRING)
     private GuardianRelationship relationship;
 
     /** Số điện thoại liên hệ của người giám hộ. */

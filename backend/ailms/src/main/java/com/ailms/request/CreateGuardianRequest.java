@@ -10,12 +10,11 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class GuardianRequest {
+public class CreateGuardianRequest {
 
     @NotNull(message = "Student user ID is required")
     private Long studentUserId;
 
-    @NotBlank(message = "Guardian full name is required")
     private String fullName;
 
     private GuardianRelationship relationship;

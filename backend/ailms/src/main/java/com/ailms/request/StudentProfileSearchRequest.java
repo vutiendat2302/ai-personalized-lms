@@ -6,16 +6,8 @@ import java.time.LocalDateTime;
 
 @Getter
 @Setter
-@NoArgsConstructor
-@AllArgsConstructor
 @Builder
 @EqualsAndHashCode(callSuper = false)
-public class StudentProfileSearchRequest extends BaseSearchRequest {
-    private String keyword;
+public class StudentProfileSearchRequest extends CommonSearchRequest<Boolean> {
 
-    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
-    private LocalDateTime createdFrom;
-
-    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
-    private LocalDateTime createdTo;
 }

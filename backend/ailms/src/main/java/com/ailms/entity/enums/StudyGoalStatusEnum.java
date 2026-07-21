@@ -6,7 +6,7 @@ package com.ailms.entity.enums;
  * COMPLETED   : Đã hoàn thành.
  * CANCELLED   : Đã hủy.
  */
-public enum StudyGoalSatusEnum {
+public enum StudyGoalStatusEnum {
     IN_PROGRESS,
     COMPLETED,
     CANCELLED

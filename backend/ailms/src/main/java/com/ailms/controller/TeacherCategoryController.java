@@ -2,6 +2,7 @@ package com.ailms.controller;
 
 import com.ailms.request.AssignTeacherRequest;
 import com.ailms.request.CreateTeacherCategoryRequest;
+import com.ailms.request.UpdateTeacherCategoryRequest;
 import com.ailms.response.ApiResponse;
 import com.ailms.response.TeacherCategoryResponse;
 import com.ailms.service.ITeacherCategoryService;
@@ -59,5 +60,11 @@ public class TeacherCategoryController {
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         teacherCategoryService.delete(id);
         return ResponseEntity.ok(ApiResponse.message("Teacher category association deleted successfully"));
+    }
+
+    @PutMapping("{id}")
+    public ResponseEntity<ApiResponse<Void>> update(@PathVariable Long id, @RequestBody UpdateTeacherCategoryRequest request) {
+        teacherCategoryService.update(id, request);
+        return ResponseEntity.ok(ApiResponse.message("Update success"));
     }
 }

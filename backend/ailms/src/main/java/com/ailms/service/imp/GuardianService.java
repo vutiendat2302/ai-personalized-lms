@@ -1,6 +1,7 @@
 package com.ailms.service.imp;
 import com.ailms.repository.specification.GuardianSpecification;
 import com.ailms.request.GuardianSearchRequest;
+import com.ailms.request.UpdateGuardianRequest;
 import com.ailms.service.IGuardianService;
 
 
@@ -10,7 +11,7 @@ import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.mapper.GuardianMapper;
 import com.ailms.repository.GuardianRepository;
 import com.ailms.repository.StudentProfileRepository;
-import com.ailms.request.GuardianRequest;
+import com.ailms.request.CreateGuardianRequest;
 import com.ailms.response.GuardianResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -62,7 +63,7 @@ public class GuardianService implements IGuardianService {
     }
 
     @Transactional
-    public GuardianResponse create(GuardianRequest request) {
+    public GuardianResponse create(CreateGuardianRequest request) {
         log.info("Creating guardian for student: {}", request.getStudentUserId());
 
         StudentProfileEntity studentProfile = studentProfileRepository.findById(request.getStudentUserId())
@@ -76,18 +77,13 @@ public class GuardianService implements IGuardianService {
     }
 
     @Transactional
-    public GuardianResponse update(Long id, GuardianRequest request) {
+    public GuardianResponse update(Long id, UpdateGuardianRequest request) {
         log.info("Updating guardian record: {}", id);
 
         GuardianEntity existing = guardianRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
 
-        StudentProfileEntity studentProfile = studentProfileRepository.findById(request.getStudentUserId())
-                .orElseThrow(() -> ResourceNotFoundException.of("StudentProfile", request.getStudentUserId()));
-
         guardianMapper.updateFromRequest(request, existing);
-        existing.setStudentProfile(studentProfile);
-
         GuardianEntity updated = guardianRepository.save(existing);
         return guardianMapper.toResponse(updated);
     }

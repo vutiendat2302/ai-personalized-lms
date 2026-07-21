@@ -9,7 +9,7 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class StudentProfileRequest {
+public class CreateStudentProfileRequest {
 
     @NotNull(message = "User ID is required")
     private Long userId;
@@ -24,8 +24,6 @@ public class StudentProfileRequest {
     private String goal;
 
     private String schoolName;
-
-    private String notes;
 
     private Boolean isMinor;
 }

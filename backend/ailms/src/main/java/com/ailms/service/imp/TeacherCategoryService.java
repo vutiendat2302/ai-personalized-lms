@@ -1,5 +1,6 @@
 package com.ailms.service.imp;
 
+import com.ailms.common.converter.SimpleJsonWriter;
 import com.ailms.entity.CategoryEntity;
 import com.ailms.entity.EmployeeEntity;
 import com.ailms.entity.TeacherCategoryEntity;
@@ -14,6 +15,7 @@ import com.ailms.repository.CourseRepository;
 import com.ailms.repository.EmployeeRepository;
 import com.ailms.repository.TeacherCategoryRepository;
 import com.ailms.request.CreateTeacherCategoryRequest;
+import com.ailms.request.UpdateTeacherCategoryRequest;
 import com.ailms.response.TeacherCategoryResponse;
 import com.ailms.service.IEmailService;
 import com.ailms.service.ITeacherCategoryService;
@@ -144,5 +146,18 @@ public class TeacherCategoryService implements ITeacherCategoryService {
 
         teacherCategoryRepository.delete(entity);
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "DELETE", "TEACHER_CATEGORY", id, entity, null));
+    }
+
+    @Override
+    public void update(Long id, UpdateTeacherCategoryRequest request) {
+        TeacherCategoryEntity entity = teacherCategoryRepository.findById(id)
+                .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
+        String oldValue = SimpleJsonWriter.toJson(entity);
+        teacherCategoryMapper.update(request, entity);
+        CategoryEntity categoryEntity = categoryRepository.findById(request.getCategoryId())
+                .orElseThrow(() -> ResourceNotFoundException.of("Category", id));
+        entity.setCategory(categoryEntity);
+        teacherCategoryRepository.save(entity);
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "UPDATE", "TEACHER_CATEGORY", id, oldValue, entity));
     }
 }

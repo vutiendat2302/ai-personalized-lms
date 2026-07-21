@@ -28,6 +28,12 @@ import file_metadata
 import employee_contract
 import employee
 import attendance
+import student_profile
+import guardian
+import student_interest
+import study_goal
+import teacher_category
+import teacher_availability
 
 def main():
     print(f"Kết nối tới MySQL: {DB_CONFIG['user']}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}")
@@ -47,6 +53,12 @@ def main():
             employee.seed(cursor)
             employee_contract.seed(cursor)
             attendance.seed(cursor)
+            student_profile.seed(cursor)
+            guardian.seed(cursor)
+            student_interest.seed(cursor)
+            study_goal.seed(cursor)
+            teacher_category.seed(cursor)
+            teacher_availability.seed(cursor)
             
             
         conn.commit()

@@ -15,7 +15,7 @@ public class OnboardingRequest {
     @NotNull(message = "User ID is required")
     private Long userId;
 
-    private StudyGoalRequest goal;
+    private CreateStudyGoalRequest goal;
 
     private List<Long> interestIds;
 }

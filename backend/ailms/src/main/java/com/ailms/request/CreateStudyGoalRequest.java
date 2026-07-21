@@ -1,5 +1,6 @@
 package com.ailms.request;
 
+import com.ailms.entity.enums.StudyGoalTypeEnum;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 
@@ -8,12 +9,12 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class StudyGoalRequest {
+public class CreateStudyGoalRequest {
 
     @NotNull(message = "User ID is required")
     private Long userId;
 
-    private Byte goalType;
+    private StudyGoalTypeEnum studyGoalTypeEnum;
 
     private Integer targetValue;
 
@@ -22,6 +23,4 @@ public class StudyGoalRequest {
     private Integer currentStreak;
 
     private Integer longestStreak;
-
-    private Byte status;
 }

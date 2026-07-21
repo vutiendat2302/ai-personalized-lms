@@ -6,6 +6,7 @@ package com.ailms.entity.enums;
  * CLOSED           : Đã kết thúc bình thường (qua beacon hoặc end request)
  * IDLE_TIMEOUT     : Đóng do không có tương tác người dùng (> 10-12 phút)
  * HEARTBEAT_TIMEOUT: Đóng do mất kết nối / quá 90s không nhận heartbeat
+ * BEACON_CLOSED: Phiên học bị đóng bởi thiết bị beacon (tự động)
  */
 public enum SessionStatusEnum {
     ACTIVE,

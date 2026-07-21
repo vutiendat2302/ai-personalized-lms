@@ -46,12 +46,8 @@ public class InterestService implements IInterestService {
     @Transactional
     public InterestResponse updateInterest(Long id, UpdateInterestRequest request) {
         InterestEntity entity = findEntityById(id);
-
-        if (interestRepository.existsByCodeIgnoreCaseAndIdNot(request.getCode(), id)) {
-            throw DuplicateResourceException.of(RESOURCE_NAME, "code", request.getCode());
-        }
-
         interestMapper.updateInterestEntity(entity, request);
+        entity.setStatus(request.getStatus());
         return interestMapper.toInterestResponse(interestRepository.save(entity));
     }
 

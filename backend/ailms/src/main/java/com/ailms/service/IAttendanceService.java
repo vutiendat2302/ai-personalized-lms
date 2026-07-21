@@ -1,5 +1,6 @@
 package com.ailms.service;
 
+import com.ailms.entity.enums.AttendanceStatusEnum;
 import com.ailms.request.AttendanceSearchRequest;
 import com.ailms.request.CreateAttendanceRequest;
 import com.ailms.request.UpdateAttendanceRequest;
@@ -18,4 +19,5 @@ public interface IAttendanceService {
     void delete(Long id);
     AttendanceResponse checkIn(Long employeeId, String note);
     AttendanceResponse checkOut(Long employeeId, String note);
+    AttendanceResponse updateStatus(Long id, AttendanceStatusEnum status);
 }

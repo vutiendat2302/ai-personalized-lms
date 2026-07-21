@@ -2732,7 +2732,7 @@ Lưu trữ tập trung các tài liệu nghiệp vụ như:
 
 ---
 
-### 11.2 Database Schema
+### 12.2 Database Schema
 
 
 ```mermaid
@@ -2759,7 +2759,100 @@ erDiagram
 
 ---
 
-## 13. Gen data
+## 13.  Learning Log
+
+### 13.1 
+
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Student as Học viên / Client
+    participant API as LearningActivityLogController
+    participant Session as LearningSessionService
+    participant Scheduler as SessionTimeoutScheduler
+    participant LogRepo as LearningActivityLogRepository
+    participant GoalService as StudyGoalService
+
+    alt 1. Ghi Log Trực Tiếp (Direct Event Logging)
+        Student->>API: POST /api/v1/learning-activity-logs (Event: LESSON_COMPLETE, QUIZ_SUBMIT...)
+        API->>LogRepo: Save LearningActivityLogEntity
+        LogRepo-->>API: Saved
+    else 2. Ghi Log Tự Động Từ Phiên Học (Session-based Logging)
+        Student->>Session: startSession() / heartbeat()
+        Note over Student,Session: Học viên tương tác, gửi Heartbeat định kỳ
+        alt Học viên chủ động kết thúc hoặc Timeout
+            Session->>Session: closeSessionInternal()
+            Session->>LogRepo: Save LearningActivityLogEntity (eventType = LEARNING_SESSION_END)
+            Session->>GoalService: evaluateUserGoals(userId) [Async]
+        else Stale Session Timeout (Sau 90s không heartbeat)
+            Scheduler->>Scheduler: cleanupStaleSessions() (Cron 30s)
+            Scheduler->>LogRepo: Save LearningActivityLogEntity (eventType = LEARNING_SESSION_END)
+            Scheduler->>GoalService: evaluateUserGoals(userId)
+        end
+    end
+```
+
+
+### 13.2 
+
+```mermaid
+classDiagram
+    class LearningActivityLogEntity {
+        +Long id
+        +Long userId
+        +String eventType
+        +String entityType
+        +Long entityId
+        +String metadata
+        +String device
+        +LocalDateTime occurredAt
+    }
+
+    class ILearningActivityLogService {
+        <<interface>>
+        +search(request) PageResponse
+        +getAll() List
+        +getById(id) LearningActivityLogResponse
+        +getByUserId(userId) List
+        +getByEntity(type, id) List
+        +create(request) LearningActivityLogResponse
+        +update(id, request) LearningActivityLogResponse
+        +delete(id) void
+    }
+
+    class LearningActivityLogService {
+        -LearningActivityLogRepository repository
+        -LearningActivityLogMapper mapper
+    }
+
+    class LearningActivityLogController {
+        -ILearningActivityLogService service
+    }
+
+    class DailyStreakCalculator {
+        -LearningActivityLogRepository repository
+        +calculateProgress(goal, asOfDate) GoalProgress
+    }
+
+    class WeeklyStudyDaysCalculator {
+        -LearningActivityLogRepository repository
+        +calculateProgress(goal, asOfDate) GoalProgress
+    }
+
+    ILearningActivityLogService <|.. LearningActivityLogService
+    LearningActivityLogController --> ILearningActivityLogService
+    LearningActivityLogService --> LearningActivityLogEntity
+    DailyStreakCalculator --> LearningActivityLogEntity
+    WeeklyStudyDaysCalculator --> LearningActivityLogEntity
+```
+
+
+
+
+---
+
+## 14. Gen data
 
 ```mermaid
 flowchart TD
@@ -2779,7 +2872,7 @@ flowchart TD
 
 ---
 
-## 14. AI
+## 15. AI
 
 
 

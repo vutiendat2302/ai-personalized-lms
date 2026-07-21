@@ -11,8 +11,9 @@ import com.ailms.repository.StudentProfileRepository;
 import com.ailms.repository.UserRepository;
 import com.ailms.repository.specification.StudentProfileSpecification;
 import com.ailms.request.OnboardingRequest;
-import com.ailms.request.StudentProfileRequest;
+import com.ailms.request.CreateStudentProfileRequest;
 import com.ailms.request.StudentProfileSearchRequest;
+import com.ailms.request.UpdateStudentProfileRequest;
 import com.ailms.response.PageResponse;
 import com.ailms.response.StudentProfileResponse;
 import com.ailms.service.IStudentProfileService;
@@ -66,7 +67,7 @@ public class StudentProfileService implements IStudentProfileService {
     }
 
     @Transactional
-    public StudentProfileResponse create(StudentProfileRequest request) {
+    public StudentProfileResponse create(CreateStudentProfileRequest request) {
         log.info("Creating student profile for user: {}", request.getUserId());
 
         UserEntity user = userRepository.findById(request.getUserId())
@@ -92,16 +93,11 @@ public class StudentProfileService implements IStudentProfileService {
     }
 
     @Transactional
-    public StudentProfileResponse update(Long id, StudentProfileRequest request) {
+    public StudentProfileResponse update(Long id, UpdateStudentProfileRequest request) {
         log.info("Updating student profile: {}", id);
 
         StudentProfileEntity existing = studentProfileRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
-
-        if (!existing.getStudentCode().equals(request.getStudentCode()) &&
-                studentProfileRepository.existsByStudentCode(request.getStudentCode())) {
-            throw DuplicateResourceException.of(RESOURCE_NAME, "studentCode", request.getStudentCode());
-        }
 
         studentProfileMapper.updateFromRequest(request, existing);
         StudentProfileEntity updated = studentProfileRepository.save(existing);

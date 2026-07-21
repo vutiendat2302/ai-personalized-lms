@@ -1,11 +1,10 @@
 package com.ailms.mapper;
 
 import com.ailms.entity.StudyGoalEntity;
-import com.ailms.request.StudyGoalRequest;
+import com.ailms.request.CreateStudyGoalRequest;
+import com.ailms.request.UpdateStudyGoalRequest;
 import com.ailms.response.StudyGoalResponse;
-import org.mapstruct.Mapper;
-import org.mapstruct.Mapping;
-import org.mapstruct.MappingTarget;
+import org.mapstruct.*;
 
 import java.util.List;
 
@@ -21,12 +20,15 @@ public interface StudyGoalMapper {
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
-    StudyGoalEntity toEntity(StudyGoalRequest request);
+    @Mapping(target = "status", ignore = true)
+    StudyGoalEntity toEntity(CreateStudyGoalRequest request);
 
+    @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
-    void updateFromRequest(StudyGoalRequest request, @MappingTarget StudyGoalEntity entity);
+    @Mapping(target = "userId", ignore = true)
+    void updateFromRequest(UpdateStudyGoalRequest request, @MappingTarget StudyGoalEntity entity);
 }

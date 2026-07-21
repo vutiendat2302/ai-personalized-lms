@@ -2,6 +2,10 @@ package com.ailms.dto;
 
 import lombok.*;
 
+/**
+ * lưu kết quả đánh giá tiến độ của một mục tiêu học tập.
+ * trả về sau khi hệ thống tính toán tiến độ hoàn thành goal.
+ */
 @Getter
 @Setter
 @NoArgsConstructor

@@ -1,7 +1,7 @@
 package com.ailms.entity;
 
 import com.ailms.common.snowflake.SnowflakeId;
-import com.ailms.entity.enums.StudyGoalSatusEnum;
+import com.ailms.entity.enums.StudyGoalStatusEnum;
 import com.ailms.entity.enums.StudyGoalTypeEnum;
 import jakarta.persistence.*;
 import lombok.*;
@@ -56,5 +56,6 @@ public class StudyGoalEntity extends BaseEntity {
     /** Trạng thái mục tiêu (IN_PROGRESS, COMPLETED, FAILED, CANCELLED). */
     @Column(name = "status")
     @Enumerated(EnumType.STRING)
-    private StudyGoalSatusEnum goalSatusEnum;
+    @Builder.Default
+    private StudyGoalStatusEnum status = StudyGoalStatusEnum.IN_PROGRESS;
 }

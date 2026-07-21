@@ -1,8 +1,9 @@
 package com.ailms.service;
 
 import com.ailms.dto.GoalProgress;
-import com.ailms.request.StudyGoalRequest;
+import com.ailms.request.CreateStudyGoalRequest;
 import com.ailms.request.StudyGoalSearchRequest;
+import com.ailms.request.UpdateStudyGoalRequest;
 import com.ailms.response.PageResponse;
 import com.ailms.response.StudyGoalResponse;
 
@@ -19,13 +20,19 @@ public interface IStudyGoalService {
 
     List<StudyGoalResponse> getByCourseId(Long courseId);
 
-    StudyGoalResponse create(StudyGoalRequest request);
+    StudyGoalResponse create(CreateStudyGoalRequest request);
 
-    StudyGoalResponse update(Long id, StudyGoalRequest request);
+    StudyGoalResponse update(Long id, UpdateStudyGoalRequest request);
 
     void delete(Long id);
 
+    /**
+     * Đánh giá tiến độ của một mục tiêu học tập.
+     */
     GoalProgress evaluateGoal(Long goalId);
 
+    /**
+     * Đánh giá tất cả mục tiêu học tập của người dùng.
+     */
     List<GoalProgress> evaluateUserGoals(Long userId);
 }

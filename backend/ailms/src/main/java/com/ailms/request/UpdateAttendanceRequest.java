@@ -18,7 +18,5 @@ public class UpdateAttendanceRequest {
 
     private LocalDateTime checkOutTime;
 
-    private AttendanceStatusEnum status;
-
     private String note;
 }

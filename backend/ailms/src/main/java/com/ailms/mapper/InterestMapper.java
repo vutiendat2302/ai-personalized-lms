@@ -22,11 +22,11 @@ public interface InterestMapper {
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     @Mapping(target = "id", ignore = true)
-    @Mapping(target = "status", ignore = true)
     @Mapping(target = "studentInterests", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
+    @Mapping(target = "code", ignore = true)
     void updateInterestEntity(@MappingTarget InterestEntity entity, UpdateInterestRequest request);
 }

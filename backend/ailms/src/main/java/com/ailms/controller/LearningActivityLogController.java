@@ -1,13 +1,12 @@
 package com.ailms.controller;
 
+import com.ailms.request.CreateLearningActivityLogRequest;
 import com.ailms.response.PageResponse;
 import com.ailms.request.LearningActivityLogSearchRequest;
 import com.ailms.response.LearningActivityLogResponse;
 
 
-import com.ailms.request.LearningActivityLogRequest;
 import com.ailms.response.ApiResponse;
-import com.ailms.response.LearningActivityLogResponse;
 import com.ailms.service.ILearningActivityLogService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -25,17 +24,9 @@ public class LearningActivityLogController {
     private final ILearningActivityLogService learningActivityLogService;
 
     @PostMapping
-    public ResponseEntity<ApiResponse<LearningActivityLogResponse>> create(@Valid @RequestBody LearningActivityLogRequest request) {
+    public ResponseEntity<ApiResponse<LearningActivityLogResponse>> create(@Valid @RequestBody CreateLearningActivityLogRequest request) {
         LearningActivityLogResponse response = learningActivityLogService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of("Learning activity log created successfully", response));
-    }
-
-    @PutMapping("/{id}")
-    public ResponseEntity<ApiResponse<LearningActivityLogResponse>> update(
-            @PathVariable Long id,
-            @Valid @RequestBody LearningActivityLogRequest request) {
-        LearningActivityLogResponse response = learningActivityLogService.update(id, request);
-        return ResponseEntity.ok(ApiResponse.of("Learning activity log updated successfully", response));
     }
 
     @GetMapping("/{id}")

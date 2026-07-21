@@ -1,13 +1,13 @@
 package com.ailms.controller;
 
+import com.ailms.request.CreateStudentProfileRequest;
+import com.ailms.request.UpdateStudentProfileRequest;
 import com.ailms.response.PageResponse;
 import com.ailms.request.StudentProfileSearchRequest;
 import com.ailms.response.StudentProfileResponse;
 
 
-import com.ailms.request.StudentProfileRequest;
 import com.ailms.response.ApiResponse;
-import com.ailms.response.StudentProfileResponse;
 import com.ailms.service.IStudentProfileService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +25,7 @@ public class StudentProfileController {
     private final IStudentProfileService studentProfileService;
 
     @PostMapping
-    public ResponseEntity<ApiResponse<StudentProfileResponse>> create(@Valid @RequestBody StudentProfileRequest request) {
+    public ResponseEntity<ApiResponse<StudentProfileResponse>> create(@Valid @RequestBody CreateStudentProfileRequest request) {
         StudentProfileResponse response = studentProfileService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of("Student profile created successfully", response));
     }
@@ -33,7 +33,7 @@ public class StudentProfileController {
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<StudentProfileResponse>> update(
             @PathVariable Long id,
-            @Valid @RequestBody StudentProfileRequest request) {
+            @Valid @RequestBody UpdateStudentProfileRequest request) {
         StudentProfileResponse response = studentProfileService.update(id, request);
         return ResponseEntity.ok(ApiResponse.of("Student profile updated successfully", response));
     }

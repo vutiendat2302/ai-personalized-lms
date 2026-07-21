@@ -19,10 +19,4 @@ public class UserSearchRequest extends CommonSearchRequest<UserStatusEnum> {
     private List<Long> roleIds;
 
     private List<UserStatusEnum> statuses;
-
-    @DateTimeFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
-    private LocalDateTime createdFrom;
-
-    @DateTimeFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
-    private LocalDateTime createdTo;
 }

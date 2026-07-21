@@ -17,12 +17,10 @@ public class CreateAttendanceRequest {
     @NotNull(message = "Employee ID is required")
     private Long employeeId;
 
-    @NotBlank(message = "Check in is not null)")
+    @NotNull(message = "Check in time is required")
     private LocalDateTime checkInTime;
 
     private LocalDateTime checkOutTime;
-
-    private AttendanceStatusEnum status;
 
     private String note;
 }

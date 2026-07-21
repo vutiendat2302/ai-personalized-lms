@@ -35,3 +35,9 @@ out/
 docker/mysql/
 docker/redis/
 docker/minio/
+
+
+database/gen_data/__pycache__/
+
+.venv/
+.venv

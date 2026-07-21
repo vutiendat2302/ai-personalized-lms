@@ -8,6 +8,7 @@ import com.ailms.entity.enums.EmployeeStatusEnum;
 import com.ailms.entity.enums.LeaveStatusEnum;
 import com.ailms.event.AuditLogEvent;
 import com.ailms.exception.BusinessException;
+import com.ailms.exception.DuplicateResourceException;
 import com.ailms.exception.ForbiddenException;
 import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.mapper.AttendanceMapper;
@@ -28,6 +29,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -51,7 +53,10 @@ public class AttendanceService implements IAttendanceService {
     private final ApplicationEventPublisher applicationEventPublisher;
 
     private static final String RESOURCE_NAME = "Attendance";
-    private static final LocalTime WORK_START_TIME = LocalTime.of(8, 0);
+    private static final LocalTime WORK_START_MORNING_TIME = LocalTime.of(8, 0);
+    private static final LocalTime WORK_START_AFTERNOON_TIME = LocalTime.of(13, 0);
+    private static final LocalTime LUNCH = LocalTime.of(11, 45);
+
 
     @Override
     public List<AttendanceResponse> getAll() {
@@ -86,7 +91,7 @@ public class AttendanceService implements IAttendanceService {
         }
 
         List<AttendanceEntity> openAttendances = attendanceRepository.findByEmployee_UserId(employeeId).stream()
-                .filter(a -> a.getCheckOutTime() == null && a.getStatus() != AttendanceStatusEnum.CANCELLED)
+                .filter(a -> a.getCheckOutTime() == null && a.getStatus() != AttendanceStatusEnum.CANCELLED && a.getStatus() != AttendanceStatusEnum.ON_LEAVE && a.getStatus() != AttendanceStatusEnum.INVALID && a.getStatus() != AttendanceStatusEnum.ABSENT)
                 .toList();
 
         if (!openAttendances.isEmpty()) {
@@ -114,14 +119,15 @@ public class AttendanceService implements IAttendanceService {
         log.info("Check-out request for employee: {}", employeeId);
 
         List<AttendanceEntity> openAttendances = attendanceRepository.findByEmployee_UserId(employeeId).stream()
-                .filter(a -> a.getCheckOutTime() == null && a.getStatus() != AttendanceStatusEnum.CANCELLED)
+                .filter(a -> a.getCheckOutTime() == null && a.getStatus() != AttendanceStatusEnum.CANCELLED  && a.getStatus() != AttendanceStatusEnum.ON_LEAVE && a.getStatus() != AttendanceStatusEnum.INVALID && a.getStatus() != AttendanceStatusEnum.ABSENT)
                 .toList();
 
         if (openAttendances.isEmpty()) {
-            throw new BusinessException("Không tìm thấy bản ghi check-in chưa check-out để thực hiện check-out.");
+            throw new DuplicateResourceException("Da check out");
         }
 
         AttendanceEntity existing = openAttendances.get(0);
+
         LocalDateTime checkOutTime = LocalDateTime.now();
 
         if (!checkOutTime.isAfter(existing.getCheckInTime())) {
@@ -157,6 +163,12 @@ public class AttendanceService implements IAttendanceService {
         entity.setEmployee(employee);
         if (entity.getCheckInTime() == null) {
             entity.setCheckInTime(LocalDateTime.now());
+        }
+
+        // Validate thứ tự thời gian - thiếu chỗ này là nguyên nhân tạo được bản ghi
+        // checkOut trước checkIn, khiến duration âm -> status ra sai (ABSENT vô nghĩa).
+        if (entity.getCheckOutTime() != null && !entity.getCheckOutTime().isAfter(entity.getCheckInTime())) {
+            throw new BusinessException("Check-out time must be after check-in time.");
         }
 
         if (entity.getCheckOutTime() != null) {
@@ -196,7 +208,7 @@ public class AttendanceService implements IAttendanceService {
             boolean isAdminOrHr = false;
             if (auth != null && auth.isAuthenticated()) {
                 isAdminOrHr = auth.getAuthorities().stream()
-                        .map(org.springframework.security.core.GrantedAuthority::getAuthority)
+                        .map(GrantedAuthority::getAuthority)
                         .anyMatch(a -> a.equals("ROLE_ADMIN") || a.equals("ROLE_HR"));
             }
             if (!isAdminOrHr) {
@@ -225,9 +237,7 @@ public class AttendanceService implements IAttendanceService {
         AttendanceEntity entity = attendanceRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
         String oldValue = SimpleJsonWriter.toJson(entity);
-        entity.setStatus(AttendanceStatusEnum.CANCELLED);
-        entity.setNote(entity.getNote() != null ? entity.getNote() + " [Cancelled]" : "Cancelled");
-        attendanceRepository.save(entity);
+        attendanceRepository.delete(entity);
 
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "DELETE", "ATTENDANCE", id, oldValue, null));
     }
@@ -243,50 +253,103 @@ public class AttendanceService implements IAttendanceService {
 
     private AttendanceStatusEnum computeStatusOnCheckIn(Long employeeId, LocalDateTime checkInTime) {
         LocalDate date = checkInTime.toLocalDate();
-        boolean hasApprovedLeave = !leaveRequestRepository.findActiveLeaveOnDate(employeeId, LeaveStatusEnum.APPROVED, date).isEmpty();
+        boolean hasApprovedLeave = !leaveRequestRepository
+                .findActiveLeaveOnDate(employeeId, LeaveStatusEnum.APPROVED, date)
+                .isEmpty();
         if (hasApprovedLeave) {
             return AttendanceStatusEnum.ON_LEAVE;
         }
 
         LocalTime checkInTimeOfDay = checkInTime.toLocalTime();
-        long minutesLate = Duration.between(WORK_START_TIME, checkInTimeOfDay).toMinutes();
+
+        // Checkin trước giờ nghỉ trưa -> tính theo giờ bắt đầu ca sáng.
+        // Checkin từ giờ nghỉ trưa trở đi -> tính theo giờ bắt đầu ca chiều.
+        LocalTime shiftStart = checkInTimeOfDay.isBefore(LUNCH) ? WORK_START_MORNING_TIME : WORK_START_AFTERNOON_TIME;
+
+        long minutesLate = Duration.between(shiftStart, checkInTimeOfDay).toMinutes();
 
         if (minutesLate <= 0) {
             return AttendanceStatusEnum.PRESENT;
-        } else if (minutesLate <= 60) {
-            return AttendanceStatusEnum.LATE;
         } else {
-            // Check-in trễ > 1h: không tính công buổi đó
+            // <=60 hay >60 phút thì trước giờ cũng đều trả về LATE như code gốc,
+            // nên gộp lại cho gọn (giữ nguyên hành vi, chỉ bỏ nhánh trùng lặp)
             return AttendanceStatusEnum.LATE;
         }
     }
 
     private AttendanceStatusEnum computeFinalStatus(AttendanceEntity entity) {
-        LocalDate date = entity.getCheckInTime().toLocalDate();
-        boolean hasApprovedLeave = !leaveRequestRepository.findActiveLeaveOnDate(entity.getEmployee().getUserId(), LeaveStatusEnum.APPROVED, date).isEmpty();
-        if (hasApprovedLeave) {
-            return AttendanceStatusEnum.ON_LEAVE;
-        }
-
+        // Kiểm tra null TRƯỚC khi gọi getCheckInTime().toLocalDate() để tránh NPE
         if (entity.getCheckInTime() == null || entity.getCheckOutTime() == null) {
             return AttendanceStatusEnum.ABSENT;
         }
 
-        LocalTime checkInTimeOfDay = entity.getCheckInTime().toLocalTime();
-        long minutesLate = Duration.between(WORK_START_TIME, checkInTimeOfDay).toMinutes();
-        long durationHours = Duration.between(entity.getCheckInTime(), entity.getCheckOutTime()).toHours();
-
-        if (minutesLate > 60) {
-            // Check-in trễ > 1h: không tính công buổi đó
-            return AttendanceStatusEnum.LATE;
+        LocalDate date = entity.getCheckInTime().toLocalDate();
+        boolean hasApprovedLeave = !leaveRequestRepository
+                .findActiveLeaveOnDate(entity.getEmployee().getUserId(), LeaveStatusEnum.APPROVED, date)
+                .isEmpty();
+        if (hasApprovedLeave) {
+            return AttendanceStatusEnum.ON_LEAVE;
         }
 
-        if (durationHours >= 8) {
-            return minutesLate > 0 ? AttendanceStatusEnum.LATE : AttendanceStatusEnum.PRESENT;
-        } else if (durationHours >= 4) {
+        LocalTime checkInTimeOfDay = entity.getCheckInTime().toLocalTime();
+        long durationHours = Duration.between(entity.getCheckInTime(), entity.getCheckOutTime()).toHours();
+
+        // Checkin trước giờ nghỉ trưa (LUNCH) -> tính theo giờ bắt đầu ca sáng.
+        // Checkin từ giờ nghỉ trưa trở đi (kể cả trong khoảng nghỉ trưa 11:45-13:00) -> tính
+        // theo giờ bắt đầu ca chiều, vì đây rõ ràng không phải checkin cho ca sáng nữa.
+        LocalTime shiftStart = checkInTimeOfDay.isBefore(LUNCH) ? WORK_START_MORNING_TIME : WORK_START_AFTERNOON_TIME;
+
+        long minutesLate = Duration.between(shiftStart, checkInTimeOfDay).toMinutes();
+        // Checkin sớm hơn giờ bắt đầu ca (vd 12:30 checkin cho ca chiều 13:00) -> không tính "muộn"
+
+        if (durationHours >= 8 && minutesLate <= 0) {
+            return AttendanceStatusEnum.PRESENT;
+        } else if (durationHours >= 8) {
+            return AttendanceStatusEnum.PRESENT_LATE;
+        } else if (durationHours >= 4 && minutesLate < 0) {
             return AttendanceStatusEnum.HALF_DAY;
+        } else if (durationHours >= 4) {
+            return AttendanceStatusEnum.HALF_DAY_LATE;
         } else {
             return AttendanceStatusEnum.ABSENT;
         }
+    }
+
+    @Transactional
+    @Override
+    public AttendanceResponse updateStatus(Long id, AttendanceStatusEnum status) {
+        log.info("Updating attendance status manually: id={}, newStatus={}", id, status);
+
+        if (status == null) {
+            throw new BusinessException("Status is required.");
+        }
+
+        AttendanceEntity existing = attendanceRepository.findById(id)
+                .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
+
+        // Chỉ Admin/HR mới được ghi đè status thủ công
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        boolean isAdminOrHr = false;
+        if (auth != null && auth.isAuthenticated()) {
+            isAdminOrHr = auth.getAuthorities().stream()
+                    .map(GrantedAuthority::getAuthority)
+                    .anyMatch(a -> a.equals("ROLE_ADMIN") || a.equals("ROLE_HR"));
+        }
+        if (!isAdminOrHr) {
+            throw new ForbiddenException("Only admin or HR can manually update attendance status.");
+        }
+
+        if (existing.getStatus() == status) {
+            // Không có gì thay đổi, khỏi cần ghi audit log / save
+            return attendanceMapper.toResponse(existing);
+        }
+
+        String oldValue = SimpleJsonWriter.toJson(existing);
+        existing.setStatus(status);
+
+        AttendanceEntity updated = attendanceRepository.save(existing);
+        applicationEventPublisher.publishEvent(
+                new AuditLogEvent(this, "UPDATE_STATUS", "ATTENDANCE", id, oldValue, updated));
+        return attendanceMapper.toResponse(updated);
     }
 }

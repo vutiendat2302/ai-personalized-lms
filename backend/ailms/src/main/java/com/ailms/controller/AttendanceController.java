@@ -1,5 +1,6 @@
 package com.ailms.controller;
 
+import com.ailms.entity.enums.AttendanceStatusEnum;
 import com.ailms.request.AttendanceSearchRequest;
 import com.ailms.request.CreateAttendanceRequest;
 import com.ailms.request.UpdateAttendanceRequest;
@@ -8,6 +9,7 @@ import com.ailms.response.AttendanceResponse;
 import com.ailms.response.PageResponse;
 import com.ailms.service.IAttendanceService;
 import jakarta.validation.Valid;
+import jakarta.websocket.server.PathParam;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -80,5 +82,11 @@ public class AttendanceController {
     public ResponseEntity<ApiResponse<PageResponse<AttendanceResponse>>> search(AttendanceSearchRequest request) {
         PageResponse<AttendanceResponse> result = attendanceService.search(request);
         return ResponseEntity.ok(ApiResponse.of("Search Attendance successfully", result));
+    }
+
+    @PutMapping("/status/{id}")
+    public ResponseEntity<ApiResponse<AttendanceResponse>> updateStatus(@PathVariable Long id, @RequestParam AttendanceStatusEnum statusEnum) {
+        AttendanceResponse response = attendanceService.updateStatus(id, statusEnum);
+        return ResponseEntity.ok(ApiResponse.of("Attendance status updated successfully", response));
     }
 }

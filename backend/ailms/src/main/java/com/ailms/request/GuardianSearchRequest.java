@@ -1,21 +1,14 @@
 package com.ailms.request;
  
+import com.ailms.entity.enums.GuardianRelationship;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.*;
 import java.time.LocalDateTime;
 
 @Getter
 @Setter
-@NoArgsConstructor
-@AllArgsConstructor
 @Builder
 @EqualsAndHashCode(callSuper = false)
-public class GuardianSearchRequest extends BaseSearchRequest {
-    private String keyword;
+public class GuardianSearchRequest extends CommonSearchRequest<GuardianRelationship> {
 
-    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
-    private LocalDateTime createdFrom;
-
-    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
-    private LocalDateTime createdTo;
 }

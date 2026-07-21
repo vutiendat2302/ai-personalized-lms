@@ -22,6 +22,7 @@ public interface AttendanceMapper {
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
+    @Mapping(target = "status", ignore = true)
     AttendanceEntity toEntity(CreateAttendanceRequest request);
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
@@ -31,5 +32,6 @@ public interface AttendanceMapper {
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
+    @Mapping(target = "status", ignore = true)
     void updateFromRequest(UpdateAttendanceRequest request, @MappingTarget AttendanceEntity entity);
 }

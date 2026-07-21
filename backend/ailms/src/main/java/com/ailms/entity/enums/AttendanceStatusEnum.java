@@ -17,5 +17,7 @@ public enum AttendanceStatusEnum {
     ON_LEAVE,
     HALF_DAY,
     INVALID,
-    CANCELLED
+    CANCELLED,
+    PRESENT_LATE,
+    HALF_DAY_LATE
 }

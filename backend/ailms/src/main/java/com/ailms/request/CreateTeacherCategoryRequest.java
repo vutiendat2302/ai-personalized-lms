@@ -15,4 +15,6 @@ public class CreateTeacherCategoryRequest {
 
     @NotNull(message = "Category ID is required")
     private Long categoryId;
+
+    private Long assignedBy;
 }

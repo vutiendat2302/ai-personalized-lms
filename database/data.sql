@@ -1,8 +1,3 @@
-
-student_profile (cần user)
-teacher_category (cần employee + category)
-teacher_availability (cần employee)
-
 course (cần category, employee tạo)
   → course_section
     → lesson

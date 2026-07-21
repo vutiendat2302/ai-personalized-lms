@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class LearningActivityLogRequest {
+public class CreateLearningActivityLogRequest {
 
     @NotNull(message = "User ID is required")
     private Long userId;
