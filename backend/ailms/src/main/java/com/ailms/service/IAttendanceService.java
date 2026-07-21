@@ -1,10 +1,11 @@
 package com.ailms.service;
 
+import com.ailms.request.AttendanceSearchRequest;
 import com.ailms.request.CreateAttendanceRequest;
 import com.ailms.request.UpdateAttendanceRequest;
-import com.ailms.response.PageResponse;
-import com.ailms.request.AttendanceSearchRequest;
 import com.ailms.response.AttendanceResponse;
+import com.ailms.response.PageResponse;
+
 import java.util.List;
 
 public interface IAttendanceService {
@@ -15,4 +16,6 @@ public interface IAttendanceService {
     AttendanceResponse create(CreateAttendanceRequest request);
     AttendanceResponse update(Long id, UpdateAttendanceRequest request);
     void delete(Long id);
+    AttendanceResponse checkIn(Long employeeId, String note);
+    AttendanceResponse checkOut(Long employeeId, String note);
 }

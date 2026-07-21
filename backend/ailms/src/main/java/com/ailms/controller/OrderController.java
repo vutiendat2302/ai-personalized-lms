@@ -1,6 +1,7 @@
 package com.ailms.controller;
 
 import com.ailms.request.CheckoutRequest;
+import com.ailms.request.RefundRequest;
 import com.ailms.response.ApiResponse;
 import com.ailms.response.OrderResponse;
 import com.ailms.response.PaymentTransactionResponse;
@@ -41,6 +42,14 @@ public class OrderController {
             @RequestParam boolean success) {
         OrderResponse response = orderService.handlePaymentCallback(transactionRef, success);
         return ResponseEntity.ok(ApiResponse.of("Payment callback processed successfully", response));
+    }
+
+    @PostMapping("/{id}/refund")
+    public ResponseEntity<ApiResponse<OrderResponse>> refundOrder(
+            @PathVariable Long id,
+            @Valid @RequestBody RefundRequest request) {
+        OrderResponse response = orderService.refundOrder(id, request);
+        return ResponseEntity.ok(ApiResponse.of("Order refunded successfully", response));
     }
 
     @GetMapping("/{id}")

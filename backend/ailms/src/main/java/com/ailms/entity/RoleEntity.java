@@ -27,32 +27,30 @@ import java.util.Set;
 @SuperBuilder
 public class RoleEntity extends BaseEntity {
 
-//    id sinh bang snowflake
+    /** Mã định danh vai trò (Snowflake ID 64-bit). */
     @Id
     @SnowflakeId
     @Column(name = "id", updatable = false, nullable = false)
     private Long id;
 
-//    Ten hien thi Role
-    /** Mã role, VD: ADMIN, INSTRUCTOR, TEACHER, STUDENT. Lưu chữ hoa, không dấu cách. */
+    /** Tên hiển thị của role (VD: Quan tri vien, Giang vien). */
     @Column(name = "name", nullable = false, unique = true, length = 50)
     private String name;
 
-//    Ma dinh danh hien thi trong he thong
+    /** Mã định danh vai trò dạng chữ hoa không dấu (VD: ADMIN, INSTRUCTOR, TEACHER, STUDENT). */
     @Column(name = "code", nullable = false, unique = true, length = 30)
     private String code;
 
-//     Mo ta chuc nang, muc dich
+    /** Mô tả chức năng và mục đích của vai trò. */
     @Column(name = "description")
     private String description;
-
 
     /** Role hệ thống (seed sẵn) thì không cho xóa, VD: ADMIN. */
     @Column(name = "is_system", nullable = false)
     @Builder.Default
     private Boolean isSystem = false;
 
-//    Danh sach permission duoc gan cho role
+    /** Danh sách phân quyền (RolePermission) được gán cho vai trò này. */
     @OneToMany(mappedBy = "roleEntity", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @Builder.Default
     private Set<RolePermissionEntity> rolePermissions = new HashSet<>();

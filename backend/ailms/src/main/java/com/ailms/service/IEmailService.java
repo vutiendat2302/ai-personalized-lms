@@ -1,5 +1,6 @@
 package com.ailms.service;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 public interface IEmailService {
@@ -30,9 +31,6 @@ public interface IEmailService {
     /**
      * Gửi email thông báo mật khẩu vừa được thay đổi.
      *
-     * <p>Mục đích bảo mật: nếu người dùng KHÔNG phải là người thực hiện
-     * thay đổi này, họ cần biết ngay để kịp thời xử lý (report, khóa
-     * tài khoản, liên hệ hỗ trợ...).
      * @param toEmail Email người nhận.
      * @param changedAt Thời điểm đổi mật khẩu.
      */
@@ -44,6 +42,13 @@ public interface IEmailService {
      * @param inviteLink Đường dẫn kích hoạt tài khoản.
      */
     void sendInviteEmail(String toEmail, String inviteLink);
+
+    /**
+     * Gửi email chứa liên kết thiết lập mật khẩu.
+     * @param toEmail Email người nhận.
+     * @param token Token xác thực.
+     */
+    void sendSetPasswordEmail(String toEmail, String token);
 
     /**
      * Gửi email thông báo ký kết hợp đồng lao động mới.
@@ -61,6 +66,5 @@ public interface IEmailService {
      * @param contractCode Mã/Loại hợp đồng.
      * @param endDate Ngày hết hạn.
      */
-    void sendContractExpirationAlertEmail(String toEmail, String employeeName, String contractCode, java.time.LocalDate endDate);
-
+    void sendContractExpirationAlertEmail(String toEmail, String employeeName, String contractCode, LocalDate endDate);
 }

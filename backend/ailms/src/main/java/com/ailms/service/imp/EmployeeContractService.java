@@ -20,6 +20,7 @@ import com.ailms.repository.EmployeeContractRepository;
 import com.ailms.repository.EmployeeRepository;
 import com.ailms.repository.FileMetadataRepository;
 import com.ailms.response.EmployeeContractResponse;
+import com.ailms.service.IFileService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -58,7 +59,7 @@ public class EmployeeContractService implements IEmployeeContractService {
     private final SalaryRepository salaryRepository;
     private final IApprovalRequestService approvalRequestService;
     private final IEmailService emailService;
-    private final FileService fileService;
+    private final IFileService fileService;
 
     private static final String RESOURCE_NAME = "EmployeeContract";
     private final ApplicationEventPublisher applicationEventPublisher;
@@ -195,8 +196,9 @@ public class EmployeeContractService implements IEmployeeContractService {
         employeeContractMapper.updateFromRequest(request, existing);
 
         EmployeeContractEntity updated = employeeContractRepository.save(existing);
+        String newValue = SimpleJsonWriter.toJson(updated);
 
-        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "UPDATE", "EMPLOYEE_CONTRACT", id, oldValue, updated));
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "UPDATE", "EMPLOYEE_CONTRACT", id, oldValue, newValue));
         return employeeContractMapper.toResponse(updated);
     }
 

@@ -1,30 +1,34 @@
 package com.ailms.service.imp;
+
 import com.ailms.common.converter.SimpleJsonWriter;
 import com.ailms.entity.ClassOnlineEntity;
+import com.ailms.entity.EmployeeEntity;
+import com.ailms.entity.TeachingRateEntity;
+import com.ailms.entity.TeachingSessionPaymentEntity;
+import com.ailms.entity.enums.BaseStatusEnum;
+import com.ailms.entity.enums.EmployeeStatusEnum;
+import com.ailms.entity.enums.SessionPaymentStatusEnum;
 import com.ailms.event.AuditLogEvent;
+import com.ailms.exception.BusinessException;
+import com.ailms.exception.ResourceNotFoundException;
+import com.ailms.mapper.TeachingSessionPaymentMapper;
 import com.ailms.repository.ClassOnlineRepository;
+import com.ailms.repository.EmployeeRepository;
+import com.ailms.repository.TeachingRateRepository;
+import com.ailms.repository.TeachingSessionPaymentRepository;
 import com.ailms.repository.specification.TeachingSessionPaymentSpecification;
 import com.ailms.request.CreateTeachingSessionPaymentRequest;
 import com.ailms.request.TeachingSessionPaymentSearchRequest;
 import com.ailms.request.UpdateTeachingSessionPaymentRequest;
-import com.ailms.security.CustomUserDetails;
-import com.ailms.service.ITeachingSessionPaymentService;
-
-
-import com.ailms.entity.EmployeeEntity;
-import com.ailms.entity.TeachingRateEntity;
-import com.ailms.entity.TeachingSessionPaymentEntity;
-import com.ailms.exception.ResourceNotFoundException;
-import com.ailms.mapper.TeachingSessionPaymentMapper;
-import com.ailms.repository.EmployeeRepository;
-import com.ailms.repository.TeachingRateRepository;
-import com.ailms.repository.TeachingSessionPaymentRepository;
+import com.ailms.response.PageResponse;
 import com.ailms.response.TeachingSessionPaymentResponse;
+import com.ailms.security.CustomUserDetails;
+import com.ailms.service.IApprovalRequestService;
+import com.ailms.service.ITeachingSessionPaymentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
-import com.ailms.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.Authentication;
@@ -33,13 +37,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import com.ailms.entity.enums.EmployeeStatusEnum;
-import com.ailms.entity.enums.BaseStatusEnum;
-import com.ailms.entity.enums.SessionPaymentStatusEnum;
-import com.ailms.exception.BusinessException;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -52,16 +52,18 @@ public class TeachingSessionPaymentService implements ITeachingSessionPaymentSer
     private final TeachingRateRepository teachingRateRepository;
     private final TeachingSessionPaymentMapper teachingSessionPaymentMapper;
     private final ClassOnlineRepository classOnlineRepository;
-    private final com.ailms.service.IApprovalRequestService approvalRequestService;
-
-    private static final String RESOURCE_NAME = "TeachingSessionPayment";
+    private final IApprovalRequestService approvalRequestService;
     private final ApplicationEventPublisher applicationEventPublisher;
 
+    private static final String RESOURCE_NAME = "TeachingSessionPayment";
+
+    @Override
     public List<TeachingSessionPaymentResponse> getAll() {
         log.info("Getting all session payments");
         return teachingSessionPaymentMapper.toResponseList(teachingSessionPaymentRepository.findAll());
     }
 
+    @Override
     public TeachingSessionPaymentResponse getById(Long id) {
         log.info("Getting session payment by id: {}", id);
         TeachingSessionPaymentEntity entity = teachingSessionPaymentRepository.findById(id)
@@ -70,6 +72,7 @@ public class TeachingSessionPaymentService implements ITeachingSessionPaymentSer
         return teachingSessionPaymentMapper.toResponse(entity);
     }
 
+    @Override
     public List<TeachingSessionPaymentResponse> getByEmployeeId(Long employeeId) {
         log.info("Getting session payments for employee: {}", employeeId);
         verifyEmployeeAccess(employeeId);
@@ -77,25 +80,32 @@ public class TeachingSessionPaymentService implements ITeachingSessionPaymentSer
     }
 
     @Transactional
+    @Override
     public TeachingSessionPaymentResponse create(CreateTeachingSessionPaymentRequest request) {
-        log.info("Creating session payment for employee: {} and class online: {}", request.getEmployeeId(), request.getClassOnlineId());
+        return createDraftForSession(request.getClassOnlineId(), request.getEmployeeId(), request.getActualDurationMin());
+    }
 
-        EmployeeEntity employee = employeeRepository.findById(request.getEmployeeId())
-                .orElseThrow(() -> ResourceNotFoundException.of("Employee", request.getEmployeeId()));
+    @Transactional
+    @Override
+    public TeachingSessionPaymentResponse createDraftForSession(Long classOnlineId, Long employeeId, int durationMin) {
+        log.info("Creating draft session payment for employee: {} and class online: {}", employeeId, classOnlineId);
+
+        EmployeeEntity employee = employeeRepository.findById(employeeId)
+                .orElseThrow(() -> ResourceNotFoundException.of("Employee", employeeId));
 
         if (employee.getStatus() == EmployeeStatusEnum.DELETE) {
             throw new BusinessException("Employee is deleted. Cannot create payment.");
         }
 
-        ClassOnlineEntity classOnline = classOnlineRepository.findById(request.getClassOnlineId())
-                .orElseThrow(() -> ResourceNotFoundException.of("ClassOnline", request.getClassOnlineId()));
+        ClassOnlineEntity classOnline = classOnlineRepository.findById(classOnlineId)
+                .orElseThrow(() -> ResourceNotFoundException.of("ClassOnline", classOnlineId));
 
-        if (teachingSessionPaymentRepository.findByClassOnlineId(request.getClassOnlineId()).isPresent()) {
+        if (teachingSessionPaymentRepository.findByClassOnlineId(classOnlineId).isPresent()) {
             throw new BusinessException("Payment already exists for this online class session.");
         }
 
-        // Resolve rate
-        List<TeachingRateEntity> activeRates = teachingRateRepository.findByEmployeeEntity_UserId(request.getEmployeeId()).stream()
+        // Resolve teaching rate active at the time of session
+        List<TeachingRateEntity> activeRates = teachingRateRepository.findByEmployeeEntity_UserId(employeeId).stream()
                 .filter(r -> r.getClassEntity() != null && r.getClassEntity().getId().equals(classOnline.getClassEntity().getId()))
                 .filter(r -> r.getStatus() == BaseStatusEnum.ACTIVE)
                 .filter(r -> !r.getEffectiveFrom().isAfter(classOnline.getScheduledAt()))
@@ -110,18 +120,20 @@ public class TeachingSessionPaymentService implements ITeachingSessionPaymentSer
                 .max(java.util.Comparator.comparing(TeachingRateEntity::getEffectiveFrom))
                 .get();
 
-        int actualDurationMin = classOnline.getDurationMin() != null ? classOnline.getDurationMin() : request.getActualDurationMin();
+        int actualDurationMin = classOnline.getDurationMin() != null ? classOnline.getDurationMin() : durationMin;
         BigDecimal amount = rate.getRate().multiply(BigDecimal.valueOf(actualDurationMin))
                 .divide(BigDecimal.valueOf(60), 2, RoundingMode.HALF_UP);
 
-        TeachingSessionPaymentEntity entity = teachingSessionPaymentMapper.toEntity(request);
-        entity.setEmployee(employee);
-        entity.setTeachingRate(rate);
-        entity.setClassOnline(classOnline);
-        entity.setRateApplied(rate.getRate());
-        entity.setActualDurationMin(actualDurationMin);
-        entity.setAmount(amount);
-        entity.setStatus(SessionPaymentStatusEnum.PENDING);
+        TeachingSessionPaymentEntity entity = TeachingSessionPaymentEntity.builder()
+                .employee(employee)
+                .teachingRate(rate)
+                .classOnline(classOnline)
+                .rateApplied(rate.getRate())
+                .actualDurationMin(actualDurationMin)
+                .amount(amount)
+                .status(SessionPaymentStatusEnum.DRAFT)
+                .description("Buổi dạy tạo tự động dạng DRAFT")
+                .build();
 
         TeachingSessionPaymentEntity saved = teachingSessionPaymentRepository.save(entity);
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CREATE", "TEACHING_SESSION_PAYMENT", entity.getId(), null, entity));
@@ -129,6 +141,44 @@ public class TeachingSessionPaymentService implements ITeachingSessionPaymentSer
     }
 
     @Transactional
+    @Override
+    public TeachingSessionPaymentResponse submitTaEvaluation(Long id, String evaluationNote) {
+        log.info("TA submitting evaluation for session payment: {}", id);
+        TeachingSessionPaymentEntity entity = teachingSessionPaymentRepository.findById(id)
+                .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
+
+        if (entity.getStatus() != SessionPaymentStatusEnum.DRAFT) {
+            throw new BusinessException("Session payment must be in DRAFT status for TA evaluation.");
+        }
+
+        String existingDesc = entity.getDescription() != null ? entity.getDescription() : "";
+        entity.setDescription(existingDesc + " | TA Evaluation: " + evaluationNote);
+        entity.setStatus(SessionPaymentStatusEnum.PENDING);
+
+        TeachingSessionPaymentEntity saved = teachingSessionPaymentRepository.save(entity);
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "SUBMIT_TA_EVALUATION", "TEACHING_SESSION_PAYMENT", id, null, saved));
+        return teachingSessionPaymentMapper.toResponse(saved);
+    }
+
+    @Transactional
+    @Override
+    public TeachingSessionPaymentResponse confirmPayment(Long id) {
+        log.info("Confirming session payment quality: {}", id);
+        TeachingSessionPaymentEntity entity = teachingSessionPaymentRepository.findById(id)
+                .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
+
+        if (entity.getStatus() != SessionPaymentStatusEnum.PENDING) {
+            throw new BusinessException("Session payment must be in PENDING status to be confirmed.");
+        }
+
+        entity.setStatus(SessionPaymentStatusEnum.CONFIRMED);
+        TeachingSessionPaymentEntity saved = teachingSessionPaymentRepository.save(entity);
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CONFIRM", "TEACHING_SESSION_PAYMENT", id, null, saved));
+        return teachingSessionPaymentMapper.toResponse(saved);
+    }
+
+    @Transactional
+    @Override
     public TeachingSessionPaymentResponse update(Long id, UpdateTeachingSessionPaymentRequest request) {
         log.info("Updating session payment: {}", id);
 
@@ -140,8 +190,8 @@ public class TeachingSessionPaymentService implements ITeachingSessionPaymentSer
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
         String oldValue = SimpleJsonWriter.toJson(existing);
 
-        if (existing.getStatus() != SessionPaymentStatusEnum.PENDING) {
-            throw new BusinessException("Only pending payments can be updated.");
+        if (existing.getStatus() != SessionPaymentStatusEnum.PENDING && existing.getStatus() != SessionPaymentStatusEnum.DRAFT) {
+            throw new BusinessException("Only DRAFT or PENDING payments can be updated.");
         }
 
         if (request.getClassOnlineId() != null && !request.getClassOnlineId().equals(existing.getClassOnline().getId())) {
@@ -156,7 +206,6 @@ public class TeachingSessionPaymentService implements ITeachingSessionPaymentSer
             }
             existing.setEmployee(newEmployee);
 
-            // Re-resolve rate
             List<TeachingRateEntity> activeRates = teachingRateRepository.findByEmployeeEntity_UserId(newEmployee.getUserId()).stream()
                     .filter(r -> r.getClassEntity() != null && r.getClassEntity().getId().equals(existing.getClassOnline().getClassEntity().getId()))
                     .filter(r -> r.getStatus() == BaseStatusEnum.ACTIVE)
@@ -196,6 +245,7 @@ public class TeachingSessionPaymentService implements ITeachingSessionPaymentSer
     }
 
     @Transactional
+    @Override
     public void delete(Long id) {
         log.info("Deleting (cancelling) session payment: {}", id);
 
@@ -206,9 +256,6 @@ public class TeachingSessionPaymentService implements ITeachingSessionPaymentSer
         TeachingSessionPaymentEntity existing = teachingSessionPaymentRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
         String oldValue = SimpleJsonWriter.toJson(existing);
-        if (existing.getStatus() != SessionPaymentStatusEnum.PENDING) {
-            throw new BusinessException("Only pending payments can be deleted/cancelled.");
-        }
 
         existing.setStatus(SessionPaymentStatusEnum.CANCELLED);
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "DELETE", "TEACHING_SESSION_PAYMENT", id, oldValue, null));
@@ -234,7 +281,7 @@ public class TeachingSessionPaymentService implements ITeachingSessionPaymentSer
     }
 
     private List<String> getCurrentUserRoles() {
-       Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated()) {
             return java.util.Collections.emptyList();
         }
@@ -248,11 +295,11 @@ public class TeachingSessionPaymentService implements ITeachingSessionPaymentSer
         List<String> roles = getCurrentUserRoles();
 
         if (roles.contains("ROLE_ADMIN") || roles.contains("ROLE_HR")) {
-            return; // HR and Payroll can access all
+            return;
         }
 
         if (currentUserId.equals(employeeId)) {
-            return; // Self access
+            return;
         }
 
         throw new BusinessException("Access denied to requested employee data");
@@ -271,7 +318,6 @@ public class TeachingSessionPaymentService implements ITeachingSessionPaymentSer
         }
 
         Specification<TeachingSessionPaymentEntity> spec = (root, query, cb) -> cb.disjunction();
-
         spec = spec.or((root, query, cb) -> cb.equal(root.get("employee").get("userId"), currentUserId));
 
         return spec;

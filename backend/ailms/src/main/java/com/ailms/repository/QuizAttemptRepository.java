@@ -2,8 +2,6 @@ package com.ailms.repository;
 
 import com.ailms.entity.QuizAttemptEntity;
 import com.ailms.repository.base.BaseRepository;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -15,4 +13,8 @@ public interface QuizAttemptRepository extends BaseRepository<QuizAttemptEntity,
     List<QuizAttemptEntity> findByUserId(Long userId);
 
     List<QuizAttemptEntity> findByEnrollmentId(Long enrollmentId);
+
+    List<QuizAttemptEntity> findByQuizIdAndUserId(Long quizId, Long userId);
+
+    List<QuizAttemptEntity> findByStatus(Byte status);
 }

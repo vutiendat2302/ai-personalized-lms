@@ -35,22 +35,22 @@ import java.time.LocalDateTime;
 @SuperBuilder
 public class BaseEntity {
 
-    // Tự động gán thời điểm tạo khi insert
+    /** Thời điểm bản ghi được khởi tạo trong hệ thống (Tự động gán bởi JPA Auditing). */
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-    // Tự động gán ID của người tạo
+    /** ID của người dùng khởi tạo bản ghi (Tự động gán bởi JPA Auditing). */
     @CreatedBy
     @Column(name = "created_by", updatable = false)
     private Long createdBy;
 
-    // Tự động cập nhật thời điểm mỗi lần update
+    /** Thời điểm bản ghi được cập nhật lần gần nhất (Tự động gán bởi JPA Auditing). */
     @LastModifiedDate
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    // Tự động cập nhật ID của người chỉnh sửa cuối cùng
+    /** ID của người dùng thực hiện cập nhật bản ghi gần nhất (Tự động gán bởi JPA Auditing). */
     @LastModifiedBy
     @Column(name = "updated_by")
     private Long updatedBy;

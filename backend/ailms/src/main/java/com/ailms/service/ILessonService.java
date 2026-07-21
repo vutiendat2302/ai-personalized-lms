@@ -1,14 +1,12 @@
 package com.ailms.service;
 
-import com.ailms.response.PageResponse;
-import com.ailms.request.LessonSearchRequest;
-import com.ailms.response.LessonResponse;
-
-
 import com.ailms.request.CreateLessonRequest;
-import com.ailms.request.UpdateLessonRequest;
+import com.ailms.request.LessonSearchRequest;
 import com.ailms.request.ReorderRequest;
+import com.ailms.request.UpdateLessonRequest;
+import com.ailms.response.LessonPreviewResponse;
 import com.ailms.response.LessonResponse;
+import com.ailms.response.PageResponse;
 
 import java.util.List;
 
@@ -23,8 +21,9 @@ public interface ILessonService {
 
     LessonResponse getById(Long id);
 
+    LessonPreviewResponse getLessonWithPreview(Long id, Long currentUserId);
+
     List<LessonResponse> getLessonsBySectionId(Long sectionId);
 
     void reorder(ReorderRequest request);
-
 }

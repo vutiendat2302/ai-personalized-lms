@@ -1,5 +1,6 @@
 package com.ailms.response;
 
+import com.ailms.entity.enums.BaseStatusEnum;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.*;
 
@@ -22,7 +23,7 @@ public class ClassResponse {
 
     private Integer maxMembers;
 
-    private Byte status;
+    private BaseStatusEnum status;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime startDate;

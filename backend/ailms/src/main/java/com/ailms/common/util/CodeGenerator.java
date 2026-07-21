@@ -2,6 +2,7 @@ package com.ailms.common.util;
 
 import com.ailms.exception.BusinessException;
 
+import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.UUID;
@@ -14,7 +15,7 @@ public class CodeGenerator {
      * Ví dụ: EM-2607-A1B2C3
      * Tham số existsPredicate được dùng để kiểm tra
      * mã vừa sinh ra đã tồn tại trong hệ thống hay chưa.
-     * Tối đa thử 5 lần, nếu vẫn bị trùng thì ném exception.
+     * Tối đa thử 10 lần, nếu vẫn bị trùng thì ném exception.
      */
     public static String generate(String prefix, Predicate<String> existsPredicate) {
         String yyMM = DateTimeFormatter.ofPattern("yyMM").format(LocalDate.now());

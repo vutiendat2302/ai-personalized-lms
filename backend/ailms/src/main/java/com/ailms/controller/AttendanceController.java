@@ -1,12 +1,11 @@
 package com.ailms.controller;
 
+import com.ailms.request.AttendanceSearchRequest;
 import com.ailms.request.CreateAttendanceRequest;
 import com.ailms.request.UpdateAttendanceRequest;
-import com.ailms.response.PageResponse;
-import com.ailms.request.AttendanceSearchRequest;
-import com.ailms.response.AttendanceResponse;
-
 import com.ailms.response.ApiResponse;
+import com.ailms.response.AttendanceResponse;
+import com.ailms.response.PageResponse;
 import com.ailms.service.IAttendanceService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +21,22 @@ import java.util.List;
 public class AttendanceController {
 
     private final IAttendanceService attendanceService;
+
+    @PostMapping("/check-in")
+    public ResponseEntity<ApiResponse<AttendanceResponse>> checkIn(
+            @RequestParam Long employeeId,
+            @RequestParam(required = false) String note) {
+        AttendanceResponse response = attendanceService.checkIn(employeeId, note);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of("Check-in successful", response));
+    }
+
+    @PostMapping("/check-out")
+    public ResponseEntity<ApiResponse<AttendanceResponse>> checkOut(
+            @RequestParam Long employeeId,
+            @RequestParam(required = false) String note) {
+        AttendanceResponse response = attendanceService.checkOut(employeeId, note);
+        return ResponseEntity.ok(ApiResponse.of("Check-out successful", response));
+    }
 
     @PostMapping
     public ResponseEntity<ApiResponse<AttendanceResponse>> create(@Valid @RequestBody CreateAttendanceRequest request) {

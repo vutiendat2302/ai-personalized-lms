@@ -1,9 +1,9 @@
 package com.ailms.service;
 
 import com.ailms.request.CreateTeachingSessionPaymentRequest;
+import com.ailms.request.TeachingSessionPaymentSearchRequest;
 import com.ailms.request.UpdateTeachingSessionPaymentRequest;
 import com.ailms.response.PageResponse;
-import com.ailms.request.TeachingSessionPaymentSearchRequest;
 import com.ailms.response.TeachingSessionPaymentResponse;
 
 import java.util.List;
@@ -14,6 +14,9 @@ public interface ITeachingSessionPaymentService {
     TeachingSessionPaymentResponse getById(Long id);
     List<TeachingSessionPaymentResponse> getByEmployeeId(Long employeeId);
     TeachingSessionPaymentResponse create(CreateTeachingSessionPaymentRequest request);
+    TeachingSessionPaymentResponse createDraftForSession(Long classOnlineId, Long employeeId, int durationMin);
+    TeachingSessionPaymentResponse submitTaEvaluation(Long id, String evaluationNote);
+    TeachingSessionPaymentResponse confirmPayment(Long id);
     TeachingSessionPaymentResponse update(Long id, UpdateTeachingSessionPaymentRequest request);
     void delete(Long id);
 }

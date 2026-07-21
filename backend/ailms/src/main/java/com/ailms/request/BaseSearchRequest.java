@@ -33,11 +33,13 @@ public class BaseSearchRequest {
      * Danh sách sort, mỗi phần tử dạng "field,direction"
      * Mặc định sort theo "id,desc"
      */
-    private List<String> sort = List.of("id,desc");
+    private List<String> sort = List.of("id:desc");
 
     public Pageable toPageable() {
         int safePage = (page == null || page < 0) ? DEFAULT_PAGE : page;
         int safeSize = (size == null || size <= 0 || size > MAX_SIZE) ? DEFAULT_SIZE : size;
+
+        System.out.println("sort raw = " + sort);
 
         List<Sort.Order> orders = (sort == null || sort.isEmpty())
                 ? List.of(new Sort.Order(Sort.Direction.DESC, "id"))
@@ -55,7 +57,7 @@ public class BaseSearchRequest {
 
     private Sort.Order parseSortItem(String item) {
         if (item == null || item.isBlank()) return null;
-        String[] parts = item.split(",");
+        String[] parts = item.split(":");
         String field = parts[0].trim();
         Sort.Direction direction = (parts.length > 1 && "asc".equalsIgnoreCase(parts[1].trim()))
                 ? Sort.Direction.ASC

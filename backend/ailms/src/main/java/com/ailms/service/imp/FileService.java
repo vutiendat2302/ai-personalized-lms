@@ -1,4 +1,5 @@
 package com.ailms.service.imp;
+import com.ailms.event.AuditLogEvent;
 import com.ailms.service.IFileMetadataService;
 import com.ailms.service.IFileService;
 import com.ailms.service.IFileStorageService;
@@ -11,6 +12,7 @@ import com.ailms.request.CreateFileMetadataRequest;
 import com.ailms.response.FileMetadataResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -26,6 +28,7 @@ public class FileService implements IFileService {
 
     private final MinioFileStorageService fileStorageService;
     private final IFileMetadataService fileMetadataService;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     @Override
     @Transactional
@@ -79,6 +82,7 @@ public class FileService implements IFileService {
             throw new FileStorageException("File is not active or has been deleted");
         }
 
+
         return fileStorageService.getPresignedUrl(fileKey, Duration.ofDays(7));
     }
 
@@ -93,5 +97,7 @@ public class FileService implements IFileService {
 
         // Soft-delete metadata in DB
         fileMetadataService.hardDelete(fileKey);
+
+
     }
 }

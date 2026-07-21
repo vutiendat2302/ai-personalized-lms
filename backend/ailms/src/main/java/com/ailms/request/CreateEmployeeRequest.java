@@ -1,11 +1,13 @@
 package com.ailms.request;
 
+import com.ailms.entity.enums.ContractTypeEnum;
 import com.ailms.entity.enums.EmployeeStatusEnum;
 import com.ailms.entity.enums.EmploymentTypeEnum;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Email;
 import lombok.*;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Getter
@@ -15,8 +17,18 @@ import java.time.LocalDateTime;
 @Builder
 public class CreateEmployeeRequest {
 
-    @NotNull(message = "User ID is required")
+    /** If user ID is provided, attaches employee profile to existing user. */
     private Long userId;
+
+    /** If userId is null, HR can pass user creation info inline */
+    @Email(message = "Email format is invalid")
+    private String email;
+
+    private String fullName;
+
+    private String password;
+
+    private String roleCode; // e.g. "HR", "TEACHER", "EMPLOYEE"
 
     private String employeeCode;
 
@@ -29,4 +41,15 @@ public class CreateEmployeeRequest {
     private LocalDateTime startDate;
 
     private LocalDateTime endDate;
+
+    /** Optional initial contract info */
+    private ContractTypeEnum contractTypeEnum;
+
+    private LocalDate contractStartDate;
+
+    private LocalDate contractEndDate;
+
+    private BigDecimal baseSalary;
+
+    private String contractFileKey;
 }

@@ -3,45 +3,43 @@ package com.ailms.service.imp;
 import com.ailms.common.converter.SimpleJsonWriter;
 import com.ailms.common.util.CodeGenerator;
 import com.ailms.entity.*;
+import com.ailms.entity.enums.BaseStatusEnum;
+import com.ailms.entity.enums.ContractTypeEnum;
 import com.ailms.entity.enums.EmployeeStatusEnum;
+import com.ailms.entity.enums.UserStatusEnum;
 import com.ailms.event.AuditLogEvent;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.data.domain.Page;
-import com.ailms.response.PageResponse;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.domain.Specification;
-import com.ailms.request.EmployeeSearchRequest;
-import com.ailms.repository.specification.EmployeeSpecification;
-import com.ailms.response.EmployeeResponse;
-
-
+import com.ailms.exception.BusinessException;
 import com.ailms.exception.DuplicateResourceException;
 import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.mapper.EmployeeMapper;
-import com.ailms.repository.DepartmentRepository;
-import com.ailms.repository.EmployeeRepository;
-import com.ailms.repository.UserRepository;
+import com.ailms.repository.*;
+import com.ailms.request.CreateEmployeeContractRequest;
 import com.ailms.request.CreateEmployeeRequest;
+import com.ailms.request.EmployeeSearchRequest;
 import com.ailms.request.UpdateEmployeeRequest;
 import com.ailms.response.EmployeeResponse;
+import com.ailms.response.PageResponse;
+import com.ailms.service.IEmailService;
+import com.ailms.service.IEmployeeContractService;
 import com.ailms.service.IEmployeeService;
+import com.ailms.common.util.SortFieldResolver;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+import com.ailms.repository.specification.EmployeeSpecification;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.ailms.repository.EmployeeContractRepository;
-import com.ailms.repository.SalaryRepository;
-import com.ailms.repository.TeachingRateRepository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
-
-import com.ailms.entity.enums.BaseStatusEnum;
-import com.ailms.exception.BusinessException;
-
-import com.ailms.common.util.SortFieldResolver;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -52,14 +50,19 @@ public class EmployeeService implements IEmployeeService {
     private final EmployeeRepository employeeRepository;
     private final DepartmentRepository departmentRepository;
     private final UserRepository userRepository;
+    private final RoleRepository roleRepository;
+    private final UserRoleRepository userRoleRepository;
+    private final PasswordEncoder passwordEncoder;
     private final EmployeeMapper employeeMapper;
     private final EmployeeContractRepository employeeContractRepository;
+    private final IEmployeeContractService employeeContractService;
     private final SalaryRepository salaryRepository;
     private final TeachingRateRepository teachingRateRepository;
     private final SortFieldResolver sortFieldResolver;
+    private final IEmailService emailService;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     private static final String RESOURCE_NAME = "Employee";
-    private final ApplicationEventPublisher applicationEventPublisher;
 
     @Override
     public List<EmployeeResponse> getAll() {
@@ -81,13 +84,58 @@ public class EmployeeService implements IEmployeeService {
     @Transactional
     @Override
     public EmployeeResponse create(CreateEmployeeRequest request) {
-        log.info("Creating employee for user: {}", request.getUserId());
+        log.info("Creating employee");
 
-        UserEntity user = userRepository.findById(request.getUserId())
-                .orElseThrow(() -> ResourceNotFoundException.of("User", request.getUserId()));
+        UserEntity user;
+        if (request.getUserId() != null) {
+            user = userRepository.findById(request.getUserId())
+                    .orElseThrow(() -> ResourceNotFoundException.of("User", request.getUserId()));
 
-        if (employeeRepository.existsById(request.getUserId())) {
-            throw new DuplicateResourceException("Employee already exists for user ID: " + request.getUserId());
+            if (employeeRepository.existsById(request.getUserId())) {
+                throw new DuplicateResourceException("Employee profile already exists for user ID: " + request.getUserId());
+            }
+        } else {
+            // HR creating new user account + employee profile in one step
+            if (request.getEmail() == null || request.getEmail().isBlank()) {
+                throw new BusinessException("Email is required to create a new user and employee");
+            }
+            if (userRepository.existsByEmail(request.getEmail())) {
+                throw new DuplicateResourceException("Email already exists: " + request.getEmail());
+            }
+
+            String tempPassword = request.getPassword() != null && !request.getPassword().isBlank()
+                    ? request.getPassword()
+                    : UUID.randomUUID().toString().substring(0, 8);
+
+            user = UserEntity.builder()
+                    .username(request.getEmail())
+                    .email(request.getEmail())
+                    .passwordHash(passwordEncoder.encode(tempPassword))
+                    .fullName(request.getFullName() != null ? request.getFullName() : request.getEmail())
+                    .status(UserStatusEnum.ACTIVE)
+                    .build();
+            user = userRepository.save(user);
+
+            // Assign Role
+            String roleCode = request.getRoleCode() != null ? request.getRoleCode() : "EMPLOYEE";
+            RoleEntity role = roleRepository.findByCode(roleCode)
+                    .orElseGet(() -> roleRepository.findByCode("EMPLOYEE")
+                            .orElseThrow(() -> ResourceNotFoundException.of("Role", roleCode)));
+
+            UserRoleEntity userRole = UserRoleEntity.builder()
+                    .userEntity(user)
+                    .roleEntity(role)
+                    .build();
+            userRoleRepository.save(userRole);
+
+            // Send set password / welcome email async
+            final String recipientEmail = user.getEmail();
+            final String token = UUID.randomUUID().toString();
+            try {
+                emailService.sendSetPasswordEmail(recipientEmail, token);
+            } catch (Exception e) {
+                log.error("Failed to send welcome set-password email to {}", recipientEmail, e);
+            }
         }
 
         EmployeeEntity entity = employeeMapper.toEntity(request);
@@ -95,10 +143,28 @@ public class EmployeeService implements IEmployeeService {
         entity.setEmployeeCode(CodeGenerator.generate("EP", employeeRepository::existsByEmployeeCode));
         entity.setStatus(EmployeeStatusEnum.ACTIVE);
         entity.setDepartment(resolveDepartment(request.getDepartmentId()));
+        if (entity.getStartDate() == null) {
+            entity.setStartDate(LocalDateTime.now());
+        }
 
         EmployeeEntity saved = employeeRepository.save(entity);
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CREATE", "EMPLOYEE", saved.getUserId(), null, saved));
-        log.info("Employee created successfully");
+
+        // Create initial contract if contract info provided
+        if (request.getBaseSalary() != null && request.getBaseSalary().compareTo(java.math.BigDecimal.ZERO) > 0) {
+            CreateEmployeeContractRequest contractReq = CreateEmployeeContractRequest.builder()
+                    .employeeId(saved.getUserId())
+                    .contractTypeEnum(request.getContractTypeEnum() != null ? request.getContractTypeEnum() : ContractTypeEnum.PROBATION)
+                    .startDate(request.getContractStartDate() != null ? request.getContractStartDate() : LocalDate.now())
+                    .endDate(request.getContractEndDate())
+                    .baseSalary(request.getBaseSalary())
+                    .fileKey(request.getContractFileKey())
+                    .status(BaseStatusEnum.ACTIVE)
+                    .build();
+            employeeContractService.create(contractReq);
+        }
+
+        log.info("Employee created successfully with employeeCode: {}", saved.getEmployeeCode());
         return employeeMapper.toResponse(saved);
     }
 
@@ -149,7 +215,6 @@ public class EmployeeService implements IEmployeeService {
             throw new DuplicateResourceException("Employee already deleted: " + id);
         }
 
-        // Không cho phép xóa nếu còn hợp đồng đang hiệu lực
         List<EmployeeContractEntity> activeContracts = employeeContractRepository.findByEmployee_UserId(id).stream()
                 .filter(c -> c.getStatus() == BaseStatusEnum.ACTIVE)
                 .filter(c -> (c.getStartDate() == null || !LocalDate.now().isBefore(c.getStartDate()))
@@ -159,7 +224,6 @@ public class EmployeeService implements IEmployeeService {
             throw new BusinessException("Cannot delete employee: Employee has active contracts.");
         }
 
-        // Không cho phép xóa nếu còn bảng lương chưa được chốt
         List<SalaryEntity> draftSalaries = salaryRepository.findByEmployee_UserId(id).stream()
                 .filter(s -> s.getStatus() == com.ailms.entity.enums.SalaryStatusEnum.DRAFT)
                 .toList();
@@ -172,12 +236,6 @@ public class EmployeeService implements IEmployeeService {
         employeeRepository.save(entity);
     }
 
-    /**
-     * Chấm dứt nhân viên.
-     *
-     * @param id ID nhân viên
-     * @return Thông tin nhân viên sau khi chấm dứt
-     */
     @Transactional
     @Override
     public EmployeeResponse terminate(Long id) {
@@ -195,7 +253,6 @@ public class EmployeeService implements IEmployeeService {
         employee.setStatus(EmployeeStatusEnum.TERMINATED);
         employee.setEndDate(LocalDateTime.now());
 
-        // Kết thúc toàn bộ hợp đồng còn hiệu lực
         List<EmployeeContractEntity> contracts = employeeContractRepository.findByEmployee_UserId(id);
         for (EmployeeContractEntity contract : contracts) {
             if (contract.getStatus() == BaseStatusEnum.ACTIVE) {
@@ -205,7 +262,6 @@ public class EmployeeService implements IEmployeeService {
             }
         }
 
-        // Vô hiệu hóa các mức lương giảng dạy đang áp dụng
         List<TeachingRateEntity> rates = teachingRateRepository.findByEmployeeEntity_UserId(id);
         for (TeachingRateEntity rate : rates) {
             if (rate.getStatus() == BaseStatusEnum.ACTIVE) {
@@ -216,8 +272,58 @@ public class EmployeeService implements IEmployeeService {
         }
 
         EmployeeEntity saved = employeeRepository.save(employee);
-
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "TERMINATE", "EMPLOYEE", id, null, null));
+        return employeeMapper.toResponse(saved);
+    }
+
+    @Transactional
+    @Override
+    public EmployeeResponse probationReview(Long id, boolean pass, CreateEmployeeContractRequest newContractRequest) {
+        log.info("Probation review for employee: {}, pass: {}", id, pass);
+        EmployeeEntity employee = employeeRepository.findById(id)
+                .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
+
+        if (employee.getStatus() == EmployeeStatusEnum.DELETE || employee.getStatus() == EmployeeStatusEnum.TERMINATED) {
+            throw new BusinessException("Employee is not active for probation review.");
+        }
+
+        // Expire previous active contracts
+        List<EmployeeContractEntity> activeContracts = employeeContractRepository.findByEmployee_UserId(id).stream()
+                .filter(c -> c.getStatus() == BaseStatusEnum.ACTIVE)
+                .toList();
+
+        for (EmployeeContractEntity c : activeContracts) {
+            c.setStatus(BaseStatusEnum.EXPIRED);
+            if (c.getEndDate() == null) {
+                c.setEndDate(LocalDate.now());
+            }
+            employeeContractRepository.save(c);
+        }
+
+        if (pass) {
+            if (newContractRequest != null) {
+                newContractRequest.setEmployeeId(id);
+                newContractRequest.setContractTypeEnum(ContractTypeEnum.OFFICIAL);
+                newContractRequest.setStatus(BaseStatusEnum.ACTIVE);
+                employeeContractService.create(newContractRequest);
+            }
+        } else {
+            employee.setStatus(EmployeeStatusEnum.TERMINATED);
+            employee.setEndDate(LocalDateTime.now());
+            employeeRepository.save(employee);
+
+            // Send notification to user about end of probation
+            try {
+                String email = employee.getUserEntity().getEmail();
+                String name = employee.getUserEntity().getFullName();
+                emailService.sendContractExpirationAlertEmail(email, name, "PROBATION_NOT_PASSED", LocalDate.now());
+            } catch (Exception e) {
+                log.error("Failed to send probation termination email", e);
+            }
+        }
+
+        EmployeeEntity saved = employeeRepository.save(employee);
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "PROBATION_REVIEW", "EMPLOYEE", id, null, saved));
         return employeeMapper.toResponse(saved);
     }
 
@@ -244,5 +350,4 @@ public class EmployeeService implements IEmployeeService {
         Page<EmployeeEntity> page = employeeRepository.findAll(spec, pageable);
         return PageResponse.from(page.map(employeeMapper::toResponse));
     }
-
 }

@@ -1,11 +1,10 @@
 package com.ailms.controller;
 
-import com.ailms.response.PageResponse;
-import com.ailms.request.StudyGoalSearchRequest;
-import com.ailms.response.StudyGoalResponse;
-
+import com.ailms.dto.GoalProgress;
 import com.ailms.request.StudyGoalRequest;
+import com.ailms.request.StudyGoalSearchRequest;
 import com.ailms.response.ApiResponse;
+import com.ailms.response.PageResponse;
 import com.ailms.response.StudyGoalResponse;
 import com.ailms.service.IStudyGoalService;
 import jakarta.validation.Valid;
@@ -17,7 +16,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/study-goals")
+@RequestMapping("${api.prefix}/study-goals")
 @RequiredArgsConstructor
 public class StudyGoalController {
 
@@ -36,6 +35,18 @@ public class StudyGoalController {
             @Valid @RequestBody StudyGoalRequest request) {
         StudyGoalResponse response = studyGoalService.update(id, request);
         return ResponseEntity.ok(ApiResponse.of("Study goal updated successfully", response));
+    }
+
+    @PostMapping("/{id}/evaluate")
+    public ResponseEntity<ApiResponse<GoalProgress>> evaluateGoal(@PathVariable Long id) {
+        GoalProgress response = studyGoalService.evaluateGoal(id);
+        return ResponseEntity.ok(ApiResponse.of("Study goal evaluated successfully", response));
+    }
+
+    @PostMapping("/user/{userId}/evaluate")
+    public ResponseEntity<ApiResponse<List<GoalProgress>>> evaluateUserGoals(@PathVariable Long userId) {
+        List<GoalProgress> response = studyGoalService.evaluateUserGoals(userId);
+        return ResponseEntity.ok(ApiResponse.of("User study goals evaluated successfully", response));
     }
 
     @GetMapping("/{id}")

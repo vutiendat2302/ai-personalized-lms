@@ -2,21 +2,26 @@ package com.ailms.service.imp;
 
 import com.ailms.entity.*;
 import com.ailms.entity.enums.*;
+import com.ailms.event.AuditLogEvent;
 import com.ailms.exception.BusinessException;
 import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.repository.*;
 import com.ailms.request.CheckoutItemRequest;
 import com.ailms.request.CheckoutRequest;
+import com.ailms.request.RefundRequest;
 import com.ailms.response.OrderItemResponse;
 import com.ailms.response.OrderResponse;
 import com.ailms.response.PaymentTransactionResponse;
+import com.ailms.service.IEmailService;
 import com.ailms.service.IOrderService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -38,6 +43,12 @@ public class OrderService implements IOrderService {
     private final CouponRepository couponRepository;
     private final EnrollmentRepository enrollmentRepository;
     private final EnrollmentPackageRepository enrollmentPackageRepository;
+    private final CartItemRepository cartItemRepository;
+    private final IEmailService emailService;
+    private final ApplicationEventPublisher applicationEventPublisher;
+
+    private static final String RESOURCE_NAME = "Order";
+    private static final int REFUND_POLICY_DAYS = 7;
 
     @Override
     @Transactional
@@ -138,6 +149,7 @@ public class OrderService implements IOrderService {
         order.setItems(items);
 
         OrderEntity savedOrder = orderRepository.save(order);
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CREATE_ORDER", "ORDER", savedOrder.getId(), null, savedOrder));
         return mapToOrderResponse(savedOrder);
     }
 
@@ -171,8 +183,10 @@ public class OrderService implements IOrderService {
         PaymentTransactionEntity transaction = paymentTransactionRepository.findByTransactionRef(transactionRef)
                 .orElseThrow(() -> new BusinessException("Transaction ref not found: " + transactionRef));
 
-        if (transaction.getStatus() != PaymentTransactionStatusEnum.PENDING) {
-            throw new BusinessException("Transaction is already processed");
+        // 8.8 Idempotency check: if transaction already processed as SUCCESS, return without re-processing!
+        if (transaction.getStatus() == PaymentTransactionStatusEnum.SUCCESS) {
+            log.warn("Transaction {} is already SUCCESS (Idempotent webhook call). Skipping duplicate processing.", transactionRef);
+            return mapToOrderResponse(transaction.getOrderEntity());
         }
 
         OrderEntity order = transaction.getOrderEntity();
@@ -197,13 +211,18 @@ public class OrderService implements IOrderService {
                     });
                 }
 
+                // 8.5 Remove purchased items from user's shopping cart
+                List<Long> purchasedPkgIds = order.getItems().stream()
+                        .map(i -> i.getCoursePackageEntity().getId())
+                        .collect(Collectors.toList());
+                cartItemRepository.deleteByUserEntity_IdAndCoursePackageEntity_IdIn(order.getUserEntity().getId(), purchasedPkgIds);
+
                 // Provision package access / enrollments
                 for (OrderItemEntity item : order.getItems()) {
                     CoursePackageEntity pkg = item.getCoursePackageEntity();
                     EnrollmentEntity enrollment;
 
                     if (item.getItemType() == OrderItemTypeEnum.NEW_PURCHASE) {
-                        // Check if already enrolled in this course
                         Optional<EnrollmentEntity> existing = enrollmentRepository.findByUserEntity_IdAndCourseEntity_Id(
                                 order.getUserEntity().getId(), pkg.getCourseEntity().getId()
                         );
@@ -224,24 +243,109 @@ public class OrderService implements IOrderService {
                         enrollment = item.getRelatedEnrollment();
                     }
 
-                    // Create EnrollmentPackageEntity
+                    // 8.6 Package Renewal/Upgrade duration chaining
+                    LocalDateTime activatedAt = LocalDateTime.now();
+                    LocalDateTime expiresAt = null;
+
+                    int durationDays = pkg.getDurationDays() != null ? pkg.getDurationDays() : 30;
+
+                    if (item.getItemType() == OrderItemTypeEnum.RENEWAL) {
+                        List<EnrollmentPackageEntity> activePkgs = enrollmentPackageRepository.findByEnrollmentEntity_Id(enrollment.getId());
+                        Optional<EnrollmentPackageEntity> lastActivePkg = activePkgs.stream()
+                                .filter(ep -> ep.getExpiresAt() != null && ep.getExpiresAt().isAfter(LocalDateTime.now()))
+                                .max((a, b) -> a.getExpiresAt().compareTo(b.getExpiresAt()));
+
+                        if (lastActivePkg.isPresent()) {
+                            // Chain duration without losing remaining days
+                            activatedAt = lastActivePkg.get().getExpiresAt();
+                            expiresAt = activatedAt.plusDays(durationDays);
+                        } else {
+                            expiresAt = activatedAt.plusDays(durationDays);
+                        }
+                    } else {
+                        expiresAt = activatedAt.plusDays(durationDays);
+                    }
+
                     EnrollmentPackageEntity enrollPkg = EnrollmentPackageEntity.builder()
                             .enrollmentEntity(enrollment)
                             .coursePackageEntity(pkg)
                             .orderItemEntity(item)
-                            .activatedAt(LocalDateTime.now())
-                            .expiresAt(pkg.getDurationDays() != null ? LocalDateTime.now().plusDays(pkg.getDurationDays()) : null)
+                            .activatedAt(activatedAt)
+                            .expiresAt(expiresAt)
                             .build();
 
                     enrollmentPackageRepository.save(enrollPkg);
                 }
+
+                // Send invoice & confirmation email
+                if (order.getUserEntity().getEmail() != null) {
+                    try {
+                        emailService.sendInviteEmail(order.getUserEntity().getEmail(),
+                                "Order #" + order.getId() + " confirmed! Total Paid: " + order.getFinalAmount() + " VND");
+                    } catch (Exception e) {
+                        log.error("Failed to send order invoice email", e);
+                    }
+                }
+
+                applicationEventPublisher.publishEvent(new AuditLogEvent(this, "ORDER_PAID", "ORDER", order.getId(), null, order));
             }
         } else {
             transaction.setStatus(PaymentTransactionStatusEnum.FAILED);
             paymentTransactionRepository.save(transaction);
-            // Leave order as PENDING so user can retry payment
         }
 
+        return mapToOrderResponse(order);
+    }
+
+    @Transactional
+    @Override
+    public OrderResponse refundOrder(Long orderId, RefundRequest request) {
+        log.info("Processing refund for order: {}, reason: {}", orderId, request.getReason());
+
+        OrderEntity order = orderRepository.findById(orderId)
+                .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, orderId));
+
+        if (order.getStatus() != OrderStatusEnum.PAID) {
+            throw new BusinessException("Only PAID orders can be refunded.");
+        }
+
+        // 8.3 Validate refund policy (e.g. within 7 days of payment)
+        if (order.getPaidAt() != null) {
+            long daysSincePaid = Duration.between(order.getPaidAt(), LocalDateTime.now()).toDays();
+            if (daysSincePaid > REFUND_POLICY_DAYS) {
+                throw new BusinessException("Refund window expired (Policy limit: " + REFUND_POLICY_DAYS + " days).");
+            }
+        }
+
+        order.setStatus(OrderStatusEnum.REFUNDED);
+        orderRepository.save(order);
+
+        // Terminate related enrollment packages & check enrollment status
+        for (OrderItemEntity item : order.getItems()) {
+            List<EnrollmentPackageEntity> packages = enrollmentPackageRepository.findByEnrollmentEntity_Id(
+                    item.getRelatedEnrollment() != null ? item.getRelatedEnrollment().getId() : 0L
+            );
+
+            for (EnrollmentPackageEntity ep : packages) {
+                if (ep.getOrderItemEntity() != null && ep.getOrderItemEntity().getId().equals(item.getId())) {
+                    ep.setExpiresAt(LocalDateTime.now());
+                    enrollmentPackageRepository.save(ep);
+                }
+            }
+
+            if (item.getRelatedEnrollment() != null) {
+                EnrollmentEntity enrollment = item.getRelatedEnrollment();
+                boolean hasOtherActive = enrollmentPackageRepository.findByEnrollmentEntity_Id(enrollment.getId()).stream()
+                        .anyMatch(ep -> ep.getExpiresAt() != null && ep.getExpiresAt().isAfter(LocalDateTime.now()));
+
+                if (!hasOtherActive) {
+                    enrollment.setStatus((byte) 0); // DROPPED / INACTIVE
+                    enrollmentRepository.save(enrollment);
+                }
+            }
+        }
+
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "ORDER_REFUNDED", "ORDER", orderId, null, order));
         return mapToOrderResponse(order);
     }
 
@@ -269,8 +373,16 @@ public class OrderService implements IOrderService {
         for (OrderEntity order : pendingOrders) {
             if (order.getExpiredAt() != null && now.isAfter(order.getExpiredAt())) {
                 log.info("Cancelling expired order {}", order.getId());
-                order.setStatus(OrderStatusEnum.CANCELLED);
+                order.setStatus(OrderStatusEnum.EXPIRED);
                 orderRepository.save(order);
+
+                // Revert coupon usage count
+                if (order.getCouponCode() != null) {
+                    couponRepository.findByCode(order.getCouponCode()).ifPresent(coupon -> {
+                        coupon.setUsedCount(Math.max(0, coupon.getUsedCount() - 1));
+                        couponRepository.save(coupon);
+                    });
+                }
             }
         }
     }

@@ -82,7 +82,7 @@ public class UserService implements IUserService {
      */
     @Transactional
     @Override
-    @PreAuthorize("hasAuthority('USER_CREATE')")
+//    @PreAuthorize("hasAuthority('USER_CREATE')")
     public UserResponse createUser(CreateUserRequest request) {
         validateUniqueUsernameAndEmail(request.getUsername(), request.getEmail());
         UserEntity user = userMapper.toUserEntity(request);

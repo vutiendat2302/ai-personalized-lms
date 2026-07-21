@@ -1,26 +1,28 @@
 package com.ailms.service.imp;
+
 import com.ailms.common.converter.SimpleJsonWriter;
 import com.ailms.entity.*;
 import com.ailms.entity.enums.*;
 import com.ailms.event.AuditLogEvent;
+import com.ailms.exception.BusinessException;
+import com.ailms.exception.DuplicateResourceException;
+import com.ailms.exception.ResourceNotFoundException;
+import com.ailms.mapper.SalaryMapper;
 import com.ailms.repository.*;
 import com.ailms.repository.specification.SalarySpecification;
 import com.ailms.request.CreateSalaryRequest;
 import com.ailms.request.SalarySearchRequest;
 import com.ailms.request.UpdateSalaryRequest;
-import com.ailms.security.CustomUserDetails;
-import com.ailms.service.ISalaryService;
-
-
-import com.ailms.exception.DuplicateResourceException;
-import com.ailms.exception.ResourceNotFoundException;
-import com.ailms.mapper.SalaryMapper;
+import com.ailms.response.PageResponse;
 import com.ailms.response.SalaryResponse;
+import com.ailms.security.CustomUserDetails;
+import com.ailms.service.IApprovalRequestService;
+import com.ailms.service.ISalaryService;
+import com.ailms.common.util.SortFieldResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
-import com.ailms.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.Authentication;
@@ -29,12 +31,12 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.RoundingMode;
-import java.util.List;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
-
-import com.ailms.exception.BusinessException;
+import java.time.YearMonth;
+import java.util.ArrayList;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -46,18 +48,20 @@ public class SalaryService implements ISalaryService {
     private final EmployeeRepository employeeRepository;
     private final SalaryMapper salaryMapper;
     private final EmployeeContractRepository employeeContractRepository;
-    private final com.ailms.service.IApprovalRequestService approvalRequestService;
+    private final IApprovalRequestService approvalRequestService;
     private final AttendanceRepository attendanceRepository;
     private final TeachingSessionPaymentRepository teachingSessionPaymentRepository;
 
     private static final String RESOURCE_NAME = "Salary";
     private final ApplicationEventPublisher applicationEventPublisher;
 
+    @Override
     public List<SalaryResponse> getAll() {
         log.info("Getting all salary records");
         return salaryMapper.toResponseList(salaryRepository.findAll());
     }
 
+    @Override
     public SalaryResponse getById(Long id) {
         log.info("Getting salary record by id: {}", id);
         SalaryEntity entity = salaryRepository.findById(id)
@@ -66,6 +70,7 @@ public class SalaryService implements ISalaryService {
         return salaryMapper.toResponse(entity);
     }
 
+    @Override
     public List<SalaryResponse> getByEmployeeId(Long employeeId) {
         log.info("Getting salary records for employee: {}", employeeId);
         verifyEmployeeAccess(employeeId);
@@ -73,6 +78,7 @@ public class SalaryService implements ISalaryService {
     }
 
     @Transactional
+    @Override
     public SalaryResponse create(CreateSalaryRequest request) {
         log.info("Creating salary record for employee: {} and period: {}", request.getEmployeeId(), request.getPeriod());
 
@@ -87,7 +93,6 @@ public class SalaryService implements ISalaryService {
             throw new BusinessException("Employee is deleted. Cannot create salary record.");
         }
 
-        // Resolve contract for the period
         List<EmployeeContractEntity> activeContracts = employeeContractRepository.findByEmployee_UserId(request.getEmployeeId()).stream()
                 .filter(c -> c.getStatus() == BaseStatusEnum.ACTIVE)
                 .filter(c -> !c.getStartDate().isAfter(request.getPeriod().atEndOfMonth()))
@@ -96,10 +101,6 @@ public class SalaryService implements ISalaryService {
 
         if (activeContracts.isEmpty()) {
             throw new BusinessException("Nhân viên chưa có hợp đồng hiệu lực cho kỳ lương này");
-        }
-
-        if (activeContracts.size() > 1) {
-            log.warn("Multiple active contracts found for employee ID: {} in period: {}", request.getEmployeeId(), request.getPeriod());
         }
 
         EmployeeContractEntity contract = activeContracts.stream()
@@ -127,12 +128,12 @@ public class SalaryService implements ISalaryService {
         );
 
         SalaryEntity saved = salaryRepository.save(entity);
-
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CREATE", "SALARY", entity.getId(), null, entity));
         return salaryMapper.toResponse(saved);
     }
 
     @Transactional
+    @Override
     public SalaryResponse update(Long id, UpdateSalaryRequest request) {
         log.info("Updating salary record: {}", id);
 
@@ -152,7 +153,6 @@ public class SalaryService implements ISalaryService {
             throw new BusinessException("Cannot change period of salary record.");
         }
 
-        // Resolve contract for the period
         List<EmployeeContractEntity> activeContracts = employeeContractRepository.findByEmployee_UserId(existing.getEmployee().getUserId()).stream()
                 .filter(c -> c.getStatus() == BaseStatusEnum.ACTIVE)
                 .filter(c -> !c.getStartDate().isAfter(existing.getPeriod().atEndOfMonth()))
@@ -198,7 +198,6 @@ public class SalaryService implements ISalaryService {
         );
 
         SalaryEntity updated = salaryRepository.save(existing);
-
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "UPDATE", "SALARY", id, oldValue, existing));
         return salaryMapper.toResponse(updated);
     }
@@ -207,7 +206,7 @@ public class SalaryService implements ISalaryService {
         if (entity.getDetails() == null) return BigDecimal.ZERO;
         return entity.getDetails().stream()
                 .filter(d -> key.equals(d.getItemKey()))
-                .map(com.ailms.entity.SalaryDetailEntity::getAmount)
+                .map(SalaryDetailEntity::getAmount)
                 .findFirst()
                 .orElse(BigDecimal.ZERO);
     }
@@ -216,17 +215,17 @@ public class SalaryService implements ISalaryService {
         if (entity.getDetails() == null) return 0;
         BigDecimal amt = entity.getDetails().stream()
                 .filter(d -> "DEPENDENT_DEDUCTION".equals(d.getItemKey()))
-                .map(com.ailms.entity.SalaryDetailEntity::getAmount)
+                .map(SalaryDetailEntity::getAmount)
                 .findFirst()
                 .orElse(BigDecimal.ZERO);
         if (amt.compareTo(BigDecimal.ZERO) == 0) return 0;
-        return amt.divide(new BigDecimal("4400000"), 0, java.math.RoundingMode.HALF_UP).intValue();
+        return amt.divide(new BigDecimal("4400000"), 0, RoundingMode.HALF_UP).intValue();
     }
 
     private void calculateSalaryForEmployee(SalaryEntity entity,
                                            EmployeeEntity employee,
                                            EmployeeContractEntity contract,
-                                           java.time.YearMonth period,
+                                           YearMonth period,
                                            BigDecimal meal,
                                            BigDecimal phone,
                                            BigDecimal uniform,
@@ -245,6 +244,7 @@ public class SalaryService implements ISalaryService {
 
         LocalDateTime start = period.atDay(1).atStartOfDay();
         LocalDateTime end = period.atEndOfMonth().atTime(23, 59, 59);
+
         if (isFullTime) {
             List<AttendanceEntity> attendances = attendanceRepository.findByEmployeeAndDateRange(employee.getUserId(), start, end);
             int absentCount = 0;
@@ -262,9 +262,10 @@ public class SalaryService implements ISalaryService {
             BigDecimal dailyWage = contract.getBaseSalary().divide(new BigDecimal("22"), 2, RoundingMode.HALF_UP);
             absentDeduct = dailyWage.multiply(BigDecimal.valueOf(absentCount));
             halfDayDeduct = dailyWage.multiply(new BigDecimal("0.5")).multiply(BigDecimal.valueOf(halfDayCount));
-            lateDeduct = dailyWage.multiply(new BigDecimal("0.1")).multiply(BigDecimal.valueOf(lateCount));
+            // 5.3: Trừ phạt đi muộn 100k/lần
+            lateDeduct = new BigDecimal("100000").multiply(BigDecimal.valueOf(lateCount));
         } else {
-            // PART_TIME: baseSalary = SUM(teaching_session_payment.amount)
+            // PART_TIME: baseSalary = SUM(teaching_session_payment.amount) for CONFIRMED payments
             List<TeachingSessionPaymentEntity> payments = teachingSessionPaymentRepository.findByEmployeeAndStatusAndPeriod(
                 employee.getUserId(),
                 SessionPaymentStatusEnum.CONFIRMED,
@@ -275,7 +276,6 @@ public class SalaryService implements ISalaryService {
                 .map(TeachingSessionPaymentEntity::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
             
-            // Allowances for part-time are 0 by default
             meal = BigDecimal.ZERO;
             phone = BigDecimal.ZERO;
             uniform = BigDecimal.ZERO;
@@ -381,17 +381,15 @@ public class SalaryService implements ISalaryService {
             net = BigDecimal.ZERO;
         }
 
-        // Update main SalaryEntity fields
         entity.setBaseSalary(baseSalary);
         entity.setBonus(meal.add(phone).add(uniform).add(responsibility).add(performance).add(bonus));
         entity.setDeduction(totalIns.add(pit).add(otherDeduction).add(totalAttendanceDeduction));
         entity.setTotalSalary(net);
 
-        // Clear existing details
         if (entity.getDetails() != null) {
             entity.getDetails().clear();
         } else {
-            entity.setDetails(new java.util.ArrayList<>());
+            entity.setDetails(new ArrayList<>());
         }
 
         addDetail(entity, "BASE_SALARY", baseSalary, isFullTime ? "Lương cơ bản" : "Lương dạy học (Part-time)");
@@ -454,6 +452,7 @@ public class SalaryService implements ISalaryService {
     }
 
     @Transactional
+    @Override
     public void delete(Long id) {
         log.info("Deleting salary record: {}", id);
 
@@ -474,6 +473,7 @@ public class SalaryService implements ISalaryService {
     }
 
     @Transactional
+    @Override
     public SalaryResponse approve(Long id) {
         log.info("Approving salary record: {}", id);
         SalaryEntity existing = salaryRepository.findById(id)
@@ -489,18 +489,36 @@ public class SalaryService implements ISalaryService {
     }
 
     @Transactional
+    @Override
     public SalaryResponse pay(Long id) {
         log.info("Paying salary record: {}", id);
         SalaryEntity existing = salaryRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
 
         if (existing.getStatus() != SalaryStatusEnum.CONFIRMED && existing.getStatus() != SalaryStatusEnum.DRAFT) {
-            throw new BusinessException("Salary record must be in DRAFT or APPROVED status to be paid.");
+            throw new BusinessException("Salary record must be in DRAFT or CONFIRMED status to be paid.");
         }
 
         existing.setStatus(SalaryStatusEnum.PAID);
         existing.setPaidAt(LocalDateTime.now());
         SalaryEntity saved = salaryRepository.save(existing);
+
+        // Transition related teaching session payments for PART_TIME to PAID
+        if (saved.getEmployee().getEmploymentTypeEnum() == EmploymentTypeEnum.PART_TIME) {
+            LocalDateTime start = saved.getPeriod().atDay(1).atStartOfDay();
+            LocalDateTime end = saved.getPeriod().atEndOfMonth().atTime(23, 59, 59);
+            List<TeachingSessionPaymentEntity> payments = teachingSessionPaymentRepository.findByEmployeeAndStatusAndPeriod(
+                    saved.getEmployee().getUserId(),
+                    SessionPaymentStatusEnum.CONFIRMED,
+                    start,
+                    end
+            );
+            for (TeachingSessionPaymentEntity p : payments) {
+                p.setStatus(SessionPaymentStatusEnum.PAID);
+                teachingSessionPaymentRepository.save(p);
+            }
+        }
+
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "PAY", "SALARY", id, saved, null));
         return salaryMapper.toResponse(saved);
     }
@@ -538,11 +556,11 @@ public class SalaryService implements ISalaryService {
         List<String> roles = getCurrentUserRoles();
 
         if (roles.contains("ROLE_ADMIN") || roles.contains("ROLE_HR")) {
-            return; // HR and Payroll can access all
+            return;
         }
 
         if (currentUserId.equals(employeeId)) {
-            return; // Self access
+            return;
         }
 
         throw new BusinessException("Access denied to requested employee data");
@@ -561,7 +579,6 @@ public class SalaryService implements ISalaryService {
         }
 
         Specification<SalaryEntity> spec = (root, query, cb) -> cb.disjunction();
-
         spec = spec.or((root, query, cb) -> cb.equal(root.get("employee").get("userId"), currentUserId));
 
         return spec;

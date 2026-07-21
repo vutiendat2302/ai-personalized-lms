@@ -4,6 +4,10 @@ import tools.jackson.core.JsonGenerator;
 import tools.jackson.databind.SerializationContext;
 import tools.jackson.databind.ValueSerializer;
 
+/**
+ * Serializer tùy chỉnh cho kiểu Long.
+ * Chuyển giá trị Long thành chuỗi (String) khi trả về JSON
+ */
 public class LongToStringSerializer extends ValueSerializer<Long> {
 
     @Override

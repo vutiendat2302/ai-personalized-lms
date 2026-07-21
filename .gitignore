@@ -31,3 +31,7 @@ Thumbs.db
 *.iws
 out/
 
+# Docker data
+docker/mysql/
+docker/redis/
+docker/minio/

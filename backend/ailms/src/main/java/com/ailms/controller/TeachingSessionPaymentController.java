@@ -1,12 +1,11 @@
 package com.ailms.controller;
 
 import com.ailms.request.CreateTeachingSessionPaymentRequest;
-import com.ailms.request.UpdateTeachingSessionPaymentRequest;
-import com.ailms.response.PageResponse;
 import com.ailms.request.TeachingSessionPaymentSearchRequest;
-import com.ailms.response.TeachingSessionPaymentResponse;
-
+import com.ailms.request.UpdateTeachingSessionPaymentRequest;
 import com.ailms.response.ApiResponse;
+import com.ailms.response.PageResponse;
+import com.ailms.response.TeachingSessionPaymentResponse;
 import com.ailms.service.ITeachingSessionPaymentService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +26,20 @@ public class TeachingSessionPaymentController {
     public ResponseEntity<ApiResponse<TeachingSessionPaymentResponse>> create(@Valid @RequestBody CreateTeachingSessionPaymentRequest request) {
         TeachingSessionPaymentResponse response = teachingSessionPaymentService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of("Teaching session payment created successfully", response));
+    }
+
+    @PostMapping("/{id}/ta-evaluation")
+    public ResponseEntity<ApiResponse<TeachingSessionPaymentResponse>> submitTaEvaluation(
+            @PathVariable Long id,
+            @RequestParam String note) {
+        TeachingSessionPaymentResponse response = teachingSessionPaymentService.submitTaEvaluation(id, note);
+        return ResponseEntity.ok(ApiResponse.of("TA evaluation submitted successfully", response));
+    }
+
+    @PostMapping("/{id}/confirm")
+    public ResponseEntity<ApiResponse<TeachingSessionPaymentResponse>> confirmPayment(@PathVariable Long id) {
+        TeachingSessionPaymentResponse response = teachingSessionPaymentService.confirmPayment(id);
+        return ResponseEntity.ok(ApiResponse.of("Teaching session payment confirmed successfully", response));
     }
 
     @PutMapping("/{id}")

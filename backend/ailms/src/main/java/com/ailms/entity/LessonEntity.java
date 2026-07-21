@@ -4,11 +4,14 @@ import com.ailms.common.snowflake.SnowflakeId;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
-import org.w3c.dom.Text;
 
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Thực thể lưu trữ bài học thuộc một chương học (CourseSectionEntity).
+ * Hỗ trợ nhiều loại nội dung: VIDEO, PDF, TEXT, LIVE...
+ */
 @Entity
 @Table(name = "lesson", indexes = {
         @Index(name = "idx_lesson_section_id", columnList = "section_id")
@@ -19,52 +22,72 @@ import java.util.List;
 @AllArgsConstructor
 @SuperBuilder
 public class LessonEntity extends BaseEntity {
+
+    /** Mã định danh bài học (Snowflake ID 64-bit). */
     @Id
     @SnowflakeId
     @Column(name = "id", updatable = false, nullable = false)
     private Long id;
 
+    /** Chương/Phần học chứa bài học này. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "section_id", nullable = false)
     private CourseSectionEntity courseSectionEntity;
 
+    /** Tên bài học. */
     @Column(name = "name", nullable = false, length = 100)
     private String name;
 
     /**
-     * VIDEO / PDF / TEXT / LIVE
+     * Định dạng nội dung chính của bài học (VIDEO, PDF, TEXT, LIVE, QUIZ, ASSIGNMENT).
      */
     @Column(name = "content_type", length = 20)
     private String contentType;
 
+    /** Đường dẫn URL hoặc key MinIO lưu trữ file nội dung bài học. */
     @Column(name = "content_url", length = 500)
     private String contentUrl;
 
+    /** Mô tả hoặc nội dung văn bản chi tiết của bài học. */
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
+    /** Thời lượng bài học ước tính (tính theo phút). */
     @Column(name = "duration_min")
     private Integer durationMin;
 
     /**
-     * true = bài học xem thử miễn phí, false = phải đăng ký
+     * Cho phép học sinh xem thử miễn phí trước khi đăng ký mua khóa học (true = FREE, false = LOCKED).
      */
     @Column(name = "is_preview", nullable = false)
     @Builder.Default
     private Boolean isPreview = false;
 
+    /** Loại xem thử (FREE, LOCKED). */
+    @Column(name = "preview_type", length = 20)
+    private String previewType; // "FREE", "LOCKED"
+
+    /** Thứ tự hiển thị của bài học trong chương. */
     @Column(name = "order_index", nullable = false)
     @Builder.Default
     private Integer orderIndex = 0;
 
     /**
-     * 1 = Active, 0 = Inactive
+     * Trạng thái hoạt động (1 = Active, 0 = Inactive).
      */
     @Column(name = "status", nullable = false)
     @Builder.Default
     private Byte status = 1;
 
+    /** Danh sách tài liệu đính kèm kèm theo bài học. */
     @OneToMany(mappedBy = "lessonEntity", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @Builder.Default
     private List<LessonResourceEntity> resources = new ArrayList<>();
+
+    public String getPreviewType() {
+        if (previewType != null) {
+            return previewType;
+        }
+        return Boolean.TRUE.equals(isPreview) ? "FREE" : "LOCKED";
+    }
 }

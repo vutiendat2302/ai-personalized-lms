@@ -1,5 +1,6 @@
 package com.ailms.request;
 
+import com.ailms.entity.enums.BaseStatusEnum;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -19,7 +20,7 @@ public class UpdateSectionRequest {
     private Integer orderIndex;
 
     @NotNull(message = "Status is required")
-    private Byte status;
+    private BaseStatusEnum status;
 
     @NotNull
     private Long courseId;

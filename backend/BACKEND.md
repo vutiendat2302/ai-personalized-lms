@@ -2321,7 +2321,7 @@ erDiagram
         tinyint status
     }
 ```
- 
+
 ## 10. Assessment
 
 ### 10.1 Learning Progress Update Workflow

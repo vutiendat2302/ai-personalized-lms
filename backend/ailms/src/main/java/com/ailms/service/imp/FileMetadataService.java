@@ -1,4 +1,6 @@
 package com.ailms.service.imp;
+import com.ailms.common.converter.SimpleJsonWriter;
+import com.ailms.event.AuditLogEvent;
 import com.ailms.service.IFileMetadataService;
 
 
@@ -17,6 +19,7 @@ import io.micrometer.common.util.StringUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FilenameUtils;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import com.ailms.response.PageResponse;
 import org.springframework.data.domain.Pageable;
@@ -34,6 +37,7 @@ public class FileMetadataService implements IFileMetadataService {
 
     private final FileMetadataRepository fileMetadataRepository;
     private final FileMetadataMapper fileMetadataMapper;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     @Override
     @Transactional
@@ -42,6 +46,8 @@ public class FileMetadataService implements IFileMetadataService {
         FileMetadataEntity entity = fileMetadataMapper.toEntity(request);
         entity.setStatus(BaseStatusEnum.ACTIVE);
         FileMetadataEntity saved = fileMetadataRepository.save(entity);
+
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "UPLOAD", "FILE", saved.getId(), null, saved));
         return fileMetadataMapper.toResponse(saved);
     }
 
@@ -74,8 +80,11 @@ public class FileMetadataService implements IFileMetadataService {
         log.info("Soft deleting file metadata with key: {}", fileKey);
         FileMetadataEntity entity = fileMetadataRepository.findByFileKey(fileKey)
                 .orElseThrow(() -> new ResourceNotFoundException("File metadata not found for key"));
+
+        String oldValue = SimpleJsonWriter.toJson(entity);
         entity.setStatus(BaseStatusEnum.INACTIVE);
         fileMetadataRepository.save(entity);
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "DELETE_SOFT", "FILE", entity.getId(), oldValue, entity));
     }
 
     @Override
@@ -84,7 +93,9 @@ public class FileMetadataService implements IFileMetadataService {
         log.info("Hard deleting file metadata with key: {}", fileKey);
         FileMetadataEntity entity = fileMetadataRepository.findByFileKey(fileKey)
                 .orElseThrow(() -> new ResourceNotFoundException("File metadata not found for key"));
+        String oldValue = SimpleJsonWriter.toJson(entity);
         fileMetadataRepository.delete(entity);
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "DELETE_HARD", "FILE", entity.getId(), oldValue, null));
     }
 
     @Override
@@ -143,6 +154,8 @@ public class FileMetadataService implements IFileMetadataService {
 
         entity.setOriginalName(finalName);
         FileMetadataEntity saved = fileMetadataRepository.save(entity);
+
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "UPDATE_NAME", "FILE", entity.getId(), oldExt, newExt));
         return fileMetadataMapper.toResponse(saved);
     }
 
@@ -156,9 +169,11 @@ public class FileMetadataService implements IFileMetadataService {
 
         FileMetadataEntity entity = fileMetadataRepository.findByFileKey(fileKey)
                 .orElseThrow(() -> ResourceNotFoundException.of("File"));
-
+        String oldValue = SimpleJsonWriter.toJson(entity.getStatus());
         entity.setStatus(status);
         FileMetadataEntity saved = fileMetadataRepository.save(entity);
+
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "UPDATE_STATUS", "FILE", entity.getId(), oldValue, saved.getStatus()));
         return fileMetadataMapper.toResponse(saved);
     }
 

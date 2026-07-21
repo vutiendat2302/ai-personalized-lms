@@ -1,23 +1,24 @@
 package com.ailms.service.imp;
-import com.ailms.repository.specification.LessonSpecification;
-import com.ailms.request.LessonSearchRequest;
-import com.ailms.service.ILessonService;
-
 
 import com.ailms.entity.CourseSectionEntity;
 import com.ailms.entity.LessonEntity;
 import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.mapper.LessonMapper;
 import com.ailms.repository.CourseSectionRepository;
+import com.ailms.repository.EnrollmentRepository;
 import com.ailms.repository.LessonRepository;
+import com.ailms.repository.specification.LessonSpecification;
 import com.ailms.request.CreateLessonRequest;
-import com.ailms.request.UpdateLessonRequest;
+import com.ailms.request.LessonSearchRequest;
 import com.ailms.request.ReorderRequest;
+import com.ailms.request.UpdateLessonRequest;
+import com.ailms.response.LessonPreviewResponse;
 import com.ailms.response.LessonResponse;
+import com.ailms.response.PageResponse;
+import com.ailms.service.ILessonService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
-import com.ailms.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
@@ -29,7 +30,14 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+@Transactional(readOnly = true)
 public class LessonService implements ILessonService {
+
+    private final LessonRepository lessonRepository;
+    private final CourseSectionRepository courseSectionRepository;
+    private final EnrollmentRepository enrollmentRepository;
+    private final LessonMapper lessonMapper;
+
     @Override
     public PageResponse<LessonResponse> search(LessonSearchRequest request) {
         log.info("Searching Lesson via specification");
@@ -38,11 +46,6 @@ public class LessonService implements ILessonService {
         Page<LessonEntity> page = lessonRepository.findAll(spec, pageable);
         return PageResponse.from(page.map(lessonMapper::toResponse));
     }
-
-
-    private final LessonRepository lessonRepository;
-    private final CourseSectionRepository courseSectionRepository;
-    private final LessonMapper lessonMapper;
 
     @Override
     @Transactional
@@ -61,9 +64,6 @@ public class LessonService implements ILessonService {
         }
 
         LessonEntity savedEntity = lessonRepository.save(entity);
-
-        // Recalculate metadata
-
         return lessonMapper.toResponse(savedEntity);
     }
 
@@ -75,12 +75,8 @@ public class LessonService implements ILessonService {
         LessonEntity existingEntity = lessonRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Lesson not found with id: " + id));
 
-        int oldDuration = existingEntity.getDurationMin() != null ? existingEntity.getDurationMin() : 0;
-        int newDuration = request.getDurationMin() != null ? request.getDurationMin() : 0;
-
         lessonMapper.updateEntityFromRequest(request, existingEntity);
         LessonEntity updatedEntity = lessonRepository.save(existingEntity);
-
 
         return lessonMapper.toResponse(updatedEntity);
     }
@@ -93,9 +89,7 @@ public class LessonService implements ILessonService {
         LessonEntity existingEntity = lessonRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Lesson not found with id: " + id));
 
-        Long courseId = existingEntity.getCourseSectionEntity().getCourseEntity().getId();
         lessonRepository.delete(existingEntity);
-
     }
 
     @Override
@@ -106,6 +100,77 @@ public class LessonService implements ILessonService {
                 .orElseThrow(() -> new ResourceNotFoundException("Lesson not found with id: " + id));
 
         return lessonMapper.toResponse(entity);
+    }
+
+    @Override
+    public LessonPreviewResponse getLessonWithPreview(Long id, Long currentUserId) {
+        log.info("Getting lesson preview for lessonId: {}, userId: {}", id, currentUserId);
+
+        LessonEntity lesson = lessonRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Lesson not found with id: " + id));
+
+        String previewType = lesson.getPreviewType();
+
+        if ("FREE".equalsIgnoreCase(previewType)) {
+            return LessonPreviewResponse.builder()
+                    .id(lesson.getId())
+                    .name(lesson.getName())
+                    .contentType(lesson.getContentType())
+                    .description(lesson.getDescription())
+                    .durationMin(lesson.getDurationMin())
+                    .previewType("FREE")
+                    .locked(false)
+                    .contentUrl(lesson.getContentUrl())
+                    .ctaUrl(null)
+                    .build();
+        }
+
+        // Preview type is LOCKED
+        if (currentUserId == null) {
+            return LessonPreviewResponse.builder()
+                    .id(lesson.getId())
+                    .name(lesson.getName())
+                    .contentType(lesson.getContentType())
+                    .description(lesson.getDescription())
+                    .durationMin(lesson.getDurationMin())
+                    .previewType("LOCKED")
+                    .locked(true)
+                    .contentUrl(null)
+                    .ctaUrl("/login?redirect=/lessons/" + id)
+                    .build();
+        }
+
+        Long courseId = lesson.getCourseSectionEntity() != null && lesson.getCourseSectionEntity().getCourseEntity() != null
+                ? lesson.getCourseSectionEntity().getCourseEntity().getId()
+                : null;
+
+        boolean isEnrolled = courseId != null && enrollmentRepository.findByUserEntity_IdAndCourseEntity_Id(currentUserId, courseId).isPresent();
+
+        if (isEnrolled) {
+            return LessonPreviewResponse.builder()
+                    .id(lesson.getId())
+                    .name(lesson.getName())
+                    .contentType(lesson.getContentType())
+                    .description(lesson.getDescription())
+                    .durationMin(lesson.getDurationMin())
+                    .previewType("LOCKED")
+                    .locked(false)
+                    .contentUrl(lesson.getContentUrl())
+                    .ctaUrl(null)
+                    .build();
+        } else {
+            return LessonPreviewResponse.builder()
+                    .id(lesson.getId())
+                    .name(lesson.getName())
+                    .contentType(lesson.getContentType())
+                    .description(lesson.getDescription())
+                    .durationMin(lesson.getDurationMin())
+                    .previewType("LOCKED")
+                    .locked(true)
+                    .contentUrl(null)
+                    .ctaUrl("/checkout?courseId=" + courseId)
+                    .build();
+        }
     }
 
     @Override

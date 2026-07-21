@@ -34,33 +34,33 @@ public class UserRoleEntity extends BaseEntity {
     @Column(name = "id", updatable = false, nullable = false)
     private Long id;
 
-    /** User duoc gan role */
+    /** Người dùng được gán vai trò. */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)
     private UserEntity userEntity;
 
-//    Role duoc gan cho user
+    /** Vai trò được gán cho người dùng. */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "role_id", nullable = false)
     private RoleEntity roleEntity;
 
-    /** Id của user thực hiện gán (admin), null nếu do hệ thống tự gán lúc register. */
+    /** ID của người dùng thực hiện gán (Admin), null nếu hệ thống tự gán khi đăng ký. */
     @Column(name = "assigned_by")
     private Long assignedBy;
 
-//    Thoi diem gan role
+    /** Thời điểm gán vai trò. */
     @Column(name = "assigned_at")
     private LocalDateTime assignedAt;
 
-//    Thoi diem het hieu luc
+    /** Thời điểm vai trò hết hiệu lực (nếu có hạn). */
     @Column(name = "expired_at")
     private LocalDateTime expiredAt;
 
-    /** Chỗ trống cho ABAC sau này: giới hạn role theo phạm vi, VD: courseId cụ thể. Để null = áp dụng toàn hệ thống. */
+    /** Phạm vi áp dụng ABAC (VD: COURSE, DEPARTMENT, CLASS). Để null = áp dụng toàn hệ thống. */
     @Column(name = "scope_type", length = 50)
     private String scopeType;
 
-//    Id cua doi tuong thuoc pham vi ap dung ABAC
+    /** ID của đối tượng thuộc phạm vi áp dụng ABAC tương ứng. */
     @Column(name = "scope_id")
     private Long scopeId;
 }

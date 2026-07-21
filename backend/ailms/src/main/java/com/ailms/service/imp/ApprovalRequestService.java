@@ -7,6 +7,7 @@ import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.repository.*;
 import com.ailms.security.CustomUserDetails;
 import com.ailms.service.IApprovalRequestService;
+import com.ailms.service.IEmailService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
@@ -28,9 +29,11 @@ public class ApprovalRequestService implements IApprovalRequestService {
     private final EmployeeContractRepository employeeContractRepository;
     private final SalaryRepository salaryRepository;
     private final TeachingSessionPaymentRepository teachingSessionPaymentRepository;
+    private final LeaveRequestRepository leaveRequestRepository;
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final UserRoleRepository userRoleRepository;
+    private final IEmailService emailService;
 
     private Long getCurrentUserId() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -46,14 +49,12 @@ public class ApprovalRequestService implements IApprovalRequestService {
         log.info("Creating approval request for targetType={}, targetId={}, totalLevels={}, approverId={}",
                 targetType, targetId, totalLevels, approverId);
 
-        // Check if there is already a PENDING approval request
         Optional<ApprovalRequestEntity> existingPending = approvalRequestRepository
-                .findFirstByTargetTypeAndTargetIdAndStatusOrderByLevelDesc(targetType, targetId, ApprovalStatusEnum.PENDING);
+                .findFirstByTargetTypeAndTargetIdAndStatusOrderByLevelDesc(targetType.toUpperCase(), targetId, ApprovalStatusEnum.PENDING);
         if (existingPending.isPresent()) {
             throw new BusinessException("An active approval request is already pending for this record.");
         }
 
-        // Validate target and transition its status
         if ("CONTRACT".equalsIgnoreCase(targetType)) {
             EmployeeContractEntity contract = employeeContractRepository.findById(targetId)
                     .orElseThrow(() -> ResourceNotFoundException.of("EmployeeContract", targetId));
@@ -78,8 +79,13 @@ public class ApprovalRequestService implements IApprovalRequestService {
             if (payment.getStatus() != SessionPaymentStatusEnum.PENDING) {
                 throw new BusinessException("Payment must be in PENDING status to request approval.");
             }
-            // Keep status as PENDING, but the presence of the active ApprovalRequest will lock it
 
+        } else if ("LEAVE_REQUEST".equalsIgnoreCase(targetType)) {
+            LeaveRequestEntity leave = leaveRequestRepository.findById(targetId)
+                    .orElseThrow(() -> ResourceNotFoundException.of("LeaveRequest", targetId));
+            if (leave.getStatus() != LeaveStatusEnum.PENDING && leave.getStatus() != LeaveStatusEnum.UNPAID) {
+                throw new BusinessException("Leave request must be in PENDING or UNPAID status to request approval.");
+            }
         } else {
             throw new BusinessException("Unsupported target type: " + targetType);
         }
@@ -124,7 +130,6 @@ public class ApprovalRequestService implements IApprovalRequestService {
         approvalRequestRepository.save(request);
 
         if (request.getLevel() < request.getTotalLevels()) {
-            // Create next level approval request
             int nextLevel = request.getLevel() + 1;
             Long nextApproverId = resolveNextApprover(request.getTargetType(), nextLevel);
 
@@ -137,11 +142,9 @@ public class ApprovalRequestService implements IApprovalRequestService {
                     .status(ApprovalStatusEnum.PENDING)
                     .build();
 
-            // Carry over creation audit attributes so the creator restriction holds
             nextRequest.setCreatedBy(request.getCreatedBy());
             approvalRequestRepository.save(nextRequest);
         } else {
-            // Final level approved -> update target status
             finalizeTargetStatus(request.getTargetType(), request.getTargetId(), true);
         }
 
@@ -174,8 +177,18 @@ public class ApprovalRequestService implements IApprovalRequestService {
         request.setDecidedAt(LocalDateTime.now());
         approvalRequestRepository.save(request);
 
-        // Reject updates target status back to DRAFT or REJECTED
         finalizeTargetStatus(request.getTargetType(), request.getTargetId(), false);
+
+        // Notify creator / target owner of rejection with reason
+        if (request.getCreatedBy() != null) {
+            userRepository.findById(request.getCreatedBy()).ifPresent(creator -> {
+                try {
+                    emailService.sendContractExpirationAlertEmail(creator.getEmail(), creator.getFullName(), "REJECTED_" + request.getTargetType() + ": " + comment, java.time.LocalDate.now());
+                } catch (Exception e) {
+                    log.error("Failed to send rejection email notification", e);
+                }
+            });
+        }
 
         return request;
     }
@@ -201,7 +214,6 @@ public class ApprovalRequestService implements IApprovalRequestService {
         request.setDecidedAt(LocalDateTime.now());
         approvalRequestRepository.save(request);
 
-        // Revert target back to DRAFT / original state
         finalizeTargetStatus(request.getTargetType(), request.getTargetId(), false);
     }
 
@@ -214,7 +226,6 @@ public class ApprovalRequestService implements IApprovalRequestService {
 
     @Override
     public List<ApprovalRequestEntity> getPendingRequestsForApprover(Long approverId) {
-        // Typically custom query can be written, or simple spec/filter
         return approvalRequestRepository.findAll().stream()
                 .filter(r -> approverId.equals(r.getApproverId()) && r.getStatus() == ApprovalStatusEnum.PENDING)
                 .toList();
@@ -222,7 +233,6 @@ public class ApprovalRequestService implements IApprovalRequestService {
 
     private Long resolveNextApprover(String targetType, int nextLevel) {
         if ("SALARY".equalsIgnoreCase(targetType) && nextLevel == 2) {
-            // Find user with PAYROLL or ACCOUNTANT role
             Optional<RoleEntity> payrollRole = roleRepository.findByCode("PAYROLL");
             if (payrollRole.isEmpty()) {
                 payrollRole = roleRepository.findByCode("ACCOUNTANT");
@@ -234,7 +244,6 @@ public class ApprovalRequestService implements IApprovalRequestService {
                 }
             }
         }
-        // Fallback: return default admin/system user
         return 1L; 
     }
 
@@ -256,6 +265,12 @@ public class ApprovalRequestService implements IApprovalRequestService {
                     .orElseThrow(() -> ResourceNotFoundException.of("TeachingSessionPayment", targetId));
             payment.setStatus(approved ? SessionPaymentStatusEnum.CONFIRMED : SessionPaymentStatusEnum.PENDING);
             teachingSessionPaymentRepository.save(payment);
+
+        } else if ("LEAVE_REQUEST".equalsIgnoreCase(targetType)) {
+            LeaveRequestEntity leave = leaveRequestRepository.findById(targetId)
+                    .orElseThrow(() -> ResourceNotFoundException.of("LeaveRequest", targetId));
+            leave.setStatus(approved ? LeaveStatusEnum.APPROVED : LeaveStatusEnum.REJECTED);
+            leaveRequestRepository.save(leave);
         }
     }
 }

@@ -1,11 +1,12 @@
 package com.ailms.controller;
 
+import com.ailms.request.CreateEmployeeContractRequest;
 import com.ailms.request.CreateEmployeeRequest;
-import com.ailms.request.UpdateEmployeeRequest;
-import com.ailms.response.PageResponse;
 import com.ailms.request.EmployeeSearchRequest;
-import com.ailms.response.EmployeeResponse;
+import com.ailms.request.UpdateEmployeeRequest;
 import com.ailms.response.ApiResponse;
+import com.ailms.response.EmployeeResponse;
+import com.ailms.response.PageResponse;
 import com.ailms.service.IEmployeeService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -60,9 +61,20 @@ public class EmployeeController {
         return ResponseEntity.ok(ApiResponse.of("Search Employee successfully", result));
     }
 
+//    Chấm dứt hợp đồng / cho nhân viên nghỉ việc (Terminate)
     @PutMapping("/{id}/terminate")
     public ResponseEntity<ApiResponse<EmployeeResponse>> terminate(@PathVariable Long id) {
         EmployeeResponse response = employeeService.terminate(id);
         return ResponseEntity.ok(ApiResponse.of("Employee terminated successfully", response));
+    }
+
+//    Đánh giá kết thúc thời gian thử việc cho nhân viên
+    @PostMapping("/{id}/probation-review")
+    public ResponseEntity<ApiResponse<EmployeeResponse>> probationReview(
+            @PathVariable Long id,
+            @RequestParam boolean pass,
+            @RequestBody(required = false) CreateEmployeeContractRequest newContractRequest) {
+        EmployeeResponse response = employeeService.probationReview(id, pass, newContractRequest);
+        return ResponseEntity.ok(ApiResponse.of("Probation review submitted successfully", response));
     }
 }
