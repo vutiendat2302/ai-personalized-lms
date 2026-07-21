@@ -28,7 +28,8 @@ public class LessonController {
     public ResponseEntity<ApiResponse<LessonResponse>> create(
             @PathVariable Long sectionId,
             @Valid @RequestBody CreateLessonRequest request) {
-        LessonResponse response = lessonService.create(sectionId, request);
+        request.setSectionId(sectionId);
+        LessonResponse response = lessonService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.of("Lesson created successfully", response));
     }

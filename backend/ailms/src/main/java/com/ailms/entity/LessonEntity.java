@@ -1,6 +1,8 @@
 package com.ailms.entity;
 
 import com.ailms.common.snowflake.SnowflakeId;
+import com.ailms.entity.enums.BaseStatusEnum;
+import com.ailms.entity.enums.PreviewTypeEnum;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
@@ -35,7 +37,7 @@ public class LessonEntity extends BaseEntity {
     private CourseSectionEntity courseSectionEntity;
 
     /** Tên bài học. */
-    @Column(name = "name", nullable = false, length = 100)
+    @Column(name = "name", length = 100)
     private String name;
 
     /**
@@ -56,38 +58,27 @@ public class LessonEntity extends BaseEntity {
     @Column(name = "duration_min")
     private Integer durationMin;
 
-    /**
-     * Cho phép học sinh xem thử miễn phí trước khi đăng ký mua khóa học (true = FREE, false = LOCKED).
-     */
-    @Column(name = "is_preview", nullable = false)
-    @Builder.Default
-    private Boolean isPreview = false;
-
     /** Loại xem thử (FREE, LOCKED). */
-    @Column(name = "preview_type", length = 20)
-    private String previewType; // "FREE", "LOCKED"
+    @Column(name = "preview_type")
+    @Enumerated(EnumType.STRING)
+    @Builder.Default
+    private PreviewTypeEnum previewType = PreviewTypeEnum.LOCKED; // "FREE", "LOCKED"
 
     /** Thứ tự hiển thị của bài học trong chương. */
-    @Column(name = "order_index", nullable = false)
+    @Column(name = "order_index")
     @Builder.Default
     private Integer orderIndex = 0;
 
     /**
-     * Trạng thái hoạt động (1 = Active, 0 = Inactive).
+     * Trạng thái hoạt động
      */
-    @Column(name = "status", nullable = false)
+    @Column(name = "status")
+    @Enumerated(EnumType.STRING)
     @Builder.Default
-    private Byte status = 1;
+    private BaseStatusEnum status = BaseStatusEnum.ACTIVE;
 
     /** Danh sách tài liệu đính kèm kèm theo bài học. */
     @OneToMany(mappedBy = "lessonEntity", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @Builder.Default
     private List<LessonResourceEntity> resources = new ArrayList<>();
-
-    public String getPreviewType() {
-        if (previewType != null) {
-            return previewType;
-        }
-        return Boolean.TRUE.equals(isPreview) ? "FREE" : "LOCKED";
-    }
 }

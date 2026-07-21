@@ -63,6 +63,20 @@ def check_attendance_exists(cursor, employee_id: int, target_date: date):
     row = cursor.fetchone()
     return row["id"] if row else None
 
+def check_employee_has_attendance(cursor, employee_id: int):
+    """
+    ---> CHỐT CHẶN TỔNG Siêu Mạnh <---
+    Kiểm tra xem nhân viên này ĐÃ CÓ bất kỳ bản ghi chấm công nào chưa.
+    Nếu có rồi -> Đã được seed từ lần chạy trước -> Bỏ qua luôn cả 5 tháng!
+    """
+    query = "SELECT 1 FROM attendance WHERE employee_id = %s LIMIT 1"
+    try:
+        cursor.execute(query, (employee_id,))
+    except Exception:
+        # Fallback phòng hờ tên bảng trong DB của m là số nhiều (attendances)
+        cursor.execute("SELECT 1 FROM attendances WHERE employee_id = %s LIMIT 1", (employee_id,))
+    return cursor.fetchone() is not None
+
 
 def seed(cursor):
     print("→ Seeding attendances (5 tháng cho TEACHER & HR)...")
@@ -109,6 +123,13 @@ def seed(cursor):
 
     # 5. Lặp qua từng nhân viên và từng ngày làm việc
     for emp_id in employees:
+        
+        # ---> KIỂM TRA CHỐT CHẶN TỔNG <---
+        # Nếu nhân viên này đã có chấm công -> Bỏ qua ngay lập tức, không lặp ngày!
+        if check_employee_has_attendance(cursor, emp_id):
+            total_skipped += len(work_days)
+            continue
+        
         for w_date in work_days:
             # Check idempotent
             if check_attendance_exists(cursor, emp_id, w_date):

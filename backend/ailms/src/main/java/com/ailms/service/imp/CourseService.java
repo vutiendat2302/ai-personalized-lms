@@ -81,7 +81,7 @@ public class CourseService implements ICourseService {
         CourseEntity entity = courseMapper.toEntity(request);
         entity.setCategoryEntity(category);
         entity.setLink(link);
-        entity.setStatus(CourseStatusEnum.DRAFT);
+        entity.setStatus(request.getStatus() != null ? request.getStatus() : CourseStatusEnum.DRAFT);
 
         CourseEntity savedEntity = courseRepository.save(entity);
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CREATE", "COURSE", savedEntity.getId(), null, savedEntity));
@@ -113,7 +113,7 @@ public class CourseService implements ICourseService {
         CourseEntity entity = courseMapper.toEntity(request);
         entity.setCategoryEntity(category);
         entity.setLink(link);
-        entity.setStatus(CourseStatusEnum.PENDING);
+        entity.setStatus(request.getStatus() != null ? request.getStatus() : CourseStatusEnum.PENDING);
 
         CourseEntity savedEntity = courseRepository.save(entity);
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CREATE_BY_TEACHER", "COURSE", savedEntity.getId(), null, savedEntity));
@@ -128,16 +128,12 @@ public class CourseService implements ICourseService {
         CourseEntity existingEntity = courseRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
 
-        CategoryEntity category = categoryRepository.findById(request.getCategoryId())
-                .orElseThrow(() -> ResourceNotFoundException.of("Category", request.getCategoryId()));
-
         String link = request.getLink();
         if (link == null || link.trim().isEmpty()) {
             link = generateSlug(request.getName());
         }
 
         courseMapper.updateEntityFromRequest(request, existingEntity);
-        existingEntity.setCategoryEntity(category);
         existingEntity.setLink(link);
 
         CourseEntity updatedEntity = courseRepository.save(existingEntity);

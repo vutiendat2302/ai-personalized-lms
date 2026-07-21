@@ -78,6 +78,20 @@ def check_teacher_category_exists(cursor, employee_id: int, category_id: int):
     row = cursor.fetchone()
     return row["id"] if row else None
 
+def check_teacher_has_categories(cursor, employee_id: int):
+    """
+    ---> CHỐT CHẶN MỚI <---
+    Kiểm tra xem giảng viên này ĐÃ CÓ chuyên môn nào trong DB chưa.
+    Nếu có rồi thì bỏ qua luôn, không bao giờ bị đẻ thêm record nữa!
+    """
+    query = "SELECT 1 FROM teacher_category WHERE employee_id = %s LIMIT 1"
+    try:
+        cursor.execute(query, (employee_id,))
+    except Exception:
+        # Fallback phòng hờ tên bảng trong DB là số nhiều (teacher_categories)
+        cursor.execute("SELECT 1 FROM teacher_categories WHERE employee_id = %s LIMIT 1", (employee_id,))
+    return cursor.fetchone() is not None
+
 
 def seed(cursor):
     print("→ Seeding teacher_category (Phân công chuyên môn giảng viên)...")
@@ -108,6 +122,10 @@ def seed(cursor):
 
     # 4. Lặp qua từng giảng viên để gán chuyên môn
     for emp_id in teachers:
+        if check_teacher_has_categories(cursor, emp_id):
+            total_skipped += 1
+            continue
+        
         # Mỗi giảng viên nhận 2 đến 3 chuyên môn ngẫu nhiên
         desired_count = random.randint(2, 3)
         actual_count = min(desired_count, total_categories_available)

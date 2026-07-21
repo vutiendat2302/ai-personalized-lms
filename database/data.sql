@@ -1,4 +1,4 @@
-course (cần category, employee tạo)
+course (employee tạo)
   → course_section
     → lesson
       → lesson_resource

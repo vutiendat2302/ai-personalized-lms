@@ -21,6 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import com.ailms.entity.enums.PreviewTypeEnum;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -49,17 +50,17 @@ public class LessonService implements ILessonService {
 
     @Override
     @Transactional
-    public LessonResponse create(Long sectionId, CreateLessonRequest request) {
-        log.info("Creating lesson for section id: {}", sectionId);
+    public LessonResponse create(CreateLessonRequest request) {
+        log.info("Creating lesson for section id: {}", request.getSectionId());
 
-        CourseSectionEntity section = courseSectionRepository.findById(sectionId)
-                .orElseThrow(() -> new ResourceNotFoundException("Section not found with id: " + sectionId));
+        CourseSectionEntity section = courseSectionRepository.findById(request.getSectionId())
+                .orElseThrow(() -> new ResourceNotFoundException("Section not found with id: " + request.getSectionId()));
 
         LessonEntity entity = lessonMapper.toEntity(request);
         entity.setCourseSectionEntity(section);
 
         if (request.getOrderIndex() == null) {
-            int currentCount = lessonRepository.countByCourseSectionEntityId(sectionId);
+            int currentCount = lessonRepository.countByCourseSectionEntityId(request.getSectionId());
             entity.setOrderIndex(currentCount);
         }
 
@@ -109,9 +110,9 @@ public class LessonService implements ILessonService {
         LessonEntity lesson = lessonRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Lesson not found with id: " + id));
 
-        String previewType = lesson.getPreviewType();
+        PreviewTypeEnum previewType = lesson.getPreviewType();
 
-        if ("FREE".equalsIgnoreCase(previewType)) {
+        if (PreviewTypeEnum.FREE == previewType) {
             return LessonPreviewResponse.builder()
                     .id(lesson.getId())
                     .name(lesson.getName())

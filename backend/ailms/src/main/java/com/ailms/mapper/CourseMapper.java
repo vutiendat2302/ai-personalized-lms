@@ -9,26 +9,29 @@ import org.mapstruct.*;
 @Mapper(componentModel = "spring")
 public interface CourseMapper {
 
-    @Mapping(target = "categoryEntity.id", source = "categoryId")
     @Mapping(target = "id", ignore = true)
-    @Mapping(target = "status", ignore = true)
+    @Mapping(target = "categoryEntity", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
     @Mapping(target = "sections", ignore = true)
+    @Mapping(target = "rejectionReason", ignore = true)
+    @Mapping(target = "avgRating", ignore = true)
+    @Mapping(target = "reviewCount", ignore = true)
     CourseEntity toEntity(CreateCourseRequest request);
 
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
-    @Mapping(target = "categoryEntity.id", source = "categoryId")
+    @Mapping(target = "categoryEntity", ignore = true)
     @Mapping(target = "id", ignore = true)
-    @Mapping(target = "status", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
     @Mapping(target = "sections", ignore = true)
+    @Mapping(target = "avgRating", ignore = true)
+    @Mapping(target = "reviewCount", ignore = true)
     void updateEntityFromRequest(UpdateCourseRequest request, @MappingTarget CourseEntity entity);
 
     @Mapping(target = "categoryId", source = "categoryEntity.id")

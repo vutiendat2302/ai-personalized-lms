@@ -13,7 +13,7 @@ import java.util.List;
 public interface ILessonService {
     PageResponse<LessonResponse> search(LessonSearchRequest request);
 
-    LessonResponse create(Long sectionId, CreateLessonRequest request);
+    LessonResponse create(CreateLessonRequest request);
 
     LessonResponse update(Long id, UpdateLessonRequest request);
 

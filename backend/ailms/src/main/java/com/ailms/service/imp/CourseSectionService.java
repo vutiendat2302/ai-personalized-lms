@@ -78,11 +78,6 @@ public class CourseSectionService implements ICourseSectionService {
         courseSectionMapper.updateEntityFromRequest(request, existingEntity);
         existingEntity.setCourseEntity(courseEntity);
 
-        if (request.getOrderIndex() == null) {
-            int currentCount = courseSectionRepository.countByCourseEntityId(request.getCourseId());
-            existingEntity.setOrderIndex(currentCount);
-        }
-
         CourseSectionEntity updatedEntity = courseSectionRepository.save(existingEntity);
 
         return courseSectionMapper.toResponse(updatedEntity);

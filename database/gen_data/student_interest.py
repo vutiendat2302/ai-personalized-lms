@@ -47,6 +47,21 @@ def get_all_interests(cursor):
         cursor.execute("SELECT id FROM interest")
     return cursor.fetchall()
 
+def check_student_has_interests(cursor, student_user_id: int):
+    """
+    ---> CHỐT CHẶN MỚI <---
+    Kiểm tra xem học viên này ĐÃ CÓ sở thích nào trong DB chưa.
+    Nếu có rồi thì bỏ qua luôn, không bao giờ bị đẻ thêm record nữa!
+    """
+    # Lưu ý: Nếu tên bảng trong DB của m là số nhiều (student_interests), hãy thêm chữ s vào tên bảng bên dưới
+    query = "SELECT 1 FROM student_interest WHERE student_user_id = %s LIMIT 1"
+    try:
+        cursor.execute(query, (student_user_id,))
+    except Exception:
+        # Fallback tự động nếu tên bảng trong DB của m là số nhiều
+        cursor.execute("SELECT 1 FROM student_interests WHERE student_user_id = %s LIMIT 1", (student_user_id,))
+    return cursor.fetchone() is not None
+
 
 def check_interest_exists(cursor, student_user_id: int, interest_id: int):
     """Kiểm tra xem cặp (student_user_id, interest_id) đã tồn tại chưa (Idempotent)."""
@@ -88,6 +103,12 @@ def seed(cursor):
 
     # 4. Lặp qua từng học viên để gán sở thích
     for student_id in students:
+        # ---> KIỂM TRA CHỐT CHẶN <---
+        # Nếu học viên đã được seed sở thích từ lần chạy trước -> SKIP NGAY!
+        if check_student_has_interests(cursor, student_id):
+            total_skipped += 1
+            continue
+        
         # Chọn số lượng sở thích học viên này sẽ có (3, 4 hoặc 5)
         desired_count = random.choice(count_pool)
         
