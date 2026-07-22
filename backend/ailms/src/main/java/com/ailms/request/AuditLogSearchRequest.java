@@ -11,11 +11,9 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 @EqualsAndHashCode(callSuper = false)
-public class AuditLogSearchRequest extends BaseSearchRequest {
+public class AuditLogSearchRequest extends CommonSearchRequest<Void> {
 
     private Long userId;
-
-    private String keyword;
 
     private String entityType;
 

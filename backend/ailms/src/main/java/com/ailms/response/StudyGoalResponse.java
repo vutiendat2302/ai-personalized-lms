@@ -1,5 +1,7 @@
 package com.ailms.response;
 
+import com.ailms.entity.enums.StudyGoalStatusEnum;
+import com.ailms.entity.enums.StudyGoalTypeEnum;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.*;
 
@@ -16,7 +18,7 @@ public class StudyGoalResponse {
 
     private Long userId;
 
-    private Byte goalType;
+    private StudyGoalTypeEnum studyGoalTypeEnum;
 
     private Integer targetValue;
 
@@ -26,7 +28,7 @@ public class StudyGoalResponse {
 
     private Integer longestStreak;
 
-    private Byte status;
+    private StudyGoalStatusEnum status;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime createdAt;

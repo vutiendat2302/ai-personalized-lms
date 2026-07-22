@@ -1,7 +1,8 @@
 package com.ailms.mapper;
 
 import com.ailms.entity.GuardianEntity;
-import com.ailms.request.GuardianRequest;
+import com.ailms.request.CreateGuardianRequest;
+import com.ailms.request.UpdateGuardianRequest;
 import com.ailms.response.GuardianResponse;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
@@ -23,7 +24,7 @@ public interface GuardianMapper {
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
-    GuardianEntity toEntity(GuardianRequest request);
+    GuardianEntity toEntity(CreateGuardianRequest request);
 
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "studentProfile", ignore = true)
@@ -31,5 +32,5 @@ public interface GuardianMapper {
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
-    void updateFromRequest(GuardianRequest request, @MappingTarget GuardianEntity entity);
+    void updateFromRequest(UpdateGuardianRequest request, @MappingTarget GuardianEntity entity);
 }

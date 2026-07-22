@@ -1,7 +1,7 @@
 package com.ailms.security;
 
 import com.ailms.entity.UserEntity;
-import com.ailms.entity.UserStatusEnum;
+import com.ailms.entity.enums.UserStatusEnum;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;

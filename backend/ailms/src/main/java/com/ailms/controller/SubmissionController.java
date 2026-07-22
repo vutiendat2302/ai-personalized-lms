@@ -1,9 +1,14 @@
 package com.ailms.controller;
 
+import com.ailms.response.PageResponse;
+import com.ailms.request.SubmissionSearchRequest;
+import com.ailms.response.SubmissionResponse;
+
+
 import com.ailms.request.SubmissionRequest;
 import com.ailms.response.ApiResponse;
 import com.ailms.response.SubmissionResponse;
-import com.ailms.service.SubmissionService;
+import com.ailms.service.ISubmissionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -13,11 +18,11 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/submissions")
+@RequestMapping("${api.prefix}/submissions")
 @RequiredArgsConstructor
 public class SubmissionController {
 
-    private final SubmissionService submissionService;
+    private final ISubmissionService submissionService;
 
     @PostMapping
     public ResponseEntity<ApiResponse<SubmissionResponse>> create(@Valid @RequestBody SubmissionRequest request) {
@@ -67,5 +72,11 @@ public class SubmissionController {
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         submissionService.delete(id);
         return ResponseEntity.ok(ApiResponse.message("Submission deleted successfully"));
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<PageResponse<SubmissionResponse>>> search(SubmissionSearchRequest request) {
+        PageResponse<SubmissionResponse> result = submissionService.search(request);
+        return ResponseEntity.ok(ApiResponse.of("Search Submission successfully", result));
     }
 }

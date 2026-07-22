@@ -1,6 +1,7 @@
 package com.ailms.request;
 
-import com.ailms.entity.UserStatusEnum;
+import com.ailms.entity.enums.BaseStatusEnum;
+import com.ailms.entity.enums.UserStatusEnum;
 import lombok.*;
 import org.springframework.format.annotation.DateTimeFormat;
 
@@ -13,17 +14,9 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 @EqualsAndHashCode(callSuper = false)
-public class UserSearchRequest extends BaseSearchRequest {
-
-    private String keyword;
+public class UserSearchRequest extends CommonSearchRequest<UserStatusEnum> {
 
     private List<Long> roleIds;
 
     private List<UserStatusEnum> statuses;
-
-    @DateTimeFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
-    private LocalDateTime createdFrom;
-
-    @DateTimeFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
-    private LocalDateTime createdTo;
 }

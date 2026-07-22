@@ -25,27 +25,29 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @SuperBuilder
-public class
-RolePermissionEntity extends BaseEntity {
+public class RolePermissionEntity extends BaseEntity {
 
+    /** Mã định danh bản ghi liên kết Role - Permission (Snowflake ID 64-bit). */
     @Id
     @SnowflakeId
     @Column(name = "id", updatable = false, nullable = false)
     private Long id;
 
+    /** Vai trò được cấp quyền. */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "role_id", nullable = false)
     private RoleEntity roleEntity;
 
+    /** Quyền hạn được gán cho vai trò. */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "permission_id", nullable = false)
     private PermissionEntity permissionEntity;
 
-    // Nguoi gan permission cho role
+    /** ID của Admin thực hiện gán quyền này cho Role. */
     @Column(name = "granted_by")
     private Long grantedBy;
 
-    // Thoi diem gan permission cho role
+    /** Thời điểm gán quyền cho Role. */
     @Column(name = "granted_at")
     private LocalDateTime grantedAt;
 }

@@ -1,15 +1,18 @@
 package com.ailms.controller;
 
+import com.ailms.response.PageResponse;
+import com.ailms.request.UserSearchRequest;
+import com.ailms.response.UserResponse;
+
+
 import com.ailms.request.*;
 import com.ailms.response.ApiResponse;
-import com.ailms.response.UserResponse;
 import com.ailms.response.EffectivePermissionResponse;
 import com.ailms.security.CustomUserDetails;
 import com.ailms.service.IUserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -19,7 +22,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/users")
+@RequestMapping("${api.prefix}/users")
 @RequiredArgsConstructor
 @Slf4j
 public class UserController {
@@ -101,12 +104,12 @@ public class UserController {
      * - sortDir: hướng sắp xếp (ASC/DESC)
      *
      * @param request chứa các điều kiện tìm kiếm, phân trang và sắp xếp
-     * @return danh sách người dùng dạng Page<UserResponse>
+     * @return danh sách người dùng dạng PageResponse<UserResponse>
      */
     @GetMapping("/page")
-    public ResponseEntity<ApiResponse<Page<UserResponse>>> getUsers(
+    public ResponseEntity<ApiResponse<PageResponse<UserResponse>>> getUsers(
             UserSearchRequest request) {
-        Page<UserResponse> page = userService.getUsers(request);
+        PageResponse<UserResponse> page = userService.getUsers(request);
         return ResponseEntity.ok(ApiResponse.of("Users retrieved successfully", page));
     }
 

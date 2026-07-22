@@ -1,5 +1,6 @@
 package com.ailms.request;
 
+import com.ailms.entity.enums.CourseStatusEnum;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.*;
 
@@ -7,21 +8,8 @@ import java.time.LocalDateTime;
 
 @Getter
 @Setter
-@NoArgsConstructor
-@AllArgsConstructor
 @Builder
 @EqualsAndHashCode(callSuper = false) // Khong so sanh in hoa voi in thuong
-public class CourseSearchRequest extends BaseSearchRequest {
-    
-    private String keyword;
+public class CourseSearchRequest extends CommonSearchRequest<CourseStatusEnum> {
 
-    // private String level; Sau fix enum bổ sung sau
-    
-    private Byte status;
-
-    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
-    private LocalDateTime createdFrom;
-
-    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
-    private LocalDateTime createdTo;
 }

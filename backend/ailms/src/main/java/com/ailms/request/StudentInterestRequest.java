@@ -17,6 +17,5 @@ public class StudentInterestRequest {
     @NotNull(message = "Interest ID is required")
     private Long interestId;
 
-    @Size(max = 3000, message = "Note must not exceed 3000 characters")
     private String note;
 }

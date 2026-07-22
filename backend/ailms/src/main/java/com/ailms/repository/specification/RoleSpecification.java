@@ -1,33 +1,22 @@
 package com.ailms.repository.specification;
 
 import com.ailms.entity.RoleEntity;
+import com.ailms.common.util.SpecificationBuilder;
 import com.ailms.request.RoleSearchRequest;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.util.StringUtils;
 
 public class RoleSpecification {
 
     public static Specification<RoleEntity> filterAndSearch(RoleSearchRequest request) {
-        Specification<RoleEntity> spec = (root, query, criteriaBuilder) -> criteriaBuilder.conjunction();
+        SpecificationBuilder<RoleEntity> builder = SpecificationBuilder.of();
 
         if (request == null) {
-            return spec;
+            return builder.build();
         }
 
-        if (request.getIsSystem() != null) {
-            spec = spec.and((root, query, criteriaBuilder) ->
-                    criteriaBuilder.equal(root.get("isSystem"), request.getIsSystem()));
+        builder.equalIfPresent("isSystem", request.getIsSystem());
+        builder.likeAnyIfPresent(request.getKeyword(), "name", "code");
 
-        }
-
-        if (StringUtils.hasText(request.getKeyword())) {
-            String pattern = "%" + request.getKeyword().toLowerCase() + "%";
-            spec = spec.and((root, query, criteriaBuilder) -> criteriaBuilder.or(
-                    criteriaBuilder.like(criteriaBuilder.lower(root.get("name")), pattern),
-                    criteriaBuilder.like(criteriaBuilder.lower(root.get("code")), pattern)
-            ));
-        }
-
-        return spec;
+        return builder.build();
     }
 }

@@ -1,6 +1,6 @@
 package com.ailms.response;
 
-import com.ailms.entity.BaseStatusEnum;
+import com.ailms.entity.enums.BaseStatusEnum;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.*;
 
@@ -14,8 +14,6 @@ import java.time.LocalDateTime;
 public class DepartmentResponse {
 
     private Long id;
-    private Long parentId;
-    private String parentName;
     private String code;
     private String name;
     private String description;
@@ -26,4 +24,7 @@ public class DepartmentResponse {
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime updatedAt;
+
+    private Long createdBy;
+    private Long updatedBy;
 }

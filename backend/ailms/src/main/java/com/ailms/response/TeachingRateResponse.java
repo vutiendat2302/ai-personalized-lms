@@ -1,6 +1,6 @@
 package com.ailms.response;
 
-import com.ailms.entity.BaseStatusEnum;
+import com.ailms.entity.enums.BaseStatusEnum;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.*;
 
@@ -35,4 +35,9 @@ public class TeachingRateResponse {
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime updatedAt;
+
+    private String description;
+
+    private Long createdBy;
+    private Long updatedBy;
 }

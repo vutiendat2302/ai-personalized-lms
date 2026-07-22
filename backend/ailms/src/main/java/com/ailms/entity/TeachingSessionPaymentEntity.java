@@ -1,17 +1,15 @@
 package com.ailms.entity;
 
 import com.ailms.common.snowflake.SnowflakeId;
+import com.ailms.entity.enums.SessionPaymentStatusEnum;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 import lombok.experimental.SuperBuilder;
 
 import java.math.BigDecimal;
 
 /**
- * Luu tru thong tin thanh toan cho mot buoi day hoc
+ * Thực thể lưu trữ thông tin tính toán thù lao thanh toán cho từng buổi dạy học trực tuyến.
  */
 @Entity
 @Table(name = "teaching_session_payment", uniqueConstraints = {
@@ -24,40 +22,47 @@ import java.math.BigDecimal;
 @SuperBuilder
 public class TeachingSessionPaymentEntity extends BaseEntity {
 
+    /** Mã định danh thanh toán buổi dạy (Snowflake ID 64-bit). */
     @Id
     @SnowflakeId
     @Column(name = "id", updatable = false, nullable = false)
     private Long id;
 
-//    lop hoc truc tuyen
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    /** Buổi học trực tuyến tương ứng được tính thù lao. */
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "class_online_id")
     private ClassOnlineEntity classOnline;
 
-//    Giang vien
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "employee_id", nullable = false)
+    /** Giảng viên thực hiện buổi dạy. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "employee_id")
     private EmployeeEntity employee;
 
-//    Bang don gia duoc ap dung
+    /** Đơn giá thù lao được áp dụng cho buổi dạy này. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "rate_id")
     private TeachingRateEntity teachingRate;
 
-//    Don gia duoc ap dung khi tinh luong, tai thoi diem do
+    /** Giá trị đơn giá thực tế được áp dụng tại thời điểm tính thù lao. */
     @Column(name = "rate_applied", precision = 12, scale = 2)
     private BigDecimal rateApplied;
 
-//    Thoi luong giang day thuc te
+    /** Thời lượng giảng dạy thực tế của buổi học (tính theo phút). */
     @Column(name = "actual_duration_min")
-    private Integer actualDurationMin;
+    @Builder.Default
+    private int actualDurationMin = 0;
 
-//    So tien thanh toan cho buoi day
+    /** Tổng số tiền thù lao thanh toán cho buổi dạy. */
     @Column(name = "amount", precision = 12, scale = 2)
     private BigDecimal amount;
 
-//    Trang thai
+    /** Trạng thái quyết toán thù lao buổi dạy (PENDING, CALCULATED, APPROVED, PAID, REJECTED). */
     @Column(name = "status")
     @Enumerated(EnumType.STRING)
-    private SessionPaymentStatusEnum status;
+    @Builder.Default
+    private SessionPaymentStatusEnum status = SessionPaymentStatusEnum.PENDING;
+
+    /** Ghi chú giải trình hoặc thông tin bổ sung về buổi dạy. */
+    @Column(name = "description")
+    private String description;
 }

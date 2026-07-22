@@ -1,11 +1,10 @@
 package com.ailms.mapper;
 
 import com.ailms.entity.ClassOnlineEntity;
-import com.ailms.request.ClassOnlineRequest;
+import com.ailms.request.CreateClassOnlineRequest;
+import com.ailms.request.UpdateClassOnlineRequest;
 import com.ailms.response.ClassOnlineResponse;
-import org.mapstruct.Mapper;
-import org.mapstruct.Mapping;
-import org.mapstruct.MappingTarget;
+import org.mapstruct.*;
 
 import java.util.List;
 
@@ -20,13 +19,15 @@ public interface ClassOnlineMapper {
 
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "classEntity", ignore = true)
+    @Mapping(target = "status", ignore = true)
     @Mapping(target = "teacherEntity", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
-    ClassOnlineEntity toEntity(ClassOnlineRequest request);
+    ClassOnlineEntity toEntity(CreateClassOnlineRequest request);
 
+    @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "classEntity", ignore = true)
     @Mapping(target = "teacherEntity", ignore = true)
@@ -34,5 +35,5 @@ public interface ClassOnlineMapper {
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
-    void updateFromRequest(ClassOnlineRequest request, @MappingTarget ClassOnlineEntity entity);
+    void updateFromRequest(UpdateClassOnlineRequest request, @MappingTarget ClassOnlineEntity entity);
 }

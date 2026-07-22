@@ -1,16 +1,16 @@
 package com.ailms.entity;
 
+import com.ailms.entity.enums.EmployeeStatusEnum;
+import com.ailms.entity.enums.EmploymentTypeEnum;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 import lombok.experimental.SuperBuilder;
 
 import java.time.LocalDateTime;
 
 /**
- * Lưu trữ thông tin nhân sự của người dùng trong hệ thống.
+ * Lưu trữ thông tin nhân sự và giảng viên trong hệ thống LMS.
+ * Khóa chính `userId` liên kết 1-1 với tài khoản người dùng (`UserEntity`).
  */
 @Entity
 @Table(name = "employee", uniqueConstraints = {
@@ -23,45 +23,65 @@ import java.time.LocalDateTime;
 @SuperBuilder
 public class EmployeeEntity extends BaseEntity {
 
-    /** * Khóa chính của bảng employee. * Đồng thời là khóa ngoại tham chiếu đến UserEntity. */
+    /**
+     * Khóa chính của bảng employee (trùng với ID của UserEntity).
+     */
     @Id
     @Column(name = "user_id")
     private Long userId;
 
-    /** * Thông tin tài khoản người dùng tương ứng với nhân viên. * Sử dụng Shared Primary Key với cột user_id. */
+    /**
+     * Thông tin tài khoản người dùng tương ứng với nhân viên.
+     */
     @OneToOne(fetch = FetchType.LAZY)
     @MapsId
     @JoinColumn(name = "user_id", nullable = false)
     private UserEntity userEntity;
 
-    /** * Mã nhân viên duy nhất trong hệ thống. */
+    /**
+     * Mã nhân viên duy nhất trong hệ thống.
+     */
     @Column(name = "employee_code", nullable = false, unique = true)
     private String employeeCode;
 
-    /** * Phòng ban mà nhân viên trực thuộc. */
+    /**
+     * Phòng ban mà nhân viên trực thuộc.
+     */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "department_id")
     private DepartmentEntity department;
 
-    /** * Chức vụ của nhân viên. */
+    /**
+     * Chức vụ của nhân viên (VD: Giảng viên, Nhân viên tuyển sinh, Trưởng phòng).
+     */
     @Column(name = "position", length = 100)
     private String position;
 
-    /** * Loại hình làm việc của nhân viên * (Full-time, Part-time, Contract, Internship,...). */
+    /**
+     * Loại hình làm việc (FULL_TIME, PART_TIME, CONTRACT, INTERN).
+     */
     @Column(name = "employment_type")
     @Enumerated(EnumType.STRING)
     private EmploymentTypeEnum employmentTypeEnum;
 
-    /** * Ngày bắt đầu làm việc. */
+    /**
+     * Ngày bắt đầu làm việc chính thức.
+     */
     @Column(name = "start_date")
     private LocalDateTime startDate;
 
-    /** * Ngày kết thúc làm việc (nếu có). */
+    /**
+     * Ngày kết thúc hợp đồng hoặc nghỉ việc (null nếu đang làm việc).
+     */
     @Column(name = "end_date")
     private LocalDateTime endDate;
 
-    /** * Trạng thái hiện tại của nhân viên. */
+    /**
+     * Trạng thái nhân sự (ACTIVE, PROBATION, SUSPENDED, TERMINATED).
+     */
     @Column(name = "status")
     @Enumerated(EnumType.STRING)
-    private EmployeeStatusEnum status;
+    @Builder.Default
+    private EmployeeStatusEnum status = EmployeeStatusEnum.ACTIVE;
+
 }

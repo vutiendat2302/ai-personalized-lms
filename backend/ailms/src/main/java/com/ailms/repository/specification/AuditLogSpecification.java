@@ -1,58 +1,27 @@
 package com.ailms.repository.specification;
 
 import com.ailms.entity.AuditLogEntity;
+import com.ailms.common.util.SpecificationBuilder;
 import com.ailms.request.AuditLogSearchRequest;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.util.StringUtils;
 
 public class AuditLogSpecification {
 
     public static Specification<AuditLogEntity> filterAndSearch(AuditLogSearchRequest request) {
-        Specification<AuditLogEntity> spec = (root, query, criteriaBuilder) -> criteriaBuilder.conjunction();
+        SpecificationBuilder<AuditLogEntity> builder = SpecificationBuilder.of();
 
         if (request == null) {
-            return spec;
+            return builder.build();
         }
 
-        if (request.getUserId() != null) {
-            spec = spec.and((root, query, criteriaBuilder) ->
-                    criteriaBuilder.equal(root.get("user").get("id"), request.getUserId()));
-        }
+        builder.equalIfPresent("user.id", request.getUserId());
+        builder.likeAnyIfPresent(request.getKeyword(), "action", "entityType", "ipAddress");
+        builder.equalIfPresent("entityType", request.getEntityType());
+        builder.equalIfPresent("entityId", request.getEntityId());
+        builder.equalIfPresent("action", request.getAction());
+        builder.greaterOrEqualIfPresent("occurredAt", request.getOccurredFrom());
+        builder.lessOrEqualIfPresent("occurredAt", request.getOccurredTo());
 
-        if (StringUtils.hasText(request.getKeyword())) {
-            String pattern = "%" + request.getKeyword().toLowerCase() + "%";
-            spec = spec.and((root, query, criteriaBuilder) -> criteriaBuilder.or(
-                    criteriaBuilder.like(criteriaBuilder.lower(root.get("action")), pattern),
-                    criteriaBuilder.like(criteriaBuilder.lower(root.get("entityType")), pattern),
-                    criteriaBuilder.like(criteriaBuilder.lower(root.get("ipAddress")), pattern)
-            ));
-        }
-
-        if (StringUtils.hasText(request.getEntityType())) {
-            spec = spec.and((root, query, criteriaBuilder) ->
-                    criteriaBuilder.equal(root.get("entityType"), request.getEntityType()));
-        }
-
-        if (request.getEntityId() != null) {
-            spec = spec.and((root, query, criteriaBuilder) ->
-                    criteriaBuilder.equal(root.get("entityId"), request.getEntityId()));
-        }
-
-        if (StringUtils.hasText(request.getAction())) {
-            spec = spec.and((root, query, criteriaBuilder) ->
-                    criteriaBuilder.equal(root.get("action"), request.getAction()));
-        }
-
-        if (request.getOccurredFrom() != null) {
-            spec = spec.and((root, query, criteriaBuilder) ->
-                    criteriaBuilder.greaterThanOrEqualTo(root.get("occurredAt"), request.getOccurredFrom()));
-        }
-
-        if (request.getOccurredTo() != null) {
-            spec = spec.and((root, query, criteriaBuilder) ->
-                    criteriaBuilder.lessThanOrEqualTo(root.get("occurredAt"), request.getOccurredTo()));
-        }
-
-        return spec;
+        return builder.build();
     }
 }

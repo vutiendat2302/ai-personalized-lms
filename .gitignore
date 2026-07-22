@@ -31,3 +31,26 @@ Thumbs.db
 *.iws
 out/
 
+# Docker data
+docker/mysql/
+docker/redis/
+docker/minio/
+
+
+# Virtual environment
+.venv/
+venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Pytest
+.pytest_cache/
+
+# MyPy
+.mypy_cache/
+
+# IDE
+.vscode/
+.idea/

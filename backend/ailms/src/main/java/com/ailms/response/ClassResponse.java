@@ -1,6 +1,9 @@
 package com.ailms.response;
 
+import com.ailms.entity.enums.BaseStatusEnum;
+import com.ailms.entity.enums.DeliveryModeEnum;
 import com.fasterxml.jackson.annotation.JsonFormat;
+import jakarta.persistence.Column;
 import lombok.*;
 
 import java.time.LocalDateTime;
@@ -16,13 +19,17 @@ public class ClassResponse {
 
     private Long courseId;
 
+    private Long categoryId;
+
     private String name;
 
     private Byte type;
 
+    private DeliveryModeEnum packageType;
+
     private Integer maxMembers;
 
-    private Byte status;
+    private BaseStatusEnum status;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime startDate;
@@ -35,4 +42,6 @@ public class ClassResponse {
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime updatedAt;
+
+
 }

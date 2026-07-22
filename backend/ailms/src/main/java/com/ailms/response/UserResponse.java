@@ -1,6 +1,6 @@
 package com.ailms.response;
 
-import com.ailms.entity.UserStatusEnum;
+import com.ailms.entity.enums.UserStatusEnum;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 import java.time.LocalDateTime;

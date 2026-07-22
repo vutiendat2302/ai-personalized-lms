@@ -1,6 +1,7 @@
 package com.ailms.repository;
 
 import com.ailms.entity.UserRoleEntity;
+import com.ailms.repository.base.BaseRepository;
 import jakarta.persistence.Entity;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -15,7 +16,7 @@ import java.util.List;
 import java.util.Locale;
 
 @Repository
-public interface UserRoleRepository extends JpaRepository<UserRoleEntity, Long> {
+public interface UserRoleRepository extends BaseRepository<UserRoleEntity, Long> {
     
     @EntityGraph(attributePaths = {"roleEntity", "roleEntity.rolePermissions", "roleEntity.rolePermissions.permissionEntity"})
     List<UserRoleEntity> findByUserEntity_Id(Long userId);
@@ -28,6 +29,13 @@ public interface UserRoleRepository extends JpaRepository<UserRoleEntity, Long> 
     List<UserRoleEntity> findByUserEntity_IdWithRole(@Param("userId") Long userId);
 
     long countByRoleEntity_Id(Long roleId);
+
+    @Query("""
+        SELECT DISTINCT ur.userEntity.email FROM UserRoleEntity ur
+        WHERE ur.roleEntity.code IN ('ADMIN', 'HR', 'ROLE_ADMIN', 'ROLE_HR') 
+           OR ur.roleEntity.name IN ('ADMIN', 'HR', 'ROLE_ADMIN', 'ROLE_HR')
+    """)
+    List<String> findAdminAndHrEmails();
 
     boolean existsByRoleEntity_Id(Long roleId);
 

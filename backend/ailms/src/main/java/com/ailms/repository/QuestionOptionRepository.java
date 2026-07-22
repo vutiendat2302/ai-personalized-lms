@@ -1,12 +1,12 @@
 package com.ailms.repository;
 
 import com.ailms.entity.QuestionOptionEntity;
-import org.springframework.data.jpa.repository.JpaRepository;
+import com.ailms.repository.base.BaseRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
 @Repository
-public interface QuestionOptionRepository extends JpaRepository<QuestionOptionEntity, Long> {
+public interface QuestionOptionRepository extends BaseRepository<QuestionOptionEntity, Long> {
     List<QuestionOptionEntity> findByQuestionId(Long questionId);
 }

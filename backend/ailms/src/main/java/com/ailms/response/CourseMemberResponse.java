@@ -1,6 +1,6 @@
 package com.ailms.response;
 
-import com.ailms.entity.ClassMemberRole;
+import com.ailms.entity.enums.ClassMemberRole;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.*;
 

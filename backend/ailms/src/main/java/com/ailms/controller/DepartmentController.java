@@ -36,14 +36,6 @@ public class DepartmentController {
         return ResponseEntity.ok(ApiResponse.of("Department updated successfully", response));
     }
 
-    @PatchMapping("/{id}/status")
-    public ResponseEntity<ApiResponse<DepartmentResponse>> updateStatus(
-            @PathVariable Long id,
-            @Valid @RequestBody DepartmentStatusRequest request) {
-        DepartmentResponse response = departmentService.updateStatus(id, request);
-        return ResponseEntity.ok(ApiResponse.of("Department status updated successfully", response));
-    }
-
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         departmentService.delete(id);

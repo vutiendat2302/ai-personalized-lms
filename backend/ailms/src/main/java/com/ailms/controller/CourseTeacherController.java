@@ -1,9 +1,14 @@
 package com.ailms.controller;
 
+import com.ailms.response.PageResponse;
+import com.ailms.request.CourseTeacherSearchRequest;
+import com.ailms.response.CourseTeacherResponse;
+
+
 import com.ailms.request.CourseTeacherRequest;
 import com.ailms.response.ApiResponse;
 import com.ailms.response.CourseTeacherResponse;
-import com.ailms.service.CourseTeacherService;
+import com.ailms.service.ICourseTeacherService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -13,11 +18,11 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/course-teachers")
+@RequestMapping("${api.prefix}/course-teachers")
 @RequiredArgsConstructor
 public class CourseTeacherController {
 
-    private final CourseTeacherService courseTeacherService;
+    private final ICourseTeacherService courseTeacherService;
 
     @PostMapping
     public ResponseEntity<ApiResponse<CourseTeacherResponse>> create(@Valid @RequestBody CourseTeacherRequest request) {
@@ -66,5 +71,11 @@ public class CourseTeacherController {
             @PathVariable Long userId) {
         courseTeacherService.delete(courseId, userId);
         return ResponseEntity.ok(ApiResponse.message("Course teacher deleted successfully"));
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<PageResponse<CourseTeacherResponse>>> search(CourseTeacherSearchRequest request) {
+        PageResponse<CourseTeacherResponse> result = courseTeacherService.search(request);
+        return ResponseEntity.ok(ApiResponse.of("Search CourseTeacher successfully", result));
     }
 }

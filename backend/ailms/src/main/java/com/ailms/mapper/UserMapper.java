@@ -1,9 +1,7 @@
 package com.ailms.mapper;
 
-import com.ailms.entity.CategoryEntity;
 import com.ailms.entity.UserEntity;
 import com.ailms.request.*;
-import com.ailms.response.CategoryResponse;
 import com.ailms.response.UserResponse;
 import org.mapstruct.*;
 

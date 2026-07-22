@@ -24,8 +24,6 @@ public class StudentProfileResponse {
 
     private String schoolName;
 
-    private String notes;
-
     private Boolean isMinor;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")

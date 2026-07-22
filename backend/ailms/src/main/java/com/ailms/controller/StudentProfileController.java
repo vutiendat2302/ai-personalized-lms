@@ -1,9 +1,14 @@
 package com.ailms.controller;
 
-import com.ailms.request.StudentProfileRequest;
-import com.ailms.response.ApiResponse;
+import com.ailms.request.CreateStudentProfileRequest;
+import com.ailms.request.UpdateStudentProfileRequest;
+import com.ailms.response.PageResponse;
+import com.ailms.request.StudentProfileSearchRequest;
 import com.ailms.response.StudentProfileResponse;
-import com.ailms.service.StudentProfileService;
+
+
+import com.ailms.response.ApiResponse;
+import com.ailms.service.IStudentProfileService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -13,14 +18,14 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/student-profiles")
+@RequestMapping("${api.prefix}/student-profiles")
 @RequiredArgsConstructor
 public class StudentProfileController {
 
-    private final StudentProfileService studentProfileService;
+    private final IStudentProfileService studentProfileService;
 
     @PostMapping
-    public ResponseEntity<ApiResponse<StudentProfileResponse>> create(@Valid @RequestBody StudentProfileRequest request) {
+    public ResponseEntity<ApiResponse<StudentProfileResponse>> create(@Valid @RequestBody CreateStudentProfileRequest request) {
         StudentProfileResponse response = studentProfileService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of("Student profile created successfully", response));
     }
@@ -28,7 +33,7 @@ public class StudentProfileController {
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<StudentProfileResponse>> update(
             @PathVariable Long id,
-            @Valid @RequestBody StudentProfileRequest request) {
+            @Valid @RequestBody UpdateStudentProfileRequest request) {
         StudentProfileResponse response = studentProfileService.update(id, request);
         return ResponseEntity.ok(ApiResponse.of("Student profile updated successfully", response));
     }
@@ -49,5 +54,11 @@ public class StudentProfileController {
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         studentProfileService.delete(id);
         return ResponseEntity.ok(ApiResponse.message("Student profile deleted successfully"));
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<PageResponse<StudentProfileResponse>>> search(StudentProfileSearchRequest request) {
+        PageResponse<StudentProfileResponse> result = studentProfileService.search(request);
+        return ResponseEntity.ok(ApiResponse.of("Search StudentProfile successfully", result));
     }
 }

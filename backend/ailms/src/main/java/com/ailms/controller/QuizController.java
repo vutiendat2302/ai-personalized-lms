@@ -1,9 +1,13 @@
 package com.ailms.controller;
 
+import com.ailms.response.PageResponse;
+import com.ailms.request.QuizSearchRequest;
+import com.ailms.response.QuizResponse;
+
 import com.ailms.request.QuizRequest;
 import com.ailms.response.ApiResponse;
 import com.ailms.response.QuizResponse;
-import com.ailms.service.QuizService;
+import com.ailms.service.IQuizService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -17,7 +21,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class QuizController {
 
-    private final QuizService quizService;
+    private final IQuizService quizService;
 
     @PostMapping
     public ResponseEntity<ApiResponse<QuizResponse>> create(@Valid @RequestBody QuizRequest request) {
@@ -67,5 +71,11 @@ public class QuizController {
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         quizService.delete(id);
         return ResponseEntity.ok(ApiResponse.message("Quiz deleted successfully"));
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<PageResponse<QuizResponse>>> search(QuizSearchRequest request) {
+        PageResponse<QuizResponse> result = quizService.search(request);
+        return ResponseEntity.ok(ApiResponse.of("Search Quiz successfully", result));
     }
 }

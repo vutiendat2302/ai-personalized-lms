@@ -1,9 +1,13 @@
 package com.ailms.controller;
 
+import com.ailms.response.PageResponse;
+import com.ailms.request.QuestionSearchRequest;
+import com.ailms.response.QuestionResponse;
+
 import com.ailms.request.QuestionRequest;
 import com.ailms.response.ApiResponse;
 import com.ailms.response.QuestionResponse;
-import com.ailms.service.QuestionService;
+import com.ailms.service.IQuestionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -17,12 +21,13 @@ import java.util.List;
 @RequiredArgsConstructor
 public class QuestionController {
 
-    private final QuestionService questionService;
+    private final IQuestionService questionService;
 
     @PostMapping
     public ResponseEntity<ApiResponse<QuestionResponse>> create(@Valid @RequestBody QuestionRequest request) {
         QuestionResponse response = questionService.create(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of("Question created successfully", response));
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.of("Question created successfully", response));
     }
 
     @PutMapping("/{id}")
@@ -55,5 +60,11 @@ public class QuestionController {
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         questionService.delete(id);
         return ResponseEntity.ok(ApiResponse.message("Question deleted successfully"));
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<PageResponse<QuestionResponse>>> search(QuestionSearchRequest request) {
+        PageResponse<QuestionResponse> result = questionService.search(request);
+        return ResponseEntity.ok(ApiResponse.of("Search Question successfully", result));
     }
 }

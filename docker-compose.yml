@@ -11,12 +11,7 @@ services:
     ports:
       - "3306:3306"
     volumes:
-      - mysql-data:/var/lib/mysql
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p123456"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+    - ./docker/mysql:/var/lib/mysql
 
   redis:
     image: redis:alpine
@@ -25,12 +20,7 @@ services:
     ports:
       - "6379:6379"
     volumes:
-      - redis-data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+    - ./docker/redis:/data
 
   minio:
     image: minio/minio:latest
@@ -40,53 +30,11 @@ services:
       - "9000:9000"
       - "9001:9001"
     environment:
-      MINIO_ROOT_USER: "root"
-      MINIO_ROOT_PASSWORD: "123456"
+      MINIO_ROOT_USER: "minioadmin"
+      MINIO_ROOT_PASSWORD: "minioadmin123"
     command: server /data --console-address ":9001"
     volumes:
-      - minio-data:/data
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  backend:
-    build:
-      context: ./backend/ailms
-      dockerfile: Dockerfile
-    container_name: ailms-backend
-    restart: always
-    ports:
-      - "8080:8080"
-    environment:
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/ailms
-      SPRING_DATASOURCE_USERNAME: root
-      SPRING_DATASOURCE_PASSWORD: "123456"
-      SPRING_DATA_REDIS_HOST: redis
-      MINIO_ENDPOINT: http://minio:9000
-      MINIO_EXTERNAL_ENDPOINT: http://localhost:9000
-      MINIO_ACCESS_KEY: root
-      MINIO_SECRET_KEY: "123456"
-      MINIO_BUCKET_NAME: ailms-resources
-    depends_on:
-      mysql:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
-
-  frontend:
-    build:
-      context: ./frontend/ailms-frontend
-      dockerfile: Dockerfile
-    container_name: ailms-frontend
-    restart: always
-    ports:
-      - "80:80"
-    depends_on:
-      - backend
+      - ./docker/minio:/data
 
 volumes:
   mysql-data:

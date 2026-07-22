@@ -1,6 +1,6 @@
 package com.ailms.response;
 
-import com.ailms.entity.GuardianRelationship;
+import com.ailms.entity.enums.GuardianRelationship;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.*;
 

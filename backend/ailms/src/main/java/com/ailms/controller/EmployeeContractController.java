@@ -1,9 +1,14 @@
 package com.ailms.controller;
 
-import com.ailms.request.EmployeeContractRequest;
-import com.ailms.response.ApiResponse;
+import com.ailms.request.CreateEmployeeContractRequest;
+import com.ailms.request.UpdateEmployeeContractRequest;
+import com.ailms.response.PageResponse;
+import com.ailms.request.EmployeeContractSearchRequest;
 import com.ailms.response.EmployeeContractResponse;
-import com.ailms.service.EmployeeContractService;
+
+
+import com.ailms.response.ApiResponse;
+import com.ailms.service.IEmployeeContractService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -13,14 +18,14 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/employee-contracts")
+@RequestMapping("${api.prefix}/employee-contracts")
 @RequiredArgsConstructor
 public class EmployeeContractController {
 
-    private final EmployeeContractService employeeContractService;
+    private final IEmployeeContractService employeeContractService;
 
     @PostMapping
-    public ResponseEntity<ApiResponse<EmployeeContractResponse>> create(@Valid @RequestBody EmployeeContractRequest request) {
+    public ResponseEntity<ApiResponse<EmployeeContractResponse>> create(@Valid @RequestBody CreateEmployeeContractRequest request) {
         EmployeeContractResponse response = employeeContractService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of("Employee contract created successfully", response));
     }
@@ -28,7 +33,7 @@ public class EmployeeContractController {
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<EmployeeContractResponse>> update(
             @PathVariable Long id,
-            @Valid @RequestBody EmployeeContractRequest request) {
+            @Valid @RequestBody UpdateEmployeeContractRequest request) {
         EmployeeContractResponse response = employeeContractService.update(id, request);
         return ResponseEntity.ok(ApiResponse.of("Employee contract updated successfully", response));
     }
@@ -55,5 +60,11 @@ public class EmployeeContractController {
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         employeeContractService.delete(id);
         return ResponseEntity.ok(ApiResponse.message("Employee contract deleted successfully"));
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<PageResponse<EmployeeContractResponse>>> search(EmployeeContractSearchRequest request) {
+        PageResponse<EmployeeContractResponse> result = employeeContractService.search(request);
+        return ResponseEntity.ok(ApiResponse.of("Search EmployeeContract successfully", result));
     }
 }

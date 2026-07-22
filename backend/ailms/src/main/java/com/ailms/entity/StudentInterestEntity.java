@@ -22,14 +22,17 @@ import lombok.experimental.SuperBuilder;
 @SuperBuilder
 public class StudentInterestEntity extends BaseEntity {
 
+    /** Khóa phức hợp chứa studentUserId và interestId. */
     @EmbeddedId
     private StudentInterestId id;
 
+    /** Hồ sơ thông tin học viên tương ứng. */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @MapsId("studentUserId")
     @JoinColumn(name = "student_user_id", nullable = false)
     private StudentProfileEntity studentProfile;
 
+    /** Danh mục sở thích được chọn. */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @MapsId("interestId")
     @JoinColumn(name = "interest_id", nullable = false)

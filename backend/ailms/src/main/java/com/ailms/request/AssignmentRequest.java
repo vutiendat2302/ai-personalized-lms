@@ -1,5 +1,6 @@
 package com.ailms.request;
 
+import com.ailms.entity.enums.BaseStatusEnum;
 import jakarta.validation.constraints.NotBlank;
 import lombok.*;
 
@@ -30,5 +31,5 @@ public class AssignmentRequest {
 
     private Boolean allowLate;
 
-    private Byte status;
+    private BaseStatusEnum status;
 }

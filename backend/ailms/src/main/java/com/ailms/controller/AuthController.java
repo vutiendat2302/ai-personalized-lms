@@ -6,6 +6,7 @@ import com.ailms.response.JwtAuthenticationResponse;
 import com.ailms.security.CustomUserDetails;
 import com.ailms.service.IAuthService;
 
+import com.ailms.service.IUserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,7 +25,7 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final IAuthService authService;
-    private final com.ailms.service.UserService userService;
+    private final IUserService userService;
 
     @Value("${app.jwt.refresh-expiration-ms}")
     private int refreshExpirationMs;

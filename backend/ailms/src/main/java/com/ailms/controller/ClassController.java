@@ -1,9 +1,14 @@
 package com.ailms.controller;
 
-import com.ailms.request.ClassRequest;
-import com.ailms.response.ApiResponse;
+import com.ailms.request.CreateClassRequest;
+import com.ailms.request.UpdateClassRequest;
+import com.ailms.response.PageResponse;
+import com.ailms.request.ClassSearchRequest;
 import com.ailms.response.ClassResponse;
-import com.ailms.service.ClassService;
+
+
+import com.ailms.response.ApiResponse;
+import com.ailms.service.IClassService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -13,14 +18,14 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/classes")
+@RequestMapping("${api.prefix}/classes")
 @RequiredArgsConstructor
 public class ClassController {
 
-    private final ClassService classService;
+    private final IClassService classService;
 
     @PostMapping
-    public ResponseEntity<ApiResponse<ClassResponse>> create(@Valid @RequestBody ClassRequest request) {
+    public ResponseEntity<ApiResponse<ClassResponse>> create(@Valid @RequestBody CreateClassRequest request) {
         ClassResponse response = classService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of("Class created successfully", response));
     }
@@ -28,7 +33,7 @@ public class ClassController {
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<ClassResponse>> update(
             @PathVariable Long id,
-            @Valid @RequestBody ClassRequest request) {
+            @Valid @RequestBody UpdateClassRequest request) {
         ClassResponse response = classService.update(id, request);
         return ResponseEntity.ok(ApiResponse.of("Class updated successfully", response));
     }
@@ -55,5 +60,11 @@ public class ClassController {
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         classService.delete(id);
         return ResponseEntity.ok(ApiResponse.message("Class deleted successfully"));
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<PageResponse<ClassResponse>>> search(ClassSearchRequest request) {
+        PageResponse<ClassResponse> result = classService.search(request);
+        return ResponseEntity.ok(ApiResponse.of("Search Class successfully", result));
     }
 }

@@ -1,8 +1,11 @@
 package com.ailms.response;
 
+import com.ailms.entity.enums.CertificateConditionTypeEnum;
+import com.ailms.entity.enums.CourseStatusEnum;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Getter
@@ -23,15 +26,26 @@ public class CourseResponse {
     private String link;
     
     private String description;
+
+    private BigDecimal suggestedPrice;
     
     private String level;
     
-    private Byte status;
+    private CourseStatusEnum status;
+
+    private String rejectionReason;
+
+    private Double avgRating;
+
+    private Integer reviewCount;
+
+    private CertificateConditionTypeEnum certificateConditionType;
+
+    private Integer certificatePassThreshold;
     
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime createdAt;
     
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime updatedAt;
-
 }

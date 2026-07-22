@@ -1,6 +1,7 @@
 package com.ailms.repository;
 
 import com.ailms.entity.CourseEntity;
+import com.ailms.repository.base.BaseRepository;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -9,7 +10,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface CourseRepository extends JpaRepository<CourseEntity, Long>, JpaSpecificationExecutor<CourseEntity> {
+public interface CourseRepository extends BaseRepository<CourseEntity, Long> {
     boolean existsByLinkIgnoreCase(String link);
     boolean existsByLinkIgnoreCaseAndIdNot(String link, Long id);
 

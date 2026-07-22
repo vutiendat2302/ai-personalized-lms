@@ -1,12 +1,14 @@
 package com.ailms.controller;
 
-import com.ailms.response.ApiResponse;
-import com.ailms.response.PageResponse;
+import com.ailms.request.CourseApprovalRequest;
 import com.ailms.request.CourseSearchRequest;
 import com.ailms.request.CourseStatusRequest;
 import com.ailms.request.CreateCourseRequest;
 import com.ailms.request.UpdateCourseRequest;
+import com.ailms.response.ApiResponse;
+import com.ailms.response.ClassResponse;
 import com.ailms.response.CourseResponse;
+import com.ailms.response.PageResponse;
 import com.ailms.service.ICourseService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +19,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/courses")
+@RequestMapping("${api.prefix}/courses")
 @RequiredArgsConstructor
 public class CourseController {
 
@@ -27,6 +29,36 @@ public class CourseController {
     public ResponseEntity<ApiResponse<CourseResponse>> create(@Valid @RequestBody CreateCourseRequest request) {
         CourseResponse response = courseService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of("Course created successfully", response));
+    }
+
+    @PostMapping("/teacher")
+    public ResponseEntity<ApiResponse<CourseResponse>> createCourseByTeacher(
+            @RequestParam Long teacherUserId,
+            @Valid @RequestBody CreateCourseRequest request) {
+        CourseResponse response = courseService.createCourseByTeacher(teacherUserId, request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of("Course created by teacher (PENDING_APPROVAL)", response));
+    }
+
+    @PostMapping("/{id}/approve")
+    public ResponseEntity<ApiResponse<CourseResponse>> approveCourse(
+            @PathVariable Long id,
+            @Valid @RequestBody CourseApprovalRequest request) {
+        CourseResponse response = courseService.approveCourse(id, request);
+        return ResponseEntity.ok(ApiResponse.of("Course approval processed", response));
+    }
+
+    @GetMapping("/suggested-classes")
+    public ResponseEntity<ApiResponse<List<ClassResponse>>> getSuggestedClassesForTeacher(@RequestParam Long teacherUserId) {
+        List<ClassResponse> response = courseService.getSuggestedClassesForTeacher(teacherUserId);
+        return ResponseEntity.ok(ApiResponse.of("Suggested classes retrieved successfully", response));
+    }
+
+    @PostMapping("/classes/{classId}/claim")
+    public ResponseEntity<ApiResponse<ClassResponse>> claimClass(
+            @RequestParam Long teacherUserId,
+            @PathVariable Long classId) {
+        ClassResponse response = courseService.claimClass(teacherUserId, classId);
+        return ResponseEntity.ok(ApiResponse.of("Class claimed successfully", response));
     }
 
     @PutMapping("/{id}")
@@ -68,5 +100,4 @@ public class CourseController {
         PageResponse<CourseResponse> response = courseService.search(request);
         return ResponseEntity.ok(ApiResponse.of("Courses retrieved successfully", response));
     }
-
 }

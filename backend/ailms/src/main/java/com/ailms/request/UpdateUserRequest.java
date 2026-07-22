@@ -1,6 +1,6 @@
 package com.ailms.request;
 
-import com.ailms.entity.UserStatusEnum;
+import com.ailms.entity.enums.UserStatusEnum;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.validation.constraints.*;
 import lombok.*;

@@ -1,34 +1,35 @@
 package com.ailms.controller;
 
+import com.ailms.response.PageResponse;
+import com.ailms.request.RoleSearchRequest;
+import com.ailms.response.RoleResponse;
+
+
 import com.ailms.request.AssignPermissionsRequest;
 import com.ailms.request.PermissionRequest;
 import com.ailms.request.RoleRequest;
 import com.ailms.request.CloneRoleRequest;
-import com.ailms.request.RoleSearchRequest;
 import com.ailms.response.ApiResponse;
 import com.ailms.response.PermissionResponse;
-import com.ailms.response.RoleResponse;
 import com.ailms.response.UserResponse;
 import com.ailms.service.IRoleService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/roles")
+@RequestMapping("${api.prefix}/roles")
 @RequiredArgsConstructor
 public class RoleController {
 
     private final IRoleService roleService;
 
     @GetMapping("/page")
-    public ResponseEntity<ApiResponse<Page<RoleResponse>>> getRoles(RoleSearchRequest request) {
-        Page<RoleResponse> response = roleService.getRoles(request);
+    public ResponseEntity<ApiResponse<PageResponse<RoleResponse>>> getRoles(RoleSearchRequest request) {
+        PageResponse<RoleResponse> response = roleService.getRoles(request);
         return ResponseEntity.ok(ApiResponse.of("Roles retrieved successfully", response));
     }
 

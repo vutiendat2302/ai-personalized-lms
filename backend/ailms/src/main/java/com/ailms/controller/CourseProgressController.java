@@ -1,9 +1,14 @@
 package com.ailms.controller;
 
+import com.ailms.response.PageResponse;
+import com.ailms.request.CourseProgressSearchRequest;
+import com.ailms.response.CourseProgressResponse;
+
+
 import com.ailms.request.CourseProgressRequest;
 import com.ailms.response.ApiResponse;
 import com.ailms.response.CourseProgressResponse;
-import com.ailms.service.CourseProgressService;
+import com.ailms.service.ICourseProgressService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -13,11 +18,11 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/course-progress")
+@RequestMapping("${api.prefix}/course-progress")
 @RequiredArgsConstructor
 public class CourseProgressController {
 
-    private final CourseProgressService courseProgressService;
+    private final ICourseProgressService courseProgressService;
 
     @PostMapping
     public ResponseEntity<ApiResponse<CourseProgressResponse>> create(@Valid @RequestBody CourseProgressRequest request) {
@@ -67,5 +72,11 @@ public class CourseProgressController {
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         courseProgressService.delete(id);
         return ResponseEntity.ok(ApiResponse.message("Course progress deleted successfully"));
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<PageResponse<CourseProgressResponse>>> search(CourseProgressSearchRequest request) {
+        PageResponse<CourseProgressResponse> result = courseProgressService.search(request);
+        return ResponseEntity.ok(ApiResponse.of("Search CourseProgress successfully", result));
     }
 }
