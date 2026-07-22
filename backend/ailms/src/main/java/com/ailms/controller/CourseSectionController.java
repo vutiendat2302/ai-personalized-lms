@@ -26,8 +26,7 @@ public class CourseSectionController {
     private final ICourseSectionService courseSectionService;
 
     @PostMapping("/section")
-    public ResponseEntity<ApiResponse<SectionResponse>> create(
-            @Valid @RequestBody CreateSectionRequest request) {
+    public ResponseEntity<ApiResponse<SectionResponse>> create(@Valid @RequestBody CreateSectionRequest request) {
         SectionResponse response = courseSectionService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.of("Section created successfully", response));

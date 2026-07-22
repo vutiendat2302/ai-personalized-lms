@@ -9,28 +9,70 @@ import com.ailms.response.StudentProfileResponse;
 
 import java.util.List;
 
+/**
+ * Service quản lý thông tin hồ sơ học viên và quy trình khảo sát ban đầu (onboarding).
+ */
 public interface IStudentProfileService {
-    PageResponse<StudentProfileResponse> search(StudentProfileSearchRequest request);
-    List<StudentProfileResponse> getAll();
-    StudentProfileResponse getById(Long id);
-    StudentProfileResponse create(CreateStudentProfileRequest request);
-    StudentProfileResponse update(Long id, UpdateStudentProfileRequest request);
-    void delete(Long id);
-
 
     /**
-     * Hoàn thành quá trình onboarding của học viên.
+     * Tìm kiếm và phân trang danh sách dựa trên các tiêu chí lọc.
      *
-     * @param request Thông tin onboarding.
-     * @return Hồ sơ học viên sau khi cập nhật.
+     * @param request Đối tượng DTO chứa thông tin yêu cầu
+     * @return trang kết quả chứa danh sách đã được phân trang
+     */
+    PageResponse<StudentProfileResponse> search(StudentProfileSearchRequest request);
+
+    /**
+     * Lấy danh sách tất cả các bản ghi.
+     * @return danh sách các đối tượng phù hợp
+     */
+    List<StudentProfileResponse> getAll();
+
+    /**
+     * Lấy thông tin chi tiết của bản ghi theo ID.
+     *
+     * @param id ID của bản ghi cần xử lý
+     * @return đối tượng chứa thông tin chi tiết kết quả
+     */
+    StudentProfileResponse getById(Long id);
+
+    /**
+     * Tạo mới bản ghi từ dữ liệu yêu cầu.
+     *
+     * @param request Đối tượng DTO chứa thông tin yêu cầu
+     * @return đối tượng chứa thông tin chi tiết kết quả
+     */
+    StudentProfileResponse create(CreateStudentProfileRequest request);
+
+    /**
+     * Cập nhật thông tin bản ghi theo ID.
+     *
+     * @param id ID của bản ghi cần xử lý
+     * @param request Đối tượng DTO chứa thông tin yêu cầu
+     * @return đối tượng chứa thông tin chi tiết kết quả
+     */
+    StudentProfileResponse update(Long id, UpdateStudentProfileRequest request);
+
+    /**
+     * Xóa bản ghi khỏi hệ thống theo ID.
+     *
+     * @param id ID của bản ghi cần xử lý
+     */
+    void delete(Long id);
+
+    /**
+     * Hoàn tất quá trình khảo sát khảo sát ban đầu (onboarding) của học viên.
+     *
+     * @param request Đối tượng DTO chứa thông tin yêu cầu
+     * @return đối tượng chứa thông tin chi tiết kết quả
      */
     StudentProfileResponse completeOnboarding(OnboardingRequest request);
 
     /**
-     * Bỏ qua quá trình onboarding.
+     * Bỏ qua bước khảo sát ban đầu (onboarding).
      *
-     * @param userId ID người dùng.
-     * @return Hồ sơ học viên sau khi cập nhật.
+     * @param userId ID của người dùng (User)
+     * @return đối tượng chứa thông tin chi tiết kết quả
      */
     StudentProfileResponse skipOnboarding(Long userId);
 }

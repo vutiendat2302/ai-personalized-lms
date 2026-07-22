@@ -18,11 +18,11 @@ public class CertificateResponse {
 
     private Long courseId;
 
-    private String courseName;
+//    private String courseName;
 
     private Long userId;
 
-    private String studentName;
+//    private String studentName;
 
     private String certificateCode;
 

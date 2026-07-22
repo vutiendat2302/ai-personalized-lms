@@ -1,6 +1,10 @@
 package com.ailms.service.imp;
+import com.ailms.common.converter.SimpleJsonWriter;
+import com.ailms.event.AuditLogEvent;
 import com.ailms.repository.specification.ClassSpecification;
 import com.ailms.request.ClassSearchRequest;
+import com.ailms.request.CreateClassRequest;
+import com.ailms.request.UpdateClassRequest;
 import com.ailms.service.IClassService;
 
 
@@ -10,10 +14,10 @@ import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.mapper.ClassMapper;
 import com.ailms.repository.ClassRepository;
 import com.ailms.repository.CourseRepository;
-import com.ailms.request.ClassRequest;
 import com.ailms.response.ClassResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import com.ailms.response.PageResponse;
 import org.springframework.data.domain.Pageable;
@@ -28,6 +32,8 @@ import java.util.List;
 @Slf4j
 @Transactional(readOnly = true)
 public class ClassService implements IClassService {
+    private final ApplicationEventPublisher applicationEventPublisher;
+
     @Override
     public PageResponse<ClassResponse> search(ClassSearchRequest request) {
         log.info("Searching Class via specification");
@@ -62,7 +68,7 @@ public class ClassService implements IClassService {
     }
 
     @Transactional
-    public ClassResponse create(ClassRequest request) {
+    public ClassResponse create(CreateClassRequest request) {
         log.info("Creating class for course: {}", request.getCourseId());
         CourseEntity course = courseRepository.findById(request.getCourseId())
                 .orElseThrow(() -> ResourceNotFoundException.of("Course", request.getCourseId()));
@@ -71,21 +77,20 @@ public class ClassService implements IClassService {
         entity.setCourseEntity(course);
 
         ClassEntity saved = classRepository.save(entity);
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CREATE", "CLASS", saved.getId(), null, saved));
         return classMapper.toResponse(saved);
     }
 
     @Transactional
-    public ClassResponse update(Long id, ClassRequest request) {
+    public ClassResponse update(Long id, UpdateClassRequest request) {
         log.info("Updating class: {}", id);
         ClassEntity existing = classRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
-        CourseEntity course = courseRepository.findById(request.getCourseId())
-                .orElseThrow(() -> ResourceNotFoundException.of("Course", request.getCourseId()));
-
+        String oldValue = SimpleJsonWriter.toJson(existing);
         classMapper.updateFromRequest(request, existing);
-        existing.setCourseEntity(course);
 
         ClassEntity updated = classRepository.save(existing);
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "UPDATE", "CLASS", id, oldValue, updated));
         return classMapper.toResponse(updated);
     }
 
@@ -96,5 +101,6 @@ public class ClassService implements IClassService {
             throw ResourceNotFoundException.of(RESOURCE_NAME, id);
         }
         classRepository.deleteById(id);
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "DELETE", "CLASS", id, id, null));
     }
 }

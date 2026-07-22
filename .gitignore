@@ -37,7 +37,20 @@ docker/redis/
 docker/minio/
 
 
-database/gen_data/__pycache__/
-
+# Virtual environment
 .venv/
-.venv
+venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Pytest
+.pytest_cache/
+
+# MyPy
+.mypy_cache/
+
+# IDE
+.vscode/
+.idea/

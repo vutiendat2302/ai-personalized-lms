@@ -1,6 +1,7 @@
 package com.ailms.service.imp;
 import com.ailms.repository.specification.ClassOnlineSpecification;
 import com.ailms.request.ClassOnlineSearchRequest;
+import com.ailms.request.UpdateClassOnlineRequest;
 import com.ailms.service.IClassOnlineService;
 
 
@@ -12,7 +13,7 @@ import com.ailms.mapper.ClassOnlineMapper;
 import com.ailms.repository.ClassOnlineRepository;
 import com.ailms.repository.ClassRepository;
 import com.ailms.repository.UserRepository;
-import com.ailms.request.ClassOnlineRequest;
+import com.ailms.request.CreateClassOnlineRequest;
 import com.ailms.response.ClassOnlineResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -61,7 +62,7 @@ public class ClassOnlineService implements IClassOnlineService {
     }
 
     @Transactional
-    public ClassOnlineResponse create(ClassOnlineRequest request) {
+    public ClassOnlineResponse create(CreateClassOnlineRequest request) {
         log.info("Creating online class for class: {}", request.getClassId());
         ClassOnlineEntity entity = classOnlineMapper.toEntity(request);
         applyRelations(entity, request);
@@ -71,13 +72,12 @@ public class ClassOnlineService implements IClassOnlineService {
     }
 
     @Transactional
-    public ClassOnlineResponse update(Long id, ClassOnlineRequest request) {
+    public ClassOnlineResponse update(Long id, UpdateClassOnlineRequest request) {
         log.info("Updating online class: {}", id);
         ClassOnlineEntity existing = classOnlineRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
 
         classOnlineMapper.updateFromRequest(request, existing);
-        applyRelations(existing, request);
 
         ClassOnlineEntity updated = classOnlineRepository.save(existing);
         return classOnlineMapper.toResponse(updated);
@@ -92,7 +92,7 @@ public class ClassOnlineService implements IClassOnlineService {
         classOnlineRepository.deleteById(id);
     }
 
-    private void applyRelations(ClassOnlineEntity entity, ClassOnlineRequest request) {
+    private void applyRelations(ClassOnlineEntity entity, CreateClassOnlineRequest request) {
         ClassEntity classEntity = classRepository.findById(request.getClassId())
                 .orElseThrow(() -> ResourceNotFoundException.of("Class", request.getClassId()));
         UserEntity teacher = userRepository.findById(request.getTeacherId())

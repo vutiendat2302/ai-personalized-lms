@@ -1,11 +1,7 @@
 package com.ailms.service.imp;
 
 import com.ailms.entity.*;
-import com.ailms.entity.enums.BaseStatusEnum;
-import com.ailms.entity.enums.ClassMemberRole;
-import com.ailms.entity.enums.ClassMemberStatusEnum;
-import com.ailms.entity.enums.CourseStatusEnum;
-import com.ailms.entity.enums.DeliveryModeEnum;
+import com.ailms.entity.enums.*;
 import com.ailms.event.AuditLogEvent;
 import com.ailms.exception.BusinessException;
 import com.ailms.exception.DuplicateResourceException;
@@ -82,6 +78,7 @@ public class CourseService implements ICourseService {
         entity.setCategoryEntity(category);
         entity.setLink(link);
         entity.setStatus(request.getStatus() != null ? request.getStatus() : CourseStatusEnum.DRAFT);
+        entity.setCertificateConditionType(request.getCertificateConditionType() != null ? request.getCertificateConditionType() : CertificateConditionTypeEnum.COMPLETION_RATE);
 
         CourseEntity savedEntity = courseRepository.save(entity);
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CREATE", "COURSE", savedEntity.getId(), null, savedEntity));
@@ -114,6 +111,8 @@ public class CourseService implements ICourseService {
         entity.setCategoryEntity(category);
         entity.setLink(link);
         entity.setStatus(request.getStatus() != null ? request.getStatus() : CourseStatusEnum.PENDING);
+        entity.setCertificateConditionType(request.getCertificateConditionType() != null ? request.getCertificateConditionType() : CertificateConditionTypeEnum.COMPLETION_RATE);
+        entity.setCreatedBy(teacherUserId);
 
         CourseEntity savedEntity = courseRepository.save(entity);
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CREATE_BY_TEACHER", "COURSE", savedEntity.getId(), null, savedEntity));
@@ -149,7 +148,7 @@ public class CourseService implements ICourseService {
         CourseEntity existingEntity = courseRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
 
-        existingEntity.setStatus(CourseStatusEnum.valueOf(request.getStatus().toString()));
+        existingEntity.setStatus(request.getStatus());
 
         CourseEntity updatedEntity = courseRepository.save(existingEntity);
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "UPDATE_STATUS", "COURSE", id, null, updatedEntity));

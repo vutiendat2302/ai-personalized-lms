@@ -20,6 +20,7 @@ public interface CoursePackageMapper {
 
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "courseEntity", ignore = true)
+    @Mapping(target = "classEntity", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
@@ -28,6 +29,7 @@ public interface CoursePackageMapper {
 
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "courseEntity", ignore = true)
+    @Mapping(target = "classEntity", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)

@@ -53,7 +53,8 @@ public class ClassEntity extends BaseEntity {
     /** Hình thức đào tạo lớp học (ONE_ON_ONE, GROUP_CLASS, HYBRID). */
     @Column(name = "package_type")
     @Enumerated(EnumType.STRING)
-    private DeliveryModeEnum packageType; // ONE_ON_ONE, GROUP_CLASS, Hình thức đào tạo
+    @Builder.Default
+    private DeliveryModeEnum packageType = DeliveryModeEnum.ONE_ON_ONE; // ONE_ON_ONE, GROUP_CLASS, Hình thức đào tạo
 
     /** Phân loại kỹ thuật lớp học. */
     @Column(name = "type")
@@ -61,6 +62,7 @@ public class ClassEntity extends BaseEntity {
 
     /** Sức chứa / số lượng thành viên tối đa trong lớp học. */
     @Column(name = "max_members")
+    @Builder.Default
     private Integer maxMembers = 0;
 
     /** Số lượng học viên hiện tại đã đăng ký tham gia lớp. */

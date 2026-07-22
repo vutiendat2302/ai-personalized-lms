@@ -1,7 +1,9 @@
 package com.ailms.service.imp;
 
+import com.ailms.common.converter.SimpleJsonWriter;
 import com.ailms.entity.CourseSectionEntity;
 import com.ailms.entity.LessonEntity;
+import com.ailms.event.AuditLogEvent;
 import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.mapper.LessonMapper;
 import com.ailms.repository.CourseSectionRepository;
@@ -18,6 +20,7 @@ import com.ailms.response.PageResponse;
 import com.ailms.service.ILessonService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -38,6 +41,7 @@ public class LessonService implements ILessonService {
     private final CourseSectionRepository courseSectionRepository;
     private final EnrollmentRepository enrollmentRepository;
     private final LessonMapper lessonMapper;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     @Override
     public PageResponse<LessonResponse> search(LessonSearchRequest request) {
@@ -65,6 +69,8 @@ public class LessonService implements ILessonService {
         }
 
         LessonEntity savedEntity = lessonRepository.save(entity);
+
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CREATE", "LESSON", savedEntity.getId(), null, savedEntity));
         return lessonMapper.toResponse(savedEntity);
     }
 
@@ -75,10 +81,12 @@ public class LessonService implements ILessonService {
 
         LessonEntity existingEntity = lessonRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Lesson not found with id: " + id));
+        String oldValue = SimpleJsonWriter.toJson(existingEntity);
 
         lessonMapper.updateEntityFromRequest(request, existingEntity);
         LessonEntity updatedEntity = lessonRepository.save(existingEntity);
 
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "UPDATE", "LESSON", id, oldValue, existingEntity));
         return lessonMapper.toResponse(updatedEntity);
     }
 
@@ -89,8 +97,9 @@ public class LessonService implements ILessonService {
 
         LessonEntity existingEntity = lessonRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Lesson not found with id: " + id));
-
+        String oldValue = SimpleJsonWriter.toJson(existingEntity);
         lessonRepository.delete(existingEntity);
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "DELETE", "LESSON", id, oldValue, null));
     }
 
     @Override

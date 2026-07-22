@@ -1,5 +1,6 @@
 package com.ailms.request;
 
+import com.ailms.entity.enums.CourseStatusEnum;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 
@@ -10,7 +11,6 @@ import lombok.*;
 @Builder
 public class CourseStatusRequest {
 
-    @NotNull(message = "Status is required")
-    private Byte status;
+    private CourseStatusEnum status;
 
 }

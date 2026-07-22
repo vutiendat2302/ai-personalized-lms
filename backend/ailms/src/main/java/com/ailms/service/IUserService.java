@@ -8,96 +8,116 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Service xử lý nghiệp vụ liên quan đến User, Role, Permission và Audit Log.
- * Bao gồm: CRUD user, mời user qua email, thao tác hàng loạt (bulk),
- * gán role, tra cứu quyền tổng hợp (effective permissions) và lịch sử thay đổi.
+ * Service quản lý tài khoản người dùng, phân quyền và lịch sử hoạt động.
  */
-
 public interface IUserService {
 
     /**
-     * Lấy danh sách user có phân trang, hỗ trợ search/filter/sort
-     * (theo tên, email, role, status, ngày tạo...).
+     * Lấy danh sách người dùng có phân trang.
      *
-     * @param request điều kiện tìm kiếm, lọc và thông tin phân trang
-     * @return danh sách user đã phân trang
+     * @param request Đối tượng DTO chứa thông tin yêu cầu
+     * @return trang kết quả chứa danh sách đã được phân trang
      */
     PageResponse<UserResponse> getUsers(UserSearchRequest request);
 
+    /**
+     * Lấy tất cả người dùng.
+     * @return danh sách các đối tượng phù hợp
+     */
     List<UserResponse> getAllUsers();
+
+    /**
+     * Lấy thông tin người dùng theo ID.
+     *
+     * @param id ID của bản ghi cần xử lý
+     * @return đối tượng chứa thông tin chi tiết kết quả
+     */
     UserResponse getUserById(Long id);
+
+    /**
+     * Tạo tài khoản người dùng mới.
+     *
+     * @param request Đối tượng DTO chứa thông tin yêu cầu
+     * @return đối tượng chứa thông tin chi tiết kết quả
+     */
     UserResponse createUser(CreateUserRequest request);
+
+    /**
+     * Cập nhật tài khoản người dùng.
+     *
+     * @param id ID của bản ghi cần xử lý
+     * @param request Đối tượng DTO chứa thông tin yêu cầu
+     * @return đối tượng chứa thông tin chi tiết kết quả
+     */
     UserResponse updateUser(Long id, UpdateUserRequest request);
+
+    /**
+     * Xóa tài khoản người dùng.
+     *
+     * @param id ID của bản ghi cần xử lý
+     */
     void deleteUser(Long id);
 
     /**
-     * Gui loi moi than he thong qua email, tao user o trang thai chua active
-     * kem token moi co thoi gian, va link set password cho user
-     * @param request email va role cho user duoc moi
+     * Mời người dùng tham gia hệ thống qua email.
+     *
+     * @param request Đối tượng DTO chứa thông tin yêu cầu
      */
     void inviteUser(InviteUserRequest request);
 
     /**
-     * Hoàn tất quá trình được mời: xác thực token, cho user đặt password
-     * và kích hoạt tài khoản (chuyển status = ACTIVE), gán role đã chuẩn bị sẵn.
+     * Xác nhận lời mời và đặt mật khẩu lần đầu.
      *
-     * @param request token mời và password mới do user nhập
+     * @param request Đối tượng DTO chứa thông tin yêu cầu
      */
     void completeInvite(CompleteInviteRequest request);
 
     /**
-     * Xóa mềm nhiều user cùng lúc. Xử lý theo từng phần tử (partial success),
-     * user nào lỗi sẽ được ghi nhận lại thay vì làm fail toàn bộ batch.
+     * Xóa hàng loạt tài khoản người dùng.
      *
-     * @param request danh sách id user cần xóa
-     * @return kết quả tổng hợp gồm số lượng thành công/thất bại và chi tiết lỗi
+     * @param request Đối tượng DTO chứa thông tin yêu cầu
+     * @return bản đồ Map chứa kết quả xử lý (ví dụ: số lượng thành công, thất bại và chi tiết lỗi)
      */
     Map<String, Object> bulkDelete(BulkDeleteRequest request);
 
     /**
-     * Gán 1 role cho nhiều user cùng lúc. User nào đã có role đó thì bỏ qua,
-     * không tạo trùng. Xử lý theo kiểu partial success như bulkDelete.
+     * Gán vai trò hàng loạt cho nhiều người dùng.
      *
-     * @param request danh sách id user và id role cần gán
-     * @return kết quả tổng hợp gồm số lượng thành công/thất bại và chi tiết lỗi
+     * @param request Đối tượng DTO chứa thông tin yêu cầu
+     * @return bản đồ Map chứa kết quả xử lý (ví dụ: số lượng thành công, thất bại và chi tiết lỗi)
      */
     Map<String, Object> bulkAssignRole(BulkAssignRoleRequest request);
 
     /**
-     * Tổng hợp toàn bộ permission hiệu lực (effective permissions) của 1 user,
-     * gộp từ tất cả role đang active (chưa hết hạn) mà user đang có.
-     * Mỗi permission trả về kèm danh sách role nào cung cấp nó, phục vụ tra cứu/kiểm tra quyền.
+     * Lấy danh sách toàn bộ các quyền hạn có hiệu lực thực tế của người dùng.
      *
-     * @param userId id của user cần tra cứu quyền
-     * @return danh sách permission tổng hợp, đã dedupe theo permission
+     * @param userId ID của người dùng (User)
+     * @return danh sách các đối tượng phù hợp
      */
     List<EffectivePermissionResponse> getEffectivePermissions(Long userId);
 
     /**
-     * Gán lại toàn bộ role cho user (thay thế danh sách role hiện tại bằng danh sách mới).
-     * Yêu cầu user luôn phải có ít nhất 1 role sau khi gán.
+     * Gán danh sách các vai trò cho người dùng.
      *
-     * @param userId  id của user
-     * @param request danh sách id role mới muốn gán
+     * @param userId ID của người dùng (User)
+     * @param request Đối tượng DTO chứa thông tin yêu cầu
      */
     void assignRoles(Long userId, AssignRolesRequest request);
 
     /**
-     * Cập nhật thông tin hồ sơ cá nhân của user (self-update, không đổi role/status).
+     * Học viên/nhân viên tự cập nhật thông tin cá nhân của mình.
      *
-     * @param userId  id của user
-     * @param request thông tin hồ sơ cần cập nhật
-     * @return thông tin user sau khi cập nhật
+     * @param userId ID của người dùng (User)
+     * @param request Đối tượng DTO chứa thông tin yêu cầu
+     * @return đối tượng chứa thông tin chi tiết kết quả
      */
     UserResponse updateProfile(Long userId, UpdateProfileRequest request);
 
     /**
-     * Xác thực OTP để hoàn tất việc đổi email của user.
-     * OTP và email mới được lưu tạm ở Redis, xóa sau khi xác thực thành công.
+     * Xác thực mã OTP để hoàn thành đổi email mới.
      *
-     * @param userId  id của user
-     * @param request mã OTP do user nhập để xác nhận đổi email
+     * @param userId ID của người dùng (User)
+     * @param request Đối tượng DTO chứa thông tin yêu cầu
      */
     void verifyEmailChange(Long userId, VerifyEmailChangeRequest request);
-
 }

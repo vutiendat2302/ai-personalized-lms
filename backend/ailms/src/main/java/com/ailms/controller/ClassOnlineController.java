@@ -1,13 +1,13 @@
 package com.ailms.controller;
 
+import com.ailms.request.UpdateClassOnlineRequest;
 import com.ailms.response.PageResponse;
 import com.ailms.request.ClassOnlineSearchRequest;
 import com.ailms.response.ClassOnlineResponse;
 
 
-import com.ailms.request.ClassOnlineRequest;
+import com.ailms.request.CreateClassOnlineRequest;
 import com.ailms.response.ApiResponse;
-import com.ailms.response.ClassOnlineResponse;
 import com.ailms.service.IClassOnlineService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +25,7 @@ public class ClassOnlineController {
     private final IClassOnlineService classOnlineService;
 
     @PostMapping
-    public ResponseEntity<ApiResponse<ClassOnlineResponse>> create(@Valid @RequestBody ClassOnlineRequest request) {
+    public ResponseEntity<ApiResponse<ClassOnlineResponse>> create(@Valid @RequestBody CreateClassOnlineRequest request) {
         ClassOnlineResponse response = classOnlineService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of("Online class created successfully", response));
     }
@@ -33,7 +33,7 @@ public class ClassOnlineController {
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<ClassOnlineResponse>> update(
             @PathVariable Long id,
-            @Valid @RequestBody ClassOnlineRequest request) {
+            @Valid @RequestBody UpdateClassOnlineRequest request) {
         ClassOnlineResponse response = classOnlineService.update(id, request);
         return ResponseEntity.ok(ApiResponse.of("Online class updated successfully", response));
     }

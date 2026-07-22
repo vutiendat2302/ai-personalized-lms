@@ -6,56 +6,57 @@ import java.io.InputStream;
 import java.time.Duration;
 
 /**
- * Service quản lý file vật lý trên object storage (MinIO/S3).
+ * Service lưu trữ tệp vật lý tương tác trực tiếp với hệ thống lưu trữ (như MinIO, S3).
  */
 public interface IFileStorageService {
+
     /**
-     * Upload file lên storage.
+     * Lưu trữ tệp tin với thông tin được chỉ định.
      *
-     * @param file    file gốc từ request (multipart/form-data)
-     * @param fileKey object key duy nhất trong bucket (do tầng gọi sinh ra trước)
+     * @param file Tệp tin tải lên (MultipartFile)
+     * @param fileKey Khóa duy nhất định danh tệp tin trong hệ thống lưu trữ
      */
     void upload(MultipartFile file, String fileKey);
 
     /**
-     * Upload file từ InputStream (dùng khi file được generate động, không qua MultipartFile).
+     * Lưu trữ tệp tin với thông tin được chỉ định.
      *
-     * @param inputStream stream nội dung file
-     * @param fileKey     object key duy nhất trong bucket
-     * @param contentType MIME type của file
-     * @param size        kích thước file (byte), bắt buộc phải biết trước với MinIO SDK
+     * @param inputStream Luồng dữ liệu tệp tin cần tải lên
+     * @param fileKey Khóa duy nhất định danh tệp tin trong hệ thống lưu trữ
+     * @param contentType Định dạng kiểu nội dung của tệp tin
+     * @param size Kích thước của tệp tin tính theo byte
      */
     void upload(InputStream inputStream, String fileKey, String contentType, long size);
 
     /**
-     * Tải nội dung file từ storage.
+     * Tải tệp tin dưới dạng InputStream.
      *
-     * @param fileKey object key cần tải
-     * @return InputStream nội dung file — caller chịu trách nhiệm đóng stream sau khi dùng
+     * @param fileKey Khóa duy nhất định danh tệp tin trong hệ thống lưu trữ
+     * @return đối tượng chứa thông tin chi tiết kết quả
      */
     InputStream download(String fileKey);
 
     /**
-     * Sinh presigned URL để client tải file trực tiếp từ storage.
+     * Tạo liên kết truy cập tạm thời (Presigned URL) cho tệp tin.
      *
-     * @param fileKey object key cần tạo URL
-     * @param expiry  thời gian hiệu lực của URL
-     * @return presigned URL dạng String
+     * @param fileKey Khóa duy nhất định danh tệp tin trong hệ thống lưu trữ
+     * @param expiry Thời gian hết hạn hiệu lực của liên kết
+     * @return đối tượng chứa thông tin chi tiết kết quả
      */
     String getPresignedUrl(String fileKey, Duration expiry);
 
     /**
-     * Xóa file vật lý khỏi storage.
+     * Xóa bản ghi khỏi hệ thống theo ID.
      *
-     * @param fileKey object key cần xóa
+     * @param fileKey Khóa duy nhất định danh tệp tin trong hệ thống lưu trữ
      */
     void delete(String fileKey);
 
     /**
-     * Kiểm tra file có tồn tại trên storage không.
+     * Kiểm tra xem tệp tin có tồn tại trong bộ lưu trữ hay không.
      *
-     * @param fileKey object key cần kiểm tra
-     * @return true nếu tồn tại, false nếu không
+     * @param fileKey Khóa duy nhất định danh tệp tin trong hệ thống lưu trữ
+     * @return true nếu xử lý thành công hoặc hợp lệ, ngược lại là false
      */
     boolean exists(String fileKey);
 }

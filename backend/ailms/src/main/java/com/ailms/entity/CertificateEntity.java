@@ -68,4 +68,6 @@ public class CertificateEntity extends BaseEntity {
     /** Đường dẫn URL tải file PDF/Ảnh chứng chỉ chính thức. */
     @Column(name = "download_url", length = 500)
     private String downloadUrl;
+
+    private boolean valid;
 }

@@ -1,4 +1,6 @@
 package com.ailms.service.imp;
+import com.ailms.common.converter.SimpleJsonWriter;
+import com.ailms.event.AuditLogEvent;
 import com.ailms.repository.specification.LessonResourceSpecification;
 import com.ailms.request.LessonResourceSearchRequest;
 import com.ailms.service.ILessonResourceService;
@@ -6,6 +8,7 @@ import com.ailms.service.ILessonResourceService;
 
 import com.ailms.entity.LessonEntity;
 import com.ailms.entity.LessonResourceEntity;
+import com.ailms.entity.FileMetadataEntity;
 import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.mapper.LessonResourceMapper;
 import com.ailms.repository.LessonRepository;
@@ -16,12 +19,14 @@ import com.ailms.request.UpdateResourceRequest;
 import com.ailms.response.ResourceResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import com.ailms.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -30,6 +35,9 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class LessonResourceService implements ILessonResourceService {
+    private final ApplicationEventPublisher applicationEventPublisher;
+    private final FileService fileService;
+
     @Override
     public PageResponse<ResourceResponse> search(LessonResourceSearchRequest request) {
         log.info("Searching LessonResource via specification");
@@ -47,22 +55,32 @@ public class LessonResourceService implements ILessonResourceService {
 
     @Override
     @Transactional
-    public ResourceResponse create(Long lessonId, CreateResourceRequest request) {
-        log.info("Creating resource for lesson id: {}", lessonId);
+    public ResourceResponse create(CreateResourceRequest request) {
+        log.info("Creating resource for lesson id: {}", request.getLessonId());
 
-        LessonEntity lesson = lessonRepository.findById(lessonId)
-                .orElseThrow(() -> new ResourceNotFoundException("Lesson not found with id: " + lessonId));
+        if (request.getLessonId() == null) {
+            throw new IllegalArgumentException("Lesson ID must not be null");
+        }
+
+        LessonEntity lesson = lessonRepository.findById(request.getLessonId())
+                .orElseThrow(() -> new ResourceNotFoundException("Lesson not found with id: " + request.getLessonId()));
 
         LessonResourceEntity entity = lessonResourceMapper.toEntity(request);
         entity.setLessonEntity(lesson);
 
-        if (request.getFileUrl() != null) {
-            fileMetadataRepository.findByFileKey(request.getFileUrl())
-                    .ifPresent(entity::setFileMetadata);
+        if (request.getFileMetadataId() == null) {
+            throw new IllegalArgumentException("File Metadata ID must not be null");
         }
+        FileMetadataEntity fileMetadata = fileMetadataRepository.findById(request.getFileMetadataId())
+                .orElseThrow(() -> new ResourceNotFoundException("File metadata not found with id: " + request.getFileMetadataId()));
+        entity.setFileMetadata(fileMetadata);
 
         LessonResourceEntity savedEntity = lessonResourceRepository.save(entity);
-        return lessonResourceMapper.toResponse(savedEntity);
+        ResourceResponse resourceResponse = lessonResourceMapper.toResponse(entity);
+        resourceResponse.setFileUrl(fileService.getDownloadUrl(entity.getFileMetadata().getFileKey()));
+
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CREATE", "RESOURCE_LESSON", request.getLessonId(), null, savedEntity));
+        return resourceResponse;
     }
 
     @Override
@@ -73,20 +91,21 @@ public class LessonResourceService implements ILessonResourceService {
         LessonResourceEntity existingEntity = lessonResourceRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Resource not found with id: " + id));
 
+        String oldValue = SimpleJsonWriter.toJson(existingEntity);
         lessonResourceMapper.updateEntityFromRequest(request, existingEntity);
-
-        if (request.getFileUrl() != null) {
-            fileMetadataRepository.findByFileKey(request.getFileUrl())
-                    .ifPresentOrElse(
-                            existingEntity::setFileMetadata,
-                            () -> existingEntity.setFileMetadata(null)
-                    );
-        } else {
-            existingEntity.setFileMetadata(null);
+        
+        if (request.getFileMetadataId() != null) {
+            FileMetadataEntity fileMetadata = fileMetadataRepository.findById(request.getFileMetadataId())
+                    .orElseThrow(() -> new ResourceNotFoundException("File metadata not found with id: " + request.getFileMetadataId()));
+            existingEntity.setFileMetadata(fileMetadata);
         }
 
         LessonResourceEntity updatedEntity = lessonResourceRepository.save(existingEntity);
-        return lessonResourceMapper.toResponse(updatedEntity);
+        ResourceResponse resourceResponse = lessonResourceMapper.toResponse(updatedEntity);
+        resourceResponse.setFileUrl(fileService.getDownloadUrl(updatedEntity.getFileMetadata().getFileKey()));
+
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CREATE", "RESOURCE_LESSON", id, oldValue, updatedEntity));
+        return resourceResponse;
     }
 
     @Override
@@ -99,6 +118,7 @@ public class LessonResourceService implements ILessonResourceService {
         }
 
         lessonResourceRepository.deleteById(id);
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CREATE", "RESOURCE_LESSON", id, null, null));
     }
 
     @Override

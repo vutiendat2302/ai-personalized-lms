@@ -1,13 +1,13 @@
 package com.ailms.controller;
 
+import com.ailms.request.CreateClassRequest;
+import com.ailms.request.UpdateClassRequest;
 import com.ailms.response.PageResponse;
 import com.ailms.request.ClassSearchRequest;
 import com.ailms.response.ClassResponse;
 
 
-import com.ailms.request.ClassRequest;
 import com.ailms.response.ApiResponse;
-import com.ailms.response.ClassResponse;
 import com.ailms.service.IClassService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +25,7 @@ public class ClassController {
     private final IClassService classService;
 
     @PostMapping
-    public ResponseEntity<ApiResponse<ClassResponse>> create(@Valid @RequestBody ClassRequest request) {
+    public ResponseEntity<ApiResponse<ClassResponse>> create(@Valid @RequestBody CreateClassRequest request) {
         ClassResponse response = classService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of("Class created successfully", response));
     }
@@ -33,7 +33,7 @@ public class ClassController {
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<ClassResponse>> update(
             @PathVariable Long id,
-            @Valid @RequestBody ClassRequest request) {
+            @Valid @RequestBody UpdateClassRequest request) {
         ClassResponse response = classService.update(id, request);
         return ResponseEntity.ok(ApiResponse.of("Class updated successfully", response));
     }

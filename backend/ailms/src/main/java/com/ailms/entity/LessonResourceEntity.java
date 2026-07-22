@@ -1,6 +1,7 @@
 package com.ailms.entity;
 
 import com.ailms.common.snowflake.SnowflakeId;
+import com.ailms.entity.enums.BaseStatusEnum;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
@@ -34,31 +35,16 @@ public class LessonResourceEntity extends BaseEntity {
     @Column(name = "name", nullable = false, length = 255)
     private String name;
 
-    /** Đường dẫn URL hoặc key file MinIO của tài liệu. */
-    @Column(name = "file_url", nullable = false, length = 500)
-    private String fileUrl;
-
     /** Metadata thông tin chi tiết của file lưu trên MinIO. */
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "file_metadata_id")
     private FileMetadataEntity fileMetadata;
 
     /**
-     * Định dạng file tài liệu (PDF, ZIP, DOCX, PPTX...).
-     */
-    @Column(name = "file_type", length = 20)
-    private String fileType;
-
-    /**
-     * Kích thước file (tính bằng bytes).
-     */
-    @Column(name = "file_size")
-    private Long fileSize;
-
-    /**
      * Trạng thái hoạt động (1 = Active, 0 = Inactive).
      */
     @Column(name = "status", nullable = false)
+    @Enumerated(EnumType.STRING)
     @Builder.Default
-    private Byte status = 1;
+    private BaseStatusEnum status = BaseStatusEnum.ACTIVE;
 }

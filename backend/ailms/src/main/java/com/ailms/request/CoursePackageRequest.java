@@ -31,6 +31,7 @@ public class CoursePackageRequest {
     private BigDecimal originalPrice;
 
     private Integer durationDays;
+    private String description;
 
     private Integer includedTutorSessions;
 

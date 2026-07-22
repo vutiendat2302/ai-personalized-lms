@@ -25,10 +25,8 @@ public class LessonResourceController {
     private final ILessonResourceService lessonResourceService;
 
     @PostMapping("/lessons/{lessonId}/resources")
-    public ResponseEntity<ApiResponse<ResourceResponse>> create(
-            @PathVariable Long lessonId,
-            @Valid @RequestBody CreateResourceRequest request) {
-        ResourceResponse response = lessonResourceService.create(lessonId, request);
+    public ResponseEntity<ApiResponse<ResourceResponse>> create(@Valid @RequestBody CreateResourceRequest request) {
+        ResourceResponse response = lessonResourceService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.of("Resource attached successfully", response));
     }

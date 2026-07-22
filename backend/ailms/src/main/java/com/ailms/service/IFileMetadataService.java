@@ -9,91 +9,93 @@ import com.ailms.response.PageResponse;
 import java.util.List;
 
 /**
- * Service quản lý metadata của file trong DB (bảng file_metadata).
+ * Service quản lý thông tin siêu dữ liệu (metadata) của các file tải lên hệ thống.
  */
 public interface IFileMetadataService {
+
     /**
-     * Tạo mới bản ghi metadata sau khi file đã upload thành công lên storage.
+     * Tạo mới bản ghi từ dữ liệu yêu cầu.
      *
-     * @param request thông tin metadata cần lưu
-     * @return metadata vừa tạo
+     * @param request Đối tượng DTO chứa thông tin yêu cầu
+     * @return đối tượng chứa thông tin chi tiết kết quả
      */
     FileMetadataResponse create(CreateFileMetadataRequest request);
 
     /**
-     * Lấy metadata theo fileKey.
+     * Lấy thông tin file dựa trên khóa file (fileKey) duy nhất.
      *
-     * @param fileKey object key cần tra cứu
-     * @return metadata tương ứng
+     * @param fileKey Khóa duy nhất định danh tệp tin trong hệ thống lưu trữ
+     * @return đối tượng chứa thông tin chi tiết kết quả
      */
     FileMetadataResponse getByFileKey(String fileKey);
 
     /**
-     * Lấy metadata theo id.
+     * Lấy thông tin chi tiết của bản ghi theo ID.
      *
-     * @param id id của bản ghi metadata
-     * @return metadata tương ứng
+     * @param id ID của bản ghi cần xử lý
+     * @return đối tượng chứa thông tin chi tiết kết quả
      */
     FileMetadataResponse getById(Long id);
 
     /**
-     * Lấy danh sách metadata theo loại file (VD: CONTRACT, AVATAR...).
+     * Lấy danh sách file theo định dạng hoặc loại tệp.
      *
-     * @param fileType loại file cần lọc
-     * @return danh sách metadata phù hợp
+     * @param fileType Phân loại tệp tin tải lên
+     * @return danh sách các đối tượng phù hợp
      */
     List<FileMetadataResponse> getByFileType(FileTypeEnum fileType);
 
     /**
-     * Soft-delete: đổi status sang INACTIVE/DELETED, không xóa row khỏi DB.
+     * Xóa mềm file (chuyển trạng thái hoạt động thành ẩn/không sử dụng).
      *
-     * @param fileKey object key cần soft-delete
+     * @param fileKey Khóa duy nhất định danh tệp tin trong hệ thống lưu trữ
      */
     void softDelete(String fileKey);
 
     /**
-     * Xóa hẳn bản ghi metadata khỏi DB.
-     * @param fileKey object key cần xóa metadata
+     * Xóa vĩnh viễn tệp tin khỏi hệ thống dữ liệu.
+     *
+     * @param fileKey Khóa duy nhất định danh tệp tin trong hệ thống lưu trữ
      */
     void hardDelete(String fileKey);
 
     /**
-     * Kiểm tra metadata có tồn tại theo fileKey không.
-     * @param fileKey object key cần kiểm tra
-     * @return true nếu tồn tại, false nếu không
+     * Kiểm tra sự tồn tại của tệp dựa trên fileKey.
+     *
+     * @param fileKey Khóa duy nhất định danh tệp tin trong hệ thống lưu trữ
+     * @return true nếu xử lý thành công hoặc hợp lệ, ngược lại là false
      */
     boolean existsByFileKey(String fileKey);
 
     /**
-     * Tìm kiếm, lọc, sắp xếp, phân trang metadata file — dùng cho màn quản lý file của admin.
+     * Tìm kiếm và phân trang danh sách dựa trên các tiêu chí lọc.
      *
-     * @param request điều kiện tìm kiếm
-     * @return trang kết quả metadata phù hợp
+     * @param request Đối tượng DTO chứa thông tin yêu cầu
+     * @return trang kết quả chứa danh sách đã được phân trang
      */
     PageResponse<FileMetadataResponse> search(FileSearchRequest request);
 
     /**
-     * Đổi origin name
+     * Cập nhật tên gốc hiển thị của tệp tin.
      *
-     * @param fileKey object key can doi ten
-     * @param newOriginalName ten moi
-     * @return metadata vua doi ten
+     * @param fileKey Khóa duy nhất định danh tệp tin trong hệ thống lưu trữ
+     * @param newOriginalName Tên gốc mới muốn thay đổi của tệp tin
+     * @return đối tượng chứa thông tin chi tiết kết quả
      */
     FileMetadataResponse updateOriginalName(String fileKey, String newOriginalName);
 
     /**
-     * Updata status (dung khi xoa mem muon khoi phuc lai file)
+     * Cập nhật trạng thái hoạt động của tệp.
      *
-     * @param fileKey object key can doi ten
-     * @param status trang thai moi
-     * @return metadata vua cap nhat
+     * @param fileKey Khóa duy nhất định danh tệp tin trong hệ thống lưu trữ
+     * @param status Trạng thái mới cần cập nhật
+     * @return đối tượng chứa thông tin chi tiết kết quả
      */
     FileMetadataResponse updateStatus(String fileKey, BaseStatusEnum status);
 
     /**
-     * Lay tat ca cac file
+     * Lấy toàn bộ danh sách tệp tin đang quản lý.
+     * @return danh sách các đối tượng phù hợp
      */
     List<FileMetadataResponse> getAllFiles();
-
-
 }

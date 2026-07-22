@@ -25,10 +25,7 @@ public class LessonController {
     private final ILessonService lessonService;
 
     @PostMapping("/sections/{sectionId}")
-    public ResponseEntity<ApiResponse<LessonResponse>> create(
-            @PathVariable Long sectionId,
-            @Valid @RequestBody CreateLessonRequest request) {
-        request.setSectionId(sectionId);
+    public ResponseEntity<ApiResponse<LessonResponse>> create(@Valid @RequestBody CreateLessonRequest request) {
         LessonResponse response = lessonService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.of("Lesson created successfully", response));

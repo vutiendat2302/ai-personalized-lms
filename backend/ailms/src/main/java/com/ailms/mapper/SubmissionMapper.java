@@ -22,6 +22,7 @@ public interface SubmissionMapper {
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
+    @Mapping(target = "fileMetadata", ignore = true)
     SubmissionEntity toEntity(SubmissionRequest request);
 
     @Mapping(target = "id", ignore = true)
@@ -29,5 +30,6 @@ public interface SubmissionMapper {
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
+    @Mapping(target = "fileMetadata", ignore = true)
     void updateFromRequest(SubmissionRequest request, @MappingTarget SubmissionEntity entity);
 }

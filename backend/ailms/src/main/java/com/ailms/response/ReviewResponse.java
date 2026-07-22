@@ -18,7 +18,7 @@ public class ReviewResponse {
 
     private Long userId;
 
-    private String userName;
+//    private String userName;
 
     private Integer rating;
 
