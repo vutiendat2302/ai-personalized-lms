@@ -100,10 +100,13 @@ export const CourseManagement: React.FC = () => {
         sortBy: "id",
         sortDirection: "DESC"
       };
-      if (searchCourseName) params.name = searchCourseName;
+      if (searchCourseName) {
+        params.name = searchCourseName;
+        params.keyword = searchCourseName;
+      }
       if (searchCourseCategory) params.categoryId = searchCourseCategory;
       if (searchCourseLevel) params.level = searchCourseLevel;
-      if (searchCourseStatus !== "") params.status = parseInt(searchCourseStatus);
+      if (searchCourseStatus !== "") params.status = searchCourseStatus;
 
       const res = await courseApi.searchCourses(params);
       if (res.data.success) {
@@ -129,7 +132,7 @@ export const CourseManagement: React.FC = () => {
         sortDirection: "DESC"
       };
       if (searchCategoryName) params.name = searchCategoryName;
-      if (searchCategoryStatus !== "") params.status = parseInt(searchCategoryStatus);
+      if (searchCategoryStatus !== "") params.status = searchCategoryStatus;
 
       const res = await courseApi.searchCategories(params);
       if (res.data.success) {
@@ -239,11 +242,11 @@ export const CourseManagement: React.FC = () => {
   };
 
   const handleToggleCourseStatus = async (course: CourseResponse) => {
-    const newStatus = course.status === 1 ? 0 : 1;
+    const newStatus = course.status === "ACTIVE" ? "INACTIVE" : "ACTIVE";
     try {
       const res = await courseApi.updateCourseStatus(course.id, newStatus);
       if (res.data.success) {
-        showBanner(`Cập nhật trạng thái khóa học sang ${newStatus === 1 ? "Hoạt động" : "Tạm ngưng"}`);
+        showBanner(`Cập nhật trạng thái khóa học sang ${newStatus === "ACTIVE" ? "Hoạt động" : "Tạm ngưng"}`);
         fetchCourses();
       }
     } catch (err: any) {
@@ -252,11 +255,11 @@ export const CourseManagement: React.FC = () => {
   };
 
   const handleToggleCategoryStatus = async (category: CategoryResponse) => {
-    const newStatus = category.status === 1 ? 0 : 1;
+    const newStatus = category.status === "ACTIVE" ? "INACTIVE" : "ACTIVE";
     try {
       const res = await courseApi.updateCategoryStatus(category.id, newStatus);
       if (res.data.success) {
-        showBanner(`Cập nhật trạng thái danh mục sang ${newStatus === 1 ? "Hoạt động" : "Tạm ngưng"}`);
+        showBanner(`Cập nhật trạng thái danh mục sang ${newStatus === "ACTIVE" ? "Hoạt động" : "Tạm ngưng"}`);
         fetchCategoriesList();
         fetchCategories();
       }
@@ -266,7 +269,7 @@ export const CourseManagement: React.FC = () => {
   };
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-8 animate-in fade-in-50 duration-300">
+    <div className="mx-auto max-w-none w-full px-6 py-8 lg:px-12 space-y-8 animate-in fade-in-50 duration-300">
       
       {/* Top Banner Messages */}
       {successBanner && (
@@ -389,8 +392,8 @@ export const CourseManagement: React.FC = () => {
                 className="px-3 py-1.5 rounded-lg border border-border bg-background text-sm outline-none"
               >
                 <option value="">Tất cả trạng thái</option>
-                <option value="1">Hoạt động</option>
-                <option value="0">Tạm ngưng</option>
+                <option value="ACTIVE">Hoạt động</option>
+                <option value="INACTIVE">Tạm ngưng</option>
               </select>
 
               <Button onClick={() => { setCoursePage(0); fetchCourses(); }} size="sm" className="h-9 px-4 font-bold bg-muted hover:bg-muted/80 text-foreground">
@@ -463,10 +466,10 @@ export const CourseManagement: React.FC = () => {
                             <button
                               onClick={() => handleToggleCourseStatus(course)}
                               className={`px-2.5 py-0.5 rounded text-[10px] font-bold ${
-                                course.status === 1 ? "bg-green-500/10 text-green-600" : "bg-destructive/10 text-destructive"
+                                course.status === "ACTIVE" ? "bg-green-500/10 text-green-600" : "bg-destructive/10 text-destructive"
                               }`}
                             >
-                              {course.status === 1 ? "Hoạt động" : "Tạm ngưng"}
+                              {course.status === "ACTIVE" ? "Hoạt động" : "Tạm ngưng"}
                             </button>
                           </td>
                           <td className="py-3 px-4 text-right">
@@ -567,8 +570,8 @@ export const CourseManagement: React.FC = () => {
                 className="px-3 py-1.5 rounded-lg border border-border bg-background text-sm outline-none"
               >
                 <option value="">Tất cả trạng thái</option>
-                <option value="1">Hoạt động</option>
-                <option value="0">Tạm ngưng</option>
+                <option value="ACTIVE">Hoạt động</option>
+                <option value="INACTIVE">Tạm ngưng</option>
               </select>
             </div>
 
@@ -607,10 +610,10 @@ export const CourseManagement: React.FC = () => {
                             <button
                               onClick={() => handleToggleCategoryStatus(category)}
                               className={`px-2.5 py-0.5 rounded text-[10px] font-bold ${
-                                category.status === 1 ? "bg-green-500/10 text-green-600" : "bg-destructive/10 text-destructive"
+                                category.status === "ACTIVE" ? "bg-green-500/10 text-green-600" : "bg-destructive/10 text-destructive"
                               }`}
                             >
-                              {category.status === 1 ? "Hoạt động" : "Tạm ngưng"}
+                              {category.status === "ACTIVE" ? "Hoạt động" : "Tạm ngưng"}
                             </button>
                           </td>
                           <td className="py-3 px-4 text-right">

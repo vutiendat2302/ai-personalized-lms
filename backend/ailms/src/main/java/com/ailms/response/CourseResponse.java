@@ -39,6 +39,12 @@ public class CourseResponse {
 
     private Integer reviewCount;
 
+    private Integer viewCount;
+
+    private Integer enrollmentCount;
+
+    private Double trendingScore;
+
     private CertificateConditionTypeEnum certificateConditionType;
 
     private Integer certificatePassThreshold;

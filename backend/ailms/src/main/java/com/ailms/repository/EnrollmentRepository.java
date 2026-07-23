@@ -13,5 +13,6 @@ public interface EnrollmentRepository extends BaseRepository<EnrollmentEntity, L
     List<EnrollmentEntity> findByUserEntity_Id(Long userId);
     List<EnrollmentEntity> findByCourseEntity_Id(Long courseId);
     List<EnrollmentEntity> findByClassEntity_Id(Long classId);
+    long countByCourseEntity_Id(Long courseId);
     java.util.Optional<EnrollmentEntity> findByUserEntity_IdAndCourseEntity_Id(Long userId, Long courseId);
 }

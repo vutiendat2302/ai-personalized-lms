@@ -2,10 +2,14 @@ package com.ailms.controller;
 
 import com.ailms.request.*;
 import com.ailms.response.ApiResponse;
+import com.ailms.response.GuardianResponse;
 import com.ailms.response.JwtAuthenticationResponse;
+import com.ailms.response.StudentProfileResponse;
 import com.ailms.security.CustomUserDetails;
 import com.ailms.service.IAuthService;
 
+import com.ailms.service.IGuardianService;
+import com.ailms.service.IStudentProfileService;
 import com.ailms.service.IUserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +30,8 @@ public class AuthController {
 
     private final IAuthService authService;
     private final IUserService userService;
+    private final IStudentProfileService studentProfileService;
+    private final IGuardianService guardianService;
 
     @Value("${app.jwt.refresh-expiration-ms}")
     private int refreshExpirationMs;
@@ -85,6 +91,18 @@ public class AuthController {
         log.info("Đăng ký tài khoản mới cho email: {}", registerRequest.getEmail());
         authService.register(registerRequest);
         return ResponseEntity.ok(ApiResponse.message("OTP đã được gửi tới email của bạn"));
+    }
+
+    @PostMapping("register/student")
+    public ResponseEntity<ApiResponse<StudentProfileResponse>> create(@Valid @RequestBody CreateStudentProfileRequest request) {
+        StudentProfileResponse response = studentProfileService.create(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of("Student profile created successfully", response));
+    }
+
+    @PostMapping("")
+    public ResponseEntity<ApiResponse<GuardianResponse>> create(@Valid @RequestBody CreateGuardianRequest request) {
+        GuardianResponse response = guardianService.create(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of("Guardian created successfully", response));
     }
 
     /**

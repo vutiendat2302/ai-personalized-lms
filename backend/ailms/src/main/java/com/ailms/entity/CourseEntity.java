@@ -99,6 +99,22 @@ public class CourseEntity extends BaseEntity {
     @Builder.Default
     private Integer certificatePassThreshold = 80;
 
+    /** Lượt xem khóa học. */
+    @Column(name = "view_count")
+    @Builder.Default
+    private Integer viewCount = 0;
+
+    /** Số lượng học viên đăng ký tham gia khóa học. */
+    @Column(name = "enrollment_count")
+    @Builder.Default
+    private Integer enrollmentCount = 0;
+
+    /** Điểm số xu hướng thịnh hành. */
+    @Column(name = "trending_score")
+    @Builder.Default
+    private Double trendingScore = 0.0;
+
+
     /** Danh sách các chương/phần học trong khóa học. */
     @OneToMany(mappedBy = "courseEntity", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @OrderBy("orderIndex ASC")

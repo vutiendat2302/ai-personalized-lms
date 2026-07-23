@@ -1,5 +1,6 @@
 package com.ailms.controller;
 
+import com.ailms.request.BaseSearchRequest;
 import com.ailms.request.CourseApprovalRequest;
 import com.ailms.request.CourseSearchRequest;
 import com.ailms.request.CourseStatusRequest;
@@ -99,5 +100,29 @@ public class CourseController {
     public ResponseEntity<ApiResponse<PageResponse<CourseResponse>>> searchCourse(CourseSearchRequest request) {
         PageResponse<CourseResponse> response = courseService.search(request);
         return ResponseEntity.ok(ApiResponse.of("Courses retrieved successfully", response));
+    }
+
+    @GetMapping("/outstanding")
+    public ResponseEntity<ApiResponse<PageResponse<CourseResponse>>> getOutstandingCourses(@Valid BaseSearchRequest request) {
+        PageResponse<CourseResponse> response = courseService.getOutstandingCourses(request);
+        return ResponseEntity.ok(ApiResponse.of("Outstanding courses retrieved successfully", response));
+    }
+
+    @GetMapping("/trending")
+    public ResponseEntity<ApiResponse<PageResponse<CourseResponse>>> getTrendingCourses(@Valid BaseSearchRequest request) {
+        PageResponse<CourseResponse> response = courseService.getTrendingCourses(request);
+        return ResponseEntity.ok(ApiResponse.of("Trending courses retrieved successfully", response));
+    }
+
+    @GetMapping("/latest")
+    public ResponseEntity<ApiResponse<PageResponse<CourseResponse>>> getLatestCourses(@Valid BaseSearchRequest request) {
+        PageResponse<CourseResponse> response = courseService.getLatestCourses(request);
+        return ResponseEntity.ok(ApiResponse.of("Latest courses retrieved successfully", response));
+    }
+
+    @PostMapping("/metrics/recalculate")
+    public ResponseEntity<ApiResponse<Void>> recalculateMetrics() {
+        courseService.recalculateTrendingScores();
+        return ResponseEntity.ok(ApiResponse.message("Course metrics and trending scores recalculated successfully"));
     }
 }

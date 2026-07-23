@@ -20,6 +20,9 @@ public interface ReviewRepository extends JpaRepository<ReviewEntity, Long>, Jpa
 
     List<ReviewEntity> findByCourseIdAndStatus(Long courseId, ReviewStatusEnum status);
 
+    @Query("SELECT r FROM ReviewEntity r LEFT JOIN FETCH r.courseEntity LEFT JOIN FETCH r.userEntity WHERE r.courseId = :courseId AND r.status = :status")
+    List<ReviewEntity> findByCourseIdAndStatusWithRelations(@Param("courseId") Long courseId, @Param("status") ReviewStatusEnum status);
+
     @Query("SELECT AVG(r.rating) FROM ReviewEntity r WHERE r.courseId = :courseId AND r.status = 'APPROVED'")
     Double getAverageRatingForCourse(@Param("courseId") Long courseId);
 

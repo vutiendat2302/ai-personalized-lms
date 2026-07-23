@@ -19,6 +19,9 @@ public interface CourseMapper {
     @Mapping(target = "rejectionReason", ignore = true)
     @Mapping(target = "avgRating", ignore = true)
     @Mapping(target = "reviewCount", ignore = true)
+    @Mapping(target = "viewCount", ignore = true)
+    @Mapping(target = "enrollmentCount", ignore = true)
+    @Mapping(target = "trendingScore", ignore = true)
     CourseEntity toEntity(CreateCourseRequest request);
 
 
@@ -32,6 +35,9 @@ public interface CourseMapper {
     @Mapping(target = "sections", ignore = true)
     @Mapping(target = "avgRating", ignore = true)
     @Mapping(target = "reviewCount", ignore = true)
+    @Mapping(target = "viewCount", ignore = true)
+    @Mapping(target = "enrollmentCount", ignore = true)
+    @Mapping(target = "trendingScore", ignore = true)
     void updateEntityFromRequest(UpdateCourseRequest request, @MappingTarget CourseEntity entity);
 
     @Mapping(target = "categoryId", source = "categoryEntity.id")

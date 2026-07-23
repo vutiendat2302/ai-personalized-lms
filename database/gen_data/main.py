@@ -37,6 +37,8 @@ import teacher_availability
 import course
 import course_sectiton
 import lesson
+import review
+
 
 def main():
     print(f"Kết nối tới MySQL: {DB_CONFIG['user']}@{DB_CONFIG['host']}:{DB_CONFIG['port']}/{DB_CONFIG['database']}")
@@ -64,7 +66,8 @@ def main():
             teacher_availability.seed(cursor)
             course.seed(cursor) 
             course_sectiton.seed(cursor)
-            lesson.seed(cursor)
+            # lesson.seed(cursor)
+            review.seed(cursor)
             
             
             

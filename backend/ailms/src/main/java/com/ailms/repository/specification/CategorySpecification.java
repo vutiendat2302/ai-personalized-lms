@@ -17,7 +17,7 @@ public final class CategorySpecification {
             return builder.build();
         }
 
-        builder.likeIfPresent("name", request.getKeyword());
+        builder.likeAnyIfPresent(request.getKeyword(), "name");
         builder.equalIfPresent("status", request.getStatus());
         builder.greaterOrEqualIfPresent("createdAt", request.getCreatedFrom());
         builder.lessOrEqualIfPresent("createdAt", request.getCreatedTo());

@@ -24,12 +24,6 @@ public class GuardianController {
 
     private final IGuardianService guardianService;
 
-    @PostMapping
-    public ResponseEntity<ApiResponse<GuardianResponse>> create(@Valid @RequestBody CreateGuardianRequest request) {
-        GuardianResponse response = guardianService.create(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of("Guardian created successfully", response));
-    }
-
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<GuardianResponse>> update(
             @PathVariable Long id,

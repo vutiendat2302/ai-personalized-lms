@@ -493,7 +493,7 @@ export const Dashboard: React.FC = () => {
   // Student dashboard view
   if (!isAdmin) {
     return (
-      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-8 animate-in fade-in-50 duration-300">
+      <div className="mx-auto max-w-none w-full px-6 py-8 lg:px-12 space-y-8 animate-in fade-in-50 duration-300">
         
         {/* Banner Chào Mừng */}
         <div className="relative rounded-2xl bg-gradient-to-r from-primary to-indigo-950 p-6 md:p-8 text-white overflow-hidden shadow-lg shadow-primary/10">
@@ -690,7 +690,7 @@ export const Dashboard: React.FC = () => {
   // ADMIN CONSOLE VIEW (WITH CRUD PANELS)
   // ==========================================
   return (
-    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 space-y-8 animate-in fade-in-50 duration-300">
+    <div className="mx-auto max-w-none w-full px-6 py-8 lg:px-12 space-y-8 animate-in fade-in-50 duration-300">
       
       {/* Success banner notifications */}
       {successBanner && (

@@ -17,7 +17,7 @@ export const courseApi = {
   updateCourse: (id: string, payload: UpdateCourseRequest) =>
     httpClient.put<ApiResponse<CourseResponse>>(`/v1/courses/${id}`, payload),
 
-  updateCourseStatus: (id: string, status: number) =>
+  updateCourseStatus: (id: string, status: string) =>
     httpClient.patch<ApiResponse<CourseResponse>>(`/v1/courses/${id}/status`, { status }),
 
   deleteCourse: (id: string) =>
@@ -33,13 +33,23 @@ export const courseApi = {
     categoryId?: number;
     name?: string;
     level?: string;
-    status?: number;
+    status?: string;
     page?: number;
     size?: number;
     sortBy?: string;
     sortDirection?: string;
+    keyword?: string;
   }) =>
     httpClient.get<ApiResponse<any>>("/v1/courses/search", { params }),
+
+  getOutstandingCourses: (params?: { page?: number; size?: number }) =>
+    httpClient.get<ApiResponse<any>>("/v1/courses/outstanding", { params }),
+
+  getTrendingCourses: (params?: { page?: number; size?: number }) =>
+    httpClient.get<ApiResponse<any>>("/v1/courses/trending", { params }),
+
+  getLatestCourses: (params?: { page?: number; size?: number }) =>
+    httpClient.get<ApiResponse<any>>("/v1/courses/latest", { params }),
 
   // Category Endpoints
   createCategory: (payload: CreateCategoryRequest) =>
@@ -48,7 +58,7 @@ export const courseApi = {
   updateCategory: (id: string, payload: UpdateCategoryRequest) =>
     httpClient.put<ApiResponse<CategoryResponse>>(`/v1/categories/${id}`, payload),
 
-  updateCategoryStatus: (id: string, status: number) =>
+  updateCategoryStatus: (id: string, status: string) =>
     httpClient.patch<ApiResponse<CategoryResponse>>(`/v1/categories/${id}/status`, { status }),
 
   deleteCategory: (id: string) =>
@@ -62,7 +72,7 @@ export const courseApi = {
 
   searchCategories: (params?: {
     name?: string;
-    status?: number;
+    status?: string;
     page?: number;
     size?: number;
     sortBy?: string;

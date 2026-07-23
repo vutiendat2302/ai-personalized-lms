@@ -24,12 +24,6 @@ public class StudentProfileController {
 
     private final IStudentProfileService studentProfileService;
 
-    @PostMapping
-    public ResponseEntity<ApiResponse<StudentProfileResponse>> create(@Valid @RequestBody CreateStudentProfileRequest request) {
-        StudentProfileResponse response = studentProfileService.create(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of("Student profile created successfully", response));
-    }
-
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<StudentProfileResponse>> update(
             @PathVariable Long id,

@@ -316,21 +316,21 @@ export const AuthModals: React.FC = () => {
             <DialogTitle className="text-2xl font-extrabold text-foreground tracking-tight text-center">
               Đăng nhập
             </DialogTitle>
-            <DialogDescription className="hidden">
+            <DialogDescription className="text-base font-light text-center">
               Đăng nhập để vào hệ thống AILMS.
             </DialogDescription>
           </DialogHeader>
 
           {errorMsg && (
-            <div className="flex items-center gap-2 rounded-lg bg-destructive/10 p-3 text-xs text-destructive mt-2">
+            <div className="flex items-center gap-2 rounded-lg bg-destructive/10 p-3 text-base text-destructive mt-2">
               <AlertCircle className="h-4 w-4 shrink-0" />
               <span>{errorMsg}</span>
             </div>
           )}
 
-          <form onSubmit={loginForm.handleSubmit(onLoginSubmit)} className="space-y-4 mt-4">
+          <form onSubmit={loginForm.handleSubmit(onLoginSubmit)} className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="login-username" className="text-xs font-semibold text-foreground">
+              <Label htmlFor="login-username" className="text-base font-semibold text-foreground">
                 Tên tài khoản
               </Label>
               <div className="relative">
@@ -339,19 +339,19 @@ export const AuthModals: React.FC = () => {
                   id="login-username"
                   type="text"
                   placeholder="Nhập tên tài khoản hoặc email"
-                  className="pl-10 h-10 border-input bg-background/50 hover:bg-background focus:bg-background focus-visible:ring-3 focus-visible:ring-primary/20 transition-all"
+                  className="pl-10 h-10 text-base md:text-base border-input/70 placeholder:opacity-60 bg-card hover:bg-background focus:bg-card focus-visible:ring-3 focus-visible:ring-primary/20 transition-all"
                   {...loginForm.register("usernameOrEmail")}
                 />
               </div>
               {loginForm.formState.errors.usernameOrEmail && (
-                <p className="text-[10px] text-destructive font-medium">
+                <p className="text-sm text-destructive font-medium">
                   {loginForm.formState.errors.usernameOrEmail.message}
                 </p>
               )}
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="login-pass" className="text-xs font-semibold text-foreground">
+              <Label htmlFor="login-pass" className="text-base font-semibold text-foreground">
                 Mật khẩu
               </Label>
               <div className="relative">
@@ -360,7 +360,7 @@ export const AuthModals: React.FC = () => {
                   id="login-pass"
                   type={showPass ? "text" : "password"}
                   placeholder="Nhập mật khẩu"
-                  className="pl-10 pr-10 h-10 border-input bg-background/50 hover:bg-background focus:bg-background focus-visible:ring-3 focus-visible:ring-primary/20 transition-all"
+                  className="pl-10 pr-10 h-10 text-base md:text-base placeholder:opacity-60 border-input/70 bg-card hover:bg-background focus:bg-card focus-visible:ring-3 focus-visible:ring-primary/20 transition-all"
                   {...loginForm.register("password")}
                 />
                 <button
@@ -372,7 +372,7 @@ export const AuthModals: React.FC = () => {
                 </button>
               </div>
               {loginForm.formState.errors.password && (
-                <p className="text-[10px] text-destructive font-medium">
+                <p className="text-sm text-destructive font-medium">
                   {loginForm.formState.errors.password.message}
                 </p>
               )}
@@ -384,12 +384,12 @@ export const AuthModals: React.FC = () => {
           </form>
 
           <div className="flex flex-col items-center gap-2 mt-4 text-xs">
-            <button onClick={openForgotPassword} className="text-muted-foreground hover:text-primary transition-colors hover:underline">
+            <button onClick={openForgotPassword} className="text-sm font-semibold hover:text-primary transition-colors hover:underline">
               Quên mật khẩu ?
             </button>
-            <div className="text-muted-foreground mt-1">
+            <div className="text-sm font-semibold mt-1">
               Bạn chưa có tài khoản?{" "}
-              <button onClick={openRegister} className="text-primary font-bold hover:underline">
+              <button onClick={openRegister} className="text-primary text-sm font-semibold hover:underline">
                 Đăng ký.
               </button>
             </div>
@@ -437,7 +437,7 @@ export const AuthModals: React.FC = () => {
                       <Input
                         type="text"
                         placeholder="Nhập tên tài khoản"
-                        className="pl-10 h-10 border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
+                        className="pl-10 h-10 text-base md:text-base border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
                         {...registerForm.register("username")}
                       />
                     </div>
@@ -453,7 +453,7 @@ export const AuthModals: React.FC = () => {
                       <Input
                         type="password"
                         placeholder="Nhập mật khẩu"
-                        className="pl-10 h-10 border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
+                        className="pl-10 h-10 text-base md:text-base border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
                         {...registerForm.register("password")}
                       />
                     </div>
@@ -469,7 +469,7 @@ export const AuthModals: React.FC = () => {
                       <Input
                         type="email"
                         placeholder="nhapemail@gmail.com"
-                        className="pl-10 h-10 border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
+                        className="pl-10 h-10 text-base md:text-base border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
                         {...registerForm.register("email")}
                       />
                     </div>
@@ -504,7 +504,7 @@ export const AuthModals: React.FC = () => {
                       <Input
                         type="text"
                         placeholder="Nhập số điện thoại"
-                        className="pl-10 h-10 border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
+                        className="pl-10 h-10 text-base md:text-base border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
                         {...registerForm.register("phone")}
                       />
                     </div>
@@ -520,7 +520,7 @@ export const AuthModals: React.FC = () => {
                       <Input
                         type="text"
                         placeholder="Nhập họ và tên"
-                        className="pl-10 h-10 border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
+                        className="pl-10 h-10 text-base md:text-base border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
                         {...registerForm.register("fullName")}
                       />
                     </div>
@@ -547,7 +547,7 @@ export const AuthModals: React.FC = () => {
                       <Calendar className="absolute left-3 top-2.5 h-4.5 w-4.5 text-muted-foreground" />
                       <Input
                         type="date"
-                        className="pl-10 h-10 border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
+                        className="pl-10 h-10 text-base md:text-base border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
                         {...registerForm.register("dateOfBirth")}
                       />
                     </div>
@@ -565,7 +565,7 @@ export const AuthModals: React.FC = () => {
                   <Input
                     type="password"
                     placeholder="Nhập lại mật khẩu"
-                    className="pl-10 h-10 border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
+                    className="pl-10 h-10 text-base md:text-base border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
                     {...registerForm.register("confirmPassword")}
                   />
                 </div>
@@ -632,7 +632,7 @@ export const AuthModals: React.FC = () => {
                 <Input
                   type="text"
                   placeholder="Nhập tên tài khoản hoặc email"
-                  className="pl-10 h-10 border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
+                  className="pl-10 h-10 text-base md:text-base border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
                   {...forgotPasswordForm.register("usernameOrEmail")}
                 />
               </div>
@@ -773,7 +773,7 @@ export const AuthModals: React.FC = () => {
                 <Input
                   type="password"
                   placeholder="••••••••"
-                  className="pl-10 h-10 border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
+                  className="pl-10 h-10 text-base md:text-base border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
                   {...resetPasswordForm.register("password")}
                 />
               </div>
@@ -791,7 +791,7 @@ export const AuthModals: React.FC = () => {
                 <Input
                   type="password"
                   placeholder="••••••••"
-                  className="pl-10 h-10 border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
+                  className="pl-10 h-10 text-base md:text-base border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
                   {...resetPasswordForm.register("confirmPassword")}
                 />
               </div>
@@ -852,7 +852,7 @@ export const AuthModals: React.FC = () => {
                 <Input
                   type="password"
                   placeholder="••••••••"
-                  className="pl-10 h-10 border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
+                  className="pl-10 h-10 text-base md:text-base border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
                   {...changePasswordForm.register("oldPassword")}
                 />
               </div>
@@ -870,7 +870,7 @@ export const AuthModals: React.FC = () => {
                 <Input
                   type="password"
                   placeholder="••••••••"
-                  className="pl-10 h-10 border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
+                  className="pl-10 h-10 text-base md:text-base border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
                   {...changePasswordForm.register("newPassword")}
                 />
               </div>
@@ -888,7 +888,7 @@ export const AuthModals: React.FC = () => {
                 <Input
                   type="password"
                   placeholder="••••••••"
-                  className="pl-10 h-10 border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
+                  className="pl-10 h-10 text-base md:text-base border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
                   {...changePasswordForm.register("confirmPassword")}
                 />
               </div>

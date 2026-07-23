@@ -1,17 +1,37 @@
 import React, { useState, useRef, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useModalStore } from "@/store/useModalStore";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { GraduationCap, LogOut, ChevronDown, Bell, Globe, Search, User, Settings, BookOpen, Users, Shield, Activity } from "lucide-react";
+import { LogOut, ChevronDown, Bell, Globe, Search, User, Settings, BookOpen, Users, Shield, Activity, ChevronRight } from "lucide-react";
 
 export const Header: React.FC = () => {
   const { auth, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const { openLogin, openRegister, openChangePassword } = useModalStore();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const searchRef = useRef<HTMLDivElement>(null);
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      setSearchFocused(false);
+      navigate(`/explore?keyword=${encodeURIComponent(searchQuery.trim())}`);
+    }
+  };
+
+  const handleLogoClick = (e: React.MouseEvent) => {
+    const targetPath = auth.accessToken ? "/dashboard" : "/";
+    if (location.pathname === targetPath) {
+      e.preventDefault();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
 
   const handleLogout = async () => {
     setDropdownOpen(false);
@@ -30,56 +50,170 @@ export const Header: React.FC = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Close search dropdown on outside click
+  useEffect(() => {
+    const handleSearchClickOutside = (event: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setSearchFocused(false);
+      }
+    };
+    document.addEventListener("mousedown", handleSearchClickOutside);
+    return () => document.removeEventListener("mousedown", handleSearchClickOutside);
+  }, []);
+
   const isAdmin = auth.user?.roles.includes("ADMIN");
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-border bg-card/85 backdrop-blur-md transition-colors duration-200">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+    <header className="sticky top-0 z-40 w-full border-b border-border/40 bg-card/70 backdrop-blur-md transition-colors duration-200">
+      <div className="mx-auto flex h-16 max-w-none w-full items-center justify-between px-6 lg:px-12">
         
         {/* Left Side: Logo */}
-        <Link to={auth.accessToken ? "/dashboard" : "/"} className="flex items-center gap-2.5 hover:opacity-95 transition-opacity">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-md shadow-primary/20">
-            <GraduationCap className="h-5.5 w-5.5" />
-          </div>
-          <span className="text-xl font-extrabold tracking-tight bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-            AILMS
-          </span>
+        <Link to={auth.accessToken ? "/dashboard" : "/"} onClick={handleLogoClick} className="flex items-center px-3 py-1.5 rounded-lg hover:bg-neutral-soft-gray/60 transition-all duration-200">
+          <img src="/ailms_logo_full.png" alt="AILMS Logo" className="h-12 w-auto object-contain" />
         </Link>
 
-        {/* Center Section: Conditional Navigation */}
-        {auth.accessToken && auth.user ? (
-          // Authenticated Middle Section (Figma styled)
-          <div className="hidden md:flex items-center gap-4 flex-1 max-w-md mx-8">
-            {/* Courses Dropdown */}
-            <div className="relative">
+        {/* Center: Global Search Bar & Navigation */}
+        <div className="flex-1 flex items-center justify-between max-w-4xl mx-4 sm:mx-8 md:mx-12 gap-4">
+          {/* Courses Dropdown (Only for Authenticated users) */}
+          {auth.accessToken && auth.user && (
+            <div className="relative shrink-0 hidden md:block">
               <button 
                 onClick={() => navigate("/dashboard")}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-background/50 hover:bg-background text-xs font-semibold text-foreground transition-all"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-background/50 hover:bg-background text-xs font-semibold text-foreground transition-all"
               >
                 <span>Các khóa học của tôi</span>
                 <ChevronDown className="h-3 w-3 text-muted-foreground" />
               </button>
             </div>
+          )}
 
-            {/* Search Bar */}
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+          
+
+          {/* Public navigation links (Visible only when logged out and on large screens) */}
+          {!auth.accessToken && (
+            <nav className="hidden md:flex items-center gap-6 text-base font-semibold text-muted-foreground">
+              <Link to="/#features" className="px-4 py-2 rounded-lg opacity-80 hover:opacity-100 hover:text-primary hover:bg-neutral-soft-gray/80 transition-all duration-200">Tính năng</Link>
+              <Link to="/#courses" className="px-4 py-2 rounded-lg opacity-80 hover:opacity-100 hover:text-primary hover:bg-neutral-soft-gray/80 transition-all duration-200">Khóa học</Link>
+              <Link to="/#testimonials" className="px-4 py-2 rounded-lg opacity-80 hover:opacity-100 hover:text-primary hover:bg-neutral-soft-gray/80 transition-all duration-200">Đánh giá</Link>
+              <Link to="/#faq" className="px-4 py-2 rounded-lg opacity-80 hover:opacity-100 hover:text-primary hover:bg-neutral-soft-gray/80 transition-all duration-200">Hỏi đáp</Link>
+            </nav>
+          )}
+
+          {/* Coursera-style Search Bar (Visible for everyone) */}
+          <div ref={searchRef} className="relative flex-1 max-w-lg hidden sm:block">
+            <form onSubmit={handleSearchSubmit} className="relative flex items-center h-10 w-full rounded-full border border-border/50 bg-white hover:bg-background focus-within:bg-background focus-within:ring-3 focus-within:ring-primary/20 transition-all overflow-hidden pr-1 shadow-sm">
               <input
                 type="text"
-                placeholder="Bạn muốn học gì ?"
-                className="w-full pl-9 pr-4 py-1.5 rounded-full border border-border bg-background/50 hover:bg-background focus:bg-background text-xs outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                placeholder="Bạn muốn học gì hôm nay?"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onFocus={() => setSearchFocused(true)}
+                className="w-full h-full pl-5 pr-12 text-base font-semibold opacity-80 bg-transparent placeholder:text-base placeholder:opacity-70 outline-none border-none text-foreground placeholder:text-muted-foreground"
               />
-            </div>
+              <button
+                type="submit"
+                className="absolute right-1 top-1 h-8 w-8 rounded-full bg-primary hover:bg-primary/70 active:bg-primary flex items-center justify-center text-white shadow transition-all shrink-0"
+              >
+                <Search className="h-4 w-4" />
+              </button>
+            </form>
+
+            {/* Search Dropdown Overlay */}
+            {searchFocused && (
+              <div className="absolute left-0 mt-2 w-[600px] max-w-[90vw] bg-card rounded-2xl border border-border/40 shadow-2xl p-5 z-50 animate-in fade-in-50 slide-in-from-top-3 duration-200">
+                {/* Trending searches */}
+                <div className="space-y-2.5">
+                  <h4 className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider">
+                    Từ khóa tìm kiếm phổ biến
+                  </h4>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      "Trí tuệ nhân tạo (AI)",
+                      "Lập trình Python",
+                      "Marketing số",
+                      "Thiết kế UI/UX",
+                      "Phân tích dữ liệu",
+                      "Excel cơ bản",
+                      "Google SEO",
+                      "Facebook Ads",
+                      "Machine Learning"
+                    ].map((tag) => (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => {
+                          setSearchQuery(tag);
+                          setSearchFocused(false);
+                          navigate(`/explore?keyword=${encodeURIComponent(tag)}`);
+                        }}
+                        className="px-3 py-1 rounded-xl border border-border bg-muted/40 text-[11px] font-bold text-foreground hover:bg-primary/5 hover:text-primary hover:border-primary/20 transition-colors"
+                      >
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Recently viewed courses */}
+                <div className="space-y-3 mt-5 border-t border-border/60 pt-4">
+                  <h4 className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider">
+                    Xem gần đây
+                  </h4>
+                  
+                  <div className="grid grid-cols-3 gap-3">
+                    {[
+                      {
+                        id: "355582871404154883",
+                        name: "Toàn tập Marketing số cho người mới bắt đầu",
+                        category: "Marketing số",
+                        image: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=300&auto=format&fit=crop&q=60"
+                      },
+                      {
+                        id: "355582871404154884",
+                        name: "Lập trình Python từ cơ bản đến nâng cao",
+                        category: "Lập trình",
+                        image: "https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=300&auto=format&fit=crop&q=60"
+                      },
+                      {
+                        id: "355582871404154885",
+                        name: "Thiết kế giao diện UI/UX với Figma chuyên sâu",
+                        category: "Thiết kế",
+                        image: "https://images.unsplash.com/photo-1561070791-26c113006238?w=300&auto=format&fit=crop&q=60"
+                      }
+                    ].map((c) => (
+                      <div
+                        key={c.id}
+                        onClick={() => {
+                          setSearchFocused(false);
+                          navigate(`/courses/${c.id}`);
+                        }}
+                        className="flex flex-col bg-muted/20 border border-border/80 rounded-xl overflow-hidden cursor-pointer hover:shadow-md hover:border-primary/20 transition-all group"
+                      >
+                        <div className="aspect-video overflow-hidden bg-muted relative">
+                          <img src={c.image} alt={c.name} className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300" />
+                        </div>
+                        <div className="p-2 flex-1 flex flex-col justify-between space-y-1">
+                          <span className="text-[8px] font-extrabold uppercase text-primary tracking-wider">{c.category}</span>
+                          <h5 className="font-bold text-foreground text-[10px] leading-tight line-clamp-2 group-hover:text-primary transition-colors">
+                            {c.name}
+                          </h5>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Footer quiz link */}
+                <div className="mt-4 border-t border-border/60 pt-3 flex items-center justify-between text-[11px] font-bold">
+                  <span className="text-muted-foreground font-medium">Bạn chưa biết nên học gì?</span>
+                  <Link to="/explore" onClick={() => setSearchFocused(false)} className="text-primary hover:underline flex items-center gap-0.5">
+                    Làm bài kiểm tra ngắn <ChevronRight className="h-3 w-3" />
+                  </Link>
+                </div>
+              </div>
+            )}
           </div>
-        ) : (
-          // Public Marketing Middle Section
-          <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-muted-foreground">
-            <a href="#features" className="hover:text-foreground transition-colors">Tính năng</a>
-            <a href="#courses" className="hover:text-foreground transition-colors">Khóa học</a>
-            <a href="#testimonials" className="hover:text-foreground transition-colors">Đánh giá</a>
-            <a href="#faq" className="hover:text-foreground transition-colors">Hỏi đáp</a>
-          </nav>
-        )}
+        </div>
 
         {/* Right Side Section */}
         <div className="flex items-center gap-3">
@@ -216,11 +350,11 @@ export const Header: React.FC = () => {
             </div>
           ) : (
             // Public Right Side LogIn/SignUp Buttons
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" onClick={openLogin} className="hover:text-primary">
+            <div className="flex items-center gap-4">
+              <Button variant="ghost" size="lg" onClick={openLogin} className="text-primary-foreground bg-primary hover:bg-primary-foreground border-border/80 border font-semibold">
                 Đăng nhập
               </Button>
-              <Button variant="default" size="sm" onClick={openRegister} className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-md shadow-primary/15">
+              <Button variant="ghost" size="lg" onClick={openRegister} className="text-primary-foreground bg-primary hover:bg-primary-foreground border border-border/80 font-semibold">
                 Đăng ký
               </Button>
             </div>

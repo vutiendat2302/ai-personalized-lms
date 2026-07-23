@@ -28,6 +28,8 @@ public class UpdateUserRequest {
     @Max(value = 2, message = "Gender is invalid")
     private Integer gender;
 
+    private String avatarUrl;
+
     private UserStatusEnum status;
 
     private List<Long> roleIds;

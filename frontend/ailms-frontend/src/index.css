@@ -127,6 +127,156 @@
 
     /* Bo góc tối đa (~260% radius gốc) */
     --radius-4xl: calc(var(--radius) * 2.6);
+
+    /* ==========================================================================
+       HỆ THỐNG PHỐI MÀU (DESIGN SYSTEM COLOR PALETTE)
+       ========================================================================== */
+
+    /* =========================================================
+       BRAND COLORS - Nhóm màu thương hiệu
+       Sử dụng cho nhận diện thương hiệu, CTA chính, header,
+       navigation và các thành phần cần tạo điểm nhấn.
+       ========================================================= */
+
+    /* Màu chủ đạo hệ thống (Deep Royal Blue)
+       - Dùng cho: Primary button, logo, trạng thái active, links quan trọng.
+       - Tạo cảm giác: Tin cậy, chuyên nghiệp, công nghệ. */
+    --color-brand-primary: #293681;
+
+    /* Màu xanh Cobalt
+       - Dùng cho các thành phần cần nổi bật hơn primary.
+       - Ứng dụng: Hover button, highlight, badge, icon quan trọng. */
+    --color-brand-cobalt: #4274D9;
+
+    /* Màu xanh Sky nhẹ
+       - Dùng cho background phụ, illustration, card highlight, trạng thái thông tin.
+       - Tạo cảm giác: Nhẹ nhàng, thân thiện. */
+    --color-brand-sky: #95CCDD;
+
+    /* Màu xanh Slate đậm
+       - Dùng cho text đậm, footer, sidebar, background tối.
+       - Giải pháp thay thế màu đen thuần (#000000). */
+    --color-brand-slate: #233D4D;
+
+    /* =========================================================
+       NEUTRAL COLORS - Nhóm màu nền & trung tính
+       Sử dụng cho bố cục (layout), background, border, divider,
+       text phụ và các vùng không cần nhấn mạnh.
+       ========================================================= */
+
+    /* Xám sáng cơ bản (Light Gray)
+       - Dùng cho: Border, divider, trạng thái disabled, background phụ. */
+    --color-neutral-light-gray: #D9D9D9;
+
+    /* Xám rất nhẹ (Soft Gray)
+       - Dùng cho: Card background, input background, skeleton loading, phân cách section. */
+    --color-neutral-soft-gray: #D0E7E6;
+
+    /* Vàng pastel (Soft Yellow)
+       - Dùng cho: Warning nhẹ, highlight banner, background thông báo. */
+    --color-neutral-soft-yellow: #F8EBAB;
+
+    /* Kem ấm (Warm Cream)
+       - Dùng cho: Background trang phụ, empty state, các khu vực thông tin tổng quan. */
+    --color-neutral-warm-cream: #EEE0CC;
+
+    /* =========================================================
+       ALERT COLORS - Nhóm màu cảnh báo & lỗi
+       Sử dụng cho các thông báo lỗi, cảnh báo, hành động nguy hiểm
+       (destructive action) hoặc hiển thị trạng thái khẩn cấp.
+       ========================================================= */
+
+    /* Đỏ mạnh (Crimson Red)
+       - Dùng cho: Thông báo lỗi (error message), nút đăng xuất/xóa, cảnh báo nguy hiểm. */
+    --color-alert-crimson: #BE1A1A;
+
+    /* Đỏ cam (Rust Red)
+       - Dùng cho: Lỗi mức độ trung bình, cảnh báo kiểm chuẩn (validation warning). */
+    --color-alert-rust: #D0311E;
+
+    /* Cam nổi bật (Orange)
+       - Dùng cho: Trạng thái chờ xử lý (pending), cảnh báo tiến độ, attention badge. */
+    --color-alert-orange: #FE7F2D;
+
+    /* Vàng cảnh báo (Yellow Gold)
+       - Dùng cho: Đánh giá sao, thông báo lưu ý (notice), trạng thái caution. */
+    --color-alert-gold: #F7D87F;
+
+    /* =========================================================
+       SUCCESS COLORS - Nhóm màu thành công
+       Sử dụng cho các trạng thái hoàn thành, chỉ số tăng trưởng tích cực,
+       thành công và xác nhận an toàn.
+       ========================================================= */
+
+    /* Xanh lá đậm (Forest Green)
+       - Dùng cho: Nút thành công, trạng thái hoàn thành xuất sắc, metrics tích cực. */
+    --color-success-forest: #2B5748;
+
+    /* Xanh Sage trung bình (Sage Green)
+       - Dùng cho: Badge chỉ số tăng trưởng, label trạng thái hoạt động. */
+    --color-success-sage: #618764;
+
+    /* Xanh Sage nhạt (Soft Green)
+       - Dùng cho: Nền của thông báo thành công (Success Toast bg), thông tin an toàn. */
+    --color-success-soft: #9CB080;
+
+    /* =========================================================
+       ADDITIONAL SWATCHES - Các mã màu bổ sung từ bảng màu hệ thống
+       Sử dụng để tối ưu hóa hiển thị biểu đồ, nhãn phân loại (category)
+       và các biến thể giao diện nâng cao.
+       ========================================================= */
+
+    /* Xám than (Charcoal)
+       - Dùng cho: Heading, văn bản chính (body text) cần độ tương phản cao nhưng dịu mắt. */
+    --color-neutral-charcoal: #273338;
+
+    /* Đỏ tối (Dark Red)
+       - Dùng cho: Giao diện dark mode, hiệu ứng hover nút destructive, cảnh báo mạnh. */
+    --color-alert-dark-red: #7B2525;
+
+    /* Nâu đỏ tối (Dark Brown)
+       - Dùng cho: Cảnh báo đặc biệt, background tone đất (earthy theme). */
+    --color-alert-dark-brown: #4E220F;
+
+    /* Hồng pastel (Pink)
+       - Dùng cho: Category tag, illustration, chuỗi biểu đồ (chart series). */
+    --color-brand-pink: #FF97D0;
+
+    /* Xanh Mint nhạt (Light Cyan)
+       - Dùng cho: Background phụ, thẻ highlight tính năng, nền thông báo nhẹ. */
+    --color-brand-mint: #D0E7E6;
+
+    /* Đồng/Đồng đỏ (Copper)
+       - Dùng cho: Badge premium, huy hiệu thành tích (achievement), accent cao cấp. */
+    --color-brand-copper: #BA6A4C;
+
+   /* 0.75 × 16 = 12px */
+    --text-xs: 0.75rem;
+
+    /* 0.875 × 16 = 14px */
+    --text-sm: 0.875rem;
+
+    /* 1 × 16 = 16px */
+    --text-base: 1rem;
+
+    /* 1.125 × 16 = 18px */
+    --text-lg: 1.125rem;
+
+    /* 1.25 × 16 = 20px */
+    --text-xl: 1.25rem;
+
+    /* 1.5 × 16 = 24px */
+    --text-2xl: 1.5rem;
+
+    /* 1.875 × 16 = 30px */
+    --text-3xl: 1.875rem;
+
+    /* 2.25 × 16 = 36px */
+    --text-4xl: 2.25rem;
+
+    /* 3 × 16 = 48px */
+    --text-5xl: 3rem;
+    
 }
 
 :root {
@@ -135,7 +285,7 @@
        ========================= */
 
     /* Màu nền mặc định của toàn bộ website */
-    --background: #EAECF0;
+    --background: #FFFFFF;
 
     /* Màu chữ mặc định */
     --foreground: #273338;
@@ -149,7 +299,7 @@
     --card: #FFFFFF;
 
     /* Màu chữ trong Card */
-    --card-foreground: #273338;
+    --card-foreground: #273338;  
 
 
     /* =========================
@@ -179,10 +329,10 @@
        ========================= */
 
     /* Màu nền Secondary */
-    --secondary: #D9D9D9;
+    --secondary: #D0E7E6;
 
     /* Màu chữ trên nền Secondary */
-    --secondary-foreground: #233D4D;
+    --secondary-foreground: #273338;
 
 
     /* =========================
@@ -190,10 +340,10 @@
        ========================= */
 
     /* Màu nền cho các thành phần phụ */
-    --muted: #D9D9D9;
+    --muted: #FFFFFF;
 
     /* Màu chữ của nội dung phụ */
-    --muted-foreground: #618764;
+    --muted-foreground: #233D4D;
 
 
     /* =========================
@@ -212,7 +362,7 @@
        ========================= */
 
     /* Màu cho Delete, Remove, Error... */
-    --destructive: #D0311E;
+    --destructive: #BE1A1A;
 
 
     /* =========================
@@ -220,13 +370,13 @@
        ========================= */
 
     /* Màu đường viền */
-    --border: #D9D9D9;
+    --border: #273338;
 
     /* Màu nền hoặc viền của ô nhập liệu */
-    --input: #D9D9D9;
+    --input: #273338;
 
     /* Màu viền khi component được focus */
-    --ring: #4274D9;
+    --ring: #95ccdd;
 
 
     /* =========================
@@ -235,7 +385,7 @@
 
     /* Bo góc mặc định của hệ thống */
     /* REM → PX (với root font-size = 16px mặc định) */
-    --radius: 0.625rem;
+    --radius: 0.5rem;
 
 
     /* =========================
@@ -275,7 +425,7 @@
     --sidebar-primary-foreground: #FFFFFF;
 
     /* Màu nền khi Hover hoặc Active trong Sidebar */
-    --sidebar-accent: #EAECF0;
+    --sidebar-accent: #EEE0CC;
 
     /* Màu chữ trên nền Accent của Sidebar */
     --sidebar-accent-foreground: #293681;
@@ -490,6 +640,78 @@ Mức độ ưu tiên cao nhất: style css thuần
          *  - Tất cả các phần tử sẽ kế thừa font này nếu không được ghi đè.
          */
         @apply font-sans;
+    }
+
+    /* ==========================================================================
+       THANG KÍCH THƯỚC CHỮ (TYPOGRAPHY SCALE)
+       ========================================================================== */
+
+    /* 
+     * Heading 1 (Tiêu đề chính của trang)
+     * - Thang kích thước: 28px - 30px (clamp responsive linh hoạt)
+     * - Độ đậm chữ: Extra Bold (800)
+     * - Chiều cao dòng (Line-height): 1.3
+     */
+    h1, .h1 {
+        font-size: clamp(28px, 10vw, 30px);
+        font-weight: 800;
+        line-height: 1.3;
+    }
+
+    /* 
+     * Heading 2 (Tiêu đề khối/Section)
+     * - Thang kích thước: 18px - 20px (clamp responsive lên tới 24px)
+     * - Độ đậm chữ: Semi-Bold (600)
+     * - Chiều cao dòng (Line-height): 1.3
+     */
+    h2, .h2 {
+        font-size: clamp(20px, 6vw, 24px);
+        font-weight: 600;
+        line-height: 1.3;
+    }
+
+    /* 
+     * Heading 3 (Tiêu đề thẻ/Card)
+     * - Thang kích thước: 16px - 18px (clamp responsive lên tới 20px)
+     * - Độ đậm chữ: Semi-Bold (600)
+     * - Chiều cao dòng (Line-height): 1.3
+     */
+    h3, .h3 {
+        font-size: clamp(18px, 5vw, 20px);
+        font-weight: 600;
+        line-height: 1.3;
+    }
+
+    /* 
+     * Body Text (Nội dung văn bản chuẩn)
+     * - Thang kích thước: 14px - 16px (clamp responsive lên tới 18px)
+     * - Độ đậm chữ: Medium (500)
+     * - Chiều cao dòng (Line-height): 1.3
+     */
+    body, p, .body-text {
+        font-size: clamp(16px, 4vw, 18px);
+        font-weight: 500;
+        line-height: 1.3;
+    }
+
+    /* 
+     * Caption / Label (Nhãn phụ/Chú thích)
+     * - Thang kích thước: 12px - 13px
+     * - Độ đậm chữ: Regular (400)
+     * - Màu sắc: Muted Gray (#6B7280)
+     */
+    .caption, .label-text {
+        font-size: clamp(12px, 2vw, 13px);
+        font-weight: 400;
+        color: #6B7280;
+    }
+
+    /* Chú thích dạng in nghiêng (Italic Caption) */
+    .caption-italic {
+        font-size: clamp(12px, 2vw, 13px);
+        font-weight: 400;
+        font-style: italic;
+        color: #6B7280;
     }
 }
 

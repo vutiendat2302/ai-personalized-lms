@@ -14,7 +14,7 @@ public class CourseSpecification {
             return builder.build();
         }
 
-        builder.likeAnyIfPresent(request.getKeyword(), "name", "description");
+        builder.likeAnyIfPresent(request.getKeyword(), "name");
         builder.equalIfPresent("status", request.getStatus());
         builder.greaterOrEqualIfPresent("createdAt", request.getCreatedFrom());
         builder.lessOrEqualIfPresent("createdAt", request.getCreatedTo());
