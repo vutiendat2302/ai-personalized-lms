@@ -38,6 +38,9 @@ import course
 import course_sectiton
 import lesson
 import review
+import degree
+import lesson_resource
+import search_history
 
 
 def main():
@@ -66,9 +69,11 @@ def main():
             teacher_availability.seed(cursor)
             course.seed(cursor) 
             course_sectiton.seed(cursor)
-            # lesson.seed(cursor)
+            lesson.seed(cursor)
             review.seed(cursor)
-            
+            degree.seed(cursor)
+            lesson_resource.seed(cursor)
+            search_history.seed(cursor)
             
             
         conn.commit()

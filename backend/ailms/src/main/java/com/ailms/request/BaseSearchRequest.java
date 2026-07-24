@@ -57,7 +57,8 @@ public class BaseSearchRequest {
 
     private Sort.Order parseSortItem(String item) {
         if (item == null || item.isBlank()) return null;
-        String[] parts = item.split(":");
+        String delimiter = item.contains(",") ? "," : ":";
+        String[] parts = item.split(delimiter);
         String field = parts[0].trim();
         Sort.Direction direction = (parts.length > 1 && "asc".equalsIgnoreCase(parts[1].trim()))
                 ? Sort.Direction.ASC

@@ -4,20 +4,20 @@ import type { PermissionResponse, PermissionRequest } from "@/types/admin";
 
 export const permissionApi = {
   getPermissions: (params?: { entity?: string; action?: string; search?: string; page?: number; size?: number; sort?: string }) =>
-    httpClient.get<ApiResponse<any>>("/permissions/page", { params }),
+    httpClient.get<ApiResponse<any>>("/v1/permissions/page", { params }),
 
   getAllPermissions: () =>
-    httpClient.get<ApiResponse<PermissionResponse[]>>("/permissions"),
+    httpClient.get<ApiResponse<PermissionResponse[]>>("/v1/permissions"),
 
   getPermissionById: (id: string) =>
-    httpClient.get<ApiResponse<PermissionResponse>>(`/permissions/${id}`),
+    httpClient.get<ApiResponse<PermissionResponse>>(`/v1/permissions/${id}`),
 
   createPermission: (payload: PermissionRequest) =>
-    httpClient.post<ApiResponse<PermissionResponse>>("/permissions", payload),
+    httpClient.post<ApiResponse<PermissionResponse>>("/v1/permissions", payload),
 
   updatePermission: (id: string, payload: PermissionRequest) =>
-    httpClient.put<ApiResponse<PermissionResponse>>(`/permissions/${id}`, payload),
+    httpClient.put<ApiResponse<PermissionResponse>>(`/v1/permissions/${id}`, payload),
 
   deletePermission: (id: string) =>
-    httpClient.delete<ApiResponse<void>>(`/permissions/${id}`),
+    httpClient.delete<ApiResponse<void>>(`/v1/permissions/${id}`),
 };

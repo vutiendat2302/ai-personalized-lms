@@ -12,6 +12,9 @@ import org.mapstruct.*;
 public interface CategoryMapper extends EntityMapper<CategoryEntity, CreateCategoryRequest, UpdateCategoryRequest, CategoryResponse> {
 
     @Override
+    @Mapping(target = "coursesCount", ignore = true)
+    @Mapping(target = "degreesCount", ignore = true)
+    @Mapping(target = "credentialsCount", ignore = true)
     CategoryResponse toResponse(CategoryEntity entity);
 
     @Override

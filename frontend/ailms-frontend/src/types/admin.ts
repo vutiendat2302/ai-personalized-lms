@@ -109,7 +109,7 @@ export interface BulkAssignRoleRequest {
 }
 
 export interface AssignRolesRequest {
-  roleNames: string[];
+  roleIds: (string | number)[];
 }
 
 export interface RoleRequest {

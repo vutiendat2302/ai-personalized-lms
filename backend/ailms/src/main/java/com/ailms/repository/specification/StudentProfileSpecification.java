@@ -17,6 +17,7 @@ public final class StudentProfileSpecification {
             return builder.build();
         }
 
+        builder.equalIfPresent("userId", request.getUserId());
         builder.greaterOrEqualIfPresent("createdAt", request.getCreatedFrom());
         builder.lessOrEqualIfPresent("createdAt", request.getCreatedTo());
 

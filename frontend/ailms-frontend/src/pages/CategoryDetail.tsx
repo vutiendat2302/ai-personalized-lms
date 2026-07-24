@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { courseApi } from "@/api/courses/courseApi";
+import { degreeApi } from "@/api/degrees/degreeApi";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -208,6 +209,57 @@ export const CategoryDetail: React.FC = () => {
     setMockDegrees(categoryDegrees);
   }, [category]);
 
+  const [degrees, setDegrees] = useState<DegreeItem[]>([]);
+
+  // Fetch Degrees from real API when Category or degreeFilter changes
+  useEffect(() => {
+    if (!id) return;
+
+    const fetchDegreesFromApi = async () => {
+      try {
+        const catDegRes = await degreeApi.getDegreesByCategory(id);
+        if (catDegRes.data.success && catDegRes.data.data?.length > 0) {
+          const apiDegrees = catDegRes.data.data.map((d: any) => ({
+            id: d.id,
+            universityName: d.universityName,
+            universityLogo: d.universityLogo || d.universityName?.slice(0, 3)?.toUpperCase() || "UNI",
+            title: d.title,
+            type: d.type,
+            duration: d.duration,
+            image: (d.image && d.image.startsWith("http")) 
+              ? d.image 
+              : "https://images.unsplash.com/photo-1523240795612-9a054b0db644?w=500&auto=format&fit=crop&q=60"
+          }));
+          setDegrees(apiDegrees);
+        } else {
+          // If empty from category API, try search endpoint
+          const searchRes = await degreeApi.searchDegrees({ categoryId: id });
+          if (searchRes.data.success && searchRes.data.data?.content?.length > 0) {
+            const apiDegrees = searchRes.data.data.content.map((d: any) => ({
+              id: d.id,
+              universityName: d.universityName,
+              universityLogo: d.universityLogo || d.universityName?.slice(0, 3)?.toUpperCase() || "UNI",
+              title: d.title,
+              type: d.type,
+              duration: d.duration,
+              image: (d.image && d.image.startsWith("http")) 
+                ? d.image 
+                : "https://images.unsplash.com/photo-1523240795612-9a054b0db644?w=500&auto=format&fit=crop&q=60"
+            }));
+            setDegrees(apiDegrees);
+          } else {
+            setDegrees(mockDegrees);
+          }
+        }
+      } catch (err) {
+        console.error("Error loading degrees from API:", err);
+        setDegrees(mockDegrees);
+      }
+    };
+
+    fetchDegreesFromApi();
+  }, [id, mockDegrees]);
+
   const handleLevelFilterChange = (level: string) => {
     setCourseLevelFilter(level);
     setCoursePage(0); // Reset page on filter change
@@ -217,7 +269,7 @@ export const CategoryDetail: React.FC = () => {
     setCoursePage(prev => prev + 1);
   };
 
-  const filteredDegrees = mockDegrees.filter(deg => {
+  const filteredDegrees = (degrees.length > 0 ? degrees : mockDegrees).filter(deg => {
     if (degreeFilter === "ALL") return true;
     return deg.type === degreeFilter;
   });
@@ -269,6 +321,46 @@ export const CategoryDetail: React.FC = () => {
     coursesCount: category.coursesCount || courses.length * 3 + 120,
   };
 
+  const getDegreeCoverImage = (title: string, imgUrl: string) => {
+    if (imgUrl && (imgUrl.startsWith("http://") || imgUrl.startsWith("https://"))) {
+      return imgUrl;
+    }
+    const t = title?.toLowerCase() || "";
+    if (t.includes("máy tính") || t.includes("lập trình") || t.includes("công nghệ") || t.includes("cs")) {
+      return "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=500&auto=format&fit=crop&q=60";
+    }
+    if (t.includes("toán") || t.includes("phân tích") || t.includes("analytics") || t.includes("dữ liệu")) {
+      return "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=500&auto=format&fit=crop&q=60";
+    }
+    if (t.includes("kinh doanh") || t.includes("mba") || t.includes("quản trị") || t.includes("bachelor")) {
+      return "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=500&auto=format&fit=crop&q=60";
+    }
+    return "https://images.unsplash.com/photo-1523240795612-9a054b0db644?w=500&auto=format&fit=crop&q=60";
+  };
+
+  const renderUniversityLogo = (logo: string, uniName: string) => {
+    if (logo && (logo.startsWith("http://") || logo.startsWith("https://"))) {
+      return <img src={logo} alt={uniName} className="h-6 w-6 rounded-full object-cover shrink-0 border border-primary/20" />;
+    }
+    let initials = logo?.replace(/_logo\.(png|jpg|svg|jpeg)$/i, "").toUpperCase() || "";
+    if (!initials || initials.length > 5) {
+      initials = uniName
+        ? uniName
+            .split(" ")
+            .filter(w => w.length > 0)
+            .map(w => w[0])
+            .join("")
+            .slice(0, 3)
+            .toUpperCase()
+        : "UNI";
+    }
+    return (
+      <div className="h-6 w-6 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-[9px] font-black text-primary shrink-0">
+        {initials}
+      </div>
+    );
+  };
+
   return (
     <div className="bg-background min-h-screen pb-20">
       
@@ -280,7 +372,7 @@ export const CategoryDetail: React.FC = () => {
           <nav className="flex items-center space-y-0 space-x-2 text-xs text-muted-foreground mb-6 font-medium">
             <Link to="/" className="hover:text-primary transition-colors">Trang chủ</Link>
             <ChevronRight className="h-3 w-3" />
-            <span className="hover:text-primary transition-colors cursor-pointer">Danh mục</span>
+            <Link to="/categories" className="hover:text-primary transition-colors">Danh mục</Link>
             <ChevronRight className="h-3 w-3" />
             <span className="text-foreground font-semibold">{category.name}</span>
           </nav>
@@ -468,12 +560,12 @@ export const CategoryDetail: React.FC = () => {
               {/* Cover */}
               <div className="relative aspect-[16/9] overflow-hidden bg-muted">
                 <img
-                  src={deg.image}
+                  src={getDegreeCoverImage(deg.title, deg.image)}
                   alt={deg.title}
                   className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300"
                 />
                 <Badge className="absolute top-3 left-3 bg-card/90 backdrop-blur-sm hover:bg-card/90 text-primary border border-border/20 shadow-sm text-[10px] font-bold">
-                  Bằng cấp chính quy
+                  {deg.type === "MASTERS" ? "Bằng Thạc sĩ" : "Bằng Cử nhân chính quy"}
                 </Badge>
               </div>
 
@@ -481,9 +573,7 @@ export const CategoryDetail: React.FC = () => {
               <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <div className="h-6 w-6 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-[10px] font-black text-primary shrink-0">
-                      {deg.universityLogo}
-                    </div>
+                    {renderUniversityLogo(deg.universityLogo, deg.universityName)}
                     <span className="text-[11px] font-bold text-muted-foreground line-clamp-1">
                       {deg.universityName}
                     </span>

@@ -14,7 +14,7 @@ export interface UpdateProfileRequest {
 export const userService = {
   getProfile: async (): Promise<UserEntity> => {
     try {
-      const { data } = await httpClient.get<ApiResponse<UserEntity>>("/users/profile");
+      const { data } = await httpClient.get<ApiResponse<UserEntity>>("/v1/users/profile");
       return data.data;
     } catch (e) {
       // Fallback local storage for mock robustness
@@ -51,7 +51,7 @@ export const userService = {
 
   updateProfile: async (payload: UpdateProfileRequest): Promise<UserEntity> => {
     try {
-      const { data } = await httpClient.put<ApiResponse<UserEntity>>("/users/profile", payload);
+      const { data } = await httpClient.put<ApiResponse<UserEntity>>("/v1/users/profile", payload);
       // Synchronize with local storage
       localStorage.setItem("user_profile", JSON.stringify(data.data));
       return data.data;

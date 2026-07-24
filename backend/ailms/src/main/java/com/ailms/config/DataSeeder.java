@@ -46,30 +46,36 @@ public class DataSeeder {
     private final RolePermissionRepository rolePermissionRepository;
     private final PasswordEncoder passwordEncoder;
 
-    private static final String DEFAULT_PASSWORD = "123456";
+    private static final String DEFAULT_PASSWORD = "Password@123";
 
     // ===== ADMIN =====
     private static final String ADMIN_ROLE_NAME = "Administrator";
     private static final String ADMIN_ROLE_CODE = "ADMIN";
-    private static final String ADMIN_USERNAME = "admin";
+    private static final String ADMIN_USERNAME = "admin123";
     private static final String ADMIN_EMAIL = "admin@ailms.com";
+
+    //==== HR ====
+    private static final String HR_ROLE_NAME = "HR management";
+    private static final String HR_ROLE_CODE = "HR";
+    private static final String HR_USERNAME = "hrmanagement123";
+    private static final String HR_EMAIL = "hr@ailms.com";
 
     // ===== TEACHER =====
     private static final String TEACHER_ROLE_NAME = "Teacher";
     private static final String TEACHER_ROLE_CODE = "TEACHER";
-    private static final String TEACHER_USERNAME = "teacher";
+    private static final String TEACHER_USERNAME = "teacher123";
     private static final String TEACHER_EMAIL = "teacher@ailms.com";
 
     // ===== TA =====
     private static final String TA_ROLE_NAME = "Teaching Assistant";
     private static final String TA_ROLE_CODE = "TA";
-    private static final String TA_USERNAME = "ta";
+    private static final String TA_USERNAME = "teacherta123";
     private static final String TA_EMAIL = "ta@ailms.com";
 
     // ===== STUDENT =====
     private static final String STUDENT_ROLE_NAME = "Student";
     private static final String STUDENT_ROLE_CODE = "STUDENT";
-    private static final String STUDENT_USERNAME = "student";
+    private static final String STUDENT_USERNAME = "student123";
     private static final String STUDENT_EMAIL = "student@ailms.com";
 
     /** Đăng ký CommandLineRunner để seed dữ liệu khi ứng dụng khởi động. */
@@ -87,15 +93,19 @@ public class DataSeeder {
         seedUser(ADMIN_USERNAME, ADMIN_EMAIL, "Default Administrator", adminRole);
         assignExistingPermissionToAdmin(adminRole);
 
-        // 2. Seed TEACHER
+        // 2. Seed HR
+        RoleEntity hrRole = seedRole(HR_ROLE_NAME, HR_ROLE_CODE, "HR Management Role", false);
+        seedUser(HR_USERNAME, HR_EMAIL, "Default HR", hrRole);
+
+        // 3. Seed TEACHER
         RoleEntity teacherRole = seedRole(TEACHER_ROLE_NAME, TEACHER_ROLE_CODE, "Teacher Role", false);
         seedUser(TEACHER_USERNAME, TEACHER_EMAIL, "Default Teacher", teacherRole);
 
-        // 3. Seed TA
+        // 4. Seed TA
         RoleEntity taRole = seedRole(TA_ROLE_NAME, TA_ROLE_CODE, "Teaching Assistant Role", false);
         seedUser(TA_USERNAME, TA_EMAIL, "Default TA", taRole);
 
-        // 4. Seed STUDENT
+        // 5. Seed STUDENT
         RoleEntity studentRole = seedRole(STUDENT_ROLE_NAME, STUDENT_ROLE_CODE, "Student Role", false);
         seedUser(STUDENT_USERNAME, STUDENT_EMAIL, "Default Student", studentRole);
 

@@ -188,11 +188,16 @@ public class CourseService implements ICourseService {
     public void delete(Long id) {
         log.info("Deleting course with id: {}", id);
 
-        if (!courseRepository.existsById(id)) {
-            throw ResourceNotFoundException.of(RESOURCE_NAME, id);
-        }
+        CourseEntity entity = courseRepository.findById(id)
+                .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
 
-        courseRepository.deleteById(id);
+        try {
+            courseRepository.delete(entity);
+        } catch (Exception e) {
+            log.warn("Hard delete failed for course id {}, setting INACTIVE instead: {}", id, e.getMessage());
+            entity.setStatus(CourseStatusEnum.INACTIVE);
+            courseRepository.save(entity);
+        }
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "DELETE", "COURSE", id, null, null));
     }
 

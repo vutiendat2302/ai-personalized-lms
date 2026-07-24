@@ -57,7 +57,7 @@ export const PermissionManagement: React.FC = () => {
       const params: any = {
         page,
         size: 10,
-        sort: "id,desc"
+        sort: "id:desc"
       };
       if (searchPermission) params.search = searchPermission;
 
@@ -227,7 +227,7 @@ export const PermissionManagement: React.FC = () => {
             <table className="w-full text-sm text-left">
               <thead>
                 <tr className="border-b border-border/85 text-muted-foreground text-xs font-semibold bg-muted/10">
-                  <th className="py-3 px-4 w-16">ID</th>
+                  <th className="py-3 px-4 w-12 text-center">STT</th>
                   <th className="py-3 px-2">Tên quyền</th>
                   <th className="py-3 px-2">Thực thể (Entity)</th>
                   <th className="py-3 px-2">Hành động (Action)</th>
@@ -243,9 +243,9 @@ export const PermissionManagement: React.FC = () => {
                     </td>
                   </tr>
                 ) : (
-                  permissions.map((p) => (
-                    <tr key={p.id} className="hover:bg-muted/10 transition-colors">
-                      <td className="py-3 px-4 font-bold text-xs text-muted-foreground">#{p.id}</td>
+                  permissions.map((p, index) => (
+                    <tr key={p.id || index} className="hover:bg-muted/10 transition-colors">
+                      <td className="py-3 px-4 font-bold text-xs text-muted-foreground text-center">{page * 10 + index + 1}</td>
                       <td className="py-3 px-2 font-bold text-foreground text-xs">{p.name}</td>
                       <td className="py-3 px-2">
                         <span className="px-2 py-0.5 rounded text-[10px] bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200 font-bold uppercase">

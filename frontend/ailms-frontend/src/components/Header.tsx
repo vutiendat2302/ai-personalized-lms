@@ -4,24 +4,289 @@ import { useAuth } from "@/hooks/useAuth";
 import { useModalStore } from "@/store/useModalStore";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { LogOut, ChevronDown, Bell, Globe, Search, User, Settings, BookOpen, Users, Shield, Activity, ChevronRight } from "lucide-react";
+import { LogOut, ChevronDown, Bell, Globe, Search, User, Settings, BookOpen, Users, Shield, Activity, Clock, Trash2, Sparkles, Target, ShoppingBag, Tag, BarChart, Loader2 } from "lucide-react";
+import { searchApi, type SearchHistoryResponse, type PopularSearchResponse, type SuggestionResponse } from "@/api/search/searchApi";
+import { StudentOnboardingModal } from "@/components/student/StudentOnboardingModal";
+import { studentApi } from "@/api/students/studentApi";
+import { useCartStore } from "@/store/useCartStore";
 
 export const Header: React.FC = () => {
   const { auth, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { openLogin, openRegister, openChangePassword } = useModalStore();
+  const { items: cartItems, toggleCart } = useCartStore();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [searchFocused, setSearchFocused] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [suggestions, setSuggestions] = useState<SuggestionResponse[]>([]);
+  const [popularSearches, setPopularSearches] = useState<PopularSearchResponse[]>([]);
+  const [searchHistory, setSearchHistory] = useState<SearchHistoryResponse[]>([]);
+  const [recentlyViewedCourses, setRecentlyViewedCourses] = useState<any[]>([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [onboardingModalOpen, setOnboardingModalOpen] = useState(false);
+  const [onboardingInitialStep, setOnboardingInitialStep] = useState(1);
   const searchRef = useRef<HTMLDivElement>(null);
+
+  const isStudent = Boolean(
+    auth.user?.roles?.some((r: any) => {
+      const roleStr = (typeof r === "object" ? (r?.code || r?.name || "") : String(r)).toUpperCase();
+      return (
+        roleStr === "STUDENT" ||
+        roleStr === "ROLE_STUDENT" ||
+        roleStr === "HỌC VIÊN" ||
+        roleStr === "HOC VIEN" ||
+        roleStr.includes("STUDENT") ||
+        roleStr.includes("HỌC VIÊN") ||
+        roleStr.includes("HOC VIEN")
+      );
+    })
+  );
+
+  // Automatically trigger Student Onboarding modal on first login if hasGoal is false
+  useEffect(() => {
+    if (auth.accessToken && auth.user && isStudent) {
+      const uId = auth.user.id;
+
+      studentApi.getProfileById(uId)
+        .then((res) => {
+          const profile = res.data?.data;
+          if (profile && profile.hasGoal === true) {
+            localStorage.setItem(`hasGoal_${uId}`, "true");
+          } else {
+            localStorage.removeItem(`hasGoal_${uId}`);
+            setOnboardingInitialStep(1); // First login starts at Step 1 (Profile & Guardian)
+            setOnboardingModalOpen(true);
+          }
+        })
+        .catch(() => {
+          // If student profile is missing (404), this is definitely first login -> open onboarding Step 1
+          localStorage.removeItem(`hasGoal_${uId}`);
+          setOnboardingInitialStep(1);
+          setOnboardingModalOpen(true);
+        });
+    }
+  }, [auth.accessToken, auth.user, isStudent]);
+
+  // Synchronize searchQuery with URL query parameter when on /explore
+  useEffect(() => {
+    if (location.pathname === "/explore") {
+      const searchParams = new URLSearchParams(location.search);
+      const kw = searchParams.get("keyword") || searchParams.get("q") || "";
+      setSearchQuery(kw);
+    }
+  }, [location.pathname, location.search]);
+
+  // Fetch search history from API (or local user history), max 4 items
+  useEffect(() => {
+    if (searchFocused) {
+      const localHist: SearchHistoryResponse[] = JSON.parse(
+        localStorage.getItem("ailms_local_search_history") || "[]"
+      );
+
+      if (auth.accessToken) {
+        searchApi
+          .getSearchHistory()
+          .then((res) => {
+            if (res.data?.success && Array.isArray(res.data?.data) && res.data.data.length > 0) {
+              const apiHist = res.data.data;
+              const merged = [...apiHist];
+              localHist.forEach((lh) => {
+                if (!merged.some((ah) => ah.keyword.toLowerCase() === lh.keyword.toLowerCase())) {
+                  merged.push(lh);
+                }
+              });
+              const finalFour = merged.slice(0, 4);
+              setSearchHistory(finalFour);
+              localStorage.setItem("ailms_local_search_history", JSON.stringify(finalFour));
+            } else {
+              setSearchHistory(localHist.slice(0, 4));
+            }
+          })
+          .catch(() => {
+            setSearchHistory(localHist.slice(0, 4));
+          });
+      } else {
+        setSearchHistory(localHist.slice(0, 4));
+      }
+    }
+  }, [searchFocused, auth.accessToken]);
+
+  // Fetch autocomplete suggestions directly from API (Requires >= 2 characters)
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (q.length < 2) {
+      setSuggestions([]);
+      setLoadingSuggestions(false);
+      return;
+    }
+
+    setLoadingSuggestions(true);
+
+    const timer = setTimeout(async () => {
+      try {
+        const res = await searchApi.getSuggestions(q);
+        const list = Array.isArray(res.data?.data)
+          ? res.data.data
+          : Array.isArray(res.data)
+          ? res.data
+          : [];
+        setSuggestions(list);
+      } catch (err) {
+        console.warn("API getSuggestions error:", err);
+        setSuggestions([]);
+      } finally {
+        setLoadingSuggestions(false);
+      }
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Fetch popular searches directly from API
+  useEffect(() => {
+    if (searchFocused) {
+      searchApi.getPopularSearches(5, 5)
+        .then(res => {
+          if (res.data?.success && Array.isArray(res.data?.data)) {
+            setPopularSearches(res.data.data);
+          } else {
+            setPopularSearches([]);
+          }
+        })
+        .catch(err => {
+          console.warn("API getPopularSearches error:", err);
+          setPopularSearches([]);
+        });
+    }
+  }, [searchFocused]);
+
+  // Fetch Recently Viewed Courses from user interaction history
+  useEffect(() => {
+    if (searchFocused) {
+      const localViewed = JSON.parse(
+        localStorage.getItem("recently_viewed_courses") || "[]"
+      );
+      setRecentlyViewedCourses(localViewed);
+    }
+  }, [searchFocused]);
+
+  const trackRecentlyViewed = (course: { id: string; name: string; category?: string; image?: string }) => {
+    const existing: any[] = JSON.parse(localStorage.getItem("recently_viewed_courses") || "[]");
+    const filtered = existing.filter((item) => String(item.id) !== String(course.id));
+    const updated = [
+      {
+        id: String(course.id),
+        name: course.name,
+        category: course.category || "Khóa học AILMS",
+        image: course.image || "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=300&auto=format&fit=crop&q=60",
+      },
+      ...filtered,
+    ].slice(0, 3);
+    localStorage.setItem("recently_viewed_courses", JSON.stringify(updated));
+    setRecentlyViewedCourses(updated);
+  };
+
+  const saveHistory = async (keyword: string, courseId?: string | null) => {
+    if (!keyword.trim()) return;
+    const cleanKw = keyword.trim();
+
+    // 1. Update local storage history immediately
+    const localHist: SearchHistoryResponse[] = JSON.parse(
+      localStorage.getItem("ailms_local_search_history") || "[]"
+    );
+    const newHistItem: SearchHistoryResponse = {
+      id: `hist-${Date.now()}`,
+      keyword: cleanKw,
+      courseId: courseId || null,
+      createdAt: new Date().toISOString(),
+    };
+    const filteredLocal = localHist.filter((h) => h.keyword.toLowerCase() !== cleanKw.toLowerCase());
+    const updatedLocal = [newHistItem, ...filteredLocal].slice(0, 4);
+    localStorage.setItem("ailms_local_search_history", JSON.stringify(updatedLocal));
+    setSearchHistory(updatedLocal);
+
+    // 2. Call API if logged in
+    if (auth.accessToken) {
+      searchApi.saveSearchHistory({ keyword: cleanKw, courseId: courseId || null }).catch(() => {
+        // Silently catch 403 / unauth errors
+      });
+    }
+  };
+
+  const handleDeleteHistory = async (e: React.MouseEvent, id: string | number) => {
+    e.stopPropagation();
+    const targetId = String(id);
+
+    // 1. Instantly update UI and LocalStorage
+    const localHist: SearchHistoryResponse[] = JSON.parse(
+      localStorage.getItem("ailms_local_search_history") || "[]"
+    );
+    const updatedLocal = localHist.filter((item) => String(item.id) !== targetId).slice(0, 4);
+    localStorage.setItem("ailms_local_search_history", JSON.stringify(updatedLocal));
+    setSearchHistory((prev) => prev.filter((item) => String(item.id) !== targetId).slice(0, 4));
+
+    // 2. Call DELETE API only when authenticated and non-synthetic id
+    if (auth.accessToken && !targetId.startsWith("hist-")) {
+      try {
+        await searchApi.deleteSearchHistory(targetId);
+      } catch {
+        // Silently handle if token expired or item doesn't exist in backend
+      }
+    }
+  };
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
+      const query = searchQuery.trim();
+      saveHistory(query);
       setSearchFocused(false);
-      navigate(`/explore?keyword=${encodeURIComponent(searchQuery.trim())}`);
+      setSearchQuery("");
+      navigate(`/explore?keyword=${encodeURIComponent(query)}`);
+    }
+  };
+
+  const handleSelectKeyword = async (keyword: string, courseId?: string | number | null, courseObj?: any) => {
+    // 1. Resolve effective courseId
+    let effectiveCourseId = courseId && courseId !== "null" && courseId !== "undefined" ? String(courseId) : null;
+
+    if (!effectiveCourseId) {
+      const matchPopular = popularSearches.find((p) => p.name.toLowerCase() === keyword.toLowerCase() || String(p.id) === String(courseId));
+      if (matchPopular) {
+        effectiveCourseId = String(matchPopular.id);
+      }
+      const matchSuggest = suggestions.find((s) => s.name.toLowerCase() === keyword.toLowerCase() || String(s.id) === String(courseId));
+      if (matchSuggest) {
+        effectiveCourseId = String(matchSuggest.id);
+      }
+      const matchViewed = recentlyViewedCourses.find((v) => v.name.toLowerCase() === keyword.toLowerCase() || String(v.id) === String(courseId));
+      if (matchViewed) {
+        effectiveCourseId = String(matchViewed.id);
+      }
+    }
+
+    // 2. Re-save search history to push this item to the top of history (both API and LocalStorage)
+    await saveHistory(keyword, effectiveCourseId);
+
+    // 3. Track in recently viewed
+    if (effectiveCourseId || courseObj) {
+      trackRecentlyViewed({
+        id: String(effectiveCourseId || courseObj?.id),
+        name: keyword,
+        category: courseObj?.categoryName || courseObj?.category,
+      });
+    }
+
+    setSearchFocused(false);
+    setSearchQuery("");
+
+    // 4. Navigate immediately to course detail if courseId exists, otherwise navigate to search explore
+    if (effectiveCourseId) {
+      navigate(`/courses/${effectiveCourseId}`);
+    } else {
+      navigate(`/explore?keyword=${encodeURIComponent(keyword)}`);
     }
   };
 
@@ -117,99 +382,141 @@ export const Header: React.FC = () => {
                 <Search className="h-4 w-4" />
               </button>
             </form>
-
-            {/* Search Dropdown Overlay */}
             {searchFocused && (
-              <div className="absolute left-0 mt-2 w-[600px] max-w-[90vw] bg-card rounded-2xl border border-border/40 shadow-2xl p-5 z-50 animate-in fade-in-50 slide-in-from-top-3 duration-200">
-                {/* Trending searches */}
-                <div className="space-y-2.5">
-                  <h4 className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider">
-                    Từ khóa tìm kiếm phổ biến
-                  </h4>
-                  <div className="flex flex-wrap gap-1.5">
-                    {[
-                      "Trí tuệ nhân tạo (AI)",
-                      "Lập trình Python",
-                      "Marketing số",
-                      "Thiết kế UI/UX",
-                      "Phân tích dữ liệu",
-                      "Excel cơ bản",
-                      "Google SEO",
-                      "Facebook Ads",
-                      "Machine Learning"
-                    ].map((tag) => (
-                      <button
-                        key={tag}
-                        type="button"
-                        onClick={() => {
-                          setSearchQuery(tag);
-                          setSearchFocused(false);
-                          navigate(`/explore?keyword=${encodeURIComponent(tag)}`);
-                        }}
-                        className="px-3 py-1 rounded-xl border border-border bg-muted/40 text-[11px] font-bold text-foreground hover:bg-primary/5 hover:text-primary hover:border-primary/20 transition-colors"
-                      >
-                        {tag}
-                      </button>
-                    ))}
+              <div className="absolute left-1/2 -translate-x-1/2 mt-2 w-[600px] max-w-[90vw] bg-card rounded-2xl border border-border/40 shadow-2xl p-5 z-50 animate-in fade-in-50 slide-in-from-top-3 duration-200">
+                {/* 1. Real Autocomplete Suggestions from API */}
+                {searchQuery.trim() !== "" ? (
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-extrabold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                      <Sparkles className="h-3 w-3 text-primary" />
+                      Gợi ý tìm kiếm tự động
+                    </h4>
+                    {loadingSuggestions ? (
+                      <div className="py-4 flex items-center justify-center gap-2 text-xs font-semibold text-primary">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Đang tìm gợi ý từ hệ thống...</span>
+                      </div>
+                    ) : searchQuery.trim().length < 2 ? (
+                      <p className="text-xs text-muted-foreground py-2 italic">Nhập từ 2 ký tự trở lên để hiển thị gợi ý bài học.</p>
+                    ) : suggestions.length > 0 ? (
+                      <div className="flex flex-col space-y-1">
+                        {suggestions.map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => handleSelectKeyword(item.name, item.id)}
+                            className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-semibold text-foreground hover:bg-primary/10 hover:text-primary transition-colors text-left"
+                          >
+                            <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <span className="block font-bold text-foreground line-clamp-1">{item.name}</span>
+                              <span className="block text-[10px] text-primary uppercase font-extrabold">{item.categoryName}</span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground py-2 italic">Không tìm thấy gợi ý phù hợp cho "{searchQuery}". Bấm Enter để tìm kiếm.</p>
+                    )}
                   </div>
-                </div>
-
-                {/* Recently viewed courses */}
-                <div className="space-y-3 mt-5 border-t border-border/60 pt-4">
-                  <h4 className="text-[10px] font-extrabold text-muted-foreground uppercase tracking-wider">
-                    Xem gần đây
-                  </h4>
-                  
-                  <div className="grid grid-cols-3 gap-3">
-                    {[
-                      {
-                        id: "355582871404154883",
-                        name: "Toàn tập Marketing số cho người mới bắt đầu",
-                        category: "Marketing số",
-                        image: "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=300&auto=format&fit=crop&q=60"
-                      },
-                      {
-                        id: "355582871404154884",
-                        name: "Lập trình Python từ cơ bản đến nâng cao",
-                        category: "Lập trình",
-                        image: "https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=300&auto=format&fit=crop&q=60"
-                      },
-                      {
-                        id: "355582871404154885",
-                        name: "Thiết kế giao diện UI/UX với Figma chuyên sâu",
-                        category: "Thiết kế",
-                        image: "https://images.unsplash.com/photo-1561070791-26c113006238?w=300&auto=format&fit=crop&q=60"
-                      }
-                    ].map((c) => (
-                      <div
-                        key={c.id}
-                        onClick={() => {
-                          setSearchFocused(false);
-                          navigate(`/courses/${c.id}`);
-                        }}
-                        className="flex flex-col bg-muted/20 border border-border/80 rounded-xl overflow-hidden cursor-pointer hover:shadow-md hover:border-primary/20 transition-all group"
-                      >
-                        <div className="aspect-video overflow-hidden bg-muted relative">
-                          <img src={c.image} alt={c.name} className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300" />
+                ) : (
+                  <>
+                    {/* 2. User Search History from API (If logged in & available) */}
+                    {searchHistory.length > 0 && (
+                      <div className="space-y-2 mb-4 pb-4 border-b border-border/60">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-sm font-extrabold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                            <Clock className="h-3 w-3 text-primary" />
+                            Lịch sử tìm kiếm gần đây
+                          </h4>
                         </div>
-                        <div className="p-2 flex-1 flex flex-col justify-between space-y-1">
-                          <span className="text-[8px] font-extrabold uppercase text-primary tracking-wider">{c.category}</span>
-                          <h5 className="font-bold text-foreground text-[10px] leading-tight line-clamp-2 group-hover:text-primary transition-colors">
-                            {c.name}
-                          </h5>
+                        <div className="flex flex-wrap gap-1.5">
+                          {searchHistory.slice(0, 4).map((item) => (
+                            <div
+                              key={item.id}
+                              onClick={() => handleSelectKeyword(item.keyword, item.courseId)}
+                              className="group flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border/60 bg-muted/30 text-sm font-semibold text-foreground hover:bg-primary/5 hover:text-primary hover:border-primary/20 transition-all cursor-pointer"
+                            >
+                              <span className="line-clamp-1 max-w-[200px]">{item.keyword}</span>
+                              <button
+                                type="button"
+                                onClick={(e) => handleDeleteHistory(e, item.id)}
+                                className="p-0.5 rounded-full hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                                title="Xóa từ khóa này"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </div>
+                          ))}
                         </div>
                       </div>
-                    ))}
-                  </div>
-                </div>
+                    )}
 
-                {/* Footer quiz link */}
-                <div className="mt-4 border-t border-border/60 pt-3 flex items-center justify-between text-[11px] font-bold">
-                  <span className="text-muted-foreground font-medium">Bạn chưa biết nên học gì?</span>
-                  <Link to="/explore" onClick={() => setSearchFocused(false)} className="text-primary hover:underline flex items-center gap-0.5">
-                    Làm bài kiểm tra ngắn <ChevronRight className="h-3 w-3" />
-                  </Link>
-                </div>
+                    {/* 3. Trending searches */}
+                    <div className="space-y-2.5">
+                      <h4 className="text-sm font-extrabold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                        <Sparkles className="h-3.5 w-3.5 text-primary" />
+                        Từ khóa tìm kiếm phổ biến
+                      </h4>
+                      {popularSearches.length > 0 ? (
+                        <div className="flex flex-col space-y-1.5">
+                          {popularSearches.map((item) => (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onClick={() => handleSelectKeyword(item.name, item.id)}
+                              className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border/65 bg-muted/35 text-xs text-foreground font-bold hover:bg-primary/5 hover:text-primary hover:border-primary/20 transition-all text-left"
+                            >
+                              <Search className="h-3.5 w-3.5 text-muted-foreground mr-2 shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <span className="block text-foreground line-clamp-1">{item.name}</span>
+                                <span className="block text-[9px] text-muted-foreground">{item.categoryName}</span>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground italic py-1">Chưa có dữ liệu từ khóa phổ biến.</p>
+                      )}
+                    </div>
+
+                    {/* 4. Recently viewed courses */}
+                    <div className="space-y-3 mt-5 border-t border-border/60 pt-4">
+                      <h4 className="text-sm font-extrabold text-muted-foreground uppercase tracking-wider">
+                        Xem gần đây
+                      </h4>
+                      
+                      {recentlyViewedCourses.length > 0 ? (
+                        <div className="grid grid-cols-3 gap-3">
+                          {recentlyViewedCourses.map((c) => (
+                            <div
+                              key={c.id}
+                              onClick={() => {
+                                setSearchFocused(false);
+                                trackRecentlyViewed(c);
+                                navigate(`/courses/${c.id}`);
+                              }}
+                              className="flex flex-col bg-muted/20 border border-border/80 rounded-xl overflow-hidden cursor-pointer hover:shadow-md hover:border-primary/20 transition-all group"
+                            >
+                              <div className="aspect-video overflow-hidden bg-muted relative">
+                                <img src={c.image} alt={c.name} className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300" />
+                              </div>
+                              <div className="p-2 flex-1 flex flex-col justify-between space-y-1">
+                                <span className="text-[10px] font-extrabold uppercase text-primary tracking-wider">{c.category}</span>
+                                <h5 className="font-bold text-foreground text-xs leading-tight line-clamp-2 group-hover:text-primary transition-colors">
+                                  {c.name}
+                                </h5>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground italic py-1">Chưa có khóa học xem gần đây.</p>
+                      )}
+                    </div>
+                  </>
+                )}
+              
               </div>
             )}
           </div>
@@ -221,9 +528,39 @@ export const Header: React.FC = () => {
             // Authenticated Right Side Icons & Profile Dropdown
             <div className="flex items-center gap-3 relative" ref={dropdownRef}>
               
+              {/* Goal Widget Button for Student */}
+              {isStudent && (
+                <button
+                  onClick={() => {
+                    const isCompleted = localStorage.getItem(`hasGoal_${auth.user?.id}`) === "true";
+                    setOnboardingInitialStep(isCompleted ? 3 : 1);
+                    setOnboardingModalOpen(true);
+                  }}
+                  className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 text-xs font-bold transition-all shadow-sm"
+                  title="Cập nhật mục tiêu học tập & sở thích"
+                >
+                  <Target className="h-4 w-4" />
+                  <span>Mục tiêu học tập</span>
+                </button>
+              )}
+
               {/* Globe Icon */}
               <button className="p-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title="Ngôn ngữ">
                 <Globe className="h-4.5 w-4.5" />
+              </button>
+
+              {/* Shopping Cart Trigger */}
+              <button
+                onClick={toggleCart}
+                className="p-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors relative"
+                title="Giỏ hàng"
+              >
+                <ShoppingBag className="h-4.5 w-4.5" />
+                {cartItems.length > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-primary text-white font-extrabold text-[9px] flex items-center justify-center border-2 border-background shadow-sm">
+                    {cartItems.length}
+                  </span>
+                )}
               </button>
 
               {/* Notification Bell */}
@@ -271,6 +608,34 @@ export const Header: React.FC = () => {
                         <span>Quản lý người dùng</span>
                       </button>
                       <button
+                        onClick={() => { setDropdownOpen(false); navigate("/admin/hr"); }}
+                        className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
+                      >
+                        <Users className="h-4 w-4 text-primary" />
+                        <span>Quản lý nhân sự (HR)</span>
+                      </button>
+                      <button
+                        onClick={() => { setDropdownOpen(false); navigate("/admin/approval-center"); }}
+                        className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
+                      >
+                        <Shield className="h-4 w-4 text-primary" />
+                        <span>Trung tâm phê duyệt</span>
+                      </button>
+                      <button
+                        onClick={() => { setDropdownOpen(false); navigate("/admin/category-teachers"); }}
+                        className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
+                      >
+                        <BookOpen className="h-4 w-4 text-primary" />
+                        <span>Phân công giảng viên</span>
+                      </button>
+                      <button
+                        onClick={() => { setDropdownOpen(false); navigate("/analytics"); }}
+                        className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
+                      >
+                        <BarChart className="h-4 w-4 text-primary" />
+                        <span>Báo cáo & Analytics</span>
+                      </button>
+                      <button
                         onClick={() => { setDropdownOpen(false); navigate("/admin/roles"); }}
                         className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
                       >
@@ -290,6 +655,20 @@ export const Header: React.FC = () => {
                       >
                         <BookOpen className="h-4 w-4 text-primary" />
                         <span>Quản lý khóa học</span>
+                      </button>
+                      <button
+                        onClick={() => { setDropdownOpen(false); navigate("/admin/orders"); }}
+                        className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
+                      >
+                        <ShoppingBag className="h-4 w-4 text-primary" />
+                        <span>Quản lý đơn hàng</span>
+                      </button>
+                      <button
+                        onClick={() => { setDropdownOpen(false); navigate("/admin/coupons"); }}
+                        className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
+                      >
+                        <Tag className="h-4 w-4 text-primary" />
+                        <span>Quản lý mã giảm giá</span>
                       </button>
                       <button
                         onClick={() => { setDropdownOpen(false); navigate("/activity-log"); }}
@@ -315,6 +694,13 @@ export const Header: React.FC = () => {
                       >
                         <BookOpen className="h-4 w-4 text-primary" />
                         <span>Các khóa học của tôi</span>
+                      </button>
+                      <button
+                        onClick={() => { setDropdownOpen(false); setOnboardingModalOpen(true); }}
+                        className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
+                      >
+                        <Target className="h-4 w-4 text-primary" />
+                        <span>Thiết lập mục tiêu & Sở thích</span>
                       </button>
                       <button
                         onClick={() => { setDropdownOpen(false); navigate("/activity-log"); }}
@@ -362,6 +748,11 @@ export const Header: React.FC = () => {
         </div>
 
       </div>
+      <StudentOnboardingModal
+        isOpen={onboardingModalOpen}
+        initialStep={onboardingInitialStep}
+        onClose={() => setOnboardingModalOpen(false)}
+      />
     </header>
   );
 };

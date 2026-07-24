@@ -178,7 +178,7 @@ export const UserManagement: React.FC = () => {
     const selectedRoles = data.getAll("userRoles") as string[];
 
     try {
-      const res = await userApi.assignRoles(assigningUser.id, { roleNames: selectedRoles });
+      const res = await userApi.assignRoles(assigningUser.id, { roleIds: selectedRoles.map((id) => Number(id)) });
       if (res.data.success) {
         showBanner(`Gán vai trò cho ${assigningUser.fullName} thành công!`);
         fetchUsers();
@@ -402,6 +402,7 @@ export const UserManagement: React.FC = () => {
                       className="rounded border-border text-primary focus:ring-0"
                     />
                   </th>
+                  <th className="py-3 px-2 w-12 text-center">STT</th>
                   <th className="py-3 px-2">Họ & Tên</th>
                   <th className="py-3 px-2">Liên hệ</th>
                   <th className="py-3 px-2">Vai trò</th>
@@ -413,13 +414,13 @@ export const UserManagement: React.FC = () => {
               <tbody className="divide-y divide-border/60">
                 {users.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-muted-foreground text-sm">
+                    <td colSpan={8} className="py-8 text-center text-muted-foreground text-sm">
                       Không tìm thấy thành viên nào.
                     </td>
                   </tr>
                 ) : (
-                  users.map((u) => (
-                    <tr key={u.username} className="hover:bg-muted/10 transition-colors">
+                  users.map((u, index) => (
+                    <tr key={u.username || index} className="hover:bg-muted/10 transition-colors">
                       <td className="py-3 px-4">
                         <input
                           type="checkbox"
@@ -427,6 +428,9 @@ export const UserManagement: React.FC = () => {
                           onChange={() => handleSelectUser(u.id)}
                           className="rounded border-border text-primary focus:ring-0"
                         />
+                      </td>
+                      <td className="py-3 px-2 text-xs font-bold text-muted-foreground text-center">
+                        {page * 10 + index + 1}
                       </td>
                       <td className="py-3 px-2">
                         <div>
@@ -649,16 +653,16 @@ export const UserManagement: React.FC = () => {
             <form onSubmit={handleAssignRoles} className="space-y-4">
               <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
                 {roles.map((r) => (
-                  <label key={r.name} className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-muted cursor-pointer transition-colors">
+                  <label key={r.id} className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-muted cursor-pointer transition-colors">
                     <input
                       type="checkbox"
                       name="userRoles"
-                      value={r.name}
-                      defaultChecked={assigningUser?.roles?.includes(r.name)}
+                      value={r.id}
+                      defaultChecked={assigningUser?.roles?.includes(r.name) || assigningUser?.roles?.includes(r.code)}
                       className="rounded border-border text-primary focus:ring-0 h-4 w-4"
                     />
                     <div>
-                      <p className="text-xs font-bold text-foreground">{r.name}</p>
+                      <p className="text-xs font-bold text-foreground">{r.name} ({r.code})</p>
                       <p className="text-[10px] text-muted-foreground line-clamp-1">{r.description}</p>
                     </div>
                   </label>

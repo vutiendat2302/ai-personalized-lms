@@ -80,7 +80,7 @@ export const ActivityLog: React.FC = () => {
       const params: any = {
         page,
         size: 10,
-        sort: "id,desc"
+        sort: "id:desc"
       };
       if (filterEntityType) params.entityType = filterEntityType;
       if (filterEntityId) params.entityId = parseInt(filterEntityId);

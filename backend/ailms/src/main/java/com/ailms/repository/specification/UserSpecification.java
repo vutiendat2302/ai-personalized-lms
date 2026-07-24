@@ -41,8 +41,8 @@ public class UserSpecification {
                         criteriaBuilder.and(
                                 subRoot.get("roleEntity").get("id").in(request.getRoleIds()),
                                 criteriaBuilder.or(
-                                        criteriaBuilder.isNull(subRoot.get("expired_at")),
-                                        criteriaBuilder.greaterThan(subRoot.get("expired_at"), LocalDateTime.now())
+                                        criteriaBuilder.isNull(subRoot.get("expiredAt")),
+                                        criteriaBuilder.greaterThan(subRoot.get("expiredAt"), LocalDateTime.now())
                                 )
                         )
                 );

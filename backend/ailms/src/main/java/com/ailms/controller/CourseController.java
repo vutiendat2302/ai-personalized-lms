@@ -10,6 +10,8 @@ import com.ailms.response.ApiResponse;
 import com.ailms.response.ClassResponse;
 import com.ailms.response.CourseResponse;
 import com.ailms.response.PageResponse;
+import com.ailms.response.SectionResponse;
+import com.ailms.service.ICourseSectionService;
 import com.ailms.service.ICourseService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +27,7 @@ import java.util.List;
 public class CourseController {
 
     private final ICourseService courseService;
+    private final ICourseSectionService courseSectionService;
 
     @PostMapping
     public ResponseEntity<ApiResponse<CourseResponse>> create(@Valid @RequestBody CreateCourseRequest request) {
@@ -88,6 +91,12 @@ public class CourseController {
     public ResponseEntity<ApiResponse<CourseResponse>> getCourseById(@PathVariable Long id) {
         CourseResponse response = courseService.getById(id);
         return ResponseEntity.ok(ApiResponse.of("Course retrieved successfully", response));
+    }
+
+    @GetMapping("/{id}/sections")
+    public ResponseEntity<ApiResponse<List<SectionResponse>>> getCourseSections(@PathVariable Long id) {
+        List<SectionResponse> response = courseSectionService.getSectionsByCourseId(id);
+        return ResponseEntity.ok(ApiResponse.of("Course sections retrieved successfully", response));
     }
 
     @GetMapping

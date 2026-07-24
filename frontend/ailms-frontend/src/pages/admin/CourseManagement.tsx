@@ -412,7 +412,7 @@ export const CourseManagement: React.FC = () => {
                 <table className="w-full text-sm text-left">
                   <thead>
                     <tr className="border-b border-border/85 text-muted-foreground text-xs font-semibold bg-muted/10">
-                      <th className="py-3 px-4 w-16">ID</th>
+                      <th className="py-3 px-4 w-12 text-center">STT</th>
                       <th className="py-3 px-2">Tên khóa học</th>
                       <th className="py-3 px-2">Danh mục</th>
                       <th className="py-3 px-2">Cấp độ</th>
@@ -429,9 +429,9 @@ export const CourseManagement: React.FC = () => {
                         </td>
                       </tr>
                     ) : (
-                      courses.map((course) => (
-                        <tr key={course.id} className="hover:bg-muted/10 transition-colors">
-                          <td className="py-3 px-4 font-bold text-xs text-muted-foreground">#{course.id}</td>
+                      courses.map((course, index) => (
+                        <tr key={course.id || index} className="hover:bg-muted/10 transition-colors">
+                          <td className="py-3 px-4 font-bold text-xs text-muted-foreground text-center">{coursePage * 10 + index + 1}</td>
                           <td className="py-3 px-2">
                             <div>
                               <p className="font-bold text-foreground">{course.name}</p>
@@ -586,7 +586,7 @@ export const CourseManagement: React.FC = () => {
                 <table className="w-full text-sm text-left">
                   <thead>
                     <tr className="border-b border-border/85 text-muted-foreground text-xs font-semibold bg-muted/10">
-                      <th className="py-3 px-4 w-16">ID</th>
+                      <th className="py-3 px-4 w-12 text-center">STT</th>
                       <th className="py-3 px-2">Tên danh mục</th>
                       <th className="py-3 px-2">Mô tả</th>
                       <th className="py-3 px-2">Trạng thái</th>
@@ -601,9 +601,9 @@ export const CourseManagement: React.FC = () => {
                         </td>
                       </tr>
                     ) : (
-                      categories.map((category) => (
-                        <tr key={category.id} className="hover:bg-muted/10 transition-colors">
-                          <td className="py-3 px-4 font-bold text-xs text-muted-foreground">#{category.id}</td>
+                      categories.map((category, index) => (
+                        <tr key={category.id || index} className="hover:bg-muted/10 transition-colors">
+                          <td className="py-3 px-4 font-bold text-xs text-muted-foreground text-center">{categoryPage * 10 + index + 1}</td>
                           <td className="py-3 px-2 font-bold text-foreground">{category.name}</td>
                           <td className="py-3 px-2 text-xs text-muted-foreground">{category.description}</td>
                           <td className="py-3 px-2">

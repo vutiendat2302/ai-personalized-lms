@@ -3,6 +3,7 @@ import type { ApiResponse } from "@/types/base";
 
 export const reviewApi = {
   searchReviews: (params?: {
+    courseId?: string;
     rating?: number;
     status?: string;
     sort?: string[] | string;

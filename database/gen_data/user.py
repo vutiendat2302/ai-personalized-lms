@@ -16,7 +16,7 @@ from snowflake_id import snowflake
 fake = Faker("vi_VN")
 
 # Chuỗi hash BCrypt chuẩn của mật khẩu: Password@123 (với cost/strength = 10)
-COMMON_PASSWORD_HASH = "$2a$10$xazISHupvR3eaffzWOK6ueom3n.y731CmmYQqzfxq36XdDInm7iva"
+COMMON_PASSWORD_HASH = "$2a$10$djMqqqaw5rFMJgibP/iCU.D1tdCyXRDpqjNtI61ifaARAS0X9Sgl6"
 
 TOTAL_USERS = 150
 

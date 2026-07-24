@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { courseApi } from "@/api/courses/courseApi";
 import { 
   Search, 
   Brain, 
@@ -180,32 +181,78 @@ const INSTRUCTORS = [
 ];
 
 export const ExplorePathways: React.FC = () => {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("Tất cả");
   const [selectedLevel, setSelectedLevel] = useState("Tất cả");
   const [selectedDuration, setSelectedDuration] = useState("Tất cả");
+  const [realCourses, setRealCourses] = useState<any[]>([]);
 
+  // Synchronize URL search params (keyword and category)
   useEffect(() => {
+    const keywordParam = searchParams.get("keyword") || searchParams.get("q") || searchParams.get("search");
+    if (keywordParam !== null) {
+      setSearch(keywordParam);
+    }
     const categoryParam = searchParams.get("category");
     if (categoryParam) {
       setSelectedCategory(categoryParam);
-    } else {
-      setSelectedCategory("Tất cả");
     }
   }, [searchParams]);
 
+  // Fetch real courses from Backend API when search or filters change
+  useEffect(() => {
+    const fetchCoursesFromApi = async () => {
+      try {
+        const searchPayload: any = { size: 50, status: "ACTIVE" };
+        if (search.trim()) {
+          searchPayload.keyword = search.trim();
+        }
+        if (selectedLevel !== "Tất cả") {
+          searchPayload.level = selectedLevel === "Cơ bản" ? "BEGINNER" : selectedLevel === "Trung cấp" ? "INTERMEDIATE" : "ADVANCED";
+        }
+        const res = await courseApi.searchCourses(searchPayload);
+        if (res.data.success && res.data.data?.content?.length > 0) {
+          const mapped = res.data.data.content.map((c: any) => ({
+            id: c.id,
+            title: c.name,
+            category: c.categoryName || "Khóa học AILMS",
+            level: c.level === "ADVANCED" ? "Nâng cao" : c.level === "BEGINNER" ? "Cơ bản" : "Trung cấp",
+            duration: 35,
+            durationText: "30-40 giờ học",
+            rating: c.avgRating || 4.8,
+            studentsCount: c.enrollmentCount || 1200,
+            image: c.image || "https://images.unsplash.com/photo-1515879218367-8466d910aaa4?w=500&auto=format&fit=crop&q=60",
+            tags: [c.categoryName || "AI", c.level || "ALL"],
+            description: c.description || "Khóa học chất lượng cao giúp làm chủ kiến thức thực chiến.",
+            suggestedPrice: c.suggestedPrice
+          }));
+          setRealCourses(mapped);
+        } else {
+          setRealCourses([]);
+        }
+      } catch (err) {
+        console.error("Error searching courses in ExplorePathways:", err);
+        setRealCourses([]);
+      }
+    };
+
+    fetchCoursesFromApi();
+  }, [search, selectedLevel]);
+
   const filteredCourses = useMemo(() => {
-    return ALL_COURSES.filter(course => {
+    const baseList = realCourses.length > 0 ? realCourses : ALL_COURSES;
+    return baseList.filter(course => {
       // Search text filter
       const matchesSearch = 
+        !search.trim() ||
         course.title.toLowerCase().includes(search.toLowerCase()) || 
-        course.tags.some(tag => tag.toLowerCase().includes(search.toLowerCase())) ||
-        course.description.toLowerCase().includes(search.toLowerCase());
+        (course.tags && course.tags.some((tag: string) => tag.toLowerCase().includes(search.toLowerCase()))) ||
+        (course.description && course.description.toLowerCase().includes(search.toLowerCase()));
 
       // Category filter
       const matchesCategory = 
-        selectedCategory === "Tất cả" || course.category === selectedCategory;
+        selectedCategory === "Tất cả" || course.category.toLowerCase().includes(selectedCategory.toLowerCase());
 
       // Level filter
       const matchesLevel = 
@@ -223,13 +270,23 @@ export const ExplorePathways: React.FC = () => {
 
       return matchesSearch && matchesCategory && matchesLevel && matchesDuration;
     });
-  }, [search, selectedCategory, selectedLevel, selectedDuration]);
+  }, [realCourses, search, selectedCategory, selectedLevel, selectedDuration]);
+
+  const handleSearchChange = (newVal: string) => {
+    setSearch(newVal);
+    if (newVal.trim()) {
+      setSearchParams({ keyword: newVal.trim() });
+    } else {
+      setSearchParams({});
+    }
+  };
 
   const handleResetFilters = () => {
     setSearch("");
     setSelectedCategory("Tất cả");
     setSelectedLevel("Tất cả");
     setSelectedDuration("Tất cả");
+    setSearchParams({});
   };
 
   return (
@@ -267,12 +324,12 @@ export const ExplorePathways: React.FC = () => {
                 type="text"
                 placeholder="Nhập tên khóa học, kỹ năng, hoặc từ khóa (ví dụ: Python, UI/UX...)"
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => handleSearchChange(e.target.value)}
                 className="w-full h-12 pl-12 pr-4 bg-white text-black placeholder:text-muted-foreground rounded-2xl border-0 shadow-lg text-base focus-visible:ring-offset-0 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-white"
               />
               {search && (
                 <button 
-                  onClick={() => setSearch("")} 
+                  onClick={() => handleSearchChange("")} 
                   className="absolute right-4 text-sm font-bold text-muted-foreground hover:text-black transition-colors"
                 >
                   Xóa
@@ -424,7 +481,7 @@ export const ExplorePathways: React.FC = () => {
                 <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
                   <div className="space-y-2">
                     <div className="flex flex-wrap gap-1.5">
-                      {course.tags.map((t, i) => (
+                      {course.tags.map((t: string, i: number) => (
                         <span key={i} className="text-sm font-bold uppercase px-2 py-0.5 rounded bg-primary/10 text-primary">
                           {t}
                         </span>

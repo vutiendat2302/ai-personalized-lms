@@ -79,7 +79,7 @@ export const RoleManagement: React.FC = () => {
       const params: any = {
         page,
         size: 10,
-        sort: "id,desc"
+        sort: "id:desc"
       };
       if (searchRole) params.search = searchRole;
 

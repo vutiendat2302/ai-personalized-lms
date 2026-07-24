@@ -93,17 +93,6 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.message("OTP đã được gửi tới email của bạn"));
     }
 
-    @PostMapping("register/student")
-    public ResponseEntity<ApiResponse<StudentProfileResponse>> create(@Valid @RequestBody CreateStudentProfileRequest request) {
-        StudentProfileResponse response = studentProfileService.create(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of("Student profile created successfully", response));
-    }
-
-    @PostMapping("")
-    public ResponseEntity<ApiResponse<GuardianResponse>> create(@Valid @RequestBody CreateGuardianRequest request) {
-        GuardianResponse response = guardianService.create(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of("Guardian created successfully", response));
-    }
 
     /**
      * Xác thực mã OTP, kích hoạt tài khoản nếu hợp lệ.
@@ -120,8 +109,8 @@ public class AuthController {
      */
     @PostMapping("/resend-otp")
     public ResponseEntity<ApiResponse<Void>> resendOtp(@Valid @RequestBody ResendOtpRequest request) {
-        log.info("Gửi lại OTP cho email: {}", request.getEmail());
-        authService.resendOtp(request.getEmail());
+        log.info("Gửi lại OTP cho thông tin: {}", request.getUsernameOrEmail());
+        authService.resendOtp(request.getUsernameOrEmail());
         return ResponseEntity.ok(ApiResponse.message("Đã gửi lại OTP, vui lòng kiểm tra email"));
     }
 
@@ -158,8 +147,8 @@ public class AuthController {
     @PostMapping("/resend-forgot-password-otp")
     public ResponseEntity<ApiResponse<Void>> resendForgotPasswordOtp(
             @Valid @RequestBody ResendOtpRequest request) {
-        log.info("Yêu cầu gửi lại OTP quên mật khẩu cho thông tin: {}", request.getEmail());
-        authService.resendForgotPasswordOtp(request.getEmail());
+        log.info("Yêu cầu gửi lại OTP quên mật khẩu cho thông tin: {}", request.getUsernameOrEmail());
+        authService.resendForgotPasswordOtp(request.getUsernameOrEmail());
         return ResponseEntity.ok(ApiResponse.message("Đã gửi lại OTP đặt lại mật khẩu"));
     }
 

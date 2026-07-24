@@ -13,38 +13,38 @@ import type {
 
 export const userApi = {
   getUserById: (id: string) =>
-    httpClient.get<ApiResponse<UserResponse>>(`/users/${id}`),
+    httpClient.get<ApiResponse<UserResponse>>(`/v1/users/${id}`),
 
   createUser: (payload: CreateUserRequest) =>
-    httpClient.post<ApiResponse<UserResponse>>("/users", payload),
+    httpClient.post<ApiResponse<UserResponse>>("/v1/users", payload),
 
   updateUser: (id: string, payload: UpdateUserRequest) =>
-    httpClient.put<ApiResponse<UserResponse>>(`/users/${id}`, payload),
+    httpClient.put<ApiResponse<UserResponse>>(`/v1/users/${id}`, payload),
 
   deleteUser: (id: string) =>
-    httpClient.delete<ApiResponse<void>>(`/users/${id}`),
+    httpClient.delete<ApiResponse<void>>(`/v1/users/${id}`),
 
   getProfile: () =>
-    httpClient.get<ApiResponse<UserResponse>>("/users/profile"),
+    httpClient.get<ApiResponse<UserResponse>>("/v1/users/profile"),
 
   updateProfile: (payload: UpdateProfileRequest) =>
-    httpClient.put<ApiResponse<UserResponse>>("/users/profile", payload),
+    httpClient.put<ApiResponse<UserResponse>>("/v1/users/profile", payload),
 
   getAllUsers: () =>
-    httpClient.get<ApiResponse<UserResponse[]>>("/users"),
+    httpClient.get<ApiResponse<UserResponse[]>>("/v1/users"),
 
   getUsers: (params?: any) =>
-    httpClient.get<ApiResponse<any>>("/users/page", { params }),
+    httpClient.get<ApiResponse<any>>("/v1/users/page", { params }),
 
   inviteUser: (payload: InviteUserRequest) =>
-    httpClient.post<ApiResponse<void>>("/users/invite", payload),
+    httpClient.post<ApiResponse<void>>("/v1/users/invite", payload),
 
   bulkDelete: (payload: BulkDeleteRequest) =>
-    httpClient.post<ApiResponse<any>>("/users/bulk-delete", payload),
+    httpClient.post<ApiResponse<any>>("/v1/users/bulk-delete", payload),
 
   bulkAssignRole: (payload: BulkAssignRoleRequest) =>
-    httpClient.post<ApiResponse<any>>("/users/bulk-assign-role", payload),
+    httpClient.post<ApiResponse<any>>("/v1/users/bulk-assign-role", payload),
 
   assignRoles: (id: string, payload: AssignRolesRequest) =>
-    httpClient.post<ApiResponse<void>>(`/users/${id}/roles`, payload),
+    httpClient.post<ApiResponse<void>>(`/v1/users/${id}/roles`, payload),
 };

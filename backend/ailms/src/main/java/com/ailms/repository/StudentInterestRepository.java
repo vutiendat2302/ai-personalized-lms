@@ -10,6 +10,8 @@ public interface StudentInterestRepository extends JpaRepository<StudentInterest
 
     List<StudentInterestEntity> findByStudentProfile_UserId(Long studentUserId);
 
+    void deleteByStudentProfile_UserId(Long studentUserId);
+
     List<StudentInterestEntity> findByInterest_Id(Long interestId);
 
     boolean existsByInterest_Id(Long interestId);

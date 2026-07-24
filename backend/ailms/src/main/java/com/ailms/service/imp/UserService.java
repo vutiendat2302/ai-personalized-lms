@@ -555,7 +555,7 @@ public class UserService implements IUserService {
         List<UserRoleEntity> userRoles = userRoleRepository.findByUserEntity_Id(user.getId());
         response.setRoles(userRoles.stream()
                 .filter(ur -> ur.getExpiredAt() == null || ur.getExpiredAt().isAfter(LocalDateTime.now()))
-                .map(ur -> ur.getRoleEntity().getName())
+                .map(ur -> ur.getRoleEntity().getCode())
                 .collect(Collectors.toList()));
         return response;
     }

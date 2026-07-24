@@ -16,6 +16,8 @@ public interface LearningSessionRepository extends JpaRepository<LearningSession
 
     List<LearningSessionEntity> findByUserIdAndStatus(Long userId, SessionStatusEnum status);
 
+    void deleteByUserId(Long userId);
+
     @Query("SELECT s FROM LearningSessionEntity s WHERE s.status = :status AND s.lastHeartbeatAt < :threshold")
     List<LearningSessionEntity> findStaleActiveSessions(@Param("status") SessionStatusEnum status,
                                                          @Param("threshold") LocalDateTime threshold);

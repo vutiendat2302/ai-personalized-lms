@@ -8,6 +8,13 @@ import { UserManagement } from "./pages/admin/UserManagement";
 import { RoleManagement } from "./pages/admin/RoleManagement";
 import { PermissionManagement } from "./pages/admin/PermissionManagement";
 import { CourseManagement } from "./pages/admin/CourseManagement";
+import { OrderManagement } from "./pages/admin/OrderManagement";
+import { CouponManagement } from "./pages/admin/CouponManagement";
+import { HRManagement } from "./pages/admin/HRManagement";
+import { ApprovalCenterPage } from "./pages/admin/ApprovalCenterPage";
+import { CategoryTeacherAssignPage } from "./pages/admin/CategoryTeacherAssignPage";
+import { LearningAnalytics } from "./pages/LearningAnalytics";
+import { CertificateVerifyPage } from "./pages/CertificateVerifyPage";
 import { ActivityLog } from "./pages/ActivityLog";
 import { Terms } from "./pages/Terms";
 import { ExplorePathways } from "./pages/ExplorePathways";
@@ -56,6 +63,7 @@ function App() {
             <Route path="/" element={<Landing />} />
             <Route path="/terms" element={<Terms />} />
             <Route path="/explore" element={<ExplorePathways />} />
+            <Route path="/categories" element={<ExplorePathways />} />
             <Route path="/courses/:id" element={<CourseDetail />} />
             <Route path="/categories/:id" element={<CategoryDetail />} />
 
@@ -80,8 +88,18 @@ function App() {
               <Route path="/admin/roles" element={<RoleManagement />} />
               <Route path="/admin/permissions" element={<PermissionManagement />} />
               <Route path="/admin/courses" element={<CourseManagement />} />
+              <Route path="/admin/orders" element={<OrderManagement />} />
+              <Route path="/admin/coupons" element={<CouponManagement />} />
+              <Route path="/admin/hr" element={<HRManagement />} />
+              <Route path="/admin/approval-center" element={<ApprovalCenterPage />} />
+              <Route path="/admin/category-teachers" element={<CategoryTeacherAssignPage />} />
+              <Route path="/analytics" element={<LearningAnalytics />} />
             </Route>
           </Route>
+
+          {/* Public Certificate Verification Route */}
+          <Route path="/verify" element={<CertificateVerifyPage />} />
+          <Route path="/verify/:certificateCode" element={<CertificateVerifyPage />} />
 
           {/* Fallback for invalid paths */}
           <Route path="*" element={<Navigate to="/" replace />} />

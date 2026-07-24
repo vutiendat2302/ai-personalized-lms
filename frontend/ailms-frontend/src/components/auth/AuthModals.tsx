@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useForm, FormProvider } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -17,7 +17,70 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Key,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+
+const parseYYYYMMDD = (str: string) => {
+  if (!str) return undefined;
+  const parts = str.split("-");
+  if (parts.length === 3) {
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10) - 1;
+    const d = parseInt(parts[2], 10);
+    return new Date(y, m, d);
+  }
+  return undefined;
+};
+
+const parseDDMMYYYYToYYYYMMDD = (str: string) => {
+  const parts = str.split("/");
+  if (parts.length === 3) {
+    const d = parts[0];
+    const m = parts[1];
+    const y = parts[2];
+    if (d.length === 2 && m.length === 2 && y.length === 4) {
+      const day = parseInt(d, 10);
+      const month = parseInt(m, 10);
+      const year = parseInt(y, 10);
+      const date = new Date(year, month - 1, day);
+      if (
+        date.getFullYear() === year &&
+        date.getMonth() === month - 1 &&
+        date.getDate() === day
+      ) {
+        return `${y}-${m}-${d}`;
+      }
+    }
+  }
+  return "";
+};
+
+const getErrorMessage = (err: any, defaultMsg: string): string => {
+  if (!err) return defaultMsg;
+  if (err.errors) {
+    if (typeof err.errors === "object") {
+      const values = Object.values(err.errors);
+      if (values.length > 0 && typeof values[0] === "string") {
+        return values[0];
+      }
+    }
+    if (Array.isArray(err.errors) && err.errors.length > 0) {
+      const firstErr = err.errors[0];
+      if (typeof firstErr === "string") return firstErr;
+      if (firstErr && typeof firstErr === "object" && firstErr.message) {
+        return firstErr.message;
+      }
+    }
+  }
+  return err.message || defaultMsg;
+};
+import {
   Mail,
   User,
   Phone,
@@ -26,7 +89,8 @@ import {
   CheckCircle2,
   AlertCircle,
   Eye,
-  EyeOff
+  EyeOff,
+  Loader2
 } from "lucide-react";
 
 // ==========================================
@@ -75,7 +139,7 @@ const registerSchema = z
     email: z.string().email("Định dạng email không hợp lệ"),
     phone: z.string().regex(/^\d{10,11}$/, "Số điện thoại phải có 10-11 chữ số"),
     fullName: z.string().min(2, "Họ và tên phải chứa ít nhất 2 ký tự"),
-    gender: z.string(),
+    gender: z.string().min(1, "Vui lòng chọn giới tính"),
     dateOfBirth: z.string().min(1, "Vui lòng chọn ngày sinh"),
   })
   .refine((data) => data.password === data.confirmPassword, {
@@ -94,6 +158,7 @@ export const AuthModals: React.FC = () => {
     isOpenChangePassword,
     emailForOtp,
     otpCode,
+    otpFlow,
     openLogin,
     openRegister,
     openForgotPassword,
@@ -109,7 +174,71 @@ export const AuthModals: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
   const [showPass, setShowPass] = useState(false);
-  const [is18, setIs18] = useState(true);
+  const [showRegPass, setShowRegPass] = useState(false);
+  const [showRegConfirmPass, setShowRegConfirmPass] = useState(false);
+  const [showResetPass, setShowResetPass] = useState(false);
+  const [showResetConfirmPass, setShowResetConfirmPass] = useState(false);
+  const [showChangeOldPass, setShowChangeOldPass] = useState(false);
+  const [showChangeNewPass, setShowChangeNewPass] = useState(false);
+  const [showChangeConfirmPass, setShowChangeConfirmPass] = useState(false);
+  const [genderVal, setGenderVal] = useState("");
+  const [dateInputVal, setDateInputVal] = useState("");
+  const [otpValues, setOtpValues] = useState<string[]>(Array(6).fill(""));
+  const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  useEffect(() => {
+    if (isOpenVerifyOtp) {
+      setOtpValues(Array(6).fill(""));
+      verifyOtpForm.setValue("otp", "");
+    }
+  }, [isOpenVerifyOtp]);
+
+  const handleOtpChange = (index: number, val: string) => {
+    const cleanVal = val.replace(/[^0-9]/g, "").slice(-1);
+    const newOtpValues = [...otpValues];
+    newOtpValues[index] = cleanVal;
+    setOtpValues(newOtpValues);
+    
+    const combined = newOtpValues.join("");
+    // Only run validation if the user has typed exactly 6 digits, avoiding showing error during typing
+    verifyOtpForm.setValue("otp", combined, { shouldValidate: combined.length === 6 });
+
+    if (cleanVal && index < 5) {
+      otpRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Backspace") {
+      if (!otpValues[index] && index > 0) {
+        otpRefs.current[index - 1]?.focus();
+        const newOtpValues = [...otpValues];
+        newOtpValues[index - 1] = "";
+        setOtpValues(newOtpValues);
+        verifyOtpForm.setValue("otp", newOtpValues.join(""), { shouldValidate: false });
+      } else if (otpValues[index]) {
+        const newOtpValues = [...otpValues];
+        newOtpValues[index] = "";
+        setOtpValues(newOtpValues);
+        verifyOtpForm.setValue("otp", newOtpValues.join(""), { shouldValidate: false });
+      }
+    } else if (e.key === "ArrowLeft" && index > 0) {
+      otpRefs.current[index - 1]?.focus();
+    } else if (e.key === "ArrowRight" && index < 5) {
+      otpRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleOtpPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const pastedData = e.clipboardData.getData("text").replace(/[^0-9]/g, "").slice(0, 6);
+    if (pastedData.length === 6) {
+      const newOtpValues = pastedData.split("");
+      setOtpValues(newOtpValues);
+      verifyOtpForm.setValue("otp", pastedData, { shouldValidate: true });
+      otpRefs.current[5]?.focus();
+    }
+  };
 
   // Forms Initialization
   const loginForm = useForm<z.infer<typeof loginSchema>>({
@@ -146,7 +275,7 @@ export const AuthModals: React.FC = () => {
       email: "",
       phone: "",
       fullName: "",
-      gender: "0",
+      gender: "",
       dateOfBirth: "",
     },
   });
@@ -164,7 +293,7 @@ export const AuthModals: React.FC = () => {
       loginForm.reset();
       navigate("/dashboard");
     } catch (err: any) {
-      setErrorMsg(err.message || "Tên đăng nhập hoặc mật khẩu không chính xác.");
+      setErrorMsg(getErrorMessage(err, "Tên đăng nhập hoặc mật khẩu không chính xác."));
     } finally {
       setLoading(false);
     }
@@ -178,10 +307,10 @@ export const AuthModals: React.FC = () => {
       setSuccessMsg("Mã OTP khôi phục đã được gửi tới email của bạn!");
       setTimeout(() => {
         setSuccessMsg("");
-        openVerifyOtp(data.usernameOrEmail);
+        openVerifyOtp(data.usernameOrEmail, "forgot");
       }, 1500);
     } catch (err: any) {
-      setErrorMsg(err.message || "Yêu cầu khôi phục thất bại.");
+      setErrorMsg(getErrorMessage(err, "Yêu cầu khôi phục thất bại."));
     } finally {
       setLoading(false);
     }
@@ -191,17 +320,28 @@ export const AuthModals: React.FC = () => {
     try {
       setLoading(true);
       setErrorMsg("");
-      await authService.verifyOtp({
-        email: emailForOtp,
-        otp: data.otp,
-      });
-      setSuccessMsg("Xác thực OTP thành công!");
-      setTimeout(() => {
-        setSuccessMsg("");
-        openResetPassword(emailForOtp, data.otp);
-      }, 1500);
+      if (otpFlow === "forgot") {
+        // For forgot password flow, OTP is verified during the resetPassword API call.
+        // We just transition directly to the reset password dialog.
+        setSuccessMsg("Đang chuyển tiếp...");
+        setTimeout(() => {
+          setSuccessMsg("");
+          openResetPassword(emailForOtp, data.otp);
+        }, 1000);
+      } else {
+        // For registration flow, we verify the OTP
+        await authService.verifyOtp({
+          email: emailForOtp,
+          otp: data.otp,
+        });
+        setSuccessMsg("Xác thực OTP thành công!");
+        setTimeout(() => {
+          setSuccessMsg("");
+          openLogin();
+        }, 1500);
+      }
     } catch (err: any) {
-      setErrorMsg(err.message || "Mã OTP không chính xác hoặc đã hết hạn.");
+      setErrorMsg(getErrorMessage(err, "Mã OTP không chính xác hoặc đã hết hạn."));
     } finally {
       setLoading(false);
     }
@@ -223,7 +363,7 @@ export const AuthModals: React.FC = () => {
         openLogin();
       }, 2000);
     } catch (err: any) {
-      setErrorMsg(err.message || "Không thể đặt lại mật khẩu.");
+      setErrorMsg(getErrorMessage(err, "Không thể đặt lại mật khẩu."));
     } finally {
       setLoading(false);
     }
@@ -245,7 +385,7 @@ export const AuthModals: React.FC = () => {
         changePasswordForm.reset();
       }, 1500);
     } catch (err: any) {
-      setErrorMsg(err.message || "Mật khẩu cũ không chính xác hoặc đổi mật khẩu thất bại.");
+      setErrorMsg(getErrorMessage(err, "Mật khẩu cũ không chính xác hoặc đổi mật khẩu thất bại."));
     } finally {
       setLoading(false);
     }
@@ -263,7 +403,7 @@ export const AuthModals: React.FC = () => {
         fullName: data.fullName,
         phone: data.phone,
         dateOfBirth: data.dateOfBirth,
-        gender: parseInt(data.gender),
+        gender: data.gender ? parseInt(data.gender) : 0,
       };
 
       await authService.register(regPayload);
@@ -274,7 +414,7 @@ export const AuthModals: React.FC = () => {
         email: data.email,
         fullname: data.fullName,
         phone: data.phone,
-        gender: parseInt(data.gender),
+        gender: data.gender ? parseInt(data.gender) : 0,
         dateOfBirth: data.dateOfBirth,
         avatarUrl: null,
         attributes: JSON.stringify({
@@ -295,11 +435,13 @@ export const AuthModals: React.FC = () => {
       setSuccessMsg("Đăng ký tài khoản thành công! Hãy xác thực email.");
       setTimeout(() => {
         setSuccessMsg("");
-        openVerifyOtp(data.email);
+        openVerifyOtp(data.email, "register");
         registerForm.reset();
+        setGenderVal("");
+        setDateInputVal("");
       }, 2000);
     } catch (err: any) {
-      setErrorMsg(err.message || "Tên tài khoản hoặc email đã tồn tại.");
+      setErrorMsg(getErrorMessage(err, "Tên tài khoản hoặc email đã tồn tại."));
     } finally {
       setLoading(false);
     }
@@ -378,8 +520,15 @@ export const AuthModals: React.FC = () => {
               )}
             </div>
 
-            <Button type="submit" className="w-full h-10 font-bold bg-primary hover:bg-primary/95 text-primary-foreground shadow-lg shadow-primary/10 mt-2" disabled={loading}>
-              {loading ? "Đang đăng nhập..." : "Đăng nhập"}
+            <Button type="submit" className="w-full h-10 font-bold bg-primary text-base hover:bg-primary/95 text-primary-foreground shadow-lg shadow-primary/10 mt-2" disabled={loading}>
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Đang đăng nhập...
+                </>
+              ) : (
+                "Đăng nhập"
+              )}
             </Button>
           </form>
 
@@ -406,20 +555,20 @@ export const AuthModals: React.FC = () => {
             <DialogTitle className="text-2xl font-extrabold text-foreground tracking-tight text-center">
               Đăng ký
             </DialogTitle>
-            <DialogDescription className="text-center text-muted-foreground text-xs mt-1">
+            <DialogDescription className="text-center text-muted-foreground text-base mt-1">
               Nhập các thông tin đăng ký để tham gia hệ thống học tập AILMS.
             </DialogDescription>
           </DialogHeader>
 
           {errorMsg && (
-            <div className="flex items-center gap-2 rounded-lg bg-destructive/10 p-3 text-xs text-destructive mt-1">
+            <div className="flex items-center gap-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive mt-1">
               <AlertCircle className="h-4 w-4 shrink-0" />
               <span>{errorMsg}</span>
             </div>
           )}
 
           {successMsg && (
-            <div className="flex items-center gap-2 rounded-lg bg-green-500/10 p-3 text-xs text-green-600 mt-1">
+            <div className="flex items-center gap-2 rounded-lg bg-green-500/10 p-3 text-sm text-green-600 mt-1">
               <CheckCircle2 className="h-4 w-4 shrink-0" />
               <span>{successMsg}</span>
             </div>
@@ -431,162 +580,229 @@ export const AuthModals: React.FC = () => {
                 {/* Left Column */}
                 <div className="space-y-3">
                   <div className="space-y-1">
-                    <Label className="text-xs font-semibold text-foreground">Tên tài khoản</Label>
+                    <Label className="text-base font-semibold text-foreground">Tên tài khoản</Label>
                     <div className="relative">
                       <User className="absolute left-3 top-2.5 h-4.5 w-4.5 text-muted-foreground" />
                       <Input
                         type="text"
                         placeholder="Nhập tên tài khoản"
-                        className="pl-10 h-10 text-base md:text-base border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
+                        className="pl-10 h-10 text-base md:text-base placeholder:opacity-70 border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
                         {...registerForm.register("username")}
                       />
                     </div>
                     {registerForm.formState.errors.username && (
-                      <p className="text-[10px] text-destructive font-medium">{registerForm.formState.errors.username.message}</p>
+                      <p className="text-sm text-destructive font-medium">{registerForm.formState.errors.username.message}</p>
                     )}
                   </div>
 
                   <div className="space-y-1">
-                    <Label className="text-xs font-semibold text-foreground">Mật khẩu</Label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-2.5 h-4.5 w-4.5 text-muted-foreground" />
-                      <Input
-                        type="password"
-                        placeholder="Nhập mật khẩu"
-                        className="pl-10 h-10 text-base md:text-base border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
-                        {...registerForm.register("password")}
-                      />
-                    </div>
-                    {registerForm.formState.errors.password && (
-                      <p className="text-[10px] text-destructive font-medium">{registerForm.formState.errors.password.message}</p>
-                    )}
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label className="text-xs font-semibold text-foreground">Email</Label>
+                    <Label className="text-base font-semibold text-foreground">Email</Label>
                     <div className="relative">
                       <Mail className="absolute left-3 top-2.5 h-4.5 w-4.5 text-muted-foreground" />
                       <Input
                         type="email"
                         placeholder="nhapemail@gmail.com"
-                        className="pl-10 h-10 text-base md:text-base border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
+                        className="pl-10 h-10 text-base md:text-base placeholder:opacity-70 border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
                         {...registerForm.register("email")}
                       />
                     </div>
                     {registerForm.formState.errors.email && (
-                      <p className="text-[10px] text-destructive font-medium">{registerForm.formState.errors.email.message}</p>
+                      <p className="text-sm text-destructive font-medium">{registerForm.formState.errors.email.message}</p>
                     )}
                   </div>
 
                   <div className="space-y-1">
-                    <Label className="text-xs font-semibold text-foreground">Bạn đã đủ 18 tuổi</Label>
-                    <button
-                      type="button"
-                      onClick={() => setIs18(!is18)}
-                      className={`flex h-10 w-full items-center justify-between rounded-lg border px-3 py-2 text-sm outline-none transition-all ${
-                        is18
-                          ? "border-primary bg-primary/10 text-primary font-semibold"
-                          : "border-input bg-background/50 text-muted-foreground"
-                      }`}
-                    >
-                      <span>{is18 ? "Đã đủ (18+)" : "Dưới 18 tuổi"}</span>
-                      <span className="text-[10px] bg-background border px-1.5 py-0.5 rounded text-foreground">Thay đổi</span>
-                    </button>
+                    <Label className="text-base font-semibold text-foreground">Ngày sinh</Label>
+                    <Popover>
+                      <PopoverTrigger
+                        nativeButton={false}
+                        render={
+                          <div className="relative">
+                            <Calendar
+                              className="absolute left-3 top-2.5 h-4.5 w-4.5 text-muted-foreground pointer-events-none"
+                            />
+                            <Input
+                              type="text"
+                              placeholder="dd/mm/yyyy"
+                              value={dateInputVal}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setDateInputVal(val);
+                                const yyyymmdd = parseDDMMYYYYToYYYYMMDD(val);
+                                if (yyyymmdd) {
+                                  registerForm.setValue("dateOfBirth", yyyymmdd, { shouldValidate: true });
+                                } else {
+                                  registerForm.setValue("dateOfBirth", "", { shouldValidate: false });
+                                }
+                              }}
+                              className="pl-10 h-10 text-base md:text-base border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
+                            />
+                          </div>
+                        }
+                      />
+                      <PopoverContent className="w-auto p-0 bg-popover border border-border rounded-lg shadow-xl" align="start">
+                        <CalendarComponent
+                          mode="single"
+                          selected={parseYYYYMMDD(registerForm.watch("dateOfBirth"))}
+                          onSelect={(date) => {
+                            if (date) {
+                              const yyyy = date.getFullYear();
+                              const mm = String(date.getMonth() + 1).padStart(2, '0');
+                              const dd = String(date.getDate()).padStart(2, '0');
+                              registerForm.setValue("dateOfBirth", `${yyyy}-${mm}-${dd}`, { shouldValidate: true });
+                              setDateInputVal(`${dd}/${mm}/${yyyy}`);
+                            } else {
+                              registerForm.setValue("dateOfBirth", "", { shouldValidate: true });
+                              setDateInputVal("");
+                            }
+                          }}
+                          captionLayout="dropdown"
+                          startMonth={new Date(1900, 0)}
+                          endMonth={new Date()}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                    {registerForm.formState.errors.dateOfBirth && (
+                      <p className="text-sm text-destructive font-medium">{registerForm.formState.errors.dateOfBirth.message}</p>
+                    )}
                   </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-base font-semibold text-foreground">Mật khẩu</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-2.5 h-4.5 w-4.5 text-muted-foreground" />
+                      <Input
+                        type={showRegPass ? "text" : "password"}
+                        placeholder="Nhập mật khẩu"
+                        className="pl-10 pr-10 h-10 text-base placeholder:opacity-70 md:text-base border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
+                        {...registerForm.register("password")}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowRegPass(!showRegPass)}
+                        className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground"
+                      >
+                        {showRegPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    </div>
+                    {registerForm.formState.errors.password && (
+                      <p className="text-sm text-destructive font-medium">{registerForm.formState.errors.password.message}</p>
+                    )}
+                  </div>
+
                 </div>
 
                 {/* Right Column */}
                 <div className="space-y-3">
                   <div className="space-y-1">
-                    <Label className="text-xs font-semibold text-foreground">Số điện thoại</Label>
+                    <Label className="text-base font-semibold text-foreground">Số điện thoại</Label>
                     <div className="relative">
                       <Phone className="absolute left-3 top-2.5 h-4.5 w-4.5 text-muted-foreground" />
                       <Input
                         type="text"
                         placeholder="Nhập số điện thoại"
-                        className="pl-10 h-10 text-base md:text-base border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
+                        className="pl-10 h-10 text-base placeholder:opacity-70 md:text-base border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
                         {...registerForm.register("phone")}
                       />
                     </div>
                     {registerForm.formState.errors.phone && (
-                      <p className="text-[10px] text-destructive font-medium">{registerForm.formState.errors.phone.message}</p>
+                      <p className="text-sm text-destructive font-medium">{registerForm.formState.errors.phone.message}</p>
                     )}
                   </div>
 
                   <div className="space-y-1">
-                    <Label className="text-xs font-semibold text-foreground">Họ và tên</Label>
+                    <Label className="text-base font-semibold text-foreground">Họ và tên</Label>
                     <div className="relative">
                       <User className="absolute left-3 top-2.5 h-4.5 w-4.5 text-muted-foreground" />
                       <Input
                         type="text"
                         placeholder="Nhập họ và tên"
-                        className="pl-10 h-10 text-base md:text-base border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
+                        className="pl-10 h-10 placeholder:opacity-70 text-base md:text-base border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
                         {...registerForm.register("fullName")}
                       />
                     </div>
                     {registerForm.formState.errors.fullName && (
-                      <p className="text-[10px] text-destructive font-medium">{registerForm.formState.errors.fullName.message}</p>
+                      <p className="text-sm text-destructive font-medium">{registerForm.formState.errors.fullName.message}</p>
                     )}
                   </div>
 
                   <div className="space-y-1">
-                    <Label className="text-xs font-semibold text-foreground">Giới tính</Label>
-                    <select
-                      className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 py-2 text-sm focus-visible:ring-3 focus-visible:ring-primary/20 outline-none"
-                      {...registerForm.register("gender")}
+                    <Label className="text-base font-semibold text-foreground">Giới tính</Label>
+                    <Select
+                      value={genderVal}
+                      onValueChange={(val) => {
+                        const newV = val || "";
+                        setGenderVal(newV);
+                        registerForm.setValue("gender", newV, { shouldValidate: true });
+                      }}
                     >
-                      <option value="0">Nam</option>
-                      <option value="1">Nữ</option>
-                      <option value="2">Khác</option>
-                    </select>
+                      <SelectTrigger className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 py-2 text-sm focus-visible:ring-3 focus-visible:ring-primary/20 outline-none data-[size=default]:h-10 data-[size=sm]:h-10 text-foreground">
+                        <SelectValue placeholder="Chọn giới tính">
+                          {(value: string | null) => {
+                            if (value === "0") return "Nam";
+                            if (value === "1") return "Nữ";
+                            if (value === "2") return "Khác";
+                            return "";
+                          }}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent className="bg-popover border border-border rounded-lg shadow-xl text-foreground p-1">
+                        <SelectItem value="0" className="hover:bg-foreground hover:text-foreground cursor-pointer rounded-md py-1.5 px-2 text-sm">Nam</SelectItem>
+                        <SelectItem value="1" className="hover:bg-foreground hover:text-foreground cursor-pointer rounded-md py-1.5 px-2 text-sm">Nữ</SelectItem>
+                        <SelectItem value="2" className="hover:bg-foreground hover:text-foreground cursor-pointer rounded-md py-1.5 px-2 text-sm">Khác</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {registerForm.formState.errors.gender && (
+                      <p className="text-sm text-destructive font-medium">{registerForm.formState.errors.gender.message}</p>
+                    )}
                   </div>
 
+
                   <div className="space-y-1">
-                    <Label className="text-xs font-semibold text-foreground">Ngày sinh</Label>
+                    <Label className="text-base font-semibold text-foreground">Xác nhận mật khẩu</Label>
                     <div className="relative">
-                      <Calendar className="absolute left-3 top-2.5 h-4.5 w-4.5 text-muted-foreground" />
+                      <Lock className="absolute left-3 top-2.5 h-4.5 w-4.5 text-muted-foreground" />
                       <Input
-                        type="date"
-                        className="pl-10 h-10 text-base md:text-base border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
-                        {...registerForm.register("dateOfBirth")}
+                        type={showRegConfirmPass ? "text" : "password"}
+                        placeholder="Nhập lại mật khẩu"
+                        className="pl-10 pr-10 h-10 text-base placeholder:opacity-70 md:text-base border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
+                        {...registerForm.register("confirmPassword")}
                       />
+                      <button
+                        type="button"
+                        onClick={() => setShowRegConfirmPass(!showRegConfirmPass)}
+                        className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground"
+                      >
+                        {showRegConfirmPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
                     </div>
-                    {registerForm.formState.errors.dateOfBirth && (
-                      <p className="text-[10px] text-destructive font-medium">{registerForm.formState.errors.dateOfBirth.message}</p>
+                    {registerForm.formState.errors.confirmPassword && (
+                      <p className="text-sm text-destructive font-medium">{registerForm.formState.errors.confirmPassword.message}</p>
                     )}
                   </div>
                 </div>
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold text-foreground">Xác nhận mật khẩu</Label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-2.5 h-4.5 w-4.5 text-muted-foreground" />
-                  <Input
-                    type="password"
-                    placeholder="Nhập lại mật khẩu"
-                    className="pl-10 h-10 text-base md:text-base border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
-                    {...registerForm.register("confirmPassword")}
-                  />
-                </div>
-                {registerForm.formState.errors.confirmPassword && (
-                  <p className="text-[10px] text-destructive font-medium">{registerForm.formState.errors.confirmPassword.message}</p>
-                )}
               </div>
 
               <Button
                 type="submit"
-                className="w-full h-10 font-bold bg-primary hover:bg-primary/95 text-primary-foreground mt-4 shadow-lg shadow-primary/10"
+                className="w-full h-10 font-bold bg-primary text-base hover:bg-primary/95 text-primary-foreground mt-4 shadow-lg shadow-primary/10"
                 disabled={loading}
               >
-                {loading ? "Đang đăng ký..." : "Đăng ký"}
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Đang đăng ký...
+                  </>
+                ) : (
+                  "Đăng ký"
+                )}
               </Button>
             </form>
           </FormProvider>
 
-          <div className="text-center text-xs mt-4 text-muted-foreground border-t border-border pt-4">
+          <div className="text-center text-sm font-semibold mt-4 text-muted-foreground border-t border-border pt-4">
             Bạn đã có tài khoản?{" "}
-            <button onClick={openLogin} className="text-primary font-bold hover:underline">
+            <button onClick={openLogin} className="text-primary text-sm font-semibold hover:underline">
               Đăng nhập.
             </button>
           </div>
@@ -602,20 +818,20 @@ export const AuthModals: React.FC = () => {
             <DialogTitle className="text-2xl font-extrabold text-foreground tracking-tight text-center">
               Quên mật khẩu
             </DialogTitle>
-            <DialogDescription className="hidden">
+            <DialogDescription className="text-base font-light text-center">
               Nhập tên tài khoản để lấy lại mật khẩu.
             </DialogDescription>
           </DialogHeader>
 
           {errorMsg && (
-            <div className="flex items-center gap-2 rounded-lg bg-destructive/10 p-3 text-xs text-destructive mt-2">
+            <div className="flex items-center gap-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive mt-2">
               <AlertCircle className="h-4 w-4 shrink-0" />
               <span>{errorMsg}</span>
             </div>
           )}
 
           {successMsg && (
-            <div className="flex items-center gap-2 rounded-lg bg-green-500/10 p-3 text-xs text-green-600 mt-2">
+            <div className="flex items-center gap-2 rounded-lg bg-green-500/10 p-3 text-sm text-green-600 mt-2">
               <CheckCircle2 className="h-4 w-4 shrink-0" />
               <span>{successMsg}</span>
             </div>
@@ -626,18 +842,18 @@ export const AuthModals: React.FC = () => {
             className="space-y-4 mt-4"
           >
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-foreground">Tên tài khoản</Label>
+              <Label className="text-base font-semibold text-foreground">Tên tài khoản</Label>
               <div className="relative">
                 <User className="absolute left-3 top-2.5 h-4.5 w-4.5 text-muted-foreground" />
                 <Input
                   type="text"
                   placeholder="Nhập tên tài khoản hoặc email"
-                  className="pl-10 h-10 text-base md:text-base border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
+                  className="pl-10 h-10 text-base md:text-base border-input/70 placeholder:opacity-60 bg-card hover:bg-background focus:bg-card focus-visible:ring-3 focus-visible:ring-primary/20 transition-all"
                   {...forgotPasswordForm.register("usernameOrEmail")}
                 />
               </div>
               {forgotPasswordForm.formState.errors.usernameOrEmail && (
-                <p className="text-[10px] text-destructive font-medium">
+                <p className="text-sm text-destructive font-medium">
                   {forgotPasswordForm.formState.errors.usernameOrEmail.message}
                 </p>
               )}
@@ -645,10 +861,17 @@ export const AuthModals: React.FC = () => {
 
             <Button
               type="submit"
-              className="w-full h-10 font-bold bg-primary hover:bg-primary/95 text-primary-foreground shadow-lg shadow-primary/10 mt-2"
+              className="w-full h-10 font-bold bg-primary text-base hover:bg-primary/95 text-primary-foreground shadow-lg shadow-primary/10 mt-2"
               disabled={loading}
             >
-              {loading ? "Đang xử lý..." : "Tiếp tục"}
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Đang xử lý...
+                </>
+              ) : (
+                "Tiếp tục"
+              )}
             </Button>
           </form>
         </DialogContent>
@@ -663,42 +886,50 @@ export const AuthModals: React.FC = () => {
             <DialogTitle className="text-2xl font-extrabold text-foreground tracking-tight text-center">
               Xác thực tài khoản
             </DialogTitle>
-            <DialogDescription className="hidden">
+            <DialogDescription className="text-sm font-light text-center">
               Nhập mã OTP để xác nhận tài khoản.
             </DialogDescription>
           </DialogHeader>
 
-          {errorMsg && (
-            <div className="flex items-center gap-2 rounded-lg bg-destructive/10 p-3 text-xs text-destructive mt-2">
+          {(errorMsg || verifyOtpForm.formState.errors.otp) && (
+            <div className="flex items-center gap-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive mt-2">
               <AlertCircle className="h-4 w-4 shrink-0" />
-              <span>{errorMsg}</span>
+              <span>{errorMsg || verifyOtpForm.formState.errors.otp?.message}</span>
             </div>
           )}
 
           {successMsg && (
-            <div className="flex items-center gap-2 rounded-lg bg-green-500/10 p-3 text-xs text-green-600 mt-2">
+            <div className="flex items-center gap-2 rounded-lg bg-green-500/10 p-3 text-sm text-green-600 mt-2">
               <CheckCircle2 className="h-4 w-4 shrink-0" />
               <span>{successMsg}</span>
             </div>
           )}
 
-          <form onSubmit={verifyOtpForm.handleSubmit(onVerifyOtpSubmit)} className="space-y-4 mt-4">
+          <form onSubmit={verifyOtpForm.handleSubmit(onVerifyOtpSubmit)} className="space-y-4">
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-foreground text-center block">
+              <Label className="text-base font-semibold text-foreground text-center block">
                 Nhập mã OTP đã gửi đến email của bạn
               </Label>
-              <div className="relative">
-                <Key className="absolute left-3 top-2.5 h-4.5 w-4.5 text-muted-foreground" />
-                <Input
-                  type="text"
-                  maxLength={6}
-                  placeholder="123456"
-                  className="pl-10 h-10 text-center tracking-widest text-lg font-bold border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
-                  {...verifyOtpForm.register("otp")}
-                />
+              <div className="flex justify-center gap-2.5 mt-3">
+                {otpValues.map((digit, idx) => (
+                  <Input
+                    key={idx}
+                    ref={(el) => {
+                      otpRefs.current[idx] = el;
+                    }}
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={1}
+                    value={digit}
+                    onChange={(e) => handleOtpChange(idx, e.target.value)}
+                    onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                    onPaste={handleOtpPaste}
+                    className="w-10 h-12 text-center text-xl font-extrabold border-input/70 placeholder:opacity-60 bg-card hover:bg-background focus:bg-card focus-visible:ring-3 focus-visible:ring-primary/20 transition-all rounded-lg"
+                  />
+                ))}
               </div>
               {verifyOtpForm.formState.errors.otp && (
-                <p className="text-[10px] text-destructive font-medium text-center">
+                <p className="text-sm text-destructive font-medium text-center">
                   {verifyOtpForm.formState.errors.otp.message}
                 </p>
               )}
@@ -706,27 +937,44 @@ export const AuthModals: React.FC = () => {
 
             <Button
               type="submit"
-              className="w-full h-10 font-bold bg-primary hover:bg-primary/95 text-primary-foreground shadow-lg shadow-primary/10 mt-2"
+              className="w-full h-10 font-bold bg-primary text-base hover:bg-primary/95 text-primary-foreground shadow-lg shadow-primary/10 mt-2"
               disabled={loading}
             >
-              {loading ? "Đang xác thực..." : "Tiếp tục"}
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Đang xác thực...
+                </>
+              ) : (
+                "Tiếp tục"
+              )}
             </Button>
           </form>
 
-          <div className="text-center text-xs mt-4 text-muted-foreground">
+          <div className="text-center text-base font-semibold mt-4 text-muted-foreground">
             Không nhận được mã?{" "}
             <button
+              type="button"
               onClick={async () => {
                 try {
                   setErrorMsg("");
-                  await authService.resendOtp(emailForOtp);
+                  setSuccessMsg("");
+                  verifyOtpForm.clearErrors();
+                  setOtpValues(Array(6).fill(""));
+                  verifyOtpForm.setValue("otp", "");
+
+                  if (otpFlow === "forgot") {
+                    await authService.resendForgotPasswordOtp(emailForOtp);
+                  } else {
+                    await authService.resendOtp(emailForOtp);
+                  }
                   setSuccessMsg("Đã gửi lại mã OTP!");
                   setTimeout(() => setSuccessMsg(""), 2000);
                 } catch (e: any) {
-                  setErrorMsg(e.message || "Gửi lại OTP thất bại.");
+                  setErrorMsg(getErrorMessage(e, "Gửi lại OTP thất bại."));
                 }
               }}
-              className="text-primary font-bold hover:underline"
+              className="text-primary text-base font-semibold hover:underline"
             >
               Gửi lại
             </button>
@@ -743,20 +991,20 @@ export const AuthModals: React.FC = () => {
             <DialogTitle className="text-2xl font-extrabold text-foreground tracking-tight text-center">
               Nhập mật khẩu mới
             </DialogTitle>
-            <DialogDescription className="hidden">
+            <DialogDescription className="text-base font-light text-center">
               Thiết lập lại mật khẩu cho tài khoản của bạn.
             </DialogDescription>
           </DialogHeader>
 
           {errorMsg && (
-            <div className="flex items-center gap-2 rounded-lg bg-destructive/10 p-3 text-xs text-destructive mt-2">
+            <div className="flex items-center gap-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive mt-2">
               <AlertCircle className="h-4 w-4 shrink-0" />
               <span>{errorMsg}</span>
             </div>
           )}
 
           {successMsg && (
-            <div className="flex items-center gap-2 rounded-lg bg-green-500/10 p-3 text-xs text-green-600 mt-2">
+            <div className="flex items-center gap-2 rounded-lg bg-green-500/10 p-3 text-sm text-green-600 mt-2">
               <CheckCircle2 className="h-4 w-4 shrink-0" />
               <span>{successMsg}</span>
             </div>
@@ -767,36 +1015,50 @@ export const AuthModals: React.FC = () => {
             className="space-y-4 mt-4"
           >
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-foreground">Mật khẩu mới</Label>
+              <Label className="text-base font-semibold text-foreground">Mật khẩu mới</Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-2.5 h-4.5 w-4.5 text-muted-foreground" />
                 <Input
-                  type="password"
+                  type={showResetPass ? "text" : "password"}
                   placeholder="••••••••"
-                  className="pl-10 h-10 text-base md:text-base border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
+                  className="pl-10 pr-10 h-10 text-base md:text-base placeholder:opacity-60 border-input/70 bg-card hover:bg-background focus:bg-card focus-visible:ring-3 focus-visible:ring-primary/20 transition-all"
                   {...resetPasswordForm.register("password")}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowResetPass(!showResetPass)}
+                  className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground"
+                >
+                  {showResetPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
               </div>
               {resetPasswordForm.formState.errors.password && (
-                <p className="text-[10px] text-destructive font-medium">
+                <p className="text-sm text-destructive font-medium">
                   {resetPasswordForm.formState.errors.password.message}
                 </p>
               )}
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-foreground">Xác nhận lại mật khẩu mới</Label>
+              <Label className="text-base font-semibold text-foreground">Xác nhận lại mật khẩu mới</Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-2.5 h-4.5 w-4.5 text-muted-foreground" />
                 <Input
-                  type="password"
+                  type={showResetConfirmPass ? "text" : "password"}
                   placeholder="••••••••"
-                  className="pl-10 h-10 text-base md:text-base border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
+                  className="pl-10 pr-10 h-10 text-base md:text-base placeholder:opacity-60 border-input/70 bg-card hover:bg-background focus:bg-card focus-visible:ring-3 focus-visible:ring-primary/20 transition-all"
                   {...resetPasswordForm.register("confirmPassword")}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowResetConfirmPass(!showResetConfirmPass)}
+                  className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground"
+                >
+                  {showResetConfirmPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
               </div>
               {resetPasswordForm.formState.errors.confirmPassword && (
-                <p className="text-[10px] text-destructive font-medium">
+                <p className="text-sm text-destructive font-medium">
                   {resetPasswordForm.formState.errors.confirmPassword.message}
                 </p>
               )}
@@ -804,10 +1066,17 @@ export const AuthModals: React.FC = () => {
 
             <Button
               type="submit"
-              className="w-full h-10 font-bold bg-primary hover:bg-primary/95 text-primary-foreground shadow-lg shadow-primary/10 mt-2"
+              className="w-full h-10 font-bold bg-primary text-base hover:bg-primary/95 text-primary-foreground shadow-lg shadow-primary/10 mt-2"
               disabled={loading}
             >
-              {loading ? "Đang lưu..." : "Xác nhận"}
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Đang lưu...
+                </>
+              ) : (
+                "Xác nhận"
+              )}
             </Button>
           </form>
         </DialogContent>
@@ -822,20 +1091,20 @@ export const AuthModals: React.FC = () => {
             <DialogTitle className="text-2xl font-extrabold text-foreground tracking-tight text-center">
               Đổi mật khẩu
             </DialogTitle>
-            <DialogDescription className="hidden">
+            <DialogDescription className="text-base font-light text-center">
               Nhập mật khẩu cũ và thiết lập mật khẩu mới cho tài khoản của bạn.
             </DialogDescription>
           </DialogHeader>
 
           {errorMsg && (
-            <div className="flex items-center gap-2 rounded-lg bg-destructive/10 p-3 text-xs text-destructive mt-2">
+            <div className="flex items-center gap-2 rounded-lg bg-destructive/10 p-3 text-sm text-destructive mt-2">
               <AlertCircle className="h-4 w-4 shrink-0" />
               <span>{errorMsg}</span>
             </div>
           )}
 
           {successMsg && (
-            <div className="flex items-center gap-2 rounded-lg bg-green-500/10 p-3 text-xs text-green-600 mt-2">
+            <div className="flex items-center gap-2 rounded-lg bg-green-500/10 p-3 text-sm text-green-600 mt-2">
               <CheckCircle2 className="h-4 w-4 shrink-0" />
               <span>{successMsg}</span>
             </div>
@@ -846,54 +1115,75 @@ export const AuthModals: React.FC = () => {
             className="space-y-4 mt-4"
           >
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-foreground">Mật khẩu cũ</Label>
+              <Label className="text-base font-semibold text-foreground">Mật khẩu cũ</Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-2.5 h-4.5 w-4.5 text-muted-foreground" />
                 <Input
-                  type="password"
+                  type={showChangeOldPass ? "text" : "password"}
                   placeholder="••••••••"
-                  className="pl-10 h-10 text-base md:text-base border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
+                  className="pl-10 pr-10 h-10 text-base md:text-base placeholder:opacity-60 border-input/70 bg-card hover:bg-background focus:bg-card focus-visible:ring-3 focus-visible:ring-primary/20 transition-all"
                   {...changePasswordForm.register("oldPassword")}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowChangeOldPass(!showChangeOldPass)}
+                  className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground"
+                >
+                  {showChangeOldPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
               </div>
               {changePasswordForm.formState.errors.oldPassword && (
-                <p className="text-[10px] text-destructive font-medium">
+                <p className="text-sm text-destructive font-medium">
                   {changePasswordForm.formState.errors.oldPassword.message}
                 </p>
               )}
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-foreground">Mật khẩu mới</Label>
+              <Label className="text-base font-semibold text-foreground">Mật khẩu mới</Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-2.5 h-4.5 w-4.5 text-muted-foreground" />
                 <Input
-                  type="password"
+                  type={showChangeNewPass ? "text" : "password"}
                   placeholder="••••••••"
-                  className="pl-10 h-10 text-base md:text-base border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
+                  className="pl-10 pr-10 h-10 text-base md:text-base placeholder:opacity-60 border-input/70 bg-card hover:bg-background focus:bg-card focus-visible:ring-3 focus-visible:ring-primary/20 transition-all"
                   {...changePasswordForm.register("newPassword")}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowChangeNewPass(!showChangeNewPass)}
+                  className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground"
+                >
+                  {showChangeNewPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
               </div>
               {changePasswordForm.formState.errors.newPassword && (
-                <p className="text-[10px] text-destructive font-medium">
+                <p className="text-sm text-destructive font-medium">
                   {changePasswordForm.formState.errors.newPassword.message}
                 </p>
               )}
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-foreground">Xác nhận lại mật khẩu mới</Label>
+              <Label className="text-base font-semibold text-foreground">Xác nhận lại mật khẩu mới</Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-2.5 h-4.5 w-4.5 text-muted-foreground" />
                 <Input
-                  type="password"
+                  type={showChangeConfirmPass ? "text" : "password"}
                   placeholder="••••••••"
-                  className="pl-10 h-10 text-base md:text-base border-input bg-background/50 focus-visible:ring-3 focus-visible:ring-primary/20"
+                  className="pl-10 pr-10 h-10 text-base md:text-base placeholder:opacity-60 border-input/70 bg-card hover:bg-background focus:bg-card focus-visible:ring-3 focus-visible:ring-primary/20 transition-all"
                   {...changePasswordForm.register("confirmPassword")}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowChangeConfirmPass(!showChangeConfirmPass)}
+                  className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground"
+                >
+                  {showChangeConfirmPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
               </div>
               {changePasswordForm.formState.errors.confirmPassword && (
-                <p className="text-[10px] text-destructive font-medium">
+                <p className="text-sm text-destructive font-medium">
                   {changePasswordForm.formState.errors.confirmPassword.message}
                 </p>
               )}
@@ -901,10 +1191,17 @@ export const AuthModals: React.FC = () => {
 
             <Button
               type="submit"
-              className="w-full h-10 font-bold bg-primary hover:bg-primary/95 text-primary-foreground shadow-lg shadow-primary/10 mt-2"
+              className="w-full h-10 font-bold bg-primary text-base hover:bg-primary/95 text-primary-foreground shadow-lg shadow-primary/10 mt-2"
               disabled={loading}
             >
-              {loading ? "Đang xử lý..." : "Xác nhận"}
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Đang xử lý...
+                </>
+              ) : (
+                "Xác nhận"
+              )}
             </Button>
           </form>
         </DialogContent>

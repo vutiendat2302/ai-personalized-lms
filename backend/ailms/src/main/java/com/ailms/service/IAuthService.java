@@ -26,9 +26,9 @@ public interface IAuthService {
     /**
      * Gửi lại mã OTP xác thực tài khoản.
      *
-     * @param email Địa chỉ thư điện tử (email) nhận tin
+     * @param usernameOrEmail Tên đăng nhập hoặc địa chỉ email tài khoản
      */
-    void resendOtp(String email);
+    void resendOtp(String usernameOrEmail);
 
     /**
      * Đăng nhập hệ thống bằng tài khoản và mật khẩu.

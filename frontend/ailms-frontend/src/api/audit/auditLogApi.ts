@@ -18,7 +18,7 @@ export interface AuditLogResponse {
 
 export const auditLogApi = {
   getByLogId: (id: number) =>
-    httpClient.get<ApiResponse<AuditLogResponse>>(`/audit-log/${id}`),
+    httpClient.get<ApiResponse<AuditLogResponse>>(`/v1/audit-log/${id}`),
 
   getAuditLogs: (params?: {
     entityType?: string;
@@ -30,11 +30,11 @@ export const auditLogApi = {
     size?: number;
     sort?: string;
   }) =>
-    httpClient.get<ApiResponse<any>>("/audit-log", { params }),
+    httpClient.get<ApiResponse<any>>("/v1/audit-log", { params }),
 
   getAllAuditLogs: () =>
-    httpClient.get<ApiResponse<AuditLogResponse[]>>("/audit-log/all"),
+    httpClient.get<ApiResponse<AuditLogResponse[]>>("/v1/audit-log/all"),
 
   getAuditLogsByUserId: (userId: number) =>
-    httpClient.get<ApiResponse<AuditLogResponse[]>>(`/audit-log/users/${userId}`),
+    httpClient.get<ApiResponse<AuditLogResponse[]>>(`/v1/audit-log/users/${userId}`),
 };

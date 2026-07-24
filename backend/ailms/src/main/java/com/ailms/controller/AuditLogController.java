@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("api/audit-log")
+@RequestMapping("${api.prefix}/audit-log")
 @RequiredArgsConstructor
 public class AuditLogController {
 
@@ -28,7 +28,7 @@ public class AuditLogController {
     /**
      * Tìm kiếm/lọc audit log có phân trang.
      */
-    @GetMapping("/page")
+    @GetMapping({"", "/page"})
     public ResponseEntity<ApiResponse<PageResponse<AuditLogResponse>>> getAuditLogs(AuditLogSearchRequest request) {
         PageResponse<AuditLogResponse> response = auditLogService.getAuditLogs(request);
         return ResponseEntity.ok(ApiResponse.of("Audit logs retrieved successfully", response));
