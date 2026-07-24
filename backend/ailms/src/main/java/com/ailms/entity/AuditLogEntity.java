@@ -10,6 +10,10 @@ import lombok.experimental.SuperBuilder;
 
 import java.time.LocalDateTime;
 
+/**
+ * Thực thể lưu trữ nhật ký thao tác kiểm toán (Audit Log) hệ thống.
+ * Ghi lại thông tin truy vết ai đã làm gì, lúc nào, trên đối tượng nào và dữ liệu thay đổi trước/sau ra sao.
+ */
 @Entity
 @Table(name = "audit_log")
 @Getter
@@ -19,6 +23,7 @@ import java.time.LocalDateTime;
 @SuperBuilder
 public class AuditLogEntity extends BaseEntity{
 
+    /** Mã định danh bản ghi kiểm toán (Snowflake ID 64-bit). */
     @Id
     @SnowflakeId
     @Column(name = "id", updatable = false, nullable = false)

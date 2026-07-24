@@ -1,33 +1,23 @@
 package com.ailms.repository.specification;
 
 import com.ailms.entity.PermissionEntity;
+import com.ailms.common.util.SpecificationBuilder;
+import com.ailms.request.PermissionSearchRequest;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.util.StringUtils;
 
 public class PermissionSpecification {
 
-    public static Specification<PermissionEntity> filterAndSearch(String entityFilter, String actionFilter, String search) {
-        Specification<PermissionEntity> spec = (root, query, criteriaBuilder) -> criteriaBuilder.conjunction();
+    public static Specification<PermissionEntity> filterAndSearch(PermissionSearchRequest request) {
+        SpecificationBuilder<PermissionEntity> builder = SpecificationBuilder.of();
 
-        if (StringUtils.hasText(entityFilter)) {
-            spec = spec.and((root, query, criteriaBuilder) ->
-                    criteriaBuilder.equal(root.get("entity"), entityFilter));
+        if (request == null) {
+            return builder.build();
         }
 
-        if (StringUtils.hasText(actionFilter)) {
-            spec = spec.and((root, query, criteriaBuilder) ->
-                    criteriaBuilder.equal(root.get("action"), actionFilter));
-        }
+        builder.equalIfPresent("entity", request.getEntity());
+        builder.equalIfPresent("action", request.getAction());
+        builder.likeAnyIfPresent(request.getKeyword(), "name", "code", "description");
 
-        if (StringUtils.hasText(search)) {
-            String pattern = "%" + search.toLowerCase() + "%";
-            spec = spec.and((root, query, criteriaBuilder) -> criteriaBuilder.or(
-                    criteriaBuilder.like(criteriaBuilder.lower(root.get("name")), pattern),
-                    criteriaBuilder.like(criteriaBuilder.lower(root.get("code")), pattern),
-                    criteriaBuilder.like(criteriaBuilder.lower(root.get("description")), pattern)
-            ));
-        }
-
-        return spec;
+        return builder.build();
     }
 }

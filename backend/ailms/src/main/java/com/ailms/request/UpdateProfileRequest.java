@@ -37,4 +37,14 @@ public class UpdateProfileRequest {
     @Min(value = 0, message = "Gender is invalid")
     @Max(value = 2, message = "Gender is invalid")
     private Integer gender;
+
+    /**
+     * Đường dẫn ảnh đại diện.
+     */
+    private String avatarUrl;
+
+    /**
+     * Thông tin mở rộng dưới dạng JSON string.
+     */
+    private String attributes;
 }

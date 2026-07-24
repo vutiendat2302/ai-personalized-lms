@@ -2,10 +2,15 @@ package com.ailms.controller;
 
 import com.ailms.request.*;
 import com.ailms.response.ApiResponse;
+import com.ailms.response.GuardianResponse;
 import com.ailms.response.JwtAuthenticationResponse;
+import com.ailms.response.StudentProfileResponse;
 import com.ailms.security.CustomUserDetails;
 import com.ailms.service.IAuthService;
 
+import com.ailms.service.IGuardianService;
+import com.ailms.service.IStudentProfileService;
+import com.ailms.service.IUserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,6 +29,9 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final IAuthService authService;
+    private final IUserService userService;
+    private final IStudentProfileService studentProfileService;
+    private final IGuardianService guardianService;
 
     @Value("${app.jwt.refresh-expiration-ms}")
     private int refreshExpirationMs;
@@ -85,6 +93,7 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.message("OTP đã được gửi tới email của bạn"));
     }
 
+
     /**
      * Xác thực mã OTP, kích hoạt tài khoản nếu hợp lệ.
      */
@@ -100,8 +109,8 @@ public class AuthController {
      */
     @PostMapping("/resend-otp")
     public ResponseEntity<ApiResponse<Void>> resendOtp(@Valid @RequestBody ResendOtpRequest request) {
-        log.info("Gửi lại OTP cho email: {}", request.getEmail());
-        authService.resendOtp(request.getEmail());
+        log.info("Gửi lại OTP cho thông tin: {}", request.getUsernameOrEmail());
+        authService.resendOtp(request.getUsernameOrEmail());
         return ResponseEntity.ok(ApiResponse.message("Đã gửi lại OTP, vui lòng kiểm tra email"));
     }
 
@@ -138,8 +147,8 @@ public class AuthController {
     @PostMapping("/resend-forgot-password-otp")
     public ResponseEntity<ApiResponse<Void>> resendForgotPasswordOtp(
             @Valid @RequestBody ResendOtpRequest request) {
-        log.info("Yêu cầu gửi lại OTP quên mật khẩu cho thông tin: {}", request.getEmail());
-        authService.resendForgotPasswordOtp(request.getEmail());
+        log.info("Yêu cầu gửi lại OTP quên mật khẩu cho thông tin: {}", request.getUsernameOrEmail());
+        authService.resendForgotPasswordOtp(request.getUsernameOrEmail());
         return ResponseEntity.ok(ApiResponse.message("Đã gửi lại OTP đặt lại mật khẩu"));
     }
 
@@ -151,5 +160,22 @@ public class AuthController {
         log.info("Yêu cầu đặt lại mật khẩu với OTP cho thông tin: {}", request.getUsernameOrEmail());
         authService.resetPassword(request);
         return ResponseEntity.ok(ApiResponse.message("Đặt lại mật khẩu thành công"));
+    }
+
+    /**
+     * Đặt mật khẩu và kích hoạt tài khoản từ link mời.
+     */
+    @PostMapping("/complete-invite")
+    public ResponseEntity<ApiResponse<Void>> completeInvite(@Valid @RequestBody CompleteInviteRequest request) {
+        log.info("Đặt mật khẩu và kích hoạt tài khoản từ link mời");
+        userService.completeInvite(request);
+        return ResponseEntity.ok(ApiResponse.message("Đặt mật khẩu và kích hoạt tài khoản thành công."));
+    }
+
+    @PostMapping("/set-password")
+    public ResponseEntity<ApiResponse<Void>> setPassword(@Valid @RequestBody SetPasswordRequest request) {
+        authService.setPassword(request);
+        return ResponseEntity.ok(
+                ApiResponse.message("Thiết lập mật khẩu thành công"));
     }
 }

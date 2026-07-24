@@ -27,11 +27,13 @@ import type { RoleCode } from "@/types/jwtAuthentication";
 
 // /* Props truyền vào ProtectedRoute */
 interface ProtectedRouteProps {
-  allowedRoles?: RoleCode[];
+  allowedRoles?: (RoleCode | string)[];
+  allowedPermission?: string[];
+  allowPerimmision?: string[]; // Alias to handle potential typo in guidelines
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
-  allowedRoles,
+  allowedRoles, allowedPermission,
 }) => {
 
   // Lấy trạng thái xác thực của người dùng từ AuthContext
@@ -52,10 +54,11 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
    * Không lưu Route hiện tại vào History để tránh người dùng
    * quay lại trang bị chặn bằng nút Back của trình duyệt.
    * ========================================================== */
-  if (!auth.accessToken) {
+  if (!auth.accessToken || !auth.user) {
     return <Navigate to="/" replace />;
   }
 
+  const user = auth.user;
 
   /* ==========================================================
    * KIỂM TRA PHÂN QUYỀN (RBAC)
@@ -66,10 +69,22 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
    * Nếu Role của người dùng không nằm trong danh sách
    * allowedRoles thì chuyển tới trang Unauthorized.
    * ========================================================== */
+  // Kiểm tra role
   if (
-    allowedRoles &&
-    auth.user &&
-    !allowedRoles.includes(auth.user.role)
+    allowedRoles?.length &&
+    !user.roles.some(role =>
+      allowedRoles.includes(role)
+    )
+  ) {
+    return <Navigate to="/unauthorized" replace />;
+  }
+
+  // Kiểm tra permission
+  if (
+    allowedPermission?.length &&
+    !allowedPermission.every(permission =>
+      auth.user?.permissions.includes(permission)
+    )
   ) {
     return <Navigate to="/unauthorized" replace />;
   }

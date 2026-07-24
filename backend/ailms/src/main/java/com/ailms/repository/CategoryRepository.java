@@ -8,17 +8,13 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
 
-public interface CategoryRepository extends JpaRepository<CategoryEntity, Long>, JpaSpecificationExecutor<CategoryEntity> {
+import com.ailms.repository.base.BaseRepository;
+
+public interface CategoryRepository extends BaseRepository<CategoryEntity, Long> {
     boolean existsByNameIgnoreCase(String name);
 
     boolean existsByNameIgnoreCaseAndIdNot(String name, Long id);
 
     Optional<CategoryEntity> findByNameIgnoreCase(String name);
 
-
-
-//    @Query("SELECT COUNT(c) " +
-//            "FROM CourseEntity c " +
-//            "WHERE c.categoryEntity.id = :categoryId")
-//    long countCoursesByCategoryId(@Param("categoryId") Long categoryId);
 }

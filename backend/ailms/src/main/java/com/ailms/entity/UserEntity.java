@@ -1,17 +1,21 @@
 package com.ailms.entity;
 
 import com.ailms.common.snowflake.SnowflakeId;
+import com.ailms.entity.enums.UserStatusEnum;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
+import lombok.experimental.SuperBuilder;
 
 import java.time.LocalDateTime;
 
+/**
+ * Thực thể đại diện cho tài khoản người dùng trong hệ thống.
+ * Chứa thông tin đăng nhập, thông tin cá nhân cơ bản và trạng thái tài khoản.
+ */
 @Getter
 @Setter
 @Entity
+@SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
 @Table(name = "user", indexes = {
@@ -20,6 +24,9 @@ import java.time.LocalDateTime;
 })
 public class UserEntity extends BaseEntity{
 
+    /**
+     * Mã định danh người dùng (Snowflake ID 64-bit).
+     */
     @Id
     @SnowflakeId
     @Column(name = "id", updatable = false, nullable = false)
@@ -33,15 +40,14 @@ public class UserEntity extends BaseEntity{
     private String username;
 
     /**
-     * Tên đăng nhập của người dùng.
-     * Được sử dụng để đăng nhập và phải là duy nhất.
+     * Địa chỉ email của người dùng.
+     * Được sử dụng để nhận thông báo, khôi phục mật khẩu và phải là duy nhất.
      */
     @Column(name = "email", nullable = false, unique = true)
     private String email;
 
     /**
-     * Tên đăng nhập của người dùng.
-     * Được sử dụng để đăng nhập và phải là duy nhất.
+     * Mật khẩu đã được mã hóa (băm) bằng BCrypt.
      */
     @Column(name = "password_hash", nullable = false)
     private String passwordHash;
@@ -97,7 +103,8 @@ public class UserEntity extends BaseEntity{
      */
     @Column(name = "status")
     @Enumerated(EnumType.STRING)
-    private UserStatusEntity status;
+    @Builder.Default
+    private UserStatusEnum status = UserStatusEnum.INACTIVE;
 
     /**
      * Thời điểm người dùng đăng nhập gần nhất.

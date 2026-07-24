@@ -1,6 +1,7 @@
 package com.ailms.response;
 
-import com.ailms.entity.UserStatusEntity;
+import com.ailms.entity.enums.UserStatusEnum;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.Data;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -14,11 +15,13 @@ public class UserResponse {
     private String phone;
     private String avatarUrl;
     private Integer gender;
+
+    @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDateTime dateOfBirth;
-    private UserStatusEntity status;
+
+    private UserStatusEnum status;
     private LocalDateTime lastLoginAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-    // Roles mapped as list of role names or RoleResponse. For simplicity, just names.
     private List<String> roles;
 }

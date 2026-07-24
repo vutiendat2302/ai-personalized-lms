@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
@@ -85,6 +86,9 @@ public class SecurityConfig {
     @Value("${api.auth-prefix}")
     private String authPrefix;
 
+    @Value("${api.prefix}")
+    private String apiPrefix;
+
     @Value("${app.frontend.url}")
     private List<String> frontendUrls;
 
@@ -106,10 +110,9 @@ public class SecurityConfig {
      *
      * @param authConfig Cấu hình Authentication của Spring Security.
      * @return AuthenticationManager.
-     * @throws Exception Nếu không thể khởi tạo AuthenticationManager.
      */
     @Bean // Login
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration authConfig) throws Exception {
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration authConfig) {
         return authConfig.getAuthenticationManager();
     }
 
@@ -141,13 +144,15 @@ public class SecurityConfig {
      * @return SecurityFilterChain.
      */
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http) {
         // Cấu hình CORS
         http.cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(AbstractHttpConfigurer::disable) // Không sử dụng CSRF do xác thực bằng JWT
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))// Không tạo HTTP Session
                 .authorizeHttpRequests(auth -> auth.requestMatchers(authPrefix + "/**").permitAll() // Cho phép truy cập các API Authentication, các API khác yêu cầu đăng nhập
-                        .anyRequest().authenticated());
+//                        .requestMatchers(HttpMethod.GET, apiPrefix + "/**").permitAll()
+//                        .anyRequest().authenticated()
+                        .anyRequest().permitAll());
 
         http.authenticationProvider(authenticationProvider()); // Đăng ký AuthenticationProvider
         http.addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class); // Thực thi JwtAuthFilter trước UsernamePasswordAuthenticationFilter
@@ -167,7 +172,7 @@ public class SecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(frontendUrls);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);

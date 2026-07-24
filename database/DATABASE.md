@@ -631,27 +631,6 @@ PRIMARY KEY (course_id, user_id)
 
 ---
 
-# Module 8. Audit & System Log
-
-## Tables
-* audit_log
-
-## audit_log
-
-| Column | Type | Description |
-|---|---|---|
-| id | BIGINT | Log ID |
-| user_id | BIGINT | FK → user.id — Ai thực hiện hành động |
-| action | VARCHAR | CREATE / UPDATE / DELETE / LOGIN / LOGIN_FAILED / LOGOUT / GRANT_ROLE / REVOKE_ROLE |
-| entity_type | VARCHAR | Bảng bị tác động — user, role, permission, course, enrollment, salary... |
-| entity_id | BIGINT | Xem bản ghi nào trong entity đó bị tác động |
-| old_value | JSON | Data trước khi bị thay đổi |
-| new_value | JSON | Data sau khi bị thay đổi |
-| ip_address | VARCHAR | IP thực hiện |
-| user_agent | VARCHAR | Trình duyệt |
-| occurred_at | DATETIME | Thời điểm xảy ra |
-
----
 
 # Module 9. AI Recommendation (To Do)
 

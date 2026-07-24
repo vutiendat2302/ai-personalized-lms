@@ -12,6 +12,4 @@ public class RoleRequest {
     private String code;
 
     private String description;
-    
-    private Boolean isSystem = false;
 }

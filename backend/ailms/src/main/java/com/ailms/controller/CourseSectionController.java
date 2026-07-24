@@ -1,5 +1,9 @@
 package com.ailms.controller;
 
+import com.ailms.response.PageResponse;
+import com.ailms.request.CourseSectionSearchRequest;
+
+
 import com.ailms.response.ApiResponse;
 import com.ailms.request.CreateSectionRequest;
 import com.ailms.request.UpdateSectionRequest;
@@ -15,21 +19,20 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1/sections")
+@RequestMapping("${api.prefix}/sections")
 @RequiredArgsConstructor
 public class CourseSectionController {
 
     private final ICourseSectionService courseSectionService;
 
     @PostMapping("/section")
-    public ResponseEntity<ApiResponse<SectionResponse>> create(
-            @Valid @RequestBody CreateSectionRequest request) {
+    public ResponseEntity<ApiResponse<SectionResponse>> create(@Valid @RequestBody CreateSectionRequest request) {
         SectionResponse response = courseSectionService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.of("Section created successfully", response));
     }
 
-    @GetMapping("/{courseId}/sections")
+    @GetMapping({"/{courseId}/sections", "/course/{courseId}", "/{courseId}"})
     public ResponseEntity<ApiResponse<List<SectionResponse>>> getSectionsByCourseId(@PathVariable Long courseId) {
         List<SectionResponse> response = courseSectionService.getSectionsByCourseId(courseId);
         return ResponseEntity.ok(ApiResponse.of("Sections retrieved successfully", response));
@@ -66,5 +69,11 @@ public class CourseSectionController {
     public ResponseEntity<ApiResponse<List<SectionResponse>>> getAll() {
         List<SectionResponse> response= courseSectionService.getAll();
         return ResponseEntity.ok(ApiResponse.of("Sections retrieved successfully", response));
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<PageResponse<SectionResponse>>> search(CourseSectionSearchRequest request) {
+        PageResponse<SectionResponse> result = courseSectionService.search(request);
+        return ResponseEntity.ok(ApiResponse.of("Search CourseSection successfully", result));
     }
 }

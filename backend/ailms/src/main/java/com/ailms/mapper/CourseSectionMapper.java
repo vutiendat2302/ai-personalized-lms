@@ -6,7 +6,7 @@ import com.ailms.request.UpdateSectionRequest;
 import com.ailms.response.SectionResponse;
 import org.mapstruct.*;
 
-@Mapper(componentModel = "spring")
+@Mapper(componentModel = "spring", uses = {LessonMapper.class})
 public interface CourseSectionMapper {
 
     @Mapping(target = "id", ignore = true)
@@ -31,6 +31,7 @@ public interface CourseSectionMapper {
 
     @Mapping(target = "courseId", source = "courseEntity.id")
     @Mapping(target = "courseName", source = "courseEntity.name")
+    @Mapping(target = "lessons", source = "lessonEntities")
     SectionResponse toResponse(CourseSectionEntity entity);
 
 }

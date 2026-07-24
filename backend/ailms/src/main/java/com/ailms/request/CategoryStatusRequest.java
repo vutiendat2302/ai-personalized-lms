@@ -1,5 +1,6 @@
 package com.ailms.request;
 
+import com.ailms.entity.enums.BaseStatusEnum;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 
@@ -14,5 +15,5 @@ public class CategoryStatusRequest {
      * Cap nhat trang thai
      */
     @NotNull(message = "Status must not be null")
-    private Byte status;
+    private BaseStatusEnum status;
 }

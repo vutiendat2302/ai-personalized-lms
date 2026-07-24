@@ -8,29 +8,39 @@ interface AuthProviderProps {
   children: React.ReactNode;
 }
 
+// Khởi tạo Auth Context Provider để quản lý trạng thái xác thực toàn ứng dụng
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+  // Thông tin người dùng hiện tại
   const [user, setUser] = useState<AuthUser | null>(null);
+  // Access Token được lưu trong state 
   const [accessToken, setAccessTokenState] = useState<string | null>(null);
+   // Trạng thái kiểm tra phiên đăng nhập ban đầu
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const initAuth = async () => {
       try {
-        // Since access token is in memory, we try to restore session on startup
+         // Thử khôi phục phiên đăng nhập bằng refresh token trong cookie
         const res = await authService.tryRestoreSession();
         if (res && res.accessToken) {
           setAccessToken(res.accessToken);
           setAccessTokenState(res.accessToken);
 
-          const roleStr = res.roles && res.roles.length > 0
-            ? (res.roles[0].replace("ROLE_", "").toUpperCase() as RoleCode)
-            : "STUDENT";
+          const getAllRoles = (roles : string[]): RoleCode[] => {
+            if (!roles || roles.length === 0) return ["STUDENT"];
+
+            return roles.map(role => role.replace("ROLE_", "").toUpperCase() as RoleCode);
+          };
+
+          const roleList = getAllRoles(res.roles);
 
           setUser({
             id: String(res.id),
-            email: res.email || res.username || "",
-            role: roleStr,
-            permissions: res.permissions || []
+            username: res.username || "",
+            email: res.email || "",
+            roles: roleList,
+            permissions: res.permissions || [],
+            fullName: res.fullName || res.username || ""
           });
         }
       } catch (error) {
@@ -43,24 +53,30 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     initAuth();
   }, []);
 
-  const login = async (usernameOrEmail: string, pass: string) => {
-    const data: LoginRequest = { usernameOrEmail, password: pass };
+  const login = async (usernameOrEmail: string, password: string) => {
+    const data: LoginRequest = { usernameOrEmail, password};
     const res = await authService.login(data);
 
     if (res.accessToken) {
       setAccessToken(res.accessToken);
       setAccessTokenState(res.accessToken);
 
-      const roleStr = res.roles && res.roles.length > 0
-        ? (res.roles[0].replace("ROLE_", "").toUpperCase() as RoleCode)
-        : "STUDENT";
+        const getAllRoles = (roles : string[]): RoleCode[] => {
+          if (!roles || roles.length === 0) return ["STUDENT"];
 
-      setUser({
-        id: String(res.id),
-        email: res.email || res.username || "",
-        role: roleStr,
-        permissions: res.permissions || []
-      });
+          return roles.map(role => role.replace("ROLE_", "").toUpperCase() as RoleCode);
+        };
+
+        const roleList = getAllRoles(res.roles);
+
+        setUser({
+          id: String(res.id),
+          username: res.username || "",
+          email: res.email || "",
+          roles: roleList,
+          permissions: res.permissions || [],
+          fullName: res.fullName || res.username || ""
+        });
     }
   };
 
@@ -76,10 +92,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  // Hiển thị loading trong lúc kiểm tra phiên đăng nhập
   if (loading) {
     return <div>Loading Auth...</div>;
   }
 
+  // Cung cấp Auth Context cho toàn bộ ứng dụng
   return (
     <AuthContext.Provider value={{ auth: { user, accessToken }, login, logout }}>
       {children}

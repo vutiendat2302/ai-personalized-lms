@@ -1,5 +1,9 @@
 package com.ailms.controller;
 
+import com.ailms.response.PageResponse;
+import com.ailms.request.LessonResourceSearchRequest;
+
+
 import com.ailms.response.ApiResponse;
 import com.ailms.request.CreateResourceRequest;
 import com.ailms.request.UpdateResourceRequest;
@@ -14,17 +18,15 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/v1")
+@RequestMapping("${api.prefix}/lesson-resources")
 @RequiredArgsConstructor
 public class LessonResourceController {
 
     private final ILessonResourceService lessonResourceService;
 
     @PostMapping("/lessons/{lessonId}/resources")
-    public ResponseEntity<ApiResponse<ResourceResponse>> create(
-            @PathVariable Long lessonId,
-            @Valid @RequestBody CreateResourceRequest request) {
-        ResourceResponse response = lessonResourceService.create(lessonId, request);
+    public ResponseEntity<ApiResponse<ResourceResponse>> create(@Valid @RequestBody CreateResourceRequest request) {
+        ResourceResponse response = lessonResourceService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.of("Resource attached successfully", response));
     }
@@ -47,5 +49,11 @@ public class LessonResourceController {
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         lessonResourceService.delete(id);
         return ResponseEntity.ok(ApiResponse.message("Resource deleted successfully"));
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<PageResponse<ResourceResponse>>> search(LessonResourceSearchRequest request) {
+        PageResponse<ResourceResponse> result = lessonResourceService.search(request);
+        return ResponseEntity.ok(ApiResponse.of("Search LessonResource successfully", result));
     }
 }

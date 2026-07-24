@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: ailms-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: "123456"
+      MYSQL_DATABASE: ailms
+    ports:
+      - "3306:3306"
+    volumes:
+    - ./docker/mysql:/var/lib/mysql
+
+  redis:
+    image: redis:alpine
+    container_name: ailms-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+    - ./docker/redis:/data
+
+  minio:
+    image: minio/minio:latest
+    container_name: ailms-minio
+    restart: always
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: "minioadmin"
+      MINIO_ROOT_PASSWORD: "minioadmin123"
+    command: server /data --console-address ":9001"
+    volumes:
+      - ./docker/minio:/data
+
+volumes:
+  mysql-data:
+    driver: local
+  redis-data:
+    driver: local
+  minio-data:
+    driver: local

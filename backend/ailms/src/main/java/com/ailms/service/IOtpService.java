@@ -2,33 +2,36 @@ package com.ailms.service;
 
 import java.time.Duration;
 
+/**
+ * Service tạo, lưu trữ và xác thực mã OTP bảo mật.
+ */
 public interface IOtpService {
+
     /**
-     * Sinh mã OTP 6 số, lưu vào Redis với TTL, gắn theo email.
+     * Tạo và lưu trữ mã OTP ngẫu nhiên cho một mục đích cụ thể.
      *
-     * @param email Email của người dùng cần xác thực.
-     * @param purpose    Mục đích dùng OTP (vd: "register", "forgot-password"),
-     * @param ttl        Thời gian sống của OTP.
-     * @return Mã OTP vừa sinh (dùng để gửi email).
+     * @param email Địa chỉ thư điện tử (email) nhận tin
+     * @param purpose Mục đích sử dụng mã OTP
+     * @param ttl Thời gian sống (Time To Live) của mã OTP
+     * @return đối tượng chứa thông tin chi tiết kết quả
      */
     String generateAndStoreOtp(String email, String purpose, Duration ttl);
 
     /**
-     * Kiểm tra mã OTP người dùng nhập có khớp và còn hạn không.
+     * Xác thực mã OTP do người dùng nhập.
      *
-     * @param email Email cần xác thực.
-     * @param purpose    Mục đích dùng OTP (vd: "register", "forgot-password"),
-     * @param otp   Mã OTP người dùng nhập.
-     * @return true nếu hợp lệ.
+     * @param email Địa chỉ thư điện tử (email) nhận tin
+     * @param purpose Mục đích sử dụng mã OTP
+     * @param otp Mã OTP xác thực
+     * @return true nếu xử lý thành công hoặc hợp lệ, ngược lại là false
      */
     boolean verifyOtp(String email, String purpose, String otp);
 
     /**
-     * Xoá OTP khỏi Redis sau khi xác thực thành công
-     * (tránh dùng lại mã cũ).
+     * Vô hiệu hóa mã OTP ngay lập tức.
      *
-     * @param email Email cần xoá OTP.
-     * @param purpose    Mục đích dùng OTP (vd: "register", "forgot-password"),
+     * @param email Địa chỉ thư điện tử (email) nhận tin
+     * @param purpose Mục đích sử dụng mã OTP
      */
     void invalidateOtp(String email, String purpose);
 }
