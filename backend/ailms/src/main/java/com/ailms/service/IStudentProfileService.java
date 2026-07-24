@@ -1,6 +1,9 @@
 package com.ailms.service;
 
+import com.ailms.request.AssignInterestsRequest;
 import com.ailms.request.CreateStudentProfileRequest;
+import com.ailms.request.UpdateHasGoalRequest;
+import com.ailms.request.UpdateIsMinorRequest;
 import com.ailms.request.OnboardingRequest;
 import com.ailms.request.StudentProfileSearchRequest;
 import com.ailms.request.UpdateStudentProfileRequest;
@@ -75,4 +78,30 @@ public interface IStudentProfileService {
      * @return đối tượng chứa thông tin chi tiết kết quả
      */
     StudentProfileResponse skipOnboarding(Long userId);
+
+    /**
+     * Gán các sở thích cho học viên dựa trên userId.
+     *
+     * @param userId ID của người dùng (User)
+     * @param request Đối tượng DTO chứa danh sách ID sở thích
+     */
+    void assignInterests(Long userId, AssignInterestsRequest request);
+
+    /**
+     * Cập nhật trạng thái hasGoal của học viên.
+     *
+     * @param id ID của bản ghi cần xử lý
+     * @param request Đối tượng DTO chứa thông tin yêu cầu
+     * @return đối tượng chứa thông tin chi tiết kết quả
+     */
+    StudentProfileResponse updateHasGoal(Long id, UpdateHasGoalRequest request);
+
+    /**
+     * Cập nhật trạng thái isMinor của học viên.
+     *
+     * @param id ID của bản ghi cần xử lý
+     * @param request Đối tượng DTO chứa thông tin yêu cầu
+     * @return đối tượng chứa thông tin chi tiết kết quả
+     */
+    StudentProfileResponse updateIsMinor(Long id, UpdateIsMinorRequest request);
 }

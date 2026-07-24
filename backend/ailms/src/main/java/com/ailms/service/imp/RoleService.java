@@ -241,7 +241,7 @@ public class RoleService implements IRoleService {
         UserResponse response = userMapper.toUserResponse(user);
         List<UserRoleEntity> userRoles = userRoleRepository.findByUserEntity_Id(user.getId());
         response.setRoles(userRoles.stream()
-                .map(item -> item.getRoleEntity().getName())
+                .map(item -> item.getRoleEntity().getCode())
                 .collect(Collectors.toList()));
         return response;
     }

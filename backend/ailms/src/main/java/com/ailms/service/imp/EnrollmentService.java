@@ -84,6 +84,14 @@ public class EnrollmentService implements IEnrollmentService {
         applyRelations(entity, request);
 
         EnrollmentEntity saved = enrollmentRepository.save(entity);
+
+        // Update enrollmentCount on CourseEntity
+        CourseEntity course = saved.getCourseEntity();
+        if (course != null) {
+            course.setEnrollmentCount((course.getEnrollmentCount() != null ? course.getEnrollmentCount() : 0) + 1);
+            courseRepository.save(course);
+        }
+
         return enrollmentMapper.toResponse(saved);
     }
 
@@ -103,10 +111,18 @@ public class EnrollmentService implements IEnrollmentService {
     @Transactional
     public void delete(Long id) {
         log.info("Deleting enrollment: {}", id);
-        if (!enrollmentRepository.existsById(id)) {
-            throw ResourceNotFoundException.of(RESOURCE_NAME, id);
+        EnrollmentEntity existing = enrollmentRepository.findById(id)
+                .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
+
+        enrollmentRepository.delete(existing);
+
+        // Update enrollmentCount on CourseEntity
+        CourseEntity course = existing.getCourseEntity();
+        if (course != null) {
+            int current = course.getEnrollmentCount() != null ? course.getEnrollmentCount() : 0;
+            course.setEnrollmentCount(Math.max(0, current - 1));
+            courseRepository.save(course);
         }
-        enrollmentRepository.deleteById(id);
     }
 
     private void applyRelations(EnrollmentEntity entity, EnrollmentRequest request) {

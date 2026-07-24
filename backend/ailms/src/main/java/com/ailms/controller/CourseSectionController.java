@@ -32,7 +32,7 @@ public class CourseSectionController {
                 .body(ApiResponse.of("Section created successfully", response));
     }
 
-    @GetMapping("/{courseId}/sections")
+    @GetMapping({"/{courseId}/sections", "/course/{courseId}", "/{courseId}"})
     public ResponseEntity<ApiResponse<List<SectionResponse>>> getSectionsByCourseId(@PathVariable Long courseId) {
         List<SectionResponse> response = courseSectionService.getSectionsByCourseId(courseId);
         return ResponseEntity.ok(ApiResponse.of("Sections retrieved successfully", response));

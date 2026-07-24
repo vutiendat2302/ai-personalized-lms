@@ -10,5 +10,8 @@ import java.util.List;
 @Repository
 public interface LearningActivityLogRepository extends BaseRepository<LearningActivityLogEntity, Long> {
     List<LearningActivityLogEntity> findByUserId(Long userId);
+
+    void deleteByUserId(Long userId);
+
     List<LearningActivityLogEntity> findByEntityTypeAndEntityId(String entityType, Long entityId);
 }

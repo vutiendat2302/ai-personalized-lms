@@ -1,7 +1,8 @@
 package com.ailms.entity.enums;
 
 public enum ReviewStatusEnum {
-    PENDING,
+    ACTIVE,
+    INACTIVE,
     APPROVED,
     REJECTED
 }

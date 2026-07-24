@@ -1,8 +1,16 @@
 package com.ailms.config;
 
-import com.ailms.entity.*;
+import com.ailms.entity.PermissionEntity;
+import com.ailms.entity.RoleEntity;
+import com.ailms.entity.RolePermissionEntity;
+import com.ailms.entity.UserEntity;
+import com.ailms.entity.UserRoleEntity;
 import com.ailms.entity.enums.UserStatusEnum;
-import com.ailms.repository.*;
+import com.ailms.repository.PermissionRepository;
+import com.ailms.repository.RolePermissionRepository;
+import com.ailms.repository.RoleRepository;
+import com.ailms.repository.UserRepository;
+import com.ailms.repository.UserRoleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
@@ -11,38 +19,66 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
-import java.util.*;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Seed dữ liệu mặc định khi ứng dụng khởi động.
- * Bao gồm:
- * - Role ADMIN (nếu chưa có)
- * - TK admin mặc định, đã gán role ADMIN (nếu chưa có)
- * - Gán hết Permission cho Role admin, nếu permission đã tồn tại trong db,
- * - Tạo tài khoản Admin mặc định.
+ * Khởi tạo (seed) dữ liệu mặc định khi ứng dụng khởi động.
+ *
+ * <p>Bao gồm: các Role hệ thống (ADMIN, TEACHER, TA, STUDENT), user mặc định
+ * cho từng role, và gán toàn bộ permission hiện có cho role ADMIN.
+ *
+ * <p>Toàn bộ thao tác đều idempotent (chạy lại nhiều lần không tạo trùng dữ liệu),
+ * dựa trên kiểm tra tồn tại theo {@code code} (Role) và {@code email} (User).
  */
-
+@Slf4j
 @Configuration
 @RequiredArgsConstructor
-@Slf4j
 @Profile("seed")
 public class DataSeeder {
 
-    private static final String ADMIN_ROLE_NAME = "ADMIN";
-    private static final String ADMIN_ROLE_CODE = "ADMIN";
-    private static final String ADMIN_USERNAME = "admin123";
-    private static final String ADMIN_EMAIL = "admin@gmail.com";
-    private static final String ADMIN_DEFAULT_PASSWORD = "Password@123";
-
-    private final PermissionRepository permissionRepository;
     private final RoleRepository roleRepository;
-    private final RolePermissionRepository rolePermissionRepository;
     private final UserRepository userRepository;
     private final UserRoleRepository userRoleRepository;
+    private final PermissionRepository permissionRepository;
+    private final RolePermissionRepository rolePermissionRepository;
     private final PasswordEncoder passwordEncoder;
 
-    /** Khởi chạy quá trình seed dữ liệu khi ứng dụng khởi động. */
+    private static final String DEFAULT_PASSWORD = "Password@123";
+
+    // ===== ADMIN =====
+    private static final String ADMIN_ROLE_NAME = "Administrator";
+    private static final String ADMIN_ROLE_CODE = "ADMIN";
+    private static final String ADMIN_USERNAME = "admin123";
+    private static final String ADMIN_EMAIL = "admin@ailms.com";
+
+    //==== HR ====
+    private static final String HR_ROLE_NAME = "HR management";
+    private static final String HR_ROLE_CODE = "HR";
+    private static final String HR_USERNAME = "hrmanagement123";
+    private static final String HR_EMAIL = "hr@ailms.com";
+
+    // ===== TEACHER =====
+    private static final String TEACHER_ROLE_NAME = "Teacher";
+    private static final String TEACHER_ROLE_CODE = "TEACHER";
+    private static final String TEACHER_USERNAME = "teacher123";
+    private static final String TEACHER_EMAIL = "teacher@ailms.com";
+
+    // ===== TA =====
+    private static final String TA_ROLE_NAME = "Teaching Assistant";
+    private static final String TA_ROLE_CODE = "TA";
+    private static final String TA_USERNAME = "teacherta123";
+    private static final String TA_EMAIL = "ta@ailms.com";
+
+    // ===== STUDENT =====
+    private static final String STUDENT_ROLE_NAME = "Student";
+    private static final String STUDENT_ROLE_CODE = "STUDENT";
+    private static final String STUDENT_USERNAME = "student123";
+    private static final String STUDENT_EMAIL = "student@ailms.com";
+
+    /** Đăng ký CommandLineRunner để seed dữ liệu khi ứng dụng khởi động. */
     @Bean
     CommandLineRunner seed() {
         return _ -> seedData();
@@ -52,64 +88,86 @@ public class DataSeeder {
     public void seedData() {
         log.info("Starting database seeding...");
 
-        RoleEntity adminRole = seedAdminRole();
-        seedAdminUser(adminRole);
+        // 1. Seed ADMIN
+        RoleEntity adminRole = seedRole(ADMIN_ROLE_NAME, ADMIN_ROLE_CODE, "System Administrator", true);
+        seedUser(ADMIN_USERNAME, ADMIN_EMAIL, "Default Administrator", adminRole);
         assignExistingPermissionToAdmin(adminRole);
+
+        // 2. Seed HR
+        RoleEntity hrRole = seedRole(HR_ROLE_NAME, HR_ROLE_CODE, "HR Management Role", false);
+        seedUser(HR_USERNAME, HR_EMAIL, "Default HR", hrRole);
+
+        // 3. Seed TEACHER
+        RoleEntity teacherRole = seedRole(TEACHER_ROLE_NAME, TEACHER_ROLE_CODE, "Teacher Role", false);
+        seedUser(TEACHER_USERNAME, TEACHER_EMAIL, "Default Teacher", teacherRole);
+
+        // 4. Seed TA
+        RoleEntity taRole = seedRole(TA_ROLE_NAME, TA_ROLE_CODE, "Teaching Assistant Role", false);
+        seedUser(TA_USERNAME, TA_EMAIL, "Default TA", taRole);
+
+        // 5. Seed STUDENT
+        RoleEntity studentRole = seedRole(STUDENT_ROLE_NAME, STUDENT_ROLE_CODE, "Student Role", false);
+        seedUser(STUDENT_USERNAME, STUDENT_EMAIL, "Default Student", studentRole);
 
         log.info("Database seeding completed successfully.");
     }
 
-//    Tao role admin neu chua ton tai
-    private RoleEntity seedAdminRole() {
-        Optional<RoleEntity> existing = roleRepository.findByName(ADMIN_ROLE_NAME);
+    /**
+     * Hàm dùng chung để tạo Role.
+     *
+     * <p>Kiểm tra tồn tại theo {@code code} (đây là cột đang có unique constraint
+     * trong DB), không dùng {@code name} để tránh insert trùng khi tên hiển thị
+     * thay đổi nhưng code giữ nguyên.
+     */
+    private RoleEntity seedRole(String name, String code, String description, boolean isSystem) {
+        Optional<RoleEntity> existing = roleRepository.findByCode(code);
 
         if (existing.isPresent()) {
-            log.info("Role ADMIN already exists, skip");
-
+            log.info("Role {} already exists, skip", code);
             return existing.get();
         }
 
         RoleEntity role = RoleEntity.builder()
-                .name(ADMIN_ROLE_NAME)
-                .code(ADMIN_ROLE_CODE)
-                .description("System Administrator")
-                .isSystem(true)
+                .name(name)
+                .code(code)
+                .description(description)
+                .isSystem(isSystem)
                 .build();
         role = roleRepository.save(role);
-        log.info("Create role admin");
+        log.info("Created role {}", code);
         return role;
     }
 
-    private void seedAdminUser(RoleEntity adminRole) {
-        if (userRepository.existsByEmail(ADMIN_EMAIL)) {
-            log.info("Admin user already exists, skip");
+    /** Hàm dùng chung để tạo User và gán Role. */
+    private void seedUser(String username, String email, String fullName, RoleEntity role) {
+        if (userRepository.existsByEmail(email)) {
+            log.info("User {} already exists, skip", email);
             return;
         }
 
-        UserEntity admin = new UserEntity();
-        admin.setUsername(ADMIN_USERNAME);
-        admin.setEmail(ADMIN_EMAIL);
-        admin.setPasswordHash(passwordEncoder.encode(ADMIN_DEFAULT_PASSWORD));
-        admin.setFullName("Default Administrator");
-        admin.setStatus(UserStatusEnum.ACTIVE);
-        admin = userRepository.save(admin);
+        UserEntity user = new UserEntity();
+        user.setUsername(username);
+        user.setEmail(email);
+        user.setPasswordHash(passwordEncoder.encode(DEFAULT_PASSWORD));
+        user.setFullName(fullName);
+        user.setStatus(UserStatusEnum.ACTIVE);
+        user = userRepository.save(user);
 
         UserRoleEntity userRole = UserRoleEntity.builder()
-                .userEntity(admin)
-                .assignedBy(admin.getId())
-                .roleEntity(adminRole)
+                .userEntity(user)
+                .assignedBy(user.getId())
+                .roleEntity(role)
                 .build();
         userRoleRepository.save(userRole);
 
-        log.info("Created default admin user {}", ADMIN_EMAIL);
+        log.info("Created default user {}", email);
     }
 
     /**
      * Nếu DB đã có sẵn permission,
      * gán toàn bộ cho role ADMIN.
-     * Nếu DB chưa có permission nào, bỏ qua
+     * Nếu DB chưa có permission nào, bỏ qua.
      */
-
     private void assignExistingPermissionToAdmin(RoleEntity role) {
         List<PermissionEntity> allPermissions = permissionRepository.findAll();
         if (allPermissions.isEmpty()) {

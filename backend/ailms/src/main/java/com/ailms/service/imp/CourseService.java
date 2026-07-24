@@ -14,12 +14,16 @@ import com.ailms.request.*;
 import com.ailms.response.ClassResponse;
 import com.ailms.response.CourseResponse;
 import com.ailms.response.PageResponse;
+import com.ailms.request.BaseSearchRequest;
 import com.ailms.service.ICourseService;
 import com.ailms.service.IEmailService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,6 +49,7 @@ public class CourseService implements ICourseService {
     private final ClassMapper classMapper;
     private final IEmailService emailService;
     private final ApplicationEventPublisher applicationEventPublisher;
+    private final EnrollmentRepository enrollmentRepository;
 
     private static final String RESOURCE_NAME = "Course";
 
@@ -183,14 +188,20 @@ public class CourseService implements ICourseService {
     public void delete(Long id) {
         log.info("Deleting course with id: {}", id);
 
-        if (!courseRepository.existsById(id)) {
-            throw ResourceNotFoundException.of(RESOURCE_NAME, id);
-        }
+        CourseEntity entity = courseRepository.findById(id)
+                .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
 
-        courseRepository.deleteById(id);
+        try {
+            courseRepository.delete(entity);
+        } catch (Exception e) {
+            log.warn("Hard delete failed for course id {}, setting INACTIVE instead: {}", id, e.getMessage());
+            entity.setStatus(CourseStatusEnum.INACTIVE);
+            courseRepository.save(entity);
+        }
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "DELETE", "COURSE", id, null, null));
     }
 
+    @Transactional
     @Override
     public CourseResponse getById(Long id) {
         log.info("Getting course by id: {}", id);
@@ -198,7 +209,10 @@ public class CourseService implements ICourseService {
         CourseEntity entity = courseRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
 
-        return courseMapper.toResponse(entity);
+        entity.setViewCount((entity.getViewCount() != null ? entity.getViewCount() : 0) + 1);
+        CourseEntity savedEntity = courseRepository.save(entity);
+
+        return courseMapper.toResponse(savedEntity);
     }
 
     @Override
@@ -287,6 +301,66 @@ public class CourseService implements ICourseService {
 
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CLAIM_CLASS", "CLASS", classId, null, clazz));
         return classMapper.toResponse(clazz);
+    }
+
+    @Override
+    public PageResponse<CourseResponse> getOutstandingCourses(BaseSearchRequest request) {
+        log.info("Getting outstanding courses, page: {}, size: {}", request.getPage(), request.getSize());
+        Pageable pageable = PageRequest.of(
+                request.getPage(),
+                request.getSize(),
+                Sort.by(
+                        Sort.Order.desc("avgRating"),
+                        Sort.Order.desc("reviewCount"),
+                        Sort.Order.desc("enrollmentCount")
+                )
+        );
+        Page<CourseEntity> page = courseRepository.findByStatus(CourseStatusEnum.ACTIVE, pageable);
+        return PageResponse.from(page.map(courseMapper::toResponse));
+    }
+
+    @Override
+    public PageResponse<CourseResponse> getTrendingCourses(BaseSearchRequest request) {
+        log.info("Getting trending courses, page: {}, size: {}", request.getPage(), request.getSize());
+        Pageable pageable = PageRequest.of(
+                request.getPage(),
+                request.getSize(),
+                Sort.by(Sort.Order.desc("trendingScore"))
+        );
+        Page<CourseEntity> page = courseRepository.findByStatus(CourseStatusEnum.ACTIVE, pageable);
+        return PageResponse.from(page.map(courseMapper::toResponse));
+    }
+
+    @Override
+    public PageResponse<CourseResponse> getLatestCourses(BaseSearchRequest request) {
+        log.info("Getting latest courses, page: {}, size: {}", request.getPage(), request.getSize());
+        Pageable pageable = PageRequest.of(
+                request.getPage(),
+                request.getSize(),
+                Sort.by(Sort.Order.desc("createdAt"))
+        );
+        Page<CourseEntity> page = courseRepository.findByStatus(CourseStatusEnum.ACTIVE, pageable);
+        return PageResponse.from(page.map(courseMapper::toResponse));
+    }
+
+    @Transactional
+    @Override
+    public void recalculateTrendingScores() {
+        log.info("Recalculating trending scores for all courses");
+        List<CourseEntity> courses = courseRepository.findAll();
+        for (CourseEntity course : courses) {
+            long enrollments = enrollmentRepository.countByCourseEntity_Id(course.getId());
+            course.setEnrollmentCount((int) enrollments);
+
+            double avgRating = course.getAvgRating() != null ? course.getAvgRating() : 0.0;
+            int reviewCount = course.getReviewCount() != null ? course.getReviewCount() : 0;
+            int viewCount = course.getViewCount() != null ? course.getViewCount() : 0;
+
+            double score = (enrollments * 5.0) + (viewCount * 0.2) + (avgRating * reviewCount * 1.5);
+            course.setTrendingScore(Math.round(score * 100.0) / 100.0);
+
+            courseRepository.save(course);
+        }
     }
 
     private String generateSlug(String input) {

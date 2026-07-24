@@ -148,16 +148,16 @@ public class AuthService implements IAuthService { // login - register
      * Gửi lại OTP mới, ghi đè OTP cũ trong Redis.
      */
     @Override
-    public void resendOtp(String email) {
-        UserEntity userEntity = userRepository.findByUsernameOrEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy tài khoản với email: " + email));
+    public void resendOtp(String usernameOrEmail) {
+        UserEntity userEntity = userRepository.findByUsernameOrEmail(usernameOrEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy tài khoản với thông tin: " + usernameOrEmail));
 
         if (userEntity.getStatus() == UserStatusEnum.ACTIVE) {
             throw new BusinessException("Tài khoản đã được xác thực trước đó.");
         }
 
-        String otp = otpService.generateAndStoreOtp(email, OTP_PURPOSE_REGISTER, REGISTER_OTP_TTL);
-        emailService.sendOtpEmail(email, otp);
+        String otp = otpService.generateAndStoreOtp(userEntity.getEmail(), OTP_PURPOSE_REGISTER, REGISTER_OTP_TTL);
+        emailService.sendOtpEmail(userEntity.getEmail(), otp);
     }
 
     /**

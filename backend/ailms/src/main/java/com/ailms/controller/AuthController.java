@@ -2,10 +2,14 @@ package com.ailms.controller;
 
 import com.ailms.request.*;
 import com.ailms.response.ApiResponse;
+import com.ailms.response.GuardianResponse;
 import com.ailms.response.JwtAuthenticationResponse;
+import com.ailms.response.StudentProfileResponse;
 import com.ailms.security.CustomUserDetails;
 import com.ailms.service.IAuthService;
 
+import com.ailms.service.IGuardianService;
+import com.ailms.service.IStudentProfileService;
 import com.ailms.service.IUserService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +30,8 @@ public class AuthController {
 
     private final IAuthService authService;
     private final IUserService userService;
+    private final IStudentProfileService studentProfileService;
+    private final IGuardianService guardianService;
 
     @Value("${app.jwt.refresh-expiration-ms}")
     private int refreshExpirationMs;
@@ -87,6 +93,7 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.message("OTP đã được gửi tới email của bạn"));
     }
 
+
     /**
      * Xác thực mã OTP, kích hoạt tài khoản nếu hợp lệ.
      */
@@ -102,8 +109,8 @@ public class AuthController {
      */
     @PostMapping("/resend-otp")
     public ResponseEntity<ApiResponse<Void>> resendOtp(@Valid @RequestBody ResendOtpRequest request) {
-        log.info("Gửi lại OTP cho email: {}", request.getEmail());
-        authService.resendOtp(request.getEmail());
+        log.info("Gửi lại OTP cho thông tin: {}", request.getUsernameOrEmail());
+        authService.resendOtp(request.getUsernameOrEmail());
         return ResponseEntity.ok(ApiResponse.message("Đã gửi lại OTP, vui lòng kiểm tra email"));
     }
 
@@ -140,8 +147,8 @@ public class AuthController {
     @PostMapping("/resend-forgot-password-otp")
     public ResponseEntity<ApiResponse<Void>> resendForgotPasswordOtp(
             @Valid @RequestBody ResendOtpRequest request) {
-        log.info("Yêu cầu gửi lại OTP quên mật khẩu cho thông tin: {}", request.getEmail());
-        authService.resendForgotPasswordOtp(request.getEmail());
+        log.info("Yêu cầu gửi lại OTP quên mật khẩu cho thông tin: {}", request.getUsernameOrEmail());
+        authService.resendForgotPasswordOtp(request.getUsernameOrEmail());
         return ResponseEntity.ok(ApiResponse.message("Đã gửi lại OTP đặt lại mật khẩu"));
     }
 

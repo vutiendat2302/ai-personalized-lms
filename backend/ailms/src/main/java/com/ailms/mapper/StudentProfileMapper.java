@@ -23,6 +23,8 @@ public interface StudentProfileMapper {
     @Mapping(target = "updatedBy", ignore = true)
     @Mapping(target = "studentInterests", ignore = true)
     @Mapping(target = "hasGoal", ignore = true)
+    @Mapping(target = "isMinor", ignore = true)
+    @Mapping(target = "studentCode", ignore = true)
     StudentProfileEntity toEntity(CreateStudentProfileRequest request);
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)

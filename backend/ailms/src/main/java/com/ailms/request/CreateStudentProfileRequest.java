@@ -14,9 +14,6 @@ public class CreateStudentProfileRequest {
     @NotNull(message = "User ID is required")
     private Long userId;
 
-    @NotBlank(message = "Student code is required")
-    private String studentCode;
-
     private String educationLevel;
 
     private String description;
@@ -24,6 +21,4 @@ public class CreateStudentProfileRequest {
     private String goal;
 
     private String schoolName;
-
-    private Boolean isMinor;
 }

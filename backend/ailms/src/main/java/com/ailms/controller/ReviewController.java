@@ -1,7 +1,9 @@
 package com.ailms.controller;
 
 import com.ailms.request.CreateReviewRequest;
+import com.ailms.request.ReviewSearchRequest;
 import com.ailms.response.ApiResponse;
+import com.ailms.response.PageResponse;
 import com.ailms.response.ReviewResponse;
 import com.ailms.service.IReviewService;
 import jakarta.validation.Valid;
@@ -47,5 +49,11 @@ public class ReviewController {
     public ResponseEntity<ApiResponse<Void>> deleteReview(@PathVariable Long id) {
         reviewService.deleteReview(id);
         return ResponseEntity.ok(ApiResponse.message("Review deleted successfully"));
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<ApiResponse<PageResponse<ReviewResponse>>> searchReviews(ReviewSearchRequest request) {
+        PageResponse<ReviewResponse> response = reviewService.search(request);
+        return ResponseEntity.ok(ApiResponse.of("Reviews retrieved successfully", response));
     }
 }

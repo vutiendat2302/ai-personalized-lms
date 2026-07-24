@@ -26,6 +26,8 @@ public class StudentProfileResponse {
 
     private Boolean isMinor;
 
+    private Boolean hasGoal;
+
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime createdAt;
 

@@ -18,7 +18,9 @@ public class CategoryResponse {
     private String description;
     private BaseStatusEnum status;
 
-    //private Long courseCount;
+    private Long coursesCount;
+    private Long degreesCount;
+    private Long credentialsCount;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime createdAt;

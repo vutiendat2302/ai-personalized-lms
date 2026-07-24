@@ -1,5 +1,6 @@
 package com.ailms.service;
 
+import com.ailms.request.BaseSearchRequest;
 import com.ailms.request.CourseApprovalRequest;
 import com.ailms.request.CourseSearchRequest;
 import com.ailms.request.CourseStatusRequest;
@@ -105,4 +106,33 @@ public interface ICourseService {
      * @return đối tượng chứa thông tin chi tiết kết quả
      */
     ClassResponse claimClass(Long teacherUserId, Long classId);
+
+    /**
+     * Lấy danh sách khóa học nổi bật có phân trang.
+     *
+     * @param request Yêu cầu phân trang
+     * @return Trang danh sách khóa học nổi bật
+     */
+    PageResponse<CourseResponse> getOutstandingCourses(BaseSearchRequest request);
+
+    /**
+     * Lấy danh sách khóa học thịnh hành có phân trang.
+     *
+     * @param request Yêu cầu phân trang
+     * @return Trang danh sách khóa học thịnh hành
+     */
+    PageResponse<CourseResponse> getTrendingCourses(BaseSearchRequest request);
+
+    /**
+     * Lấy danh sách khóa học mới nhất có phân trang.
+     *
+     * @param request Yêu cầu phân trang
+     * @return Trang danh sách khóa học mới nhất
+     */
+    PageResponse<CourseResponse> getLatestCourses(BaseSearchRequest request);
+
+    /**
+     * Tính toán lại điểm xu hướng và đồng bộ chỉ số cho toàn bộ khóa học.
+     */
+    void recalculateTrendingScores();
 }

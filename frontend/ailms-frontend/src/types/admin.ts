@@ -47,7 +47,7 @@ export interface CourseResponse {
   link: string;
   description: string;
   level: string;
-  status: number; // 0 or 1
+  status: string; // ACTIVE, INACTIVE, etc.
   createdAt: string;
   updatedAt: string | null;
 }
@@ -56,7 +56,7 @@ export interface CategoryResponse {
   id: string;
   name: string;
   description: string;
-  status: number; // 0 or 1
+  status: string; // ACTIVE, INACTIVE, etc.
   createdAt: string;
   updatedAt: string | null;
 }
@@ -109,7 +109,7 @@ export interface BulkAssignRoleRequest {
 }
 
 export interface AssignRolesRequest {
-  roleNames: string[];
+  roleIds: (string | number)[];
 }
 
 export interface RoleRequest {

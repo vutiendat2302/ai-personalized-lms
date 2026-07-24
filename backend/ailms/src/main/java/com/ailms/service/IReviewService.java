@@ -1,6 +1,8 @@
 package com.ailms.service;
 
 import com.ailms.request.CreateReviewRequest;
+import com.ailms.request.ReviewSearchRequest;
+import com.ailms.response.PageResponse;
 import com.ailms.response.ReviewResponse;
 
 import java.util.List;
@@ -44,4 +46,12 @@ public interface IReviewService {
      * @param reviewId ID của đánh giá khóa học
      */
     void deleteReview(Long reviewId);
+
+    /**
+     * Tìm kiếm và phân trang danh sách đánh giá dựa trên các tiêu chí lọc.
+     *
+     * @param request Đối tượng DTO chứa thông tin yêu cầu
+     * @return trang kết quả chứa danh sách đã được phân trang
+     */
+    PageResponse<ReviewResponse> search(ReviewSearchRequest request);
 }

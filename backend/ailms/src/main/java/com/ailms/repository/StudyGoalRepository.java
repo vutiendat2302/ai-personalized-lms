@@ -11,5 +11,7 @@ import java.util.List;
 public interface StudyGoalRepository extends BaseRepository<StudyGoalEntity, Long> {
     List<StudyGoalEntity> findByUserId(Long userId);
 
+    void deleteByUserId(Long userId);
+
     List<StudyGoalEntity> findByCourseId(Long courseId);
 }

@@ -39,6 +39,11 @@ public class UpdateProfileRequest {
     private Integer gender;
 
     /**
+     * Đường dẫn ảnh đại diện.
+     */
+    private String avatarUrl;
+
+    /**
      * Thông tin mở rộng dưới dạng JSON string.
      */
     private String attributes;

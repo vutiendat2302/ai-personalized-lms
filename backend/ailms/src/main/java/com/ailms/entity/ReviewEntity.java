@@ -36,6 +36,16 @@ public class ReviewEntity extends BaseEntity {
     @Column(name = "user_id", nullable = false)
     private Long userId;
 
+    /** Khóa học được đánh giá. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "course_id", insertable = false, updatable = false)
+    private CourseEntity courseEntity;
+
+    /** Học viên thực hiện đánh giá. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_id", insertable = false, updatable = false)
+    private UserEntity userEntity;
+
     /** Số sao đánh giá (từ 1 đến 5 sao). */
     @Column(name = "rating", nullable = false)
     private Integer rating; // 1 to 5 stars
@@ -44,11 +54,11 @@ public class ReviewEntity extends BaseEntity {
     @Column(name = "comment", columnDefinition = "TEXT")
     private String comment;
 
-    /** Trạng thái duyệt bài đánh giá (PENDING, APPROVED, REJECTED). */
+    /** Trạng thái duyệt bài đánh giá (ACTIVE, INACTIVE, REJECTED). */
     @Column(name = "status", nullable = false)
     @Enumerated(EnumType.STRING)
     @Builder.Default
-    private ReviewStatusEnum status = ReviewStatusEnum.PENDING;
+    private ReviewStatusEnum status = ReviewStatusEnum.ACTIVE;
 
     /** Lý do từ chối hiển thị đánh giá (nếu bị từ chối do vi phạm quy chuẩn). */
     @Column(name = "rejection_reason")

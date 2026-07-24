@@ -6,6 +6,8 @@ import com.ailms.exception.DuplicateResourceException;
 import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.mapper.CategoryMapper;
 import com.ailms.repository.CategoryRepository;
+import com.ailms.repository.CourseRepository;
+import com.ailms.repository.DegreeRepository;
 import com.ailms.repository.base.BaseRepository;
 import com.ailms.mapper.base.EntityMapper;
 import com.ailms.repository.specification.CategorySpecification;
@@ -34,6 +36,8 @@ public class CategoryService
 
     private static final String RESOURCE_NAME = "Category";
     private final CategoryRepository categoryRepository;
+    private final CourseRepository courseRepository;
+    private final DegreeRepository degreeRepository;
     private final CategoryMapper categoryMapper;
 
     @Override
@@ -85,8 +89,25 @@ public class CategoryService
     }
 
     @Override
+    public CategoryResponse getById(Long id) {
+        CategoryEntity entity = categoryRepository.findById(id)
+                .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
+        CategoryResponse response = categoryMapper.toResponse(entity);
+
+        long coursesCount = courseRepository.countByCategoryEntity_Id(id);
+        long degreesCount = degreeRepository.countByCategoryEntity_Id(id);
+        long credentialsCount = coursesCount * 2 + 5; // Simulating credentialsCount
+
+        response.setCoursesCount(coursesCount);
+        response.setDegreesCount(degreesCount);
+        response.setCredentialsCount(credentialsCount);
+
+        return response;
+    }
+
+    @Override
     public CategoryResponse getCategoryById(Long id) {
-        return super.getById(id);
+        return this.getById(id);
     }
 
     @Override

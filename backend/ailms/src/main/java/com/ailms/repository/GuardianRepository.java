@@ -10,4 +10,6 @@ import java.util.List;
 @Repository
 public interface GuardianRepository extends JpaRepository<GuardianEntity, Long>, JpaSpecificationExecutor<GuardianEntity> {
     List<GuardianEntity> findByStudentProfile_UserId(Long studentUserId);
+
+    void deleteByStudentProfile_UserId(Long studentUserId);
 }
