@@ -2,6 +2,7 @@ package com.ailms.service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * Service gửi email thông báo, OTP, lời mời và cảnh báo từ hệ thống.
@@ -75,4 +76,14 @@ public interface IEmailService {
      * @param endDate Tham số endDate
      */
     void sendContractExpirationAlertEmail(String toEmail, String employeeName, String contractCode, LocalDate endDate);
+
+    /**
+     * Gửi email tùy chỉnh đến nhiều tài khoản cùng lúc.
+     *
+     * @param toEmails Danh sách địa chỉ email người nhận
+     * @param subject Tiêu đề email
+     * @param content Nội dung email
+     */
+    void sendBulkEmail(List<String> toEmails, String subject, String content);
 }
+

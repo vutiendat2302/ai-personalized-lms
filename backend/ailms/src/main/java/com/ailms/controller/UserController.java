@@ -21,6 +21,10 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
+import com.ailms.response.MonthlyUserCountResponse;
+import com.ailms.response.UserDetailResponse;
+import org.springframework.http.HttpHeaders;
+
 @RestController
 @RequestMapping("${api.prefix}/users")
 @RequiredArgsConstructor
@@ -160,4 +164,132 @@ public class UserController {
         userService.verifyEmailChange(userId, request);
         return ResponseEntity.ok(ApiResponse.message("Cập nhật địa chỉ email thành công."));
     }
+
+    /**
+     * Lấy ra số lượng student (người dùng)
+     */
+    @GetMapping("/students/count")
+    public ResponseEntity<ApiResponse<Long>> countStudents() {
+        long count = userService.countStudents();
+        return ResponseEntity.ok(ApiResponse.of("Get student count successfully", count));
+    }
+
+    /**
+     * Lấy ra số lượng nhân viên
+     */
+    @GetMapping("/employees/count")
+    public ResponseEntity<ApiResponse<Long>> countEmployees() {
+        long count = userService.countEmployees();
+        return ResponseEntity.ok(ApiResponse.of("Get employee count successfully", count));
+    }
+
+    /**
+     * Số lượng user theo từng vai trò
+     */
+    @GetMapping("/stats/by-role")
+    public ResponseEntity<ApiResponse<Map<String, Long>>> countUsersByRole() {
+        Map<String, Long> stats = userService.countUsersByRole();
+        return ResponseEntity.ok(ApiResponse.of("Get user count by role successfully", stats));
+    }
+
+    /**
+     * Số lượng user theo giới tính
+     */
+    @GetMapping("/stats/by-gender")
+    public ResponseEntity<ApiResponse<Map<String, Long>>> countUsersByGender() {
+        Map<String, Long> stats = userService.countUsersByGender();
+        return ResponseEntity.ok(ApiResponse.of("Get user count by gender successfully", stats));
+    }
+
+    /**
+     * Số lượng người dùng (UserEntity) theo trạng thái
+     */
+    @GetMapping("/stats/by-status")
+    public ResponseEntity<ApiResponse<Map<String, Long>>> countUsersByStatus() {
+        Map<String, Long> stats = userService.countUsersByStatus();
+        return ResponseEntity.ok(ApiResponse.of("Get user count by status successfully", stats));
+    }
+
+
+    /**
+     * Số lượng nhân viên theo độ tuổi
+     */
+    @GetMapping("/employees/stats/by-age-group")
+    public ResponseEntity<ApiResponse<Map<String, Long>>> countEmployeesByAgeGroup() {
+        Map<String, Long> stats = userService.countEmployeesByAgeGroup();
+        return ResponseEntity.ok(ApiResponse.of("Get employee count by age group successfully", stats));
+    }
+
+    /**
+     * Số lượng nhân viên theo trạng thái
+     */
+    @GetMapping("/employees/stats/by-status")
+    public ResponseEntity<ApiResponse<Map<String, Long>>> countEmployeesByStatus() {
+        Map<String, Long> stats = userService.countEmployeesByStatus();
+        return ResponseEntity.ok(ApiResponse.of("Get employee count by status successfully", stats));
+    }
+
+    /**
+     * Lấy số lượng người dùng mới theo tháng (trả về danh sách năm đó (12 tháng))
+     */
+    @GetMapping("/stats/monthly-new-users")
+    public ResponseEntity<ApiResponse<List<MonthlyUserCountResponse>>> getMonthlyNewUsers(
+            @RequestParam(required = false) Integer year) {
+        List<MonthlyUserCountResponse> stats = userService.getMonthlyNewUsers(year);
+        return ResponseEntity.ok(ApiResponse.of("Get monthly new users count successfully", stats));
+    }
+
+    /**
+     * Xem chi tiết người dùng: thông tin cá nhân (student-guardian hoặc employee), thông tin tài khoản (user),
+     * thông tin hệ thống (baseEntity)
+     */
+    @GetMapping("/{id}/detail")
+    public ResponseEntity<ApiResponse<UserDetailResponse>> getUserDetail(@PathVariable Long id) {
+        UserDetailResponse detail = userService.getUserDetail(id);
+        return ResponseEntity.ok(ApiResponse.of("Get user detail successfully", detail));
+    }
+
+    /**
+     * Gửi email tới nhiều tài khoản (sẽ có request danh sách tài khoản email, nội dung gửi về)
+     */
+    @PostMapping("/send-bulk-email")
+    public ResponseEntity<ApiResponse<Void>> sendBulkEmail(@Valid @RequestBody SendBulkEmailRequest request) {
+        userService.sendBulkEmail(request);
+        return ResponseEntity.ok(ApiResponse.message("Bulk email sent successfully"));
+    }
+
+    /**
+     * Xuất file excel/csv danh sách người dùng (lọc theo các query params trong UserSearchRequest: keyword, status, ...)
+     */
+    @GetMapping("/export-excel")
+    public ResponseEntity<byte[]> exportUsersToExcel(@ModelAttribute UserSearchRequest request) {
+        byte[] excelBytes = userService.exportUsersToExcel(request);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=users_export.csv")
+                .header(HttpHeaders.CONTENT_TYPE, "text/csv; charset=UTF-8")
+                .body(excelBytes);
+    }
+
+    /**
+     * Xuất file excel/csv thông tin chi tiết đầy đủ của 1 người dùng theo ID (gồm tài khoản, hồ sơ cá nhân học viên/nhân viên/phụ huynh, hệ thống)
+     */
+    @GetMapping("/{id}/export-detail")
+    public ResponseEntity<byte[]> exportUserDetailToExcel(@PathVariable Long id) {
+        byte[] excelBytes = userService.exportUserDetailToExcel(id);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=user_detail_" + id + ".csv")
+                .header(HttpHeaders.CONTENT_TYPE, "text/csv; charset=UTF-8")
+                .body(excelBytes);
+    }
+
+
+    /**
+     * Thêm nhiều nhân viên (request: một danh sách email)
+     */
+    @PostMapping("/bulk-create-employees")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> bulkCreateEmployees(@Valid @RequestBody BulkCreateEmployeeRequest request) {
+        Map<String, Object> response = userService.bulkCreateEmployees(request);
+        return ResponseEntity.ok(ApiResponse.of("Bulk create employees processed successfully", response));
+    }
 }
+

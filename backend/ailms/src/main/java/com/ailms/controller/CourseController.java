@@ -134,4 +134,10 @@ public class CourseController {
         courseService.recalculateTrendingScores();
         return ResponseEntity.ok(ApiResponse.message("Course metrics and trending scores recalculated successfully"));
     }
+
+    @GetMapping("/active-count")
+    public ResponseEntity<ApiResponse<Long>> countActiveCourses() {
+        long response = courseService.countActiveCourses();
+        return ResponseEntity.ok(ApiResponse.of("Active courses count retrieved successfully", response));
+    }
 }

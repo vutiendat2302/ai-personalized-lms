@@ -24,6 +24,8 @@ public interface CourseRepository extends BaseRepository<CourseEntity, Long> {
 
     Page<CourseEntity> findByStatus(CourseStatusEnum status, Pageable pageable);
 
+    long countByStatus(CourseStatusEnum status);
+
     long countByCategoryEntity_Id(Long categoryId);
 
     @Query("""

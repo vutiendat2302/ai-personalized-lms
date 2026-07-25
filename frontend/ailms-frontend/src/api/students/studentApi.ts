@@ -62,4 +62,9 @@ export const studentApi = {
   // Set Has Goal / Complete Onboarding
   updateHasGoal: (id: string | number, hasGoal: boolean = true) =>
     httpClient.patch<ApiResponse<any>>(`/v1/student-profiles/${id}/has-goal`, { hasGoal }),
+
+  // Get Total Student Profiles Count
+  getStudentProfilesCount: () =>
+    httpClient.get<ApiResponse<number>>("/v1/student-profiles/count"),
 };
+

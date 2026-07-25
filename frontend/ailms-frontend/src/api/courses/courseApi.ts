@@ -51,6 +51,9 @@ export const courseApi = {
   getLatestCourses: (params?: { page?: number; size?: number }) =>
     httpClient.get<ApiResponse<any>>("/v1/courses/latest", { params }),
 
+  getActiveCoursesCount: () =>
+    httpClient.get<ApiResponse<number>>("/v1/courses/active-count"),
+
   // Category Endpoints
   createCategory: (payload: CreateCategoryRequest) =>
     httpClient.post<ApiResponse<CategoryResponse>>("/v1/categories", payload),

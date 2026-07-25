@@ -363,6 +363,13 @@ public class CourseService implements ICourseService {
         }
     }
 
+    @Override
+    public long countActiveCourses() {
+        log.info("Counting all active courses");
+        return courseRepository.countByStatus(CourseStatusEnum.ACTIVE);
+    }
+
+
     private String generateSlug(String input) {
         if (input == null) return "";
         String normalized = Normalizer.normalize(input, Normalizer.Form.NFD);

@@ -323,5 +323,26 @@ public class EmailService implements IEmailService {
         </html>
         """.formatted(formattedDate, employeeName, contractCode, formattedDate);
     }
+
+    @Override
+    public void sendBulkEmail(java.util.List<String> toEmails, String subject, String content) {
+        if (toEmails == null || toEmails.isEmpty()) {
+            return;
+        }
+        for (String toEmail : toEmails) {
+            try {
+                MimeMessage message = mailSender.createMimeMessage();
+                MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+                helper.setTo(toEmail);
+                helper.setSubject(subject);
+                helper.setText(content, true);
+                mailSender.send(message);
+                log.info("Bulk email sent successfully to {}", toEmail);
+            } catch (Exception e) {
+                log.error("Failed to send bulk email to {}", toEmail, e);
+            }
+        }
+    }
 }
+
 

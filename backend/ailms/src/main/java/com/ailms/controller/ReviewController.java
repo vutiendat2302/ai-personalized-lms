@@ -56,4 +56,10 @@ public class ReviewController {
         PageResponse<ReviewResponse> response = reviewService.search(request);
         return ResponseEntity.ok(ApiResponse.of("Reviews retrieved successfully", response));
     }
+
+    @GetMapping("/average-rating")
+    public ResponseEntity<ApiResponse<Double>> getAverageRating() {
+        Double response = reviewService.getAverageRating();
+        return ResponseEntity.ok(ApiResponse.of("Average rating retrieved successfully", response));
+    }
 }

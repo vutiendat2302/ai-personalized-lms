@@ -148,12 +148,76 @@ export interface UpdateCourseRequest {
   level: string;
 }
 
-export interface CreateCategoryRequest {
-  name: string;
+export interface StudentProfileResponse {
+  userId: number;
+  studentCode: string;
+  educationLevel: string;
   description: string;
+  goal: string;
+  schoolName: string;
+  isMinor: boolean;
+  hasGoal: boolean;
+  enrolledCoursesCount?: number;
+  avgGrade?: number;
+  learningProgress?: number;
+  certificatesCount?: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
-export interface UpdateCategoryRequest {
-  name: string;
-  description: string;
+export interface EmployeeResponse {
+  userId: number;
+  employeeCode: string;
+  departmentId: number;
+  departmentName: string;
+  position: string;
+  employmentTypeEnum: string;
+  startDate: string;
+  endDate: string;
+  status: string;
+  coursesCount?: number;
+  categories?: string[];
+  revenue?: number;
+  rating?: number;
+  createdAt: string;
+  updatedAt: string;
 }
+
+export interface GuardianResponse {
+  id?: number;
+  fullName: string;
+  phone: string;
+  email: string;
+  relationship: string;
+  occupation?: string;
+  isPrimary?: boolean;
+}
+
+export interface UserDetailResponse {
+  userAccount: UserResponse;
+  studentProfile?: StudentProfileResponse | null;
+  guardians?: GuardianResponse[] | null;
+  employeeProfile?: EmployeeResponse | null;
+  createdBy?: number | null;
+  updatedBy?: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MonthlyUserCountResponse {
+  month: number;
+  count: number;
+}
+
+export interface SendBulkEmailRequest {
+  emails: string[];
+  subject: string;
+  content: string;
+}
+
+export interface BulkCreateEmployeeRequest {
+  emails: string[];
+  departmentId?: number;
+  roleCode?: string;
+}
+

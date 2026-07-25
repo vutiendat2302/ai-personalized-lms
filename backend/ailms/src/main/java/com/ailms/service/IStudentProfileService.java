@@ -104,4 +104,18 @@ public interface IStudentProfileService {
      * @return đối tượng chứa thông tin chi tiết kết quả
      */
     StudentProfileResponse updateIsMinor(Long id, UpdateIsMinorRequest request);
+
+    /**
+     * Lâý ra tổng số lượng học viên
+     */
+    long countStudents();
+
+    /**
+     * Lấy thông tin chi tiết học viên theo ID, trả về null nếu không tìm thấy thay vì quăng exception.
+     *
+     * @param id ID học viên (userId)
+     * @return StudentProfileResponse hoặc null
+     */
+    StudentProfileResponse findByIdOrNull(Long id);
 }
+

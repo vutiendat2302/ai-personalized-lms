@@ -28,4 +28,7 @@ public interface ReviewRepository extends JpaRepository<ReviewEntity, Long>, Jpa
 
     @Query("SELECT COUNT(r) FROM ReviewEntity r WHERE r.courseId = :courseId AND r.status = 'APPROVED'")
     Long getReviewCountForCourse(@Param("courseId") Long courseId);
+
+    @Query("SELECT AVG(r.rating) FROM ReviewEntity r WHERE r.status = 'ACTIVE'")
+    Double getAverageRatingOfActiveReviews();
 }

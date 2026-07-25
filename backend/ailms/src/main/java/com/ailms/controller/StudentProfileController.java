@@ -112,6 +112,13 @@ public class StudentProfileController {
         return ResponseEntity.ok(ApiResponse.of("Student profile isMinor status updated successfully", response));
     }
 
+    @GetMapping("/count")
+    public ResponseEntity<ApiResponse<Long>> countStudents() {
+        long response = studentProfileService.countStudents();
+        return ResponseEntity.ok(ApiResponse.of("Total students count retrieved successfully", response));
+    }
+
+
     private Long getCurrentUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication != null && authentication.isAuthenticated() && !(authentication instanceof AnonymousAuthenticationToken)) {

@@ -4,6 +4,8 @@ import com.ailms.request.*;
 import com.ailms.response.EffectivePermissionResponse;
 import com.ailms.response.UserResponse;
 import com.ailms.response.PageResponse;
+import com.ailms.response.MonthlyUserCountResponse;
+import com.ailms.response.UserDetailResponse;
 import java.util.List;
 import java.util.Map;
 
@@ -120,4 +122,73 @@ public interface IUserService {
      * @param request Đối tượng DTO chứa thông tin yêu cầu
      */
     void verifyEmailChange(Long userId, VerifyEmailChangeRequest request);
+
+    /**
+     * Lấy ra số lượng student (người dùng)
+     */
+    long countStudents();
+
+    /**
+     * Lấy ra số lượng nhân viên
+     */
+    long countEmployees();
+
+    /**
+     * Số lượng user theo từng vai trò
+     */
+    Map<String, Long> countUsersByRole();
+
+    /**
+     * Số lượng user theo giói tính
+     */
+    Map<String, Long> countUsersByGender();
+
+    /**
+     * Số lượng người dùng (UserEntity) theo trạng thái
+     */
+    Map<String, Long> countUsersByStatus();
+
+    /**
+     * Số lượng nhân viên theo độ tuổi
+     */
+    Map<String, Long> countEmployeesByAgeGroup();
+
+
+    /**
+     * Số lượng nhân viên theo trạng thái
+     */
+    Map<String, Long> countEmployeesByStatus();
+
+    /**
+     * Lấy số lượng người dùng mới theo tháng (trả v danh sách năm đó (12 tháng))
+     */
+    List<MonthlyUserCountResponse> getMonthlyNewUsers(Integer year);
+
+    /**
+     * Xem chi tiết người dùng: thông tin cá nhân (student-guardian hoặc employee), thông tin tài khoản (user),
+     * thông tin hệ thống (baseEntity)
+     */
+    UserDetailResponse getUserDetail(Long userId);
+
+    /**
+     * Gửi email tới nhiều tài khoản (sẽ có request danh sách tài khoản email, nội dung gửi về)
+     */
+    void sendBulkEmail(SendBulkEmailRequest request);
+
+    /**
+     * Xuất file excel danh sách
+     */
+    byte[] exportUsersToExcel(UserSearchRequest request);
+
+    /**
+     * Xuất file excel chi tiết 1 người dùng (gồm tài khoản, hồ sơ cá nhân học viên/nhân viên/phụ huynh và hệ thống)
+     */
+    byte[] exportUserDetailToExcel(Long userId);
+
+    /**
+     * Thêm nhiều nhân viên (request: một danh sách email)
+     */
+    Map<String, Object> bulkCreateEmployees(BulkCreateEmployeeRequest request);
 }
+
+

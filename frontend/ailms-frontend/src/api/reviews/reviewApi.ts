@@ -11,4 +11,8 @@ export const reviewApi = {
     size?: number;
   }) =>
     httpClient.get<ApiResponse<any>>("/v1/reviews/search", { params }),
+
+  getAverageRating: () =>
+    httpClient.get<ApiResponse<number>>("/v1/reviews/average-rating"),
 };
+

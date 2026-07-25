@@ -174,6 +174,7 @@ public final class SimpleJsonWriter {
         sb.append('}');
     }
 
+    // Tìm giá trị field "id"
     private static Object findIdValue(Object obj) {
         Class<?> clazz = obj.getClass();
         while (clazz != null && clazz != Object.class) {
@@ -196,11 +197,11 @@ public final class SimpleJsonWriter {
         return null;
     }
 
+    // Lấy tên class ngắn, bỏ hậu tố Hibernate Proxy nếu có
     private static String shortClassName(Class<?> clazz) {
         String name = clazz.getName();
         int idx = name.lastIndexOf('.');
         String simple = idx >= 0 ? name.substring(idx + 1) : name;
-        // Loại bỏ hậu tố proxy của Hibernate nếu có, vd "Employee$HibernateProxy$abcd" -> "Employee"
         int dollar = simple.indexOf('$');
         return dollar >= 0 ? simple.substring(0, dollar) : simple;
     }

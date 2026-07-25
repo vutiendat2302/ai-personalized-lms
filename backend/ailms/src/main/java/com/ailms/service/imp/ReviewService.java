@@ -164,6 +164,14 @@ public class ReviewService implements IReviewService {
         return response;
     }
 
+    @Override
+    public Double getAverageRating() {
+        log.info("Calculating average rating of all active reviews");
+        Double avg = reviewRepository.getAverageRatingOfActiveReviews();
+        return avg != null ? Math.round(avg * 10.0) / 10.0 : 0.0;
+    }
+
+
     private void recalculateCourseRating(CourseEntity course) {
         Double avg = reviewRepository.getAverageRatingForCourse(course.getId());
         Long count = reviewRepository.getReviewCountForCourse(course.getId());

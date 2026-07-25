@@ -77,4 +77,19 @@ public interface IEmployeeService {
      * @return đối tượng chứa thông tin chi tiết kết quả
      */
     EmployeeResponse probationReview(Long id, boolean pass, CreateEmployeeContractRequest newContractRequest);
+
+    /**
+     * Lấy ra tổng số lượng nhân viên trong hệ thống (không bao gồm nhân viên đã bị xóa)
+     */
+    long countEmployees();
+
+    /**
+     * Lấy thông tin chi tiết nhân viên theo ID, trả về null nếu không tìm thấy hoặc đã bị xóa.
+     *
+     * @param id ID nhân viên (userId)
+     * @return EmployeeResponse hoặc null
+     */
+    EmployeeResponse findByIdOrNull(Long id);
 }
+
+

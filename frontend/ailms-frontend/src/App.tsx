@@ -23,6 +23,7 @@ import { CategoryDetail } from "./pages/CategoryDetail";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { MainLayout } from "./layouts/MainLayout";
 import { UserRole } from "./config/roles";
+import { AdminLayout } from "./layouts/AdminLayout";
 import { useModalStore } from "./store/useModalStore";
 
 // Component to reset scroll position to top on route change
@@ -77,24 +78,29 @@ function App() {
 
             {/* Protected Routes (Authenticated users: Admin, Student, etc.) */}
             <Route element={<ProtectedRoute allowedRoles={[UserRole.USER, UserRole.ADMIN, UserRole.TEACHER, UserRole.TA, UserRole.HR]} />}>
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/profile" element={<Profile />} />
-              <Route path="/activity-log" element={<ActivityLog />} />
+              <Route element={<AdminLayout />}>
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/profile" element={<Profile />} />
+                <Route path="/activity-log" element={<ActivityLog />} />
+              </Route>
             </Route>
 
             {/* Admin only routes */}
             <Route element={<ProtectedRoute allowedRoles={[UserRole.ADMIN]} />}>
-              <Route path="/admin/users" element={<UserManagement />} />
-              <Route path="/admin/roles" element={<RoleManagement />} />
-              <Route path="/admin/permissions" element={<PermissionManagement />} />
-              <Route path="/admin/courses" element={<CourseManagement />} />
-              <Route path="/admin/orders" element={<OrderManagement />} />
-              <Route path="/admin/coupons" element={<CouponManagement />} />
-              <Route path="/admin/hr" element={<HRManagement />} />
-              <Route path="/admin/approval-center" element={<ApprovalCenterPage />} />
-              <Route path="/admin/category-teachers" element={<CategoryTeacherAssignPage />} />
-              <Route path="/analytics" element={<LearningAnalytics />} />
+              <Route element={<AdminLayout />}>
+                <Route path="/admin/users" element={<UserManagement />} />
+                <Route path="/admin/roles" element={<RoleManagement />} />
+                <Route path="/admin/permissions" element={<PermissionManagement />} />
+                <Route path="/admin/courses" element={<CourseManagement />} />
+                <Route path="/admin/orders" element={<OrderManagement />} />
+                <Route path="/admin/coupons" element={<CouponManagement />} />
+                <Route path="/admin/hr" element={<HRManagement />} />
+                <Route path="/admin/approval-center" element={<ApprovalCenterPage />} />
+                <Route path="/admin/category-teachers" element={<CategoryTeacherAssignPage />} />
+                <Route path="/analytics" element={<LearningAnalytics />} />
+              </Route>
             </Route>
+
           </Route>
 
           {/* Public Certificate Verification Route */}

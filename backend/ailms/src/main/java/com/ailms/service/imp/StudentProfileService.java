@@ -311,4 +311,19 @@ public class StudentProfileService implements IStudentProfileService {
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "UPDATE_IS_MINOR", "STUDENT_PROFILE", id, null, saved));
         return studentProfileMapper.toResponse(saved);
     }
+
+    @Override
+    public long countStudents() {
+        log.info("Counting all student profiles");
+        return studentProfileRepository.count();
+    }
+
+    @Override
+    public StudentProfileResponse findByIdOrNull(Long id) {
+        log.info("Getting student profile by id or null: {}", id);
+        return studentProfileRepository.findById(id)
+                .map(studentProfileMapper::toResponse)
+                .orElse(null);
+    }
 }
+

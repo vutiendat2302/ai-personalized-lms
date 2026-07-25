@@ -326,7 +326,12 @@ export const Header: React.FC = () => {
     return () => document.removeEventListener("mousedown", handleSearchClickOutside);
   }, []);
 
-  const isAdmin = auth.user?.roles.includes("ADMIN");
+  const isAdmin = Boolean(
+    auth.user?.roles?.some((r: any) => {
+      const roleStr = (typeof r === "object" ? (r?.code || r?.name || "") : String(r)).toUpperCase();
+      return roleStr === "ADMIN" || roleStr === "ROLE_ADMIN" || roleStr.includes("ADMIN");
+    })
+  );
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border/40 bg-card/70 backdrop-blur-md transition-colors duration-200">
@@ -338,9 +343,9 @@ export const Header: React.FC = () => {
         </Link>
 
         {/* Center: Global Search Bar & Navigation */}
-        <div className="flex-1 flex items-center justify-between max-w-4xl mx-4 sm:mx-8 md:mx-12 gap-4">
-          {/* Courses Dropdown (Only for Authenticated users) */}
-          {auth.accessToken && auth.user && (
+        <div className="flex-1 flex items-center justify-center max-w-4xl mx-4 sm:mx-8 md:mx-12 gap-4">
+          {/* Courses Dropdown (Only for Authenticated Student/User - Hidden for Admin) */}
+          {auth.accessToken && auth.user && !isAdmin && (
             <div className="relative shrink-0 hidden md:block">
               <button 
                 onClick={() => navigate("/dashboard")}
@@ -351,8 +356,6 @@ export const Header: React.FC = () => {
               </button>
             </div>
           )}
-
-          
 
           {/* Public navigation links (Visible only when logged out and on large screens) */}
           {!auth.accessToken && (
@@ -365,7 +368,7 @@ export const Header: React.FC = () => {
           )}
 
           {/* Coursera-style Search Bar (Visible for everyone) */}
-          <div ref={searchRef} className="relative flex-1 max-w-lg hidden sm:block">
+          <div ref={searchRef} className="relative flex-1 max-w-lg mx-auto hidden sm:block">
             <form onSubmit={handleSearchSubmit} className="relative flex items-center h-10 w-full rounded-full border border-border/50 bg-white hover:bg-background focus-within:bg-background focus-within:ring-3 focus-within:ring-primary/20 transition-all overflow-hidden pr-1 shadow-sm">
               <input
                 type="text"
@@ -549,19 +552,22 @@ export const Header: React.FC = () => {
                 <Globe className="h-4.5 w-4.5" />
               </button>
 
-              {/* Shopping Cart Trigger */}
-              <button
-                onClick={toggleCart}
-                className="p-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors relative"
-                title="Giỏ hàng"
-              >
-                <ShoppingBag className="h-4.5 w-4.5" />
-                {cartItems.length > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-primary text-white font-extrabold text-[9px] flex items-center justify-center border-2 border-background shadow-sm">
-                    {cartItems.length}
-                  </span>
-                )}
-              </button>
+              {/* Shopping Cart Trigger (Hidden for Admin) */}
+              {!isAdmin && (
+                <button
+                  onClick={toggleCart}
+                  className="p-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors relative"
+                  title="Giỏ hàng"
+                >
+                  <ShoppingBag className="h-4.5 w-4.5" />
+                  {cartItems.length > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-primary text-white font-extrabold text-[9px] flex items-center justify-center border-2 border-background shadow-sm">
+                      {cartItems.length}
+                    </span>
+                  )}
+                </button>
+              )}
+
 
               {/* Notification Bell */}
               <button className="p-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors relative" title="Thông báo">

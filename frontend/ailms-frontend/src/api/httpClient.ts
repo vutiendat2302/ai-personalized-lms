@@ -38,8 +38,10 @@ export const clearAuth = () => {
  *  - Cho phép Browser tự động gửi HttpOnly Cookie.
  *  - Đây là điều kiện bắt buộc để Refresh Token hoạt động.
  * ============================================================ */
+const BASE_URL = import.meta.env.VITE_BE_URL;
+
 const httpClient = axios.create({
-  baseURL: import.meta.env.VITE_BE_URL,
+  baseURL: BASE_URL,
 
   // Gửi kèm Cookie trong mọi request
   withCredentials: true,
@@ -136,7 +138,7 @@ httpClient.interceptors.response.use(
          * Refresh Token được Browser tự gửi thông qua Cookie.
          * =================================================== */
         const { data } = await axios.post<ApiResponse<JwtAuthenticationResponse>>(
-          `${import.meta.env.VITE_BE_URL}/auth/refresh`,
+          `${BASE_URL}/auth/refresh`,
           {},
           { withCredentials: true }
         );

@@ -1,18 +1,22 @@
 package com.ailms.service.imp;
+import com.ailms.common.util.CsvExport;
 import com.ailms.event.AuditLogEvent;
 import com.ailms.service.IEmailService;
 import com.ailms.service.IUserService;
+import com.ailms.service.IStudentProfileService;
+import com.ailms.service.IEmployeeService;
 import org.springframework.context.ApplicationEventPublisher;
 
 
 import com.ailms.entity.*;
 import com.ailms.entity.enums.UserStatusEnum;
+import com.ailms.entity.enums.EmployeeStatusEnum;
 import com.ailms.mapper.UserMapper;
+import com.ailms.mapper.GuardianMapper;
 import com.ailms.repository.*;
 import com.ailms.repository.specification.UserSpecification;
 import com.ailms.request.*;
-import com.ailms.response.UserResponse;
-import com.ailms.response.EffectivePermissionResponse;
+import com.ailms.response.*;
 import com.ailms.exception.DuplicateResourceException;
 import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.exception.BusinessException;
@@ -20,7 +24,6 @@ import com.ailms.security.JwtUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import com.ailms.response.PageResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -32,8 +35,11 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import com.ailms.security.CustomUserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.Period;
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -50,9 +56,15 @@ public class UserService implements IUserService {
     private final PasswordEncoder passwordEncoder;
     private final ApplicationEventPublisher eventPublisher;
     private final JwtUtils jwtUtils;
+    private final IStudentProfileService studentProfileService;
+    private final IEmployeeService employeeService;
+    private final GuardianRepository guardianRepository;
+    private final GuardianMapper guardianMapper;
+    private final EmployeeRepository employeeRepository;
 
     @Value("${app.frontend.set-password}/api/auth/set-password")
     private String frontendUrl;
+
 
     @Transactional(readOnly = true)
     @Override
@@ -572,4 +584,374 @@ public class UserService implements IUserService {
         return null;
     }
 
+    @Override
+    public long countStudents() {
+        log.info("Lấy ra số lượng học viên");
+        return studentProfileService.countStudents();
+    }
+
+    @Override
+    public long countEmployees() {
+        log.info("Lấy ra số lượng nhân viên");
+        return employeeService.countEmployees();
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public Map<String, Long> countUsersByRole() {
+        log.info("Thống kê số lượng user theo từng vai trò");
+        List<Object[]> results = userRoleRepository.countUsersGroupByRole();
+        Map<String, Long> countMap = new HashMap<>();
+        for (Object[] row : results) {
+            String roleName = (String) row[0];
+            Long count = (Long) row[1];
+            if (roleName != null) {
+                countMap.put(roleName, count);
+            }
+        }
+        return countMap;
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public Map<String, Long> countUsersByGender() {
+        log.info("Thống kê số lượng user theo giới tính");
+        List<Object[]> results = userRepository.countUsersGroupByGender();
+        Map<String, Long> countMap = new LinkedHashMap<>();
+        countMap.put("NAM", 0L);
+        countMap.put("NU", 0L);
+        countMap.put("KHAC", 0L);
+        countMap.put("CHUA_XAC_DINH", 0L);
+
+        for (Object[] row : results) {
+            Integer gender = (Integer) row[0];
+            Long count = (Long) row[1];
+            if (gender == null) {
+                countMap.put("CHUA_XAC_DINH", countMap.get("CHUA_XAC_DINH") + count);
+            } else if (gender == 0) {
+                countMap.put("NAM", countMap.get("NAM") + count);
+            } else if (gender == 1) {
+                countMap.put("NU", countMap.get("NU") + count);
+            } else {
+                countMap.put("KHAC", countMap.get("KHAC") + count);
+            }
+        }
+        return countMap;
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public Map<String, Long> countUsersByStatus() {
+        log.info("Thống kê số lượng user theo trạng thái");
+        List<Object[]> results = userRepository.countUsersGroupByStatus();
+        Map<String, Long> statusMap = new HashMap<>();
+        for (Object[] row : results) {
+            UserStatusEnum status = (UserStatusEnum) row[0];
+            Long count = (Long) row[1];
+            if (status != null) {
+                statusMap.put(status.name(), count);
+            }
+        }
+        return statusMap;
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public Map<String, Long> countEmployeesByAgeGroup() {
+        log.info("Thống kê số lượng user theo độ tuổi");
+        List<UserEntity> users = userRepository.findAllByStatusNot(UserStatusEnum.DELETED);
+        Map<String, Long> ageGroupMap = new LinkedHashMap<>();
+        ageGroupMap.put("< 12", 0L);
+        ageGroupMap.put("12 - 17", 0L);
+        ageGroupMap.put("18 - 24", 0L);
+        ageGroupMap.put("24 - 34", 0L);
+        ageGroupMap.put("35 - 54", 0L);
+        ageGroupMap.put("55+", 0L);
+        ageGroupMap.put("CHUA_XAC_DINH", 0L);
+
+        LocalDate now = LocalDate.now();
+        for (UserEntity user : users) {
+            if (user == null) {
+                continue;
+            }
+
+            if (user.getDateOfBirth() == null) {
+                ageGroupMap.merge("CHUA_XAC_DINH", 1L, Long::sum);
+                continue;
+            }
+
+            LocalDate dob = user.getDateOfBirth().toLocalDate();
+            int age = Period.between(dob, now).getYears();
+
+            String group;
+            if (age < 12) {
+                group = "< 12";
+            } else if (age <= 17) {
+                group = "12 - 17";
+            } else if (age <= 24) {
+                group = "18 - 24";
+            } else if (age <= 34) {
+                group = "24 - 34";
+            } else if (age <= 54) {
+                group = "35 - 54";
+            } else {
+                group = "55+";
+            }
+
+            ageGroupMap.merge(group, 1L, Long::sum);
+        }
+
+        return ageGroupMap;
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public Map<String, Long> countEmployeesByStatus() {
+        log.info("Thống kê số lượng nhân viên theo trạng thái");
+        List<Object[]> results = employeeRepository.countEmployeesGroupByStatus(EmployeeStatusEnum.DELETE);
+        Map<String, Long> statusMap = new HashMap<>();
+        for (Object[] row : results) {
+            EmployeeStatusEnum status = (EmployeeStatusEnum) row[0];
+            Long count = (Long) row[1];
+            if (status != null) {
+                statusMap.put(status.name(), count);
+            }
+        }
+        return statusMap;
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public List<MonthlyUserCountResponse> getMonthlyNewUsers(Integer year) {
+        int targetYear = (year != null && year > 0) ? year : LocalDate.now().getYear();
+        log.info("Lấy số lượng người dùng mới theo tháng trong năm: {}", targetYear);
+        List<Object[]> queryResults = userRepository.countMonthlyNewUsersByYear(targetYear);
+        Map<Integer, Long> monthCountMap = new HashMap<>();
+        for (Object[] row : queryResults) {
+            Integer month = (Integer) row[0];
+            Long count = (Long) row[1];
+            if (month != null) {
+                monthCountMap.put(month, count);
+            }
+        }
+
+        List<MonthlyUserCountResponse> responseList = new ArrayList<>();
+        for (int m = 1; m <= 12; m++) {
+            responseList.add(MonthlyUserCountResponse.builder()
+                    .month(m)
+                    .count(monthCountMap.getOrDefault(m, 0L))
+                    .build());
+        }
+        return responseList;
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public UserDetailResponse getUserDetail(Long userId) {
+        log.info("Lấy thông tin chi tiết người dùng: {}", userId);
+        UserEntity user = userRepository.findById(userId)
+                .orElseThrow(() -> ResourceNotFoundException.of("User", userId));
+
+        UserResponse accountInfo = mapToUserResponse(user);
+
+        StudentProfileResponse studentProfile = studentProfileService.findByIdOrNull(userId);
+        List<GuardianResponse> guardians = new ArrayList<>();
+        if (studentProfile != null) {
+            List<GuardianEntity> guardianEntities = guardianRepository.findByStudentProfile_UserId(userId);
+            if (guardianEntities != null && !guardianEntities.isEmpty()) {
+                guardians = guardianMapper.toResponseList(guardianEntities);
+            }
+        }
+
+        EmployeeResponse employeeProfile = employeeService.findByIdOrNull(userId);
+
+        return UserDetailResponse.builder()
+                .userAccount(accountInfo)
+                .studentProfile(studentProfile)
+                .guardians(guardians)
+                .employeeProfile(employeeProfile)
+                .createdBy(user.getCreatedBy())
+                .updatedBy(user.getUpdatedBy())
+                .createdAt(user.getCreatedAt())
+                .updatedAt(user.getUpdatedAt())
+                .build();
+    }
+
+
+    @Override
+    public void sendBulkEmail(SendBulkEmailRequest request) {
+        log.info("Gửi email tới nhiều tài khoản");
+        if (request == null || request.getEmails() == null || request.getEmails().isEmpty()) {
+            throw new BusinessException("Danh sách email không được để trống.");
+        }
+        emailService.sendBulkEmail(request.getEmails(), request.getSubject(), request.getContent());
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public byte[] exportUsersToExcel(UserSearchRequest request) {
+        log.info("Xuất file danh sách người dùng qua CsvExport util");
+
+        List<UserResponse> users = request != null
+                ? getUsers(request).getContent()
+                : getAllUsers();
+
+        List<String> headers = List.of(
+                "ID", "Username", "Email", "Họ và tên",
+                "Số điện thoại", "Giới tính", "Trạng thái", "Vai trò", "Ngày tạo"
+        );
+
+
+        List<Function<UserResponse, Object>> extractors = List.of(
+                UserResponse::getId,
+                UserResponse::getUsername,
+                UserResponse::getEmail,
+                UserResponse::getFullName,
+                UserResponse::getPhone,
+                u -> u.getGender() == null ? "Chưa xác định" : (u.getGender() == 0 ? "Nam" : (u.getGender() == 1 ? "Nữ" : "Khác")),
+                u -> u.getStatus() != null ? u.getStatus().name() : "",
+                u -> u.getRoles() != null ? String.join("; ", u.getRoles()) : "",
+                u -> u.getCreatedAt() != null ? u.getCreatedAt().toString() : ""
+        );
+
+        return CsvExport.exportToCsv(headers, users, extractors, true);
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public byte[] exportUserDetailToExcel(Long userId) {
+        log.info("Xuất file Excel chi tiết người dùng: {}", userId);
+        UserDetailResponse detail = getUserDetail(userId);
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("\uFEFF"); // UTF-8 BOM
+
+        // 1. THÔNG TIN TÀI KHOẢN (USER ACCOUNT)
+        sb.append("=== THÔNG TIN TÀI KHOẢN ===\n");
+        sb.append("Trường,Giá trị\n");
+        UserResponse acc = detail.getUserAccount();
+        if (acc != null) {
+            sb.append("ID,").append(acc.getId() != null ? acc.getId() : "").append("\n");
+            sb.append("Tên đăng nhập,").append(escapeCsvValue(acc.getUsername())).append("\n");
+            sb.append("Email,").append(escapeCsvValue(acc.getEmail())).append("\n");
+            sb.append("Họ và tên,").append(escapeCsvValue(acc.getFullName())).append("\n");
+            sb.append("Số điện thoại,").append(escapeCsvValue(acc.getPhone())).append("\n");
+            sb.append("Giới tính,").append(acc.getGender() == null ? "Chưa xác định" : (acc.getGender() == 0 ? "Nam" : (acc.getGender() == 1 ? "Nữ" : "Khác"))).append("\n");
+            sb.append("Trạng thái,").append(acc.getStatus() != null ? acc.getStatus().name() : "").append("\n");
+            sb.append("Vai trò,").append(acc.getRoles() != null ? escapeCsvValue(String.join("; ", acc.getRoles())) : "").append("\n");
+            sb.append("Ngày sinh,").append(acc.getDateOfBirth() != null ? acc.getDateOfBirth().toString() : "").append("\n");
+            sb.append("Đăng nhập gần nhất,").append(acc.getLastLoginAt() != null ? acc.getLastLoginAt().toString() : "").append("\n");
+        }
+        sb.append("\n");
+
+        // 2. THÔNG TIN CÁ NHÂN HỌC VIÊN (NẾU CÓ)
+        if (detail.getStudentProfile() != null) {
+            sb.append("=== THÔNG TIN CÁ NHÂN HỌC VIÊN ===\n");
+            sb.append("Trường,Giá trị\n");
+            StudentProfileResponse st = detail.getStudentProfile();
+            sb.append("Mã học viên,").append(escapeCsvValue(st.getStudentCode())).append("\n");
+            sb.append("Trình độ học vấn,").append(escapeCsvValue(st.getEducationLevel())).append("\n");
+            sb.append("Trường học,").append(escapeCsvValue(st.getSchoolName())).append("\n");
+            sb.append("Mục tiêu,").append(escapeCsvValue(st.getGoal())).append("\n");
+            sb.append("Mô tả,").append(escapeCsvValue(st.getDescription())).append("\n");
+            sb.append("Vị thành niên (<18 tuổi),").append(Boolean.TRUE.equals(st.getIsMinor()) ? "Có" : "Không").append("\n");
+            sb.append("Đã tạo mục tiêu,").append(Boolean.TRUE.equals(st.getHasGoal()) ? "Rồi" : "Chưa").append("\n");
+            sb.append("\n");
+
+            // THÔNG TIN PHỤ HUYNH / NGƯỜI GIÁM HỘ
+            if (detail.getGuardians() != null && !detail.getGuardians().isEmpty()) {
+                sb.append("=== DANH SÁCH PHỤ HUYNH / NGƯỜI GIÁM HỘ ===\n");
+                sb.append("STT,Họ và tên,Số điện thoại,Mối quan hệ,Email,Địa chỉ\n");
+                int gIndex = 1;
+                for (GuardianResponse g : detail.getGuardians()) {
+                    sb.append(gIndex++).append(",")
+                            .append(escapeCsvValue(g.getFullName())).append(",")
+                            .append(escapeCsvValue(g.getPhone())).append(",")
+                            .append(escapeCsvValue(g.getRelationship().name())).append(",")
+                            .append(escapeCsvValue(g.getEmail())).append(",")
+                            .append(escapeCsvValue(g.getAddress())).append("\n");
+                }
+                sb.append("\n");
+            }
+        }
+
+        // 3. THÔNG TIN CÁ NHÂN NHÂN VIÊN (NẾU CÓ)
+        if (detail.getEmployeeProfile() != null) {
+            sb.append("=== THÔNG TIN CÁ NHÂN NHÂN VIÊN ===\n");
+            sb.append("Trường,Giá trị\n");
+            EmployeeResponse emp = detail.getEmployeeProfile();
+            sb.append("Mã nhân viên,").append(escapeCsvValue(emp.getEmployeeCode())).append("\n");
+            sb.append("Phòng ban,").append(emp.getDepartmentName() != null ? escapeCsvValue(emp.getDepartmentName()) : "").append("\n");
+            sb.append("Chức vụ,").append(escapeCsvValue(emp.getPosition())).append("\n");
+            sb.append("Loại hình làm việc,").append(emp.getEmploymentTypeEnum() != null ? emp.getEmploymentTypeEnum().name() : "").append("\n");
+            sb.append("Trạng thái nhân sự,").append(emp.getStatus() != null ? emp.getStatus().name() : "").append("\n");
+            sb.append("Ngày bắt đầu làm việc,").append(emp.getStartDate() != null ? emp.getStartDate().toString() : "").append("\n");
+            sb.append("Ngày kết thúc,").append(emp.getEndDate() != null ? emp.getEndDate().toString() : "").append("\n");
+            sb.append("\n");
+        }
+
+        // 4. THÔNG TIN HỆ THỐNG
+        sb.append("=== THÔNG TIN HỆ THỐNG ===\n");
+        sb.append("Trường,Giá trị\n");
+        sb.append("ID người tạo,").append(detail.getCreatedBy() != null ? detail.getCreatedBy() : "").append("\n");
+        sb.append("ID người cập nhật,").append(detail.getUpdatedBy() != null ? detail.getUpdatedBy() : "").append("\n");
+        sb.append("Thời gian tạo,").append(detail.getCreatedAt() != null ? detail.getCreatedAt().toString() : "").append("\n");
+        sb.append("Thời gian cập nhật,").append(detail.getUpdatedAt() != null ? detail.getUpdatedAt().toString() : "").append("\n");
+
+        return sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    private String escapeCsvValue(String value) {
+        if (value == null) {
+            return "";
+        }
+        if (value.contains(",") || value.contains("\"") || value.contains("\n") || value.contains("\r")) {
+            return "\"" + value.replace("\"", "\"\"") + "\"";
+        }
+        return value;
+    }
+
+
+
+    @Transactional
+    @Override
+    public Map<String, Object> bulkCreateEmployees(BulkCreateEmployeeRequest request) {
+        log.info("Thêm nhiều nhân viên theo danh sách email");
+        if (request == null || request.getEmails() == null || request.getEmails().isEmpty()) {
+            throw new BusinessException("Danh sách email không được để trống.");
+        }
+
+        int successCount = 0;
+        int failureCount = 0;
+        List<String> errors = new ArrayList<>();
+        List<EmployeeResponse> createdEmployees = new ArrayList<>();
+
+        for (String email : request.getEmails()) {
+            if (email == null || email.isBlank()) {
+                continue;
+            }
+            try {
+                CreateEmployeeRequest empReq = CreateEmployeeRequest.builder()
+                        .email(email.trim())
+                        .departmentId(request.getDepartmentId())
+                        .roleCode(request.getRoleCode() != null ? request.getRoleCode() : "EMPLOYEE")
+                        .build();
+
+                EmployeeResponse created = employeeService.create(empReq);
+                createdEmployees.add(created);
+                successCount++;
+            } catch (Exception e) {
+                failureCount++;
+                errors.add("Email " + email + ": " + e.getMessage());
+            }
+        }
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("successCount", successCount);
+        result.put("failureCount", failureCount);
+        result.put("errors", errors);
+        result.put("createdEmployees", createdEmployees);
+        return result;
+    }
 }
+

@@ -22,3 +22,13 @@ export interface ErrorResponse {
   path: string;
   details: string[] | null;
 }
+
+export interface SidebarGroup {
+  title: string;
+  items: {
+    label: string;
+    path: string;
+    icon: React.ElementType;
+    badge?: string;
+  }[];
+}

@@ -51,5 +51,15 @@ public interface UserRoleRepository extends BaseRepository<UserRoleEntity, Long>
         and (ur.assignedAt <= :now)
     """)
     List<UserRoleEntity> findActiveUserRoleWithPermissions(@Param("userId") Long userId, @Param("now") LocalDateTime now);
+
+    @Query("""
+        SELECT r.name, COUNT(DISTINCT ur.userEntity.id)
+        FROM UserRoleEntity ur
+        JOIN ur.roleEntity r
+        WHERE ur.expiredAt IS NULL OR ur.expiredAt > CURRENT_TIMESTAMP
+        GROUP BY r.name
+    """)
+    List<Object[]> countUsersGroupByRole();
 }
+
 

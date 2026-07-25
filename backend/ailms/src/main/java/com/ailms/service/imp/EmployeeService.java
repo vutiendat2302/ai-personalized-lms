@@ -350,4 +350,21 @@ public class EmployeeService implements IEmployeeService {
         Page<EmployeeEntity> page = employeeRepository.findAll(spec, pageable);
         return PageResponse.from(page.map(employeeMapper::toResponse));
     }
+
+    @Override
+    public long countEmployees() {
+        log.info("Counting all active/non-deleted employees");
+        return employeeRepository.countByStatusNot(EmployeeStatusEnum.DELETE);
+    }
+
+    @Override
+    public EmployeeResponse findByIdOrNull(Long id) {
+        log.info("Getting employee profile by id or null: {}", id);
+        return employeeRepository.findById(id)
+                .filter(entity -> entity.getStatus() != EmployeeStatusEnum.DELETE)
+                .map(employeeMapper::toResponse)
+                .orElse(null);
+    }
 }
+
+
