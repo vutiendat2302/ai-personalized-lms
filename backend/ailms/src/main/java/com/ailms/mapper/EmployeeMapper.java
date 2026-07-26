@@ -11,8 +11,12 @@ import java.util.List;
 @Mapper(componentModel = "spring")
 public interface EmployeeMapper {
 
+    @Mapping(source = "userId", target = "id")
     @Mapping(source = "department.id", target = "departmentId")
     @Mapping(source = "department.name", target = "departmentName")
+    @Mapping(source = "userEntity.fullName", target = "fullName")
+    @Mapping(source = "userEntity.email", target = "userEmail")
+    @Mapping(source = "userEntity.username", target = "userName")
     EmployeeResponse toResponse(EmployeeEntity entity);
 
     List<EmployeeResponse> toResponseList(List<EmployeeEntity> list);

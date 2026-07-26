@@ -51,6 +51,68 @@ public interface UserRepository extends BaseRepository<UserEntity, Long> {
             AND ur.userEntity.status != com.ailms.entity.enums.UserStatusEnum.DELETED
             """)
     List<UserEntity> findUsersByRoleName(@Param("roleName") String roleName);
+
+    List<UserEntity> findByStatus(UserStatusEnum userStatusEnum);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query(value = "DELETE FROM attendance WHERE employee_id = :id", nativeQuery = true)
+    void deleteAttendancesByUserId(@Param("id") Long id);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query(value = "DELETE FROM leave_request WHERE employee_id = :id", nativeQuery = true)
+    void deleteLeaveRequestsByUserId(@Param("id") Long id);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query(value = "DELETE FROM employee_contract WHERE employee_id = :id", nativeQuery = true)
+    void deleteEmployeeContractsByUserId(@Param("id") Long id);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query(value = "DELETE FROM salary WHERE employee_id = :id", nativeQuery = true)
+    void deleteSalariesByUserId(@Param("id") Long id);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query(value = "DELETE FROM teaching_rate WHERE employee_id = :id", nativeQuery = true)
+    void deleteTeachingRatesByUserId(@Param("id") Long id);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query(value = "DELETE FROM employee WHERE user_id = :id", nativeQuery = true)
+    void deleteEmployeeByUserId(@Param("id") Long id);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query(value = "DELETE FROM guardian WHERE student_user_id = :id", nativeQuery = true)
+    void deleteGuardiansByUserId(@Param("id") Long id);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query(value = "DELETE FROM student_interest WHERE student_user_id = :id", nativeQuery = true)
+    void deleteStudentInterestsByUserId(@Param("id") Long id);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query(value = "DELETE FROM student_profile WHERE user_id = :id", nativeQuery = true)
+    void deleteStudentProfileByUserId(@Param("id") Long id);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query(value = "DELETE FROM user_role WHERE user_id = :id", nativeQuery = true)
+    void deleteUserRolesByUserId(@Param("id") Long id);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query(value = "DELETE FROM audit_log WHERE user_id = :id", nativeQuery = true)
+    void deleteAuditLogsByUserId(@Param("id") Long id);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query(value = "DELETE FROM notification WHERE user_id = :id", nativeQuery = true)
+    void deleteNotificationsByUserId(@Param("id") Long id);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query(value = "DELETE FROM cart_item WHERE user_id = :id", nativeQuery = true)
+    void deleteCartItemsByUserId(@Param("id") Long id);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query(value = "DELETE FROM review WHERE user_id = :id", nativeQuery = true)
+    void deleteReviewsByUserId(@Param("id") Long id);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query(value = "DELETE FROM `user` WHERE id = :id", nativeQuery = true)
+    void deleteUserByIdNative(@Param("id") Long id);
 }
 
 

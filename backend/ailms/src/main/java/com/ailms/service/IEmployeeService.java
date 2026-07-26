@@ -90,6 +90,23 @@ public interface IEmployeeService {
      * @return EmployeeResponse hoặc null
      */
     EmployeeResponse findByIdOrNull(Long id);
+
+    /**
+     * Lấy danh sách các nhân viên đang ở trạng thái xóa mềm (DELETED).
+     */
+    List<EmployeeResponse> getTrashEmployees();
+
+    /**
+     * Xóa cứng (vĩnh viễn) hồ sơ nhân viên khỏi cơ sở dữ liệu.
+     *
+     * @param id ID nhân viên
+     */
+    void hardDelete(Long id);
+
+    /**
+     * Xóa cứng hàng loạt danh sách nhân viên theo IDs.
+     */
+    java.util.Map<String, Object> bulkHardDelete(List<Long> ids);
 }
 
 

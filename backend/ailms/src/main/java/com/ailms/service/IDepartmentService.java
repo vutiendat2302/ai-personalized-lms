@@ -2,6 +2,7 @@ package com.ailms.service;
 
 import com.ailms.request.*;
 import com.ailms.response.DepartmentResponse;
+import com.ailms.response.EmployeeResponse;
 import com.ailms.response.PageResponse;
 
 import java.util.List;
@@ -56,4 +57,9 @@ public interface IDepartmentService {
      * @return trang kết quả chứa danh sách đã được phân trang
      */
     PageResponse<DepartmentResponse> search(DepartmentSearchRequest request);
+
+    /**
+     * Lấy danh sách nhân viên thuộc phòng ban.
+     */
+    List<EmployeeResponse> getEmployeesByDepartmentId(Long id);
 }

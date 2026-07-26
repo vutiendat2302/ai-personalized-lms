@@ -49,6 +49,9 @@ export const userApi = {
   bulkAssignRole: (payload: BulkAssignRoleRequest) =>
     httpClient.post<ApiResponse<any>>("/v1/users/bulk-assign-role", payload),
 
+  bulkRemoveRole: (payload: any) =>
+    httpClient.post<ApiResponse<any>>("/v1/users/bulk-remove-role", payload),
+
   assignRoles: (id: string | number, payload: AssignRolesRequest) =>
     httpClient.post<ApiResponse<void>>(`/v1/users/${id}/roles`, payload),
 
@@ -99,5 +102,18 @@ export const userApi = {
     httpClient.get(`/v1/users/${id}/export-detail`, {
       responseType: "blob"
     }),
+
+  // Trash & Hard Delete API for Users
+  getTrashUsers: () =>
+    httpClient.get<ApiResponse<UserResponse[]>>("/v1/users/trash"),
+
+  hardDeleteUser: (id: string | number) =>
+    httpClient.delete<ApiResponse<void>>(`/v1/users/trash/${id}`),
+
+  bulkHardDeleteUsers: (ids: (string | number)[]) =>
+    httpClient.post<ApiResponse<any>>(
+      "/v1/users/trash/bulk-hard-delete",
+      ids.map((id) => String(id))
+    ),
 };
 

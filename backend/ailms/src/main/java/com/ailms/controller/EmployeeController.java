@@ -14,7 +14,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import org.springframework.security.access.prepost.PreAuthorize;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("${api.prefix}/employees")
@@ -52,8 +54,9 @@ public class EmployeeController {
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         employeeService.softDelete(id);
-        return ResponseEntity.ok(ApiResponse.message("Employee deleted successfully"));
+        return ResponseEntity.ok(ApiResponse.message("Employee soft-deleted successfully"));
     }
+
 
     @GetMapping("/search")
     public ResponseEntity<ApiResponse<PageResponse<EmployeeResponse>>> search(EmployeeSearchRequest request) {

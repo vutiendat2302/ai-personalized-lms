@@ -17,7 +17,7 @@ public class BaseSearchRequest {
 
     private static final int DEFAULT_PAGE = 0;
     private static final int DEFAULT_SIZE = 10;
-    private static final int MAX_SIZE = 200;
+    private static final int MAX_SIZE = 10000;
 
     /**
      * Trang hiện tại, bắt đầu từ 0
@@ -37,7 +37,7 @@ public class BaseSearchRequest {
 
     public Pageable toPageable() {
         int safePage = (page == null || page < 0) ? DEFAULT_PAGE : page;
-        int safeSize = (size == null || size <= 0 || size > MAX_SIZE) ? DEFAULT_SIZE : size;
+        int safeSize = (size == null || size <= 0) ? DEFAULT_SIZE : Math.min(size, MAX_SIZE);
 
         System.out.println("sort raw = " + sort);
 

@@ -196,7 +196,9 @@ public class EmailService implements IEmailService {
      */
     public void sendSetPasswordEmail(String toEmail, String token) {
         try {
-            String setPasswordLink = frontendUrl + "/set-password?token=" + token;
+            String setPasswordLink = frontendUrl.endsWith("/set-password")
+                    ? frontendUrl + "?token=" + token
+                    : frontendUrl + "/set-password?token=" + token;
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
             helper.setTo(toEmail);

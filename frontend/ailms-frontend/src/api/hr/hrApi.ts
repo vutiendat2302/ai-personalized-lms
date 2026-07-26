@@ -97,6 +97,21 @@ export const hrApi = {
   createEmployee: (payload: CreateEmployeeRequest) =>
     httpClient.post<ApiResponse<EmployeeResponse>>("/v1/employees", payload),
 
+  softDeleteEmployee: (id: string | number) =>
+    httpClient.delete<ApiResponse<void>>(`/v1/employees/${id}`),
+
+  getTrashEmployees: () =>
+    httpClient.get<ApiResponse<EmployeeResponse[]>>("/v1/employees/trash"),
+
+  hardDeleteEmployee: (id: string | number) =>
+    httpClient.delete<ApiResponse<void>>(`/v1/employees/trash/${id}`),
+
+  bulkHardDeleteEmployees: (ids: (string | number)[]) =>
+    httpClient.post<ApiResponse<any>>(
+      "/v1/employees/trash/bulk-hard-delete",
+      ids.map((id) => Number(id)).filter((n) => !isNaN(n))
+    ),
+
   // Contracts
   getContracts: (employeeId?: string) =>
     httpClient.get<ApiResponse<EmployeeContractResponse[]>>("/v1/employee-contracts", { params: { employeeId } }),

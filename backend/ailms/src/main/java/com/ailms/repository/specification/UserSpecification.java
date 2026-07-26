@@ -28,7 +28,8 @@ public class UserSpecification {
             return builder.build();
         }
 
-        builder.likeAnyIfPresent(request.getKeyword(), "username", "email", "fullName");
+        builder.likeAnyIfPresent(request.getKeyword(), "username", "fullName", "email");
+        builder.equalIfPresent("gender", request.getGender());
         builder.greaterOrEqualIfPresent("createdAt", request.getCreatedFrom());
         builder.lessOrEqualIfPresent("createdAt", request.getCreatedTo());
 

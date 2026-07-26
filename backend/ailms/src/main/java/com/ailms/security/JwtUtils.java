@@ -127,14 +127,13 @@ public class JwtUtils {
             return true;
         } catch (MalformedJwtException e) { // ko dung jwt (token)
             log.error("Invalid JWT token: {}", e.getMessage());
-        } catch (TokenExpiredException e) { // token het han
+        } catch (ExpiredJwtException e) { // token het han (JJWT exception)
             log.error("JWT token is expired: {}", e.getMessage());
             throw TokenExpiredException.of("Token", e.getMessage());
         } catch (UnsupportedJwtException e) { // token khong ho tro
             log.error("JWT token is unsupported: {}", e.getMessage());
-        } catch (InvalidTokenException e) { // token rong
+        } catch (IllegalArgumentException e) { // token rong / claims rong
             log.error("JWT claims string is empty: {}", e.getMessage());
-            throw InvalidTokenException.of("Token", e.getMessage());
         } catch (Exception e) {
             log.error("Cannot validate JWT token: {}", e.getMessage());
         }

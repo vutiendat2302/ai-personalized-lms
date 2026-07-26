@@ -13,5 +13,5 @@ public class BulkCreateEmployeeRequest {
 
     private Long departmentId;
 
-    private String roleCode;
+    private Long roleId;
 }

@@ -14,7 +14,15 @@ import java.time.LocalDateTime;
 @Builder
 public class EmployeeResponse {
 
+    private Long id;
+
     private Long userId;
+
+    private String userName;
+
+    private String userEmail;
+
+    private String fullName;
 
     private String employeeCode;
 

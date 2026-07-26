@@ -3,6 +3,7 @@ package com.ailms.controller;
 import com.ailms.request.*;
 import com.ailms.response.ApiResponse;
 import com.ailms.response.DepartmentResponse;
+import com.ailms.response.EmployeeResponse;
 import com.ailms.response.PageResponse;
 import com.ailms.service.IDepartmentService;
 import jakarta.validation.Valid;
@@ -58,5 +59,11 @@ public class DepartmentController {
     public ResponseEntity<ApiResponse<PageResponse<DepartmentResponse>>> search(DepartmentSearchRequest request) {
         PageResponse<DepartmentResponse> response = departmentService.search(request);
         return ResponseEntity.ok(ApiResponse.of(response));
+    }
+
+    @GetMapping("/{id}/employees")
+    public ResponseEntity<ApiResponse<List<EmployeeResponse>>> getEmployeesByDepartmentId(@PathVariable Long id) {
+        List<EmployeeResponse> response = departmentService.getEmployeesByDepartmentId(id);
+        return ResponseEntity.ok(ApiResponse.of("Employees in department retrieved successfully", response));
     }
 }

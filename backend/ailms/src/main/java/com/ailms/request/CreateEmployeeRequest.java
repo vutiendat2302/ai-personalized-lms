@@ -28,7 +28,7 @@ public class CreateEmployeeRequest {
 
     private String password;
 
-    private String roleCode; // e.g. "HR", "TEACHER", "EMPLOYEE"
+    private Long roleId; // e.g. 1, 2, 3
 
     private String employeeCode;
 

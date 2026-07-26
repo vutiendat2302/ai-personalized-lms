@@ -12,6 +12,7 @@ export interface UserResponse {
   createdAt: string;
   updatedAt: string | null;
   roles: string[];
+  departmentCode?: string | null;
 }
 
 export interface RoleResponse {
@@ -86,6 +87,7 @@ export interface UpdateUserRequest {
   phone?: string;
   gender?: number;
   dateOfBirth?: string;
+  status?: string;
 }
 
 export interface UpdateProfileRequest {
@@ -100,12 +102,12 @@ export interface InviteUserRequest {
 }
 
 export interface BulkDeleteRequest {
-  ids: string[];
+  userIds: (string | number)[];
 }
 
 export interface BulkAssignRoleRequest {
   userIds: string[];
-  roleName: string; // or code
+  roleId: string; 
 }
 
 export interface AssignRolesRequest {
@@ -217,8 +219,13 @@ export interface SendBulkEmailRequest {
 
 export interface BulkCreateEmployeeRequest {
   emails: string[];
-  departmentId?: number;
-  roleCode?: string;
+  departmentId?: string | number;
+  roleId?: string | number;
+}
+
+export interface BulkRemoveRoleRequest {
+  userIds: (string | number)[];
+  roleId: string | number;
 }
 
 export interface CreateCategoryRequest {

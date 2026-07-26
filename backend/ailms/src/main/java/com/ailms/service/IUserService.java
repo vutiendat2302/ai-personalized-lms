@@ -91,6 +91,14 @@ public interface IUserService {
     Map<String, Object> bulkAssignRole(BulkAssignRoleRequest request);
 
     /**
+     * Gỡ vai trò hàng loạt cho nhiều người dùng.
+     *
+     * @param request chứa danh sách userIds và roleId cần gỡ
+     * @return kết quả xử lý gồm successCount, failureCount, errors
+     */
+    Map<String, Object> bulkRemoveRole(BulkRemoveRoleRequest request);
+
+    /**
      * Lấy danh sách toàn bộ các quyền hạn có hiệu lực thực tế của người dùng.
      *
      * @param userId ID của người dùng (User)
@@ -189,6 +197,21 @@ public interface IUserService {
      * Thêm nhiều nhân viên (request: một danh sách email)
      */
     Map<String, Object> bulkCreateEmployees(BulkCreateEmployeeRequest request);
+
+    /**
+     * Lấy danh sách người dùng trong Thùng rác (trạng thái DELETED).
+     */
+    List<UserResponse> getTrashUsers();
+
+    /**
+     * Xóa cứng vĩnh viễn tài khoản người dùng khỏi CSDL (từ con tới cha).
+     */
+    void hardDeleteUser(Long id);
+
+    /**
+     * Xóa cứng vĩnh viễn hàng loạt tài khoản người dùng khỏi CSDL.
+     */
+    Map<String, Object> bulkHardDeleteUsers(List<Long> ids);
 }
 
 

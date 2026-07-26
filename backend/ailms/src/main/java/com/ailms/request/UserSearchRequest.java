@@ -19,4 +19,6 @@ public class UserSearchRequest extends CommonSearchRequest<UserStatusEnum> {
     private List<Long> roleIds;
 
     private List<UserStatusEnum> statuses;
+
+    private Integer gender;
 }

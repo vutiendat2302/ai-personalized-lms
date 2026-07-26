@@ -1,13 +1,10 @@
 package com.ailms.controller;
 
-import com.ailms.response.PageResponse;
+import com.ailms.response.*;
 import com.ailms.request.UserSearchRequest;
-import com.ailms.response.UserResponse;
 
 
 import com.ailms.request.*;
-import com.ailms.response.ApiResponse;
-import com.ailms.response.EffectivePermissionResponse;
 import com.ailms.security.CustomUserDetails;
 import com.ailms.service.IUserService;
 import jakarta.validation.Valid;
@@ -21,8 +18,6 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
-import com.ailms.response.MonthlyUserCountResponse;
-import com.ailms.response.UserDetailResponse;
 import org.springframework.http.HttpHeaders;
 
 @RestController
@@ -137,6 +132,15 @@ public class UserController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> bulkAssignRole(@Valid @RequestBody BulkAssignRoleRequest request) {
         Map<String, Object> response = userService.bulkAssignRole(request);
         return ResponseEntity.ok(ApiResponse.of("Bulk assign role processed", response));
+    }
+
+    /**
+     * Gỡ một role khỏi nhiều user cùng lúc.
+     */
+    @PostMapping("/bulk-remove-role")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> bulkRemoveRole(@Valid @RequestBody BulkRemoveRoleRequest request) {
+        Map<String, Object> response = userService.bulkRemoveRole(request);
+        return ResponseEntity.ok(ApiResponse.of("Bulk remove role processed", response));
     }
 
     @GetMapping("/{id}/effective-permissions")
@@ -290,6 +294,25 @@ public class UserController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> bulkCreateEmployees(@Valid @RequestBody BulkCreateEmployeeRequest request) {
         Map<String, Object> response = userService.bulkCreateEmployees(request);
         return ResponseEntity.ok(ApiResponse.of("Bulk create employees processed successfully", response));
+    }
+
+
+    @GetMapping("/trash")
+    public ResponseEntity<ApiResponse<List<UserResponse>>> getTrashUser() {
+        List<UserResponse> response = userService.getTrashUsers();
+        return ResponseEntity.ok(ApiResponse.of("Trash users retrieved successfully", response));
+    }
+
+    @DeleteMapping("/trash/{id}")
+    public ResponseEntity<ApiResponse<Void>> hardDelete(@PathVariable Long id) {
+        userService.hardDeleteUser(id);
+        return ResponseEntity.ok(ApiResponse.message("User permanently deleted successfully"));
+    }
+
+    @PostMapping("/trash/bulk-hard-delete")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> bulkHardDelete(@RequestBody List<Long> ids) {
+        Map<String, Object> response = userService.bulkHardDeleteUsers(ids);
+        return ResponseEntity.ok(ApiResponse.of("Bulk hard delete processed successfully", response));
     }
 }
 

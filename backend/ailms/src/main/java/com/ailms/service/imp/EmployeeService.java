@@ -19,6 +19,7 @@ import com.ailms.request.EmployeeSearchRequest;
 import com.ailms.request.UpdateEmployeeRequest;
 import com.ailms.response.EmployeeResponse;
 import com.ailms.response.PageResponse;
+import com.ailms.security.JwtUtils;
 import com.ailms.service.IEmailService;
 import com.ailms.service.IEmployeeContractService;
 import com.ailms.service.IEmployeeService;
@@ -58,8 +59,11 @@ public class EmployeeService implements IEmployeeService {
     private final IEmployeeContractService employeeContractService;
     private final SalaryRepository salaryRepository;
     private final TeachingRateRepository teachingRateRepository;
+    private final AttendanceRepository attendanceRepository;
+    private final LeaveRequestRepository leaveRequestRepository;
     private final SortFieldResolver sortFieldResolver;
     private final IEmailService emailService;
+    private final JwtUtils jwtUtils;
     private final ApplicationEventPublisher applicationEventPublisher;
 
     private static final String RESOURCE_NAME = "Employee";
@@ -97,44 +101,55 @@ public class EmployeeService implements IEmployeeService {
         } else {
             // HR creating new user account + employee profile in one step
             if (request.getEmail() == null || request.getEmail().isBlank()) {
-                throw new BusinessException("Email is required to create a new user and employee");
-            }
-            if (userRepository.existsByEmail(request.getEmail())) {
-                throw new DuplicateResourceException("Email already exists: " + request.getEmail());
+                throw new BusinessException("Email là bắt buộc để tạo nhân viên mới.");
             }
 
-            String tempPassword = request.getPassword() != null && !request.getPassword().isBlank()
-                    ? request.getPassword()
-                    : UUID.randomUUID().toString().substring(0, 8);
+            java.util.Optional<UserEntity> existingUserOpt = userRepository.findByEmail(request.getEmail().trim());
+            if (existingUserOpt.isPresent()) {
+                user = existingUserOpt.get();
+                if (employeeRepository.existsById(user.getId())) {
+                    throw new DuplicateResourceException("Tài khoản với email này đã là nhân sự trong hệ thống: " + request.getEmail());
+                }
+            } else {
+                String tempPassword = request.getPassword() != null && !request.getPassword().isBlank()
+                        ? request.getPassword()
+                        : "Password@123";
 
-            user = UserEntity.builder()
-                    .username(request.getEmail())
-                    .email(request.getEmail())
-                    .passwordHash(passwordEncoder.encode(tempPassword))
-                    .fullName(request.getFullName() != null ? request.getFullName() : request.getEmail())
-                    .status(UserStatusEnum.ACTIVE)
-                    .build();
-            user = userRepository.save(user);
+                user = UserEntity.builder()
+                        .username(request.getEmail().trim())
+                        .email(request.getEmail().trim())
+                        .passwordHash(passwordEncoder.encode(tempPassword))
+                        .fullName(request.getFullName() != null ? request.getFullName() : request.getEmail().trim())
+                        .status(UserStatusEnum.ACTIVE)
+                        .build();
+                user = userRepository.save(user);
 
-            // Assign Role
-            String roleCode = request.getRoleCode() != null ? request.getRoleCode() : "EMPLOYEE";
-            RoleEntity role = roleRepository.findByCode(roleCode)
-                    .orElseGet(() -> roleRepository.findByCode("EMPLOYEE")
-                            .orElseThrow(() -> ResourceNotFoundException.of("Role", roleCode)));
+                // Assign Role
+                Long roleId = request.getRoleId();
+                RoleEntity role = null;
+                if (roleId != null) {
+                    role = roleRepository.findById(roleId)
+                            .orElseThrow(() -> ResourceNotFoundException.of("Role", roleId));
+                } else {
+                    role = roleRepository.findByCode("EMPLOYEE")
+                            .orElseGet(() -> roleRepository.findAll().stream().findFirst()
+                                    .orElseThrow(() -> ResourceNotFoundException.of("Role", "EMPLOYEE")));
+                }
 
-            UserRoleEntity userRole = UserRoleEntity.builder()
-                    .userEntity(user)
-                    .roleEntity(role)
-                    .build();
-            userRoleRepository.save(userRole);
+                UserRoleEntity userRole = UserRoleEntity.builder()
+                        .userEntity(user)
+                        .roleEntity(role)
+                        .build();
+                userRoleRepository.save(userRole);
 
-            // Send set password / welcome email async
-            final String recipientEmail = user.getEmail();
-            final String token = UUID.randomUUID().toString();
-            try {
-                emailService.sendSetPasswordEmail(recipientEmail, token);
-            } catch (Exception e) {
-                log.error("Failed to send welcome set-password email to {}", recipientEmail, e);
+                // Send JWT invite set-password email
+                final String recipientEmail = user.getEmail();
+                final String jwtToken = jwtUtils.generateSetPasswordToken(user.getId());
+                try {
+                    emailService.sendSetPasswordEmail(recipientEmail, jwtToken);
+                } catch (Exception e) {
+                    log.error("Failed to send welcome set-password email to {}", recipientEmail, e);
+                }
             }
         }
 
@@ -210,7 +225,14 @@ public class EmployeeService implements IEmployeeService {
         log.info("Deleting employee: {}", id);
         EmployeeEntity entity = employeeRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
-        String oldValue = SimpleJsonWriter.toJson(entity);
+        
+        String oldValue = null;
+        try {
+            oldValue = SimpleJsonWriter.toJson(employeeMapper.toResponse(entity));
+        } catch (Exception e) {
+            oldValue = "EmployeeCode: " + entity.getEmployeeCode();
+        }
+
         if (entity.getStatus() == EmployeeStatusEnum.DELETE) {
             throw new DuplicateResourceException("Employee already deleted: " + id);
         }
@@ -232,7 +254,11 @@ public class EmployeeService implements IEmployeeService {
         }
 
         entity.setStatus(EmployeeStatusEnum.DELETE);
-        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "DELETE", "EMPLOYEE", id, oldValue, null));
+        try {
+            applicationEventPublisher.publishEvent(new AuditLogEvent(this, "DELETE", "EMPLOYEE", id, oldValue, null));
+        } catch (Exception e) {
+            log.warn("Failed to publish audit log for soft delete employee {}", id, e);
+        }
         employeeRepository.save(entity);
     }
 
@@ -364,6 +390,121 @@ public class EmployeeService implements IEmployeeService {
                 .filter(entity -> entity.getStatus() != EmployeeStatusEnum.DELETE)
                 .map(employeeMapper::toResponse)
                 .orElse(null);
+    }
+
+    @Override
+    public List<EmployeeResponse> getTrashEmployees() {
+        log.info("Getting all trash employees and soft-deleted users");
+        List<EmployeeEntity> trashList = employeeRepository.findByStatus(EmployeeStatusEnum.DELETE);
+        List<EmployeeResponse> responses = employeeMapper.toResponseList(trashList);
+
+        // Also include soft-deleted users from UserRepository
+        List<UserEntity> deletedUsers = userRepository.findByStatus(UserStatusEnum.DELETED);
+        java.util.Set<Long> existingIds = responses.stream()
+                .map(EmployeeResponse::getId)
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+
+        for (UserEntity u : deletedUsers) {
+            if (!existingIds.contains(u.getId())) {
+                EmployeeResponse synthetic = EmployeeResponse.builder()
+                        .id(u.getId())
+                        .userId(u.getId())
+                        .userName(u.getUsername())
+                        .userEmail(u.getEmail())
+                        .fullName(u.getFullName() != null ? u.getFullName() : u.getUsername())
+                        .employeeCode("USER-" + u.getId())
+                        .position("Tài khoản hệ thống")
+                        .status(EmployeeStatusEnum.DELETE)
+                        .createdAt(u.getCreatedAt())
+                        .updatedAt(u.getUpdatedAt())
+                        .build();
+                responses.add(synthetic);
+            }
+        }
+
+        return responses;
+    }
+
+    @Transactional
+    @Override
+    public void hardDelete(Long id) {
+        log.info("Permanently deleting employee/user ID: {}", id);
+
+        // 1. Delete associated attendances (fixes Foreign Key FKr7q0h8jfngkyybll6o9r3h9ua constraint)
+        List<AttendanceEntity> attendances = attendanceRepository.findByEmployee_UserId(id);
+        if (!attendances.isEmpty()) {
+            attendanceRepository.deleteAll(attendances);
+        }
+
+        // 2. Delete associated leave requests
+        List<LeaveRequestEntity> leaveRequests = leaveRequestRepository.findByEmployee_UserId(id);
+        if (!leaveRequests.isEmpty()) {
+            leaveRequestRepository.deleteAll(leaveRequests);
+        }
+
+        // 3. Delete associated employee contracts
+        List<EmployeeContractEntity> contracts = employeeContractRepository.findByEmployee_UserId(id);
+        if (!contracts.isEmpty()) {
+            employeeContractRepository.deleteAll(contracts);
+        }
+
+        // 4. Delete associated salaries
+        List<SalaryEntity> salaries = salaryRepository.findByEmployee_UserId(id);
+        if (!salaries.isEmpty()) {
+            salaryRepository.deleteAll(salaries);
+        }
+
+        // 5. Delete associated teaching rates
+        List<TeachingRateEntity> rates = teachingRateRepository.findByEmployeeEntity_UserId(id);
+        if (!rates.isEmpty()) {
+            teachingRateRepository.deleteAll(rates);
+        }
+
+        // 6. Delete Employee entity if present
+        employeeRepository.findById(id).ifPresent(employeeRepository::delete);
+
+        // 7. Delete UserRoles if present
+        List<UserRoleEntity> userRoles = userRoleRepository.findByUserEntity_Id(id);
+        if (!userRoles.isEmpty()) {
+            userRoleRepository.deleteAll(userRoles);
+        }
+
+        // 8. Delete User entity if present
+        userRepository.findById(id).ifPresent(userRepository::delete);
+
+        try {
+            applicationEventPublisher.publishEvent(new AuditLogEvent(this, "HARD_DELETE", "EMPLOYEE", id, "Permanently deleted ID " + id, null));
+        } catch (Exception e) {
+            log.warn("Failed to publish audit log for hard delete employee {}", id, e);
+        }
+    }
+
+    @Transactional
+    @Override
+    public java.util.Map<String, Object> bulkHardDelete(List<Long> ids) {
+        log.info("Bulk permanently deleting employees: {}", ids);
+        int successCount = 0;
+        int failureCount = 0;
+        List<String> errors = new java.util.ArrayList<>();
+
+        if (ids != null) {
+            for (Long id : ids) {
+                try {
+                    hardDelete(id);
+                    successCount++;
+                } catch (Exception e) {
+                    failureCount++;
+                    errors.add("Employee ID " + id + ": " + e.getMessage());
+                }
+            }
+        }
+
+        java.util.Map<String, Object> result = new java.util.HashMap<>();
+        result.put("successCount", successCount);
+        result.put("failureCount", failureCount);
+        result.put("errors", errors);
+        return result;
     }
 }
 

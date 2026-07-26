@@ -10,12 +10,15 @@ import com.ailms.entity.DepartmentEntity;
 import com.ailms.exception.BusinessException;
 import com.ailms.exception.DuplicateResourceException;
 import com.ailms.exception.ResourceNotFoundException;
+import com.ailms.entity.EmployeeEntity;
 import com.ailms.mapper.DepartmentMapper;
+import com.ailms.mapper.EmployeeMapper;
 import com.ailms.repository.DepartmentRepository;
 import com.ailms.repository.EmployeeRepository;
 import com.ailms.repository.specification.DepartmentSpecification;
 import com.ailms.request.*;
 import com.ailms.response.DepartmentResponse;
+import com.ailms.response.EmployeeResponse;
 import com.ailms.response.PageResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -39,6 +42,7 @@ public class DepartmentService implements IDepartmentService {
     private final DepartmentRepository departmentRepository;
     private final EmployeeRepository employeeRepository;
     private final DepartmentMapper departmentMapper;
+    private final EmployeeMapper employeeMapper;
     private final SortFieldResolver sortFieldResolver;
     private final ApplicationEventPublisher applicationEventPublisher;
 
@@ -122,6 +126,13 @@ public class DepartmentService implements IDepartmentService {
         );
 
         return PageResponse.from(page.map(departmentMapper::toDepartmentResponse));
+    }
+
+    @Override
+    public List<EmployeeResponse> getEmployeesByDepartmentId(Long id) {
+        findEntityById(id);
+        List<EmployeeEntity> employees = employeeRepository.findByDepartment_Id(id);
+        return employeeMapper.toResponseList(employees);
     }
 
     private DepartmentEntity findEntityById(Long id) {

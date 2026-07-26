@@ -20,6 +20,10 @@ public interface EmployeeRepository extends BaseRepository<EmployeeEntity, Long>
     boolean existsByDepartment_Id(Long departmentId);
     boolean existsByDepartment_IdAndStatusNot(Long departmentId, EmployeeStatusEnum status);
 
+    List<EmployeeEntity> findByDepartment_Id(Long departmentId);
+
+    List<EmployeeEntity> findByStatus(EmployeeStatusEnum status);
+
     List<EmployeeEntity> findAllByStatusNot(EmployeeStatusEnum status);
 
     long countByStatusNot(EmployeeStatusEnum status);

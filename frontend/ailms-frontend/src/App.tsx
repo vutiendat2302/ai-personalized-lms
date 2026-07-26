@@ -11,6 +11,7 @@ import { CourseManagement } from "./pages/admin/CourseManagement";
 import { OrderManagement } from "./pages/admin/OrderManagement";
 import { CouponManagement } from "./pages/admin/CouponManagement";
 import { HRManagement } from "./pages/admin/HRManagement";
+import { TrashManagement } from "./pages/admin/TrashManagement";
 import { ApprovalCenterPage } from "./pages/admin/ApprovalCenterPage";
 import { CategoryTeacherAssignPage } from "./pages/admin/CategoryTeacherAssignPage";
 import { DepartmentManagement } from "./pages/admin/DepartmentManagement";
@@ -28,6 +29,7 @@ import { Terms } from "./pages/Terms";
 import { ExplorePathways } from "./pages/ExplorePathways";
 import { CourseDetail } from "./pages/CourseDetail";
 import { CategoryDetail } from "./pages/CategoryDetail";
+import { SetPassword } from "./pages/SetPassword";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { MainLayout } from "./layouts/MainLayout";
 import { UserRole } from "./config/roles";
@@ -85,6 +87,7 @@ function App() {
             <Route path="/categories" element={<ExplorePathways />} />
             <Route path="/courses/:id" element={<CourseDetail />} />
             <Route path="/categories/:id" element={<CategoryDetail />} />
+            <Route path="/set-password" element={<SetPassword />} />
 
             {/* Redirects from old page routes to home + modal trigger */}
             <Route path="/login" element={<RedirectToHomeAndOpenModal modalType="login" />} />
@@ -113,6 +116,7 @@ function App() {
                 <Route path="/admin/orders" element={<OrderManagement />} />
                 <Route path="/admin/coupons" element={<CouponManagement />} />
                 <Route path="/admin/hr" element={<HRManagement />} />
+                <Route path="/admin/trash" element={<TrashManagement />} />
                 <Route path="/admin/approval-center" element={<ApprovalCenterPage />} />
                 <Route path="/admin/category-teachers" element={<CategoryTeacherAssignPage />} />
                 <Route path="/admin/department" element={<DepartmentManagement />} />

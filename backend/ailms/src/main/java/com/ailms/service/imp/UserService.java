@@ -61,9 +61,10 @@ public class UserService implements IUserService {
     private final GuardianRepository guardianRepository;
     private final GuardianMapper guardianMapper;
     private final EmployeeRepository employeeRepository;
+    private final jakarta.persistence.EntityManager entityManager;
 
-    @Value("${app.frontend.set-password}/api/auth/set-password")
-    private String frontendUrl;
+    @Value("${app.frontend.set-password:http://localhost:5173/set-password}")
+    private String setPasswordUrl;
 
 
     @Transactional(readOnly = true)
@@ -117,7 +118,8 @@ public class UserService implements IUserService {
         if (!hasPassword) {
             String token = jwtUtils.generateSetPasswordToken(user.getId());
             log.info("Invite JWT Token = {}", token);
-            emailService.sendInviteEmail(user.getEmail(), token);
+            String inviteLink = setPasswordUrl.contains("?") ? setPasswordUrl + "&token=" + token : setPasswordUrl + "?token=" + token;
+            emailService.sendInviteEmail(user.getEmail(), inviteLink);
         }
 
         eventPublisher.publishEvent(new AuditLogEvent(this, "create_user", "user", adminId, null, user));
@@ -199,20 +201,43 @@ public class UserService implements IUserService {
             log.info("Create User");
             user = new UserEntity();
             user.setUsername(request.getEmail());
-
             user.setEmail(request.getEmail());
             user.setStatus(UserStatusEnum.VERIFICATION);
             user.setPasswordHash(passwordEncoder.encode(UUID.randomUUID().toString()));
             log.info("Luu User");
             user = userRepository.save(user);
-        }
 
+            // Tạo biến final riêng để dùng trong lambda
+            final UserEntity savedUser = user;
+
+            // Assign roles from request, or fallback to STUDENT
+            List<Long> roleIds = request.getRoleIds();
+            if (roleIds != null && !roleIds.isEmpty()) {
+                for (Long roleId : roleIds) {
+                    roleRepository.findById(roleId).ifPresent(role -> {
+                        UserRoleEntity userRole = UserRoleEntity.builder()
+                                .userEntity(savedUser) // dùng savedUser thay vì user
+                                .roleEntity(role)
+                                .build();
+                        userRoleRepository.save(userRole);
+                    });
+                }
+            } else {
+                roleRepository.findByCode("STUDENT").ifPresent(role -> {
+                    UserRoleEntity userRole = UserRoleEntity.builder()
+                            .userEntity(savedUser) // dùng savedUser thay vì user
+                            .roleEntity(role)
+                            .build();
+                    userRoleRepository.save(userRole);
+                });
+            }
+        }
         String token = jwtUtils.generateSetPasswordToken(user.getId());
         log.info("Invite token = {}", token);
 
         log.info("send Invite");
         // Send Email invite link
-        String inviteLink = frontendUrl + "/set-password?token=" + token;
+        String inviteLink = setPasswordUrl.contains("?") ? setPasswordUrl + "&token=" + token : setPasswordUrl + "?token=" + token;
         emailService.sendInviteEmail(request.getEmail(), inviteLink);
 
         log.info("Audit log");
@@ -403,6 +428,70 @@ public class UserService implements IUserService {
     }
 
     /**
+     * Gỡ vai trò hàng loạt cho nhiều người dùng cùng lúc.
+     * Quy tắc kiểm tra:
+     * 1. Kiểm tra roleId có tồn tại hay không.
+     * 2. Kiểm tra từng user có tồn tại không.
+     * 3. Kiểm tra user có đang sở hữu roleId này hay không.
+     * 4. Kiểm tra user có duy trì tối thiểu 1 role sau khi gỡ (không được gỡ role cuối cùng).
+     */
+    @Transactional
+    @Override
+    public Map<String, Object> bulkRemoveRole(BulkRemoveRoleRequest request) {
+        int successCount = 0;
+        int failureCount = 0;
+        List<String> errors = new ArrayList<>();
+
+        RoleEntity role = roleRepository.findById(request.getRoleId())
+                .orElseThrow(() -> ResourceNotFoundException.of("Role", request.getRoleId()));
+
+        Long currentAdminId = getCurrentUserId();
+
+        for (Long userId : request.getUserIds()) {
+            Optional<UserEntity> userOpt = userRepository.findById(userId);
+            if (userOpt.isEmpty()) {
+                failureCount++;
+                errors.add("User ID " + userId + ": Không tìm thấy người dùng");
+                continue;
+            }
+
+            UserEntity user = userOpt.get();
+            List<UserRoleEntity> userRoles = userRoleRepository.findByUserEntity_Id(userId);
+
+            Optional<UserRoleEntity> targetUserRole = userRoles.stream()
+                    .filter(ur -> ur.getRoleEntity().getId().equals(request.getRoleId()))
+                    .findFirst();
+
+            if (targetUserRole.isEmpty()) {
+                failureCount++;
+                errors.add("Người dùng " + user.getFullName() + " (" + user.getEmail() + ") không có vai trò " + role.getName());
+                continue;
+            }
+
+            if (userRoles.size() <= 1) {
+                failureCount++;
+                errors.add("Không thể gỡ vai trò " + role.getName() + " khỏi " + user.getFullName() + ": Người dùng phải giữ ít nhất 1 vai trò");
+                continue;
+            }
+
+            try {
+                userRoleRepository.delete(targetUserRole.get());
+                eventPublisher.publishEvent(new AuditLogEvent(this, "revoke_role", "user", currentAdminId, null, "Gỡ vai trò " + role.getName() + " khỏi user " + user.getEmail()));
+                successCount++;
+            } catch (Exception e) {
+                failureCount++;
+                errors.add("User ID " + userId + ": " + e.getMessage());
+            }
+        }
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("successCount", successCount);
+        result.put("failureCount", failureCount);
+        result.put("errors", errors);
+        return result;
+    }
+
+    /**
      * Lấy toàn bộ Permission có hiệu lực của người dùng.
      * Permission được tổng hợp từ tất cả Role còn hiệu lực.
      * Nếu nhiều Role chứa cùng Permission thì chỉ trả về một lần.
@@ -486,6 +575,11 @@ public class UserService implements IUserService {
      */
     private void assignRolesToUser(UserEntity user, List<Long> roleIds, Long adminId) {
         if (roleIds == null || roleIds.isEmpty()) {
+            // Fallback: gán STUDENT mặc định nếu không chỉ định role
+            roleRepository.findByCode("STUDENT").ifPresent(role -> {
+                UserRoleEntity userRole = buildUserRole(user, role, adminId);
+                userRoleRepository.save(userRole);
+            });
             return;
         }
         List<RoleEntity> roles = roleRepository.findAllById(roleIds);
@@ -792,6 +886,10 @@ public class UserService implements IUserService {
     public byte[] exportUsersToExcel(UserSearchRequest request) {
         log.info("Xuất file danh sách người dùng qua CsvExport util");
 
+        if (request != null) {
+            request.setSize(10000);
+        }
+
         List<UserResponse> users = request != null
                 ? getUsers(request).getContent()
                 : getAllUsers();
@@ -911,9 +1009,6 @@ public class UserService implements IUserService {
         return value;
     }
 
-
-
-    @Transactional
     @Override
     public Map<String, Object> bulkCreateEmployees(BulkCreateEmployeeRequest request) {
         log.info("Thêm nhiều nhân viên theo danh sách email");
@@ -934,7 +1029,7 @@ public class UserService implements IUserService {
                 CreateEmployeeRequest empReq = CreateEmployeeRequest.builder()
                         .email(email.trim())
                         .departmentId(request.getDepartmentId())
-                        .roleCode(request.getRoleCode() != null ? request.getRoleCode() : "EMPLOYEE")
+                        .roleId(request.getRoleId())
                         .build();
 
                 EmployeeResponse created = employeeService.create(empReq);
@@ -951,6 +1046,97 @@ public class UserService implements IUserService {
         result.put("failureCount", failureCount);
         result.put("errors", errors);
         result.put("createdEmployees", createdEmployees);
+        return result;
+    }
+
+    @Override
+    public List<UserResponse> getTrashUsers() {
+        log.info("Getting all trash users with status = DELETED");
+        List<UserEntity> trashUsers = userRepository.findByStatus(UserStatusEnum.DELETED);
+        return trashUsers.stream().map(this::mapToUserResponse).toList();
+    }
+
+    private void executeNativeUpdate(String sql, Long id) {
+        entityManager.createNativeQuery(sql)
+                .setParameter("id", id)
+                .executeUpdate();
+
+    }
+
+    @Transactional
+    @Override
+    public void hardDeleteUser(Long id) {
+        log.info("Permanently deleting user ID: {}", id);
+        if (!userRepository.existsById(id)) {
+            throw ResourceNotFoundException.of("User", id);
+        }
+
+        // 1. Delete employee / teacher child records
+        executeNativeUpdate("DELETE FROM teacher_availability WHERE employee_id = :id", id);
+        executeNativeUpdate("DELETE FROM teacher_category WHERE employee_id = :id", id);
+        executeNativeUpdate("DELETE FROM course_teacher WHERE user_id = :id", id);
+        executeNativeUpdate("DELETE FROM teaching_session_payment WHERE employee_id = :id", id);
+        executeNativeUpdate("DELETE FROM attendance WHERE employee_id = :id", id);
+        executeNativeUpdate("DELETE FROM leave_request WHERE employee_id = :id", id);
+        executeNativeUpdate("DELETE FROM employee_contract WHERE employee_id = :id", id);
+        executeNativeUpdate("DELETE FROM salary_detail WHERE salary_id IN (SELECT id FROM salary WHERE employee_id = :id)", id);
+        executeNativeUpdate("DELETE FROM salary WHERE employee_id = :id", id);
+        executeNativeUpdate("DELETE FROM teaching_rate WHERE employee_id = :id", id);
+        executeNativeUpdate("DELETE FROM employee WHERE user_id = :id", id);
+
+        // 2. Delete student profile child records
+        executeNativeUpdate("DELETE FROM guardian WHERE student_user_id = :id", id);
+        executeNativeUpdate("DELETE FROM student_interest WHERE student_user_id = :id", id);
+        executeNativeUpdate("DELETE FROM student_profile WHERE user_id = :id", id);
+
+        // 3. Delete student learning & course progress records
+        executeNativeUpdate("DELETE FROM quiz_attempt WHERE user_id = :id", id);
+        executeNativeUpdate("DELETE FROM submission WHERE user_id = :id", id);
+        executeNativeUpdate("DELETE FROM lesson_progress WHERE user_id = :id", id);
+        executeNativeUpdate("DELETE FROM course_progress WHERE user_id = :id", id);
+        executeNativeUpdate("DELETE FROM enrollment WHERE user_id = :id", id);
+        executeNativeUpdate("DELETE FROM certificate WHERE user_id = :id", id);
+        executeNativeUpdate("DELETE FROM study_goal WHERE user_id = :id", id);
+        executeNativeUpdate("DELETE FROM class_member WHERE user_id = :id", id);
+        executeNativeUpdate("DELETE FROM course_member WHERE user_id = :id", id);
+
+        // 4. Delete user activity, roles, audit logs, notifications, reviews, cart, search history
+        executeNativeUpdate("DELETE FROM user_role WHERE user_id = :id", id);
+        executeNativeUpdate("DELETE FROM audit_log WHERE user_id = :id", id);
+        executeNativeUpdate("DELETE FROM notification WHERE user_id = :id", id);
+        executeNativeUpdate("DELETE FROM cart_item WHERE user_id = :id", id);
+        executeNativeUpdate("DELETE FROM review WHERE user_id = :id", id);
+        executeNativeUpdate("DELETE FROM search_history WHERE user_id = :id", id);
+
+        // 5. Delete user entity
+        executeNativeUpdate("DELETE FROM `user` WHERE id = :id", id);
+        log.info("Successfully permanently deleted user ID: {}", id);
+    }
+
+    @Transactional
+    @Override
+    public Map<String, Object> bulkHardDeleteUsers(List<Long> ids) {
+        log.info("Bulk permanently deleting users: {}", ids);
+        int successCount = 0;
+        int failureCount = 0;
+        List<String> errors = new ArrayList<>();
+
+        if (ids != null) {
+            for (Long id : ids) {
+                try {
+                    hardDeleteUser(id);
+                    successCount++;
+                } catch (Exception e) {
+                    failureCount++;
+                    errors.add("User ID " + id + ": " + e.getMessage());
+                }
+            }
+        }
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("successCount", successCount);
+        result.put("failureCount", failureCount);
+        result.put("errors", errors);
         return result;
     }
 }

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import {
   hrApi,
   type EmployeeResponse,
@@ -42,6 +43,11 @@ import {
   FileCheck,
   ChevronLeft,
   ChevronRight,
+  Trash,
+  Trash2,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
 } from "lucide-react";
 
 const getPageNumbers = (currentPage: number, total: number) => {
@@ -82,6 +88,82 @@ export const HRManagement: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [isCreateEmpOpen, setIsCreateEmpOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  // Trash & Delete states
+  const [trashModalOpen, setTrashModalOpen] = useState(false);
+  const [trashEmployees, setTrashEmployees] = useState<EmployeeResponse[]>([]);
+  const [trashLoading, setTrashLoading] = useState(false);
+  const [selectedTrashIds, setSelectedTrashIds] = useState<(string | number)[]>([]);
+  const [actionMessage, setActionMessage] = useState<{ text: string; isError?: boolean } | null>(null);
+
+  const showBanner = (text: string, isError = false) => {
+    setActionMessage({ text, isError });
+    setTimeout(() => setActionMessage(null), 4000);
+  };
+
+  const fetchTrashEmployees = async () => {
+    setTrashLoading(true);
+    try {
+      const res = await hrApi.getTrashEmployees();
+      if (res.data.success && Array.isArray(res.data.data)) {
+        setTrashEmployees(res.data.data);
+      }
+    } catch (e) {
+      console.error("Lỗi lấy danh sách thùng rác:", e);
+    } finally {
+      setTrashLoading(false);
+    }
+  };
+
+  const handleSoftDeleteEmployee = async (id: string | number) => {
+    if (!window.confirm("Bạn có chắc chắn muốn XÓA MỀM nhân viên này? (Chuyển trạng thái sang DELETED)")) {
+      return;
+    }
+    try {
+      const res = await hrApi.softDeleteEmployee(Number(id));
+      if (res.data.success) {
+        showBanner("Đã xóa mềm nhân viên thành công (chuyển vào Thùng rác)!");
+        fetchData();
+        fetchTrashEmployees();
+      }
+    } catch (err: any) {
+      showBanner(err.message || "Lỗi xóa mềm nhân viên", true);
+    }
+  };
+
+  const handleHardDeleteEmployee = async (id: string | number) => {
+    if (!window.confirm("CẢNH BÁO: Thao tác XÓA CỨNG (Vĩnh viễn) không thể hoàn tác! Bạn có chắc muốn xóa khỏi CSDL?")) {
+      return;
+    }
+    try {
+      const res = await hrApi.hardDeleteEmployee(Number(id));
+      if (res.data.success) {
+        showBanner("Đã xóa vĩnh viễn nhân viên thành công!");
+        fetchData();
+        fetchTrashEmployees();
+      }
+    } catch (err: any) {
+      showBanner(err.message || "Lỗi xóa vĩnh viễn nhân viên", true);
+    }
+  };
+
+  const handleBulkHardDelete = async () => {
+    if (selectedTrashIds.length === 0) return;
+    if (!window.confirm(`CẢNH BÁO: Bạn có chắc chắn muốn XÓA VĨNH VIỄN ${selectedTrashIds.length} nhân viên đã chọn?`)) {
+      return;
+    }
+    try {
+      const res = await hrApi.bulkHardDeleteEmployees(selectedTrashIds);
+      if (res.data.success) {
+        showBanner(`Đã xóa vĩnh viễn ${selectedTrashIds.length} nhân viên khỏi Thùng rác!`);
+        setSelectedTrashIds([]);
+        fetchData();
+        fetchTrashEmployees();
+      }
+    } catch (err: any) {
+      showBanner(err.message || "Lỗi xóa vĩnh viễn hàng loạt", true);
+    }
+  };
 
   // Pagination states
   const [empPage, setEmpPage] = useState(0);
@@ -268,13 +350,13 @@ export const HRManagement: React.FC = () => {
   const fetchData = async () => {
     try {
       const empRes = await hrApi.getEmployees();
-      if (empRes.data.success && Array.isArray(empRes.data.data) && empRes.data.data.length > 0) {
+      if (empRes.data.success && Array.isArray(empRes.data.data)) {
         setEmployees(empRes.data.data);
       } else {
-        setEmployees(MOCK_EMPLOYEES);
+        setEmployees([]);
       }
     } catch (e) {
-      setEmployees(MOCK_EMPLOYEES);
+      setEmployees([]);
     }
 
     try {
@@ -368,9 +450,9 @@ export const HRManagement: React.FC = () => {
 
   const filteredEmployees = employees.filter(
     (e) =>
-      e.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      e.employeeCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      e.userEmail.toLowerCase().includes(searchTerm.toLowerCase())
+      (e.fullName || "").toLowerCase().includes((searchTerm || "").toLowerCase()) ||
+      (e.employeeCode || "").toLowerCase().includes((searchTerm || "").toLowerCase()) ||
+      (e.userEmail || "").toLowerCase().includes((searchTerm || "").toLowerCase())
   );
 
   return (
@@ -390,6 +472,21 @@ export const HRManagement: React.FC = () => {
           <Button onClick={fetchData} variant="outline" size="sm" className="rounded-xl gap-1 text-xs font-bold">
             <RefreshCw className="h-3.5 w-3.5" /> Làm mới
           </Button>
+          <Link to="/admin/trash">
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-xl gap-1 text-xs font-bold border-destructive/40 text-destructive hover:bg-destructive/10 relative"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span>Thùng rác hệ thống</span>
+              {trashEmployees.length > 0 && (
+                <span className="ml-1 bg-destructive text-destructive-foreground px-1.5 py-0.2 text-[10px] font-black rounded-full">
+                  {trashEmployees.length}
+                </span>
+              )}
+            </Button>
+          </Link>
           <Button onClick={() => setIsCreateEmpOpen(true)} size="sm" className="rounded-xl gap-1 text-xs font-bold bg-primary">
             <UserPlus className="h-3.5 w-3.5" /> Thêm Nhân Viên Mới
           </Button>
@@ -488,7 +585,8 @@ export const HRManagement: React.FC = () => {
                       <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Hình Thức</TableHead>
                       <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Lương Cơ Bản</TableHead>
                       <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Trạng Thái</TableHead>
-                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pr-4">Ngày Vào</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Ngày Vào</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider text-right pr-4">Hành Động</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody className="opacity-90">
@@ -533,12 +631,36 @@ export const HRManagement: React.FC = () => {
                               </span>
                             )}
                           </TableCell>
-                          <TableCell className="text-muted-foreground text-xs font-medium pr-4">{emp.joinedAt}</TableCell>
+                          <TableCell className="text-muted-foreground text-xs font-medium">{emp.joinedAt}</TableCell>
+                          <TableCell className="text-right pr-4">
+                            <div className="flex items-center justify-end gap-1">
+                              {/* Soft Delete */}
+                              <Button
+                                onClick={() => handleSoftDeleteEmployee(emp.id)}
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-amber-600 hover:bg-amber-500/10 hover:text-amber-700"
+                                title="Xóa mềm (Chuyển sang DELETED vào Thùng rác)"
+                              >
+                                <Trash className="h-3.5 w-3.5" />
+                              </Button>
+                              {/* Hard Delete */}
+                              <Button
+                                onClick={() => handleHardDeleteEmployee(emp.id)}
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                title="Xóa cứng (Xóa vĩnh viễn khỏi CSDL)"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </TableCell>
                         </TableRow>
                       ))
                     ) : (
                       <TableRow>
-                        <TableCell colSpan={7} className="py-12 text-center text-muted-foreground text-sm">
+                        <TableCell colSpan={8} className="py-12 text-center text-muted-foreground text-sm">
                           Không tìm thấy nhân viên nào.
                         </TableCell>
                       </TableRow>
@@ -1345,6 +1467,19 @@ export const HRManagement: React.FC = () => {
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* TOAST BANNER NOTIFICATIONS */}
+      {actionMessage && (
+        <div
+          className={cn(
+            "fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300",
+            actionMessage.isError ? "bg-destructive" : "bg-emerald-600"
+          )}
+        >
+          {actionMessage.isError ? <AlertCircle className="h-5 w-5 shrink-0" /> : <CheckCircle2 className="h-5 w-5 shrink-0" />}
+          <span className="text-sm font-semibold">{actionMessage.text}</span>
         </div>
       )}
     </div>

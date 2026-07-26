@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/select";
 import { userApi } from "@/api/users/userApi";
 import { roleApi } from "@/api/roles/roleApi";
+import { departmentApi, type DepartmentResponse } from "@/api/departments/departmentApi";
 import type {
   UserResponse,
   RoleResponse,
@@ -42,6 +43,7 @@ import {
   Trash2,
   Edit,
   UserCheck,
+  UserX,
   CheckCircle2,
   X,
   Mail,
@@ -60,6 +62,9 @@ import {
   BarChart3,
   Filter,
   ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  RotateCcw,
   ChevronLeft,
   ChevronRight,
   Award,
@@ -231,14 +236,18 @@ export const UserManagement: React.FC = () => {
   const [searchKeyword, setSearchKeyword] = useState("");
   const [filterRole, setFilterRole] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
+  const [filterGender, setFilterGender] = useState("");
+  const [filterDepartmentCode, setFilterDepartmentCode] = useState("");
+  const [filterDepartments, setFilterDepartments] = useState<DepartmentResponse[]>([]);
   const [startDate, setStartDate] = useState("");
   const [startDateInput, setStartDateInput] = useState("");
   const [startCalendarMonth, setStartCalendarMonth] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState("");
   const [endDateInput, setEndDateInput] = useState("");
   const [endCalendarMonth, setEndCalendarMonth] = useState<Date | undefined>(undefined);
-  const [sortBy, setSortBy] = useState("id");
-  const [sortDir, setSortDir] = useState<"ASC" | "DESC">("DESC");
+  const [sortRules, setSortRules] = useState<Array<{ field: string; dir: "ASC" | "DESC" }>>([
+    { field: "id", dir: "DESC" }
+  ]);
 
   // Pagination
   const [page, setPage] = useState(0);
@@ -254,6 +263,15 @@ export const UserManagement: React.FC = () => {
   // UI Banner & Loading
   const [loading, setLoading] = useState(false);
   const [statsLoading, setStatsLoading] = useState(false);
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [bulkEmailLoading, setBulkEmailLoading] = useState(false);
+  const [bulkEmployeeLoading, setBulkEmployeeLoading] = useState(false);
+  const [saveUserLoading, setSaveUserLoading] = useState(false);
+  const [bulkDeleteLoading, setBulkDeleteLoading] = useState(false);
+  const [bulkAssignRoleLoading, setBulkAssignRoleLoading] = useState(false);
+  const [exportCsvLoading, setExportCsvLoading] = useState(false);
+  const [assignRoleLoading, setAssignRoleLoading] = useState(false);
+  const [filterLoading, setFilterLoading] = useState(false);
   const [successBanner, setSuccessBanner] = useState("");
   const [errorBanner, setErrorBanner] = useState("");
 
@@ -278,11 +296,16 @@ export const UserManagement: React.FC = () => {
 
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRoleId, setInviteRoleId] = useState("");
+  const [createUserRoleId, setCreateUserRoleId] = useState("");
 
   const [assignRoleModalOpen, setAssignRoleModalOpen] = useState(false);
   const [assigningUser, setAssigningUser] = useState<UserResponse | null>(null);
 
   const [bulkAssignRoleModalOpen, setBulkAssignRoleModalOpen] = useState(false);
+  const [bulkRemoveRoleModalOpen, setBulkRemoveRoleModalOpen] = useState(false);
+  const [selectedRemoveRoleId, setSelectedRemoveRoleId] = useState<string>("");
+  const [bulkRemoveRoleLoading, setBulkRemoveRoleLoading] = useState(false);
   const [bulkEmailModalOpen, setBulkEmailModalOpen] = useState(false);
   const [bulkEmailSubject, setBulkEmailSubject] = useState("");
   const [bulkEmailContent, setBulkEmailContent] = useState("");
@@ -290,7 +313,43 @@ export const UserManagement: React.FC = () => {
   const [bulkCreateEmployeesModalOpen, setBulkCreateEmployeesModalOpen] = useState(false);
   const [bulkEmployeeEmails, setBulkEmployeeEmails] = useState("");
   const [bulkEmployeeDeptId, setBulkEmployeeDeptId] = useState("");
-  const [bulkEmployeeRoleCode, setBulkEmployeeRoleCode] = useState("ROLE_TEACHER");
+  const [bulkEmployeeRoleId, setBulkEmployeeRoleId] = useState("");
+
+  // Dynamic Departments & Roles for Bulk Employee Modal
+  const [deptList, setDeptList] = useState<DepartmentResponse[]>([]);
+  const [roleList, setRoleList] = useState<RoleResponse[]>([]);
+  const [deptSearchTerm, setDeptSearchTerm] = useState("");
+  const [roleSearchTerm, setRoleSearchTerm] = useState("");
+  const [loadingDeptsAndRoles, setLoadingDeptsAndRoles] = useState(false);
+
+  const fetchDeptsAndRolesForBulkModal = async () => {
+    setLoadingDeptsAndRoles(true);
+    try {
+      const [deptRes, roleRes] = await Promise.all([
+        departmentApi.getAllDepartments().catch(() => null),
+        roleApi.getAllRoles().catch(() => null),
+      ]);
+      if (deptRes?.data?.success && deptRes.data.data) {
+        setDeptList(deptRes.data.data);
+      }
+      if (roleRes?.data?.success && roleRes.data.data) {
+        setRoleList(roleRes.data.data);
+        if (roleRes.data.data.length > 0 && !bulkEmployeeRoleId) {
+          setBulkEmployeeRoleId(String(roleRes.data.data[0].id));
+        }
+      }
+    } catch (err: any) {
+      console.error("Lỗi lấy danh sách phòng ban và vai trò:", err);
+    } finally {
+      setLoadingDeptsAndRoles(false);
+    }
+  };
+
+  useEffect(() => {
+    if (bulkCreateEmployeesModalOpen) {
+      fetchDeptsAndRolesForBulkModal();
+    }
+  }, [bulkCreateEmployeesModalOpen]);
 
   // User Detail Modal
   const [userDetailModalOpen, setUserDetailModalOpen] = useState(false);
@@ -344,11 +403,16 @@ export const UserManagement: React.FC = () => {
   useEffect(() => {
     fetchRoles();
     fetchStatistics();
+    fetchFilterDepartments();
   }, []);
 
   useEffect(() => {
-    fetchUsers();
-  }, [page, pageSize, filterRole, filterStatus, sortBy, sortDir]);
+    const timer = setTimeout(() => {
+      fetchUsers();
+    }, 400); // đợi 400ms rồi gọi fetchUsers()
+    
+    return () => clearTimeout(timer);
+  }, [page, pageSize, filterRole, filterStatus, filterGender, filterDepartmentCode, sortRules, searchKeyword, startDate, endDate]);
 
   useEffect(() => {
     fetchMonthlyNewUsers(selectedYear);
@@ -361,6 +425,17 @@ export const UserManagement: React.FC = () => {
     } else {
       setSuccessBanner(msg);
       setTimeout(() => setSuccessBanner(""), 3500);
+    }
+  };
+
+  const fetchFilterDepartments = async () => {
+    try {
+      const res = await departmentApi.getAllDepartments().catch(() => null);
+      if (res?.data?.success && res.data.data) {
+        setFilterDepartments(res.data.data);
+      }
+    } catch (err: any) {
+      console.error("Lỗi lấy danh sách phòng ban cho filter:", err);
     }
   };
 
@@ -454,15 +529,19 @@ export const UserManagement: React.FC = () => {
   const fetchUsers = async () => {
     setLoading(true);
     try {
+      const sortParams = sortRules.length > 0
+        ? sortRules.map(r => `${r.field}:${r.dir.toLowerCase()}`)
+        : ["id:desc"];
       const params: any = {
         page,
         size: pageSize,
-        sortBy,
-        sortDir
+        sort: sortParams,
       };
       if (searchKeyword.trim()) params.keyword = searchKeyword.trim();
-      if (filterRole) params.role = filterRole;
-      if (filterStatus) params.status = filterStatus;
+      if (filterRole) params.roleIds = [filterRole];
+      if (filterStatus) params.statuses = [filterStatus];
+      if (filterGender !== "") params.gender = parseInt(filterGender);
+      if (filterDepartmentCode) params.departmentCode = filterDepartmentCode;
       if (startDate) params.startDate = startDate;
       if (endDate) params.endDate = endDate;
 
@@ -487,14 +566,104 @@ export const UserManagement: React.FC = () => {
   };
 
   const handleSort = (field: string) => {
-    if (sortBy === field) {
-      setSortDir(prev => prev === "ASC" ? "DESC" : "ASC");
-    } else {
-      setSortBy(field);
-      setSortDir("ASC");
-    }
+    setSortRules(prevRules => {
+      const existingIndex = prevRules.findIndex(r => r.field === field);
+
+      if (existingIndex === -1) {
+        // Click 1: Sắp xếp Tăng dần (ASC)
+        const filtered = prevRules.filter(r => r.field !== "id");
+        return [...filtered, { field, dir: "ASC" }];
+      } else {
+        const currentRule = prevRules[existingIndex];
+        if (currentRule.dir === "ASC") {
+          // Click 2: Đổi sang Giảm dần (DESC)
+          const updated = [...prevRules];
+          updated[existingIndex] = { field, dir: "DESC" };
+          return updated;
+        } else {
+          // Click 3: Bỏ sắp xếp cột này
+          const updated = prevRules.filter(r => r.field !== field);
+          return updated.length === 0 ? [{ field: "id", dir: "DESC" }] : updated;
+        }
+      }
+    });
     setPage(0);
   };
+
+  const removeSortRule = (field: string) => {
+    setSortRules(prev => {
+      const updated = prev.filter(r => r.field !== field);
+      return updated.length === 0 ? [{ field: "id", dir: "DESC" }] : updated;
+    });
+    setPage(0);
+  };
+
+  const getSortRuleInfo = (field: string) => {
+    const index = sortRules.findIndex(r => r.field === field);
+    if (index === -1) return null;
+    return { rule: sortRules[index], index: index + 1 };
+  };
+
+  const renderSortIcon = (field: string) => {
+    const info = getSortRuleInfo(field);
+    if (!info) {
+      return <ArrowUpDown className="h-3 w-3 opacity-40 group-hover:opacity-100 transition-opacity" />;
+    }
+    return (
+      <span className="inline-flex items-center gap-1">
+        {info.rule.dir === "ASC" ? (
+          <ArrowUp className="h-3.5 w-3.5 text-primary font-bold animate-in fade-in" />
+        ) : (
+          <ArrowDown className="h-3.5 w-3.5 text-primary font-bold animate-in fade-in" />
+        )}
+        {sortRules.length > 1 && (
+          <span className="h-3.5 min-w-[14px] px-1 rounded-full bg-primary text-[10px] text-primary-foreground font-bold flex items-center justify-center leading-none">
+            {info.index}
+          </span>
+        )}
+      </span>
+    );
+  };
+
+  const getFieldLabel = (field: string) => {
+    switch (field) {
+      case "fullName": return "Người dùng";
+      case "gender": return "Giới tính";
+      case "dateOfBirth": return "Ngày sinh";
+      case "status": return "Trạng thái";
+      case "createdAt": return "Ngày tham gia";
+      default: return field;
+    }
+  };
+
+  const handleResetFiltersAndSort = () => {
+    setSearchKeyword("");
+    setFilterRole("");
+    setFilterStatus("");
+    setFilterGender("");
+    setFilterDepartmentCode("");
+    setStartDate("");
+    setStartDateInput("");
+    setEndDate("");
+    setEndDateInput("");
+    setSortRules([{ field: "id", dir: "DESC" }]);
+    setPage(0);
+  };
+
+  const isSorted = sortRules.some(r => r.field !== "id" || r.dir !== "DESC");
+
+  const isFilteredOrSorted = Boolean(
+    searchKeyword ||
+    filterRole ||
+    filterStatus ||
+    filterGender !== "" ||
+    filterDepartmentCode ||
+    startDate ||
+    startDateInput ||
+    endDate ||
+    endDateInput ||
+    isSorted
+  );
 
   const handleViewUserDetail = async (userId: string | number) => {
     setUserDetailLoading(true);
@@ -523,28 +692,33 @@ export const UserManagement: React.FC = () => {
     const gender = parseInt(data.get("gender") as string);
     const dateOfBirth = data.get("dateOfBirth") as string;
 
+    setSaveUserLoading(true);
     try {
       if (editingUser) {
         const res = await userApi.updateUser(editingUser.id, { fullName, phone, gender, dateOfBirth });
         if (res.data.success) {
-          showBanner("Cập nhật thông tin người dùng thành công!");
+          showBanner("Đã cập nhật thông tin người dùng thành công!");
           fetchUsers();
         }
       } else {
         const username = data.get("username") as string;
         const email = data.get("email") as string;
-        const res = await userApi.createUser({ username, email, fullName, phone, gender, dateOfBirth });
+        const roleIds = createUserRoleId && createUserRoleId !== "none" ? [createUserRoleId] : undefined;
+        const res = await userApi.createUser({ username, email, fullName, phone, gender, dateOfBirth, roleIds });
         if (res.data.success) {
-          showBanner("Thêm người dùng mới thành công!");
+          showBanner("Đã thêm người dùng mới thành công!");
           setPage(0);
           fetchUsers();
           fetchStatistics();
+          setCreateUserRoleId("");
         }
       }
       setUserModalOpen(false);
       setEditingUser(null);
     } catch (err: any) {
       showBanner(err.message || "Lỗi lưu thông tin người dùng", true);
+    } finally {
+      setSaveUserLoading(false);
     }
   };
 
@@ -565,16 +739,17 @@ export const UserManagement: React.FC = () => {
   };
 
   const handleQuickToggleStatus = async (user: UserResponse) => {
-    const newStatus = user.status === "ACTIVE" ? "BLOCKED" : "ACTIVE";
+    const newStatus = user.status === "ACTIVE" ? "LOCKED" : "ACTIVE";
     try {
       const res = await userApi.updateUser(user.id, {
         fullName: user.fullName,
         phone: user.phone,
         gender: user.gender,
-        dateOfBirth: user.dateOfBirth ? user.dateOfBirth.slice(0, 10) : undefined
+        dateOfBirth: user.dateOfBirth ? user.dateOfBirth.slice(0, 10) : undefined,
+        status: newStatus
       });
       if (res.data.success) {
-        showBanner(`Đã cập nhật trạng thái người dùng sang ${newStatus}!`);
+        showBanner(`Đã ${newStatus === "LOCKED" ? "khóa" : "mở khóa"} tài khoản ${user.fullName} thành công!`);
         fetchUsers();
       }
     } catch (err: any) {
@@ -584,15 +759,24 @@ export const UserManagement: React.FC = () => {
 
   const handleInviteUser = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!inviteEmail.trim()) return;
+    setInviteLoading(true);
     try {
-      const res = await userApi.inviteUser({ email: inviteEmail });
+      const roleIds = inviteRoleId ? [inviteRoleId] : [];
+      const res = await userApi.inviteUser({
+        email: inviteEmail.trim(),
+        ...(roleIds.length > 0 && { roleIds })
+      });
       if (res.data.success) {
         showBanner(`Đã gửi thư mời đăng ký đến: ${inviteEmail}`);
         setInviteModalOpen(false);
         setInviteEmail("");
+        setInviteRoleId("");
       }
     } catch (err: any) {
       showBanner(err.message || "Lỗi gửi thư mời", true);
+    } finally {
+      setInviteLoading(false);
     }
   };
 
@@ -602,8 +786,9 @@ export const UserManagement: React.FC = () => {
     const data = new FormData(e.target as HTMLFormElement);
     const selectedRoles = data.getAll("userRoles") as string[];
 
+    setAssignRoleLoading(true);
     try {
-      const res = await userApi.assignRoles(assigningUser.id, { roleIds: selectedRoles.map(id => Number(id)) });
+      const res = await userApi.assignRoles(assigningUser.id, { roleIds: selectedRoles });
       if (res.data.success) {
         showBanner(`Cập nhật vai trò cho ${assigningUser.fullName} thành công!`);
         fetchUsers();
@@ -612,6 +797,8 @@ export const UserManagement: React.FC = () => {
       }
     } catch (err: any) {
       showBanner(err.message || "Lỗi gán vai trò", true);
+    } finally {
+      setAssignRoleLoading(false);
     }
   };
 
@@ -619,8 +806,9 @@ export const UserManagement: React.FC = () => {
   const handleBulkDelete = async () => {
     if (selectedUserIds.length === 0) return;
     if (window.confirm(`Bạn có chắc muốn xóa ${selectedUserIds.length} tài khoản đã chọn?`)) {
+      setBulkDeleteLoading(true);
       try {
-        const res = await userApi.bulkDelete({ ids: selectedUserIds });
+        const res = await userApi.bulkDelete({ userIds: selectedUserIds });
         if (res.data.success) {
           showBanner("Xóa hàng loạt tài khoản thành công!");
           fetchUsers();
@@ -629,6 +817,8 @@ export const UserManagement: React.FC = () => {
         }
       } catch (err: any) {
         showBanner(err.message || "Lỗi xóa hàng loạt", true);
+      } finally {
+        setBulkDeleteLoading(false);
       }
     }
   };
@@ -638,8 +828,9 @@ export const UserManagement: React.FC = () => {
     const data = new FormData(e.target as HTMLFormElement);
     const targetRole = data.get("bulkRole") as string;
 
+    setBulkAssignRoleLoading(true);
     try {
-      const res = await userApi.bulkAssignRole({ userIds: selectedUserIds, roleName: targetRole });
+      const res = await userApi.bulkAssignRole({ userIds: selectedUserIds, roleId: targetRole });
       if (res.data.success) {
         showBanner(`Gán vai trò ${targetRole} thành công cho ${selectedUserIds.length} người dùng!`);
         fetchUsers();
@@ -648,6 +839,43 @@ export const UserManagement: React.FC = () => {
       }
     } catch (err: any) {
       showBanner(err.message || "Lỗi gán vai trò hàng loạt", true);
+    } finally {
+      setBulkAssignRoleLoading(false);
+    }
+  };
+
+  const handleBulkRemoveRole = async () => {
+    if (!selectedRemoveRoleId) {
+      showBanner("Vui lòng chọn vai trò cần gỡ", true);
+      return;
+    }
+    if (selectedUserIds.length === 0) {
+      showBanner("Vui lòng chọn ít nhất 1 người dùng", true);
+      return;
+    }
+
+    setBulkRemoveRoleLoading(true);
+    try {
+      const res = await userApi.bulkRemoveRole({
+        userIds: selectedUserIds,
+        roleId: selectedRemoveRoleId
+      });
+      if (res.data.success) {
+        const { successCount, failureCount, errors } = res.data.data || {};
+        if (failureCount > 0 && errors && errors.length > 0) {
+          showBanner(`Gỡ thành công cho ${successCount} user. Lỗi ${failureCount} user: ${errors[0]}`, true);
+        } else {
+          showBanner(`Đã gỡ vai trò thành công cho ${successCount} người dùng!`);
+        }
+        setBulkRemoveRoleModalOpen(false);
+        setSelectedUserIds([]);
+        fetchUsers();
+        fetchStatistics();
+      }
+    } catch (err: any) {
+      showBanner(err.message || "Lỗi gỡ vai trò hàng loạt", true);
+    } finally {
+      setBulkRemoveRoleLoading(false);
     }
   };
 
@@ -665,6 +893,7 @@ export const UserManagement: React.FC = () => {
       return;
     }
 
+    setBulkEmailLoading(true);
     try {
       const res = await userApi.sendBulkEmail({
         emails: selectedEmails,
@@ -679,6 +908,8 @@ export const UserManagement: React.FC = () => {
       }
     } catch (err: any) {
       showBanner(err.message || "Lỗi gửi email hàng loạt", true);
+    } finally {
+      setBulkEmailLoading(false);
     }
   };
 
@@ -694,14 +925,22 @@ export const UserManagement: React.FC = () => {
       return;
     }
 
+    setBulkEmployeeLoading(true);
     try {
+      const deptIdVal = (bulkEmployeeDeptId && bulkEmployeeDeptId !== "none") ? bulkEmployeeDeptId : undefined;
+      const roleIdVal = (bulkEmployeeRoleId && bulkEmployeeRoleId !== "none") ? bulkEmployeeRoleId : undefined;
       const res = await userApi.bulkCreateEmployees({
         emails: emailsList,
-        departmentId: bulkEmployeeDeptId ? Number(bulkEmployeeDeptId) : undefined,
-        roleCode: bulkEmployeeRoleCode
+        departmentId: deptIdVal,
+        roleId: roleIdVal
       });
       if (res.data.success) {
-        showBanner(`Tạo hàng loạt ${emailsList.length} nhân viên thành công!`);
+        const { successCount, failureCount, errors } = res.data.data || {};
+        if (failureCount > 0 && errors && errors.length > 0) {
+          showBanner(`Đã tạo thành công ${successCount || 0} nhân viên. Lỗi ${failureCount} email: ${errors.join("; ")}`, true);
+        } else {
+          showBanner(`Tạo hàng loạt ${successCount || emailsList.length} nhân viên thành công!`);
+        }
         setBulkCreateEmployeesModalOpen(false);
         setBulkEmployeeEmails("");
         fetchUsers();
@@ -709,18 +948,23 @@ export const UserManagement: React.FC = () => {
       }
     } catch (err: any) {
       showBanner(err.message || "Lỗi tạo nhân viên hàng loạt", true);
+    } finally {
+      setBulkEmployeeLoading(false);
     }
   };
 
   const handleExportUsersExcel = async () => {
+    setExportCsvLoading(true);
     try {
-      showBanner("Đang khởi tạo file xuất Excel...");
+      showBanner("Đang khởi tạo file xuất CSV...");
       const res = await userApi.exportUsersToExcel({
         keyword: searchKeyword,
         role: filterRole,
         status: filterStatus,
+        departmentCode: filterDepartmentCode,
         startDate,
-        endDate
+        endDate,
+        size: 10000
       });
       
       const blob = new Blob([res.data], { type: "text/csv;charset=utf-8;" });
@@ -731,9 +975,11 @@ export const UserManagement: React.FC = () => {
       document.body.appendChild(link);
       link.click();
       link.remove();
-      showBanner("Xuất file Excel/CSV thành công!");
+      showBanner("Xuất file CSV thành công!");
     } catch (err: any) {
-      showBanner(err.message || "Không thể xuất file Excel", true);
+      showBanner(err.message || "Không thể xuất file CSV", true);
+    } finally {
+      setExportCsvLoading(false);
     }
   };
 
@@ -758,18 +1004,17 @@ export const UserManagement: React.FC = () => {
   const handleSelectAllUsers = (checkedOrEvent: boolean | React.ChangeEvent<HTMLInputElement>) => {
     const isChecked = typeof checkedOrEvent === "boolean" ? checkedOrEvent : checkedOrEvent.target.checked;
     if (isChecked) {
-      setSelectedUserIds(users.map(u => String(u.id)));
+      setSelectedUserIds(users.map(u => u.id));
     } else {
       setSelectedUserIds([]);
     }
   };
 
-  const handleSelectUser = (id: string | number) => {
-    const strId = String(id);
-    if (selectedUserIds.includes(strId)) {
-      setSelectedUserIds(selectedUserIds.filter(selectedId => selectedId !== strId));
+  const handleSelectUser = (id: string) => {
+    if (selectedUserIds.includes(id)) {
+      setSelectedUserIds(selectedUserIds.filter(selectedId => selectedId !== id));
     } else {
-      setSelectedUserIds([...selectedUserIds, strId]);
+      setSelectedUserIds([...selectedUserIds, id]);
     }
   };
 
@@ -1186,10 +1431,11 @@ export const UserManagement: React.FC = () => {
               onClick={handleExportUsersExcel}
               variant="outline"
               size="sm"
-              className="h-9 gap-1.5 font-semibold text-success-forest border-emerald-500/30 hover:bg-emerald-500/10"
+              disabled={exportCsvLoading}
+              className="h-9 gap-1.5 font-semibold text-success-forest border-emerald-500/30 hover:bg-emerald-500/10 disabled:opacity-60"
             >
-              <FileSpreadsheet className="h-4 w-4" />
-              <span>Xuất File CSV</span>
+              {exportCsvLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
+              <span>{exportCsvLoading ? "Đang xuất..." : "Xuất File CSV"}</span>
             </Button>
 
             {/* Bulk Add Employees Button */}
@@ -1197,9 +1443,10 @@ export const UserManagement: React.FC = () => {
               onClick={() => setBulkCreateEmployeesModalOpen(true)}
               variant="outline"
               size="sm"
-              className="h-9 gap-1.5 font-semibold text-brand-cobalt border-indigo-500/30 hover:bg-indigo-500/10"
+              disabled={bulkEmployeeLoading}
+              className="h-9 gap-1.5 font-semibold text-brand-cobalt border-indigo-500/30 hover:bg-indigo-500/10 disabled:opacity-60"
             >
-              <UserPlus className="h-4 w-4" />
+              {bulkEmployeeLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
               <span>Thêm nhân viên</span>
             </Button>
 
@@ -1208,10 +1455,11 @@ export const UserManagement: React.FC = () => {
               onClick={() => setInviteModalOpen(true)}
               variant="outline"
               size="sm"
-              className="h-9 gap-1.5 font-semibold text-brand-primary border-border/40 hover:bg-brand-cobalt/50"
+              disabled={inviteLoading}
+              className="h-9 gap-1.5 font-semibold text-brand-primary border-border/40 hover:bg-brand-cobalt/50 disabled:opacity-60"
             >
-              <Mail className="h-4 w-4 text-brand-primary" />
-              <span>Mời nhân viên</span>
+              {inviteLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4 text-brand-primary" />}
+              <span>{inviteLoading ? "Đang gửi..." : "Mời nhân viên"}</span>
             </Button>
 
             {/* Add New User */}
@@ -1219,9 +1467,10 @@ export const UserManagement: React.FC = () => {
               onClick={() => { setEditingUser(null); setUserModalOpen(true); }}
               variant="default"
               size="sm"
-              className="h-9 gap-1.5 font-semibold bg-primary text-primary-foreground hover:bg-accent/70 shadow-xs"
+              disabled={saveUserLoading}
+              className="h-9 gap-1.5 font-semibold bg-primary text-primary-foreground hover:bg-accent/70 shadow-xs disabled:opacity-60"
             >
-              <Plus className="h-4 w-4" />
+              {saveUserLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
               <span>Tạo tài khoản</span>
             </Button>
           </div>
@@ -1231,11 +1480,11 @@ export const UserManagement: React.FC = () => {
         {/* Toolbar: Search, Filters & Date Pickers */}
         <form
           onSubmit={handleSearchSubmit}
-          className="-mt-1 pb-4 pl-4 pr-4 bg-muted/20 border-b border-border/30 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-12 gap-3 items-end"
+          className="-mt-1 py-3 px-4 bg-muted/20 border-b border-border/30 flex flex-wrap xl:flex-nowrap items-end gap-2.5 w-full"
         >
           {/* Keyword Search */}
-          <div className="flex flex-col gap-1 lg:col-span-3">
-            <Label className="text-sm font-bold text-muted-foreground">Từ khóa tìm kiếm</Label>
+          <div className="flex flex-col gap-1 flex-1 min-w-[200px]">
+            <Label className="text-xs font-bold text-muted-foreground whitespace-nowrap">Từ khóa tìm kiếm</Label>
             <div className="relative w-full">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
               <Input
@@ -1249,20 +1498,41 @@ export const UserManagement: React.FC = () => {
           </div>
 
           {/* Role Filter */}
-          <div className="flex flex-col gap-1 lg:col-span-2">
-            <Label className="text-sm font-bold text-muted-foreground">Vai trò</Label>
+          <div className="flex flex-col gap-1 w-[150px] shrink-0">
+            <Label className="text-xs font-bold text-muted-foreground whitespace-nowrap">Vai trò</Label>
             <Select
               value={filterRole || "Tất cả"}
               onValueChange={(val) => setFilterRole(val === "Tất cả" || !val ? "" : val)}
             >
               <SelectTrigger className="h-9! text-sm border border-border/30 bg-background rounded-lg w-full">
-                <SelectValue placeholder="Tất cả vai trò"/>
+                <SelectValue placeholder="Tất cả"/>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="Tất cả">Tất cả vai trò</SelectItem>
+                <SelectItem value="Tất cả">Tất cả</SelectItem>
                 {roles.map((r) => (
-                  <SelectItem key={r.name} value={r.name}>
-                    {r.name}
+                  <SelectItem key={r.id} value={String(r.id)}>
+                    {r.code}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Department Filter */}
+          <div className="flex flex-col gap-1 w-[170px] shrink-0">
+            <Label className="text-xs font-bold text-muted-foreground whitespace-nowrap">Phòng ban</Label>
+            <Select
+              value={filterDepartmentCode || "Tất cả"}
+              onValueChange={(val) => setFilterDepartmentCode(val === "Tất cả" || !val ? "" : val)}
+            >
+              <SelectTrigger className="h-9! text-sm border border-border/30 bg-background rounded-lg w-full">
+                <SelectValue placeholder="Tất cả phòng ban" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Tất cả">Tất cả phòng ban</SelectItem>
+                {filterDepartments.map((d) => (
+                  <SelectItem key={d.id} value={d.code}>
+                    {d.code} – {d.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -1270,8 +1540,8 @@ export const UserManagement: React.FC = () => {
           </div>
 
           {/* Status Filter */}
-          <div className="flex flex-col gap-1 lg:col-span-2">
-            <Label className="text-sm font-bold text-muted-foreground">Trạng thái</Label>
+          <div className="flex flex-col gap-1 w-[150px] shrink-0">
+            <Label className="text-xs font-bold text-muted-foreground whitespace-nowrap">Trạng thái</Label>
             <Select
               value={filterStatus || "Tất cả"}
               onValueChange={(val) => setFilterStatus(val === "Tất cả" || !val ? "" : val)}
@@ -1289,12 +1559,31 @@ export const UserManagement: React.FC = () => {
             </Select>
           </div>
 
+          {/* Gender Filter */}
+          <div className="flex flex-col gap-1 w-[150px] shrink-0">
+            <Label className="text-xs font-bold text-muted-foreground whitespace-nowrap">Giới tính</Label>
+            <Select
+              value={filterGender || "Tất cả"}
+              onValueChange={(val) => setFilterGender(val === "Tất cả" || !val ? "" : val)}
+            >
+              <SelectTrigger className="h-9! text-sm border border-border/30 bg-background rounded-lg w-full">
+                <SelectValue placeholder="Tất cả giới tính" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Tất cả">Tất cả giới tính</SelectItem>
+                <SelectItem value="0">Nam</SelectItem>
+                <SelectItem value="1">Nữ</SelectItem>
+                <SelectItem value="2">Khác</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           {/* Start Date Filter */}
-          <div className="flex flex-col gap-1 lg:col-span-2">
+          <div className="flex flex-col gap-1 w-[150px] shrink-0">
             <div className="flex items-center justify-between">
-              <Label className="text-sm font-bold text-muted-foreground">Từ ngày</Label>
+              <Label className="text-xs font-bold text-muted-foreground whitespace-nowrap">Từ ngày</Label>
               {isInvalidDateInput(startDateInput) && (
-                <span className="text-sm text-destructive font-semibold">Sai định dạng</span>
+                <span className="text-[10px] text-destructive font-semibold">Lỗi</span>
               )}
             </div>
             <Popover>
@@ -1357,11 +1646,11 @@ export const UserManagement: React.FC = () => {
           </div>
 
           {/* End Date Filter */}
-          <div className="flex flex-col gap-1 lg:col-span-2">
+          <div className="flex flex-col gap-1 w-[150px] shrink-0">
             <div className="flex items-center justify-between">
-              <Label className="text-sm font-bold text-muted-foreground">Đến ngày</Label>
+              <Label className="text-xs font-bold text-muted-foreground whitespace-nowrap">Đến ngày</Label>
               {isInvalidDateInput(endDateInput) && (
-                <span className="text-sm text-destructive font-semibold">Sai định dạng</span>
+                <span className="text-[10px] text-destructive font-semibold">Lỗi</span>
               )}
             </div>
             <Popover>
@@ -1424,41 +1713,103 @@ export const UserManagement: React.FC = () => {
           </div>
 
           {/* Filter Action Buttons */}
-          <div className="flex flex-col gap-1 lg:col-span-1 justify-end">
-            <div className="flex items-center gap-1.5 w-full">
-              <Button
-                type="submit"
-                size="lg"
-                className="h-9.5! font-semibold bg-primary text-primary-foreground hover:bg-accent/70 flex-1 text-sm rounded-lg"
-                title="Lọc dữ liệu"
-              >
-                <Filter className="h-3.5 w-3.5 mr-1" /> Lọc
-              </Button>
+          <div className="flex items-center gap-1.5 shrink-0 self-end">
+            <Button
+              type="submit"
+              size="lg"
+              disabled={filterLoading || loading}
+              className="h-9 font-semibold bg-primary text-primary-foreground hover:bg-accent/70 text-xs rounded-lg px-3 disabled:opacity-60"
+              title="Lọc dữ liệu"
+            >
+              {(filterLoading || loading) ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Filter className="h-3.5 w-3.5 mr-1" />} Lọc
+            </Button>
 
-              {(searchKeyword || filterRole || filterStatus || startDate || startDateInput || endDate || endDateInput) && (
-                <Button
-                  type="button"
-                  onClick={() => {
-                    setSearchKeyword("");
-                    setFilterRole("");
-                    setFilterStatus("");
-                    setStartDate("");
-                    setStartDateInput("");
-                    setEndDate("");
-                    setEndDateInput("");
-                    setPage(0);
-                  }}
-                  variant="outline"
-                  size="lg"
-                  className="h-9.25! text-xs text-muted-foreground hover:text-foreground rounded-lg px-2 border border-border/30 bg-background"
-                  title="Xóa bộ lọc"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </Button>
-              )}
-            </div>
+            {isFilteredOrSorted && (
+              <Button
+                type="button"
+                onClick={handleResetFiltersAndSort}
+                variant="outline"
+                size="lg"
+                className="h-9 text-xs text-muted-foreground hover:text-foreground rounded-lg px-2.5 border border-border/30 bg-background flex items-center gap-1"
+                title="Đặt lại bộ lọc & sắp xếp về mặc định"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                <span>Đặt lại</span>
+              </Button>
+            )}
           </div>
         </form>
+
+        {/* Active Filter & Sort Chips Bar */}
+        {isFilteredOrSorted && (
+          <div className="px-4 py-2 bg-muted/40 border-b border-border/30 flex flex-wrap items-center justify-between gap-2 text-xs animate-in fade-in-50">
+            <div className="flex flex-wrap items-center gap-1.5 text-muted-foreground">
+              <span className="font-semibold text-foreground">Đang áp dụng:</span>
+              {searchKeyword && (
+                <span className="px-2 py-0.5 rounded-md bg-background border border-border/40 text-foreground flex items-center gap-1">
+                  Từ khóa: <strong className="text-primary">{searchKeyword}</strong>
+                  <X className="h-3 w-3 cursor-pointer hover:text-destructive" onClick={() => setSearchKeyword("")} />
+                </span>
+              )}
+              {filterRole && (
+                <span className="px-2 py-0.5 rounded-md bg-background border border-border/40 text-foreground flex items-center gap-1">
+                  Vai trò: <strong className="text-primary">{roles.find(r => String(r.id) === filterRole)?.code || filterRole}</strong>
+                  <X className="h-3 w-3 cursor-pointer hover:text-destructive" onClick={() => setFilterRole("")} />
+                </span>
+              )}
+              {filterStatus && (
+                <span className="px-2 py-0.5 rounded-md bg-background border border-border/40 text-foreground flex items-center gap-1">
+                  Trạng thái: <strong className="text-primary">{filterStatus}</strong>
+                  <X className="h-3 w-3 cursor-pointer hover:text-destructive" onClick={() => setFilterStatus("")} />
+                </span>
+              )}
+              {filterGender !== "" && (
+                <span className="px-2 py-0.5 rounded-md bg-background border border-border/40 text-foreground flex items-center gap-1">
+                  Giới tính: <strong className="text-primary">{filterGender === "0" ? "Nam" : filterGender === "1" ? "Nữ" : "Khác"}</strong>
+                  <X className="h-3 w-3 cursor-pointer hover:text-destructive" onClick={() => setFilterGender("")} />
+                </span>
+              )}
+              {filterDepartmentCode && (
+                <span className="px-2 py-0.5 rounded-md bg-background border border-border/40 text-foreground flex items-center gap-1">
+                  Phòng ban: <strong className="text-primary">{filterDepartmentCode}</strong>
+                  <X className="h-3 w-3 cursor-pointer hover:text-destructive" onClick={() => setFilterDepartmentCode("")} />
+                </span>
+              )}
+              {(startDate || endDate) && (
+                <span className="px-2 py-0.5 rounded-md bg-background border border-border/40 text-foreground flex items-center gap-1">
+                  Thời gian: <strong className="text-primary">{startDateInput || "Tất cả"} - {endDateInput || "Tất cả"}</strong>
+                  <X className="h-3 w-3 cursor-pointer hover:text-destructive" onClick={() => { setStartDate(""); setStartDateInput(""); setEndDate(""); setEndDateInput(""); }} />
+                </span>
+              )}
+              {isSorted && sortRules.filter(r => r.field !== "id").map((rule, idx) => (
+                <span key={rule.field} className="px-2 py-0.5 rounded-md bg-primary/10 border border-primary/20 text-primary font-medium flex items-center gap-1">
+                  {sortRules.length > 1 && (
+                    <span className="h-3.5 w-3.5 rounded-full bg-primary text-primary-foreground text-[10px] flex items-center justify-center font-bold">
+                      {idx + 1}
+                    </span>
+                  )}
+                  <span>Sắp xếp:</span>
+                  <strong>
+                    {getFieldLabel(rule.field)} ({rule.dir === "ASC" ? "Tăng ▲" : "Giảm ▼"})
+                  </strong>
+                  <X
+                    className="h-3 w-3 cursor-pointer hover:text-destructive ml-0.5"
+                    onClick={() => removeSortRule(rule.field)}
+                  />
+                </span>
+              ))}
+            </div>
+            <Button
+              type="button"
+              onClick={handleResetFiltersAndSort}
+              variant="ghost"
+              size="sm"
+              className="h-6 text-[11px] text-destructive hover:bg-destructive/10 px-2 font-medium"
+            >
+              Xóa tất cả
+            </Button>
+          </div>
+        )}
 
 
         {/* Table */}
@@ -1477,10 +1828,23 @@ export const UserManagement: React.FC = () => {
                 onClick={() => setBulkAssignRoleModalOpen(true)}
                 variant="outline"
                 size="sm"
-                className="h-8 text-sm gap-1 border-border/30 bg-primary hover:bg-accent/70 text-primary-foreground hover:text-primary-foreground "
+                disabled={bulkAssignRoleLoading}
+                className="h-8 text-sm gap-1 border-border/30 bg-primary hover:bg-accent/70 text-primary-foreground hover:text-primary-foreground disabled:opacity-60"
               >
-                <UserCheck className="h-3.5 w-3.5 text-primary-foreground" />
+                {bulkAssignRoleLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserCheck className="h-3.5 w-3.5 text-primary-foreground" />}
                 <span>Gán vai trò</span>
+              </Button>
+
+              {/* Bulk Remove Role */}
+              <Button
+                onClick={() => setBulkRemoveRoleModalOpen(true)}
+                variant="outline"
+                size="sm"
+                disabled={bulkRemoveRoleLoading}
+                className="h-8 text-sm gap-1 border-border/30 bg-amber-600 hover:bg-amber-700 text-white hover:text-white disabled:opacity-60"
+              >
+                {bulkRemoveRoleLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <UserX className="h-3.5 w-3.5" />}
+                <span>Gỡ vai trò</span>
               </Button>
 
               {/* Bulk Send Email */}
@@ -1488,9 +1852,10 @@ export const UserManagement: React.FC = () => {
                 onClick={() => setBulkEmailModalOpen(true)}
                 variant="outline"
                 size="sm"
-                className="h-8 text-sm border-border/30 gap-1 bg-primary hover:bg-accent/70 text-primary-foreground hover:text-primary-foreground"
+                disabled={bulkEmailLoading}
+                className="h-8 text-sm border-border/30 gap-1 bg-primary hover:bg-accent/70 text-primary-foreground hover:text-primary-foreground disabled:opacity-60"
               >
-                <Mail className="h-3.5 w-3.5 text-primary-foreground" />
+                {bulkEmailLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5 text-primary-foreground" />}
                 <span>Gửi Email</span>
               </Button>
 
@@ -1499,10 +1864,11 @@ export const UserManagement: React.FC = () => {
                 onClick={handleBulkDelete}
                 variant="destructive"
                 size="sm"
-                className="h-8 text-sm border-border/30 gap-1 bg-destructive hover:bg-accent/70 text-primary-foreground hover:text-primary-foreground"
+                disabled={bulkDeleteLoading}
+                className="h-8 text-sm border-border/30 gap-1 bg-destructive hover:bg-accent/70 text-primary-foreground hover:text-primary-foreground disabled:opacity-60"
               >
-                <Trash2 className="h-3.5 w-3.5" />
-                <span>Xóa chọn</span>
+                {bulkDeleteLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                <span>{bulkDeleteLoading ? "Đang xóa..." : "Xóa chọn"}</span>
               </Button>
 
               <Button
@@ -1537,33 +1903,72 @@ export const UserManagement: React.FC = () => {
                   />
                 </TableHead>
                 
-                <TableHead className="cursor-pointer pb-4 select-none text-sm font-semibold text-muted-foreground uppercase tracking-wider" onClick={() => handleSort("fullName")}>
-                  <div className="flex items-center gap-1 pl-2">
-                    <span>Người dùng</span>
-                    <ArrowUpDown className="h-3 w-3 opacity-50" />
+                <TableHead
+                  className="cursor-pointer pb-4 select-none text-sm font-semibold uppercase tracking-wider group"
+                  onClick={() => handleSort("fullName")}
+                  title="Click 1 lần: Tăng (ASC) | Click 2 lần: Giảm (DESC) | Click 3 lần: Bỏ sắp xếp"
+                >
+                  <div className="flex items-center gap-1.5 pl-2">
+                    <span className={getSortRuleInfo("fullName") ? "text-primary font-bold" : "text-muted-foreground"}>
+                      Người dùng
+                    </span>
+                    {renderSortIcon("fullName")}
                   </div>
                 </TableHead>
 
-                <TableHead className="cursor-pointer pb-4 select-none text-sm font-semibold text-muted-foreground uppercase tracking-wider" onClick={() => handleSort("email")}>
-                  <div className="flex items-center gap-1">
-                    <span>Liên hệ</span>
-                    <ArrowUpDown className="h-3 w-3 opacity-50" />
+                <TableHead
+                  className="cursor-pointer pb-4 select-none text-sm font-semibold uppercase tracking-wider text-center group"
+                  onClick={() => handleSort("gender")}
+                  title="Click 1 lần: Tăng (ASC) | Click 2 lần: Giảm (DESC) | Click 3 lần: Bỏ sắp xếp"
+                >
+                  <div className="flex items-center gap-1.5 justify-center">
+                    <span className={getSortRuleInfo("gender") ? "text-primary font-bold" : "text-muted-foreground"}>
+                      Giới tính
+                    </span>
+                    {renderSortIcon("gender")}
+                  </div>
+                </TableHead>
+
+                <TableHead
+                  className="cursor-pointer pb-4 select-none text-sm font-semibold uppercase tracking-wider text-center group"
+                  onClick={() => handleSort("dateOfBirth")}
+                  title="Click 1 lần: Tăng (ASC) | Click 2 lần: Giảm (DESC) | Click 3 lần: Bỏ sắp xếp"
+                >
+                  <div className="flex items-center gap-1.5 justify-center">
+                    <span className={getSortRuleInfo("dateOfBirth") ? "text-primary font-bold" : "text-muted-foreground"}>
+                      Ngày sinh
+                    </span>
+                    {renderSortIcon("dateOfBirth")}
                   </div>
                 </TableHead>
 
                 <TableHead className="text-sm pb-4 text-center font-semibold text-muted-foreground uppercase tracking-wider">Vai trò</TableHead>
 
-                <TableHead className="cursor-pointer pb-4 select-none text-sm font-semibold text-muted-foreground uppercase tracking-wider" onClick={() => handleSort("status")}>
-                  <div className="flex items-center gap-1 justify-center">
-                    <span>Trạng thái</span>
-                    <ArrowUpDown className="h-3 w-3 opacity-50" />
+                <TableHead className="text-sm pb-4 text-center font-semibold text-muted-foreground uppercase tracking-wider">Phòng ban</TableHead>
+
+                <TableHead
+                  className="cursor-pointer pb-4 select-none text-sm font-semibold uppercase tracking-wider text-center group"
+                  onClick={() => handleSort("status")}
+                  title="Click 1 lần: Tăng (ASC) | Click 2 lần: Giảm (DESC) | Click 3 lần: Bỏ sắp xếp"
+                >
+                  <div className="flex items-center gap-1.5 justify-center">
+                    <span className={getSortRuleInfo("status") ? "text-primary font-bold" : "text-muted-foreground"}>
+                      Trạng thái
+                    </span>
+                    {renderSortIcon("status")}
                   </div>
                 </TableHead>
 
-                <TableHead className="cursor-pointer pb-4 select-none text-sm font-semibold text-muted-foreground uppercase tracking-wider" onClick={() => handleSort("createdAt")}>
-                  <div className="flex items-center gap-1 justify-center">
-                    <span>Ngày tham gia</span>
-                    <ArrowUpDown className="h-3 w-3 opacity-50" />
+                <TableHead
+                  className="cursor-pointer pb-4 select-none text-sm font-semibold uppercase tracking-wider text-center group"
+                  onClick={() => handleSort("createdAt")}
+                  title="Click 1 lần: Tăng (ASC) | Click 2 lần: Giảm (DESC) | Click 3 lần: Bỏ sắp xếp"
+                >
+                  <div className="flex items-center gap-1.5 justify-center">
+                    <span className={getSortRuleInfo("createdAt") ? "text-primary font-bold" : "text-muted-foreground"}>
+                      Ngày tham gia
+                    </span>
+                    {renderSortIcon("createdAt")}
                   </div>
                 </TableHead>
 
@@ -1574,7 +1979,7 @@ export const UserManagement: React.FC = () => {
             <TableBody className="opacity-90">
               {users.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-12 text-center text-muted-foreground text-sm">
+                  <TableCell colSpan={9} className="py-12 text-center text-muted-foreground text-sm">
                     Không tìm thấy tài khoản người dùng nào thỏa mãn.
                   </TableCell>
                 </TableRow>
@@ -1599,7 +2004,7 @@ export const UserManagement: React.FC = () => {
                             u.fullName ? u.fullName.charAt(0).toUpperCase() : "U"
                           )}
                         </div>
-                        <div className="text-center justify-center">
+                        <div className="text-left">
                           <p
                             onClick={() => handleViewUserDetail(u.id)}
                             className="font-semibold text-foreground hover:text-primary cursor-pointer transition-colors"
@@ -1611,10 +2016,28 @@ export const UserManagement: React.FC = () => {
                       </div>
                     </TableCell>
 
-                    {/* Contact Info Column */}
-                    <TableCell>
-                      <p className="font-semibold text-foreground text-lg">{u.email}</p>
-                      <p className="text-muted-foreground text-sm">{u.phone || ""}</p>
+                    {/* Gender Column */}
+                    <TableCell className="text-center">
+                      {u.gender === 0 ? (
+                        <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-success-forest/10 text-success-forest border border-sky-500/20">Nam</span>
+                      ) : u.gender === 1 ? (
+                        <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg- text-pink-600 border border-pink-500/20">Nữ</span>
+                      ) : u.gender === 2 ? (
+                        <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-500/10 text-purple-600 border border-purple-500/20">Khác</span>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">--</span>
+                      )}
+                    </TableCell>
+
+                    {/* Date of Birth Column */}
+                    <TableCell className="text-center text-sm text-muted-foreground font-medium">
+                      {u.dateOfBirth
+                        ? (() => {
+                            const dateStr = u.dateOfBirth.slice(0, 10);
+                            const parts = dateStr.split("-");
+                            return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : dateStr;
+                          })()
+                        : "--"}
                     </TableCell>
 
                     {/* Roles Column */}
@@ -1633,6 +2056,17 @@ export const UserManagement: React.FC = () => {
                           <span className="text-[10px] text-muted-foreground italic">Chưa phân vai trò</span>
                         )}
                       </div>
+                    </TableCell>
+
+                    {/* Department Code Column */}
+                    <TableCell className="text-center">
+                      {u.departmentCode ? (
+                        <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-500/10 text-brand-cobalt border border-indigo-500/20 uppercase">
+                          {u.departmentCode}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">--</span>
+                      )}
                     </TableCell>
 
                     {/* Status Column */}
@@ -1771,7 +2205,7 @@ export const UserManagement: React.FC = () => {
                   setPage(0);
                 }}
               >
-                <SelectTrigger className="h-8 w-16 text-sm bg-background border border-border/40 rounded-lg font-semibold">
+                <SelectTrigger className="h-8 w-auto min-w-[70px] px-2.5 text-sm bg-background border border-border/40 rounded-lg font-semibold">
                   <SelectValue placeholder={String(pageSize)} />
                 </SelectTrigger>
                 <SelectContent>
@@ -1779,6 +2213,7 @@ export const UserManagement: React.FC = () => {
                   <SelectItem value="20">20</SelectItem>
                   <SelectItem value="50">50</SelectItem>
                   <SelectItem value="100">100</SelectItem>
+                  <SelectItem value="9999">Tất cả</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -2207,11 +2642,16 @@ export const UserManagement: React.FC = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <Label className="text-xs font-semibold">Giới tính</Label>
-                  <select name="gender" defaultValue={editingUser?.gender ?? "0"} className="flex h-9 w-full rounded-lg border border-input bg-background px-3 text-xs outline-none">
-                    <option value="0">Nam</option>
-                    <option value="1">Nữ</option>
-                    <option value="2">Khác</option>
-                  </select>
+                  <Select name="gender" defaultValue={String(editingUser?.gender ?? "0")}>
+                    <SelectTrigger className="h-9 w-full text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">Nam</SelectItem>
+                      <SelectItem value="1">Nữ</SelectItem>
+                      <SelectItem value="2">Khác</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="space-y-1">
@@ -2274,9 +2714,32 @@ export const UserManagement: React.FC = () => {
                 </div>
               </div>
 
+              {/* Role selection - only for creating new user */}
+              {!editingUser && (
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold">Vai trò <span className="text-muted-foreground font-normal">(Tùy chọn)</span></Label>
+                  <Select value={createUserRoleId} onValueChange={setCreateUserRoleId}>
+                    <SelectTrigger className="h-9 w-full text-xs">
+                      <SelectValue placeholder="-- Chọn vai trò --" />
+                    </SelectTrigger>
+                    <SelectContent className="z-50">
+                      <SelectItem value="none">-- Không gán vai trò --</SelectItem>
+                      {roles.map((r) => (
+                        <SelectItem key={r.id} value={String(r.id)}>
+                          <span className="font-mono text-[10px] font-bold text-primary mr-1.5">{r.code}</span>
+                          {r.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
               <div className="flex justify-end gap-2 pt-3 border-t border-border">
-                <Button type="button" variant="outline" onClick={() => setUserModalOpen(false)} className="h-9">Hủy</Button>
-                <Button type="submit" className="h-9 bg-primary text-primary-foreground hover:bg-primary/95">Xác nhận</Button>
+                <Button type="button" variant="outline" onClick={() => setUserModalOpen(false)} disabled={saveUserLoading} className="h-9">Hủy</Button>
+                <Button type="submit" disabled={saveUserLoading} className="h-9 gap-1.5 bg-primary text-primary-foreground hover:bg-primary/95 min-w-[100px] justify-center">
+                  {saveUserLoading ? <><Loader2 className="h-4 w-4 animate-spin" /><span>Đang lưu...</span></> : <span>Xác nhận</span>}
+                </Button>
               </div>
             </form>
           </div>
@@ -2310,35 +2773,113 @@ export const UserManagement: React.FC = () => {
                 />
               </div>
 
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">Mã phòng ban (ID tùy chọn)</Label>
-                <Input
-                  type="text"
-                  placeholder="Nhập ID phòng ban (nếu có)..."
-                  value={bulkEmployeeDeptId}
-                  onChange={(e) => setBulkEmployeeDeptId(e.target.value)}
-                  className="h-9"
-                />
+              {/* PHÒNG BAN: TÌM KIẾM + DROPDOWN DỮ LIỆU THỰC TẾ (HIỂN THỊ MÃ CODE, TRẢ VỀ ID) */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold">Phòng ban (Hiển thị Mã code - Trả ID)</Label>
+                  {loadingDeptsAndRoles && <Loader2 className="h-3 w-3 animate-spin text-primary" />}
+                </div>
+
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                  <Input
+                    type="text"
+                    placeholder="Tìm theo mã code hoặc tên phòng ban..."
+                    value={deptSearchTerm}
+                    onChange={(e) => setDeptSearchTerm(e.target.value)}
+                    className="pl-8 h-8 text-xs bg-background"
+                  />
+                </div>
+
+                <Select value={bulkEmployeeDeptId} onValueChange={setBulkEmployeeDeptId}>
+                  <SelectTrigger className="h-9 w-full text-xs">
+                    <SelectValue placeholder="-- Chọn phòng ban (Tùy chọn) --" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-52 overflow-y-auto z-50">
+                    <SelectItem value="none">-- Không phân phòng ban --</SelectItem>
+                    {deptList
+                      .filter((d) =>
+                        !deptSearchTerm ||
+                        d.code?.toLowerCase().includes(deptSearchTerm.toLowerCase()) ||
+                        d.name?.toLowerCase().includes(deptSearchTerm.toLowerCase())
+                      )
+                      .map((dept) => (
+                        <SelectItem key={dept.id} value={String(dept.id)}>
+                          <span className="font-mono font-bold text-primary mr-1.5 border border-primary/20 bg-primary/10 px-1.5 py-0.5 rounded text-[10px]">
+                            {dept.code}
+                          </span>
+                          <span>{dept.name}</span>
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                {bulkEmployeeDeptId && bulkEmployeeDeptId !== "none" && (
+                  <p className="text-[10px] text-muted-foreground">
+                    ID phòng ban gửi lên BE: <code className="font-mono text-primary font-bold">#{bulkEmployeeDeptId}</code>
+                  </p>
+                )}
               </div>
 
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">Vai trò gán mặc định</Label>
-                <select
-                  value={bulkEmployeeRoleCode}
-                  onChange={(e) => setBulkEmployeeRoleCode(e.target.value)}
-                  className="w-full h-9 rounded-lg border border-input bg-background px-3 text-xs outline-none"
-                >
-                  <option value="ROLE_TEACHER">ROLE_TEACHER (Giảng viên)</option>
-                  <option value="ROLE_STAFF">ROLE_STAFF (Cán bộ nhân viên)</option>
-                  <option value="ROLE_ADMIN">ROLE_ADMIN (Quản trị viên)</option>
-                </select>
+              {/* VAI TRÒ MẶC ĐỊNH: TÌM KIẾM + DROPDOWN DỮ LIỆU THỰC TẾ (HIỂN THỊ MÃ CODE, TRẢ VỀ ROLE ID) */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold">Vai trò gán mặc định (Hiển thị Mã code - Trả Role ID)</Label>
+                  {loadingDeptsAndRoles && <Loader2 className="h-3 w-3 animate-spin text-primary" />}
+                </div>
+
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                  <Input
+                    type="text"
+                    placeholder="Tìm theo mã code hoặc tên vai trò..."
+                    value={roleSearchTerm}
+                    onChange={(e) => setRoleSearchTerm(e.target.value)}
+                    className="pl-8 h-8 text-xs bg-background"
+                  />
+                </div>
+
+                <Select value={bulkEmployeeRoleId} onValueChange={setBulkEmployeeRoleId}>
+                  <SelectTrigger className="h-9 w-full text-xs">
+                    <SelectValue placeholder="-- Chọn vai trò gán mặc định --" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-52 overflow-y-auto z-50">
+                    {roleList
+                      .filter((r) =>
+                        !roleSearchTerm ||
+                        r.code?.toLowerCase().includes(roleSearchTerm.toLowerCase()) ||
+                        r.name?.toLowerCase().includes(roleSearchTerm.toLowerCase())
+                      )
+                      .map((role) => (
+                        <SelectItem key={role.id} value={String(role.id)}>
+                          <span className="font-mono font-bold text-indigo-600 dark:text-indigo-400 mr-1.5 border border-indigo-500/20 bg-indigo-500/10 px-1.5 py-0.5 rounded text-[10px]">
+                            {role.code || role.name}
+                          </span>
+                          <span>{role.name}</span>
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                {bulkEmployeeRoleId && (
+                  <p className="text-[10px] text-muted-foreground">
+                    Role ID gửi lên BE: <code className="font-mono text-indigo-600 font-bold">#{bulkEmployeeRoleId}</code>
+                  </p>
+                )}
               </div>
 
               <div className="flex justify-end gap-2 pt-3 border-t border-border">
-                <Button type="button" variant="outline" onClick={() => setBulkCreateEmployeesModalOpen(false)} className="h-9">Hủy</Button>
-                <Button type="submit" className="h-9 bg-primary text-primary-foreground hover:bg-primary/95 gap-1.5">
-                  <UserPlus className="h-4 w-4" />
-                  <span>Xác nhận thêm</span>
+                <Button type="button" variant="outline" onClick={() => setBulkCreateEmployeesModalOpen(false)} disabled={bulkEmployeeLoading} className="h-9">Hủy</Button>
+                <Button type="submit" disabled={bulkEmployeeLoading} className="h-9 bg-primary text-primary-foreground hover:bg-primary/95 gap-1.5 min-w-[130px] justify-center">
+                  {bulkEmployeeLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Đang tạo & gửi thư...</span>
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="h-4 w-4" />
+                      <span>Xác nhận thêm</span>
+                    </>
+                  )}
                 </Button>
               </div>
             </form>
@@ -2351,8 +2892,9 @@ export const UserManagement: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
           <div className="w-full max-w-lg rounded-2xl border border-border bg-card p-6 shadow-2xl relative animate-in fade-in-50 zoom-in-95 duration-200">
             <button
-              onClick={() => setBulkEmailModalOpen(false)}
-              className="absolute right-4 top-4 p-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground"
+              onClick={() => !bulkEmailLoading && setBulkEmailModalOpen(false)}
+              disabled={bulkEmailLoading}
+              className="absolute right-4 top-4 p-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground disabled:opacity-50"
             >
               <X className="h-4 w-4" />
             </button>
@@ -2368,6 +2910,7 @@ export const UserManagement: React.FC = () => {
                   placeholder="Thông báo cập nhật hệ thống LMS"
                   value={bulkEmailSubject}
                   onChange={(e) => setBulkEmailSubject(e.target.value)}
+                  disabled={bulkEmailLoading}
                   required
                   className="h-9"
                 />
@@ -2380,16 +2923,26 @@ export const UserManagement: React.FC = () => {
                   placeholder="Kính gửi quý học viên/nhân viên..."
                   value={bulkEmailContent}
                   onChange={(e) => setBulkEmailContent(e.target.value)}
+                  disabled={bulkEmailLoading}
                   required
-                  className="w-full rounded-lg border border-input bg-background p-3 text-xs outline-none focus:ring-2 focus:ring-primary/20"
+                  className="w-full rounded-lg border border-input bg-background p-3 text-xs outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
                 />
               </div>
 
               <div className="flex justify-end gap-2 pt-3 border-t border-border">
-                <Button type="button" variant="outline" onClick={() => setBulkEmailModalOpen(false)} className="h-9">Hủy</Button>
-                <Button type="submit" className="h-9 bg-primary text-primary-foreground hover:bg-primary/95 gap-1.5">
-                  <Mail className="h-4 w-4" />
-                  <span>Gửi thư ngay</span>
+                <Button type="button" variant="outline" onClick={() => setBulkEmailModalOpen(false)} disabled={bulkEmailLoading} className="h-9">Hủy</Button>
+                <Button type="submit" disabled={bulkEmailLoading} className="h-9 bg-primary text-primary-foreground hover:bg-primary/95 gap-1.5 min-w-[130px] justify-center">
+                  {bulkEmailLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Đang gửi email...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Mail className="h-4 w-4" />
+                      <span>Gửi thư ngay</span>
+                    </>
+                  )}
                 </Button>
               </div>
             </form>
@@ -2402,8 +2955,9 @@ export const UserManagement: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
           <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 shadow-2xl relative animate-in fade-in-50 zoom-in-95 duration-200">
             <button
-              onClick={() => setInviteModalOpen(false)}
-              className="absolute right-4 top-4 p-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground"
+              onClick={() => !inviteLoading && setInviteModalOpen(false)}
+              disabled={inviteLoading}
+              className="absolute right-4 top-4 p-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground disabled:opacity-50"
             >
               <X className="h-4 w-4" />
             </button>
@@ -2421,17 +2975,46 @@ export const UserManagement: React.FC = () => {
                     placeholder="partner@ailms.edu.vn"
                     value={inviteEmail}
                     onChange={(e) => setInviteEmail(e.target.value)}
+                    disabled={inviteLoading}
                     required
                     className="pl-9 h-9"
                   />
                 </div>
               </div>
 
+              {/* Role selection */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Vai trò mặc định <span className="text-muted-foreground font-normal">(Tùy chọn)</span></Label>
+                <Select value={inviteRoleId} onValueChange={setInviteRoleId}>
+                  <SelectTrigger className="h-9 w-full text-xs">
+                    <SelectValue placeholder="-- Chọn vai trò --" />
+                  </SelectTrigger>
+                  <SelectContent className="z-50">
+                    <SelectItem value="none">-- Không gán vai trò --</SelectItem>
+                    {roles.map((r) => (
+                      <SelectItem key={r.id} value={String(r.id)}>
+                        <span className="font-mono text-[10px] font-bold text-primary mr-1.5">{r.code}</span>
+                        {r.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div className="flex justify-end gap-2 pt-2 border-t border-border">
-                <Button type="button" variant="outline" onClick={() => setInviteModalOpen(false)} className="h-9">Hủy</Button>
-                <Button type="submit" className="h-9 gap-1.5 bg-primary text-primary-foreground hover:bg-primary/95">
-                  <UserPlus className="h-4 w-4" />
-                  <span>Gửi thư mời</span>
+                <Button type="button" variant="outline" onClick={() => setInviteModalOpen(false)} disabled={inviteLoading} className="h-9">Hủy</Button>
+                <Button type="submit" disabled={inviteLoading} className="h-9 gap-1.5 bg-primary text-primary-foreground hover:bg-primary/95 min-w-[130px] justify-center">
+                  {inviteLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Đang gửi thư mời...</span>
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="h-4 w-4" />
+                      <span>Gửi thư mời</span>
+                    </>
+                  )}
                 </Button>
               </div>
             </form>
@@ -2473,8 +3056,10 @@ export const UserManagement: React.FC = () => {
               </div>
 
               <div className="flex justify-end gap-2 pt-2 border-t border-border">
-                <Button type="button" variant="outline" onClick={() => setAssignRoleModalOpen(false)} className="h-9">Hủy</Button>
-                <Button type="submit" className="h-9 bg-primary text-primary-foreground hover:bg-primary/95">Cập nhật</Button>
+                <Button type="button" variant="outline" onClick={() => setAssignRoleModalOpen(false)} disabled={assignRoleLoading} className="h-9">Hủy</Button>
+                <Button type="submit" disabled={assignRoleLoading} className="h-9 gap-1.5 bg-primary text-primary-foreground hover:bg-primary/95 min-w-[100px] justify-center">
+                  {assignRoleLoading ? <><Loader2 className="h-4 w-4 animate-spin" /><span>Đang lưu...</span></> : <span>Cập nhật</span>}
+                </Button>
               </div>
             </form>
           </div>
@@ -2498,18 +3083,95 @@ export const UserManagement: React.FC = () => {
             <form onSubmit={handleBulkAssignRole} className="space-y-4 text-xs">
               <div className="space-y-1">
                 <Label className="text-xs font-semibold">Chọn vai trò bổ sung</Label>
-                <select name="bulkRole" className="flex h-9 w-full rounded-lg border border-input bg-background px-3 text-xs outline-none">
-                  {roles.map((r) => (
-                    <option key={r.name} value={r.name}>{r.name} - {r.description.slice(0, 30)}...</option>
-                  ))}
-                </select>
+                <Select name="bulkRole" defaultValue={roles[0]?.id || ""}>
+                  <SelectTrigger className="h-9 w-full text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {roles.map((r) => (
+                      <SelectItem key={r.id} value={r.id}>
+                        {r.name} - {r.description?.slice(0, 30)}...
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="flex justify-end gap-2 pt-2 border-t border-border">
-                <Button type="button" variant="outline" onClick={() => setBulkAssignRoleModalOpen(false)} className="h-9">Hủy</Button>
-                <Button type="submit" className="h-9 bg-primary text-primary-foreground hover:bg-primary/95">Xác nhận</Button>
+                <Button type="button" variant="outline" onClick={() => setBulkAssignRoleModalOpen(false)} disabled={bulkAssignRoleLoading} className="h-9">Hủy</Button>
+                <Button type="submit" disabled={bulkAssignRoleLoading} className="h-9 gap-1.5 bg-primary text-primary-foreground hover:bg-primary/95 min-w-[100px] justify-center">
+                  {bulkAssignRoleLoading ? <><Loader2 className="h-4 w-4 animate-spin" /><span>Đang gán...</span></> : <span>Xác nhận</span>}
+                </Button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 8: BULK REMOVE ROLE MODAL */}
+      {bulkRemoveRoleModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl relative animate-in fade-in-50 zoom-in-95 duration-200">
+            <button
+              onClick={() => setBulkRemoveRoleModalOpen(false)}
+              className="absolute right-4 top-4 p-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+            </button>
+
+            <div className="flex items-center gap-2 mb-1">
+              <UserX className="h-5 w-5 text-amber-600" />
+              <h3 className="text-lg font-bold text-foreground">Gỡ vai trò hàng loạt</h3>
+            </div>
+            <p className="text-xs text-muted-foreground mb-4">
+              Gỡ vai trò đã chọn khỏi <strong className="text-primary">{selectedUserIds.length}</strong> người dùng đã chọn.
+              <br />
+              <span className="text-amber-600 font-semibold">* Lưu ý: Mỗi người dùng phải giữ lại tối thiểu 1 vai trò.</span>
+            </p>
+
+            <div className="space-y-4 text-xs">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Chọn vai trò cần gỡ</Label>
+                <Select value={selectedRemoveRoleId} onValueChange={setSelectedRemoveRoleId}>
+                  <SelectTrigger className="h-9 w-full text-xs">
+                    <SelectValue placeholder="-- Chọn vai trò cần gỡ --" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-56 overflow-y-auto z-50">
+                    {roles.map((r) => (
+                      <SelectItem key={r.id} value={String(r.id)}>
+                        <span className="font-mono font-bold text-amber-600 mr-1.5 border border-amber-500/20 bg-amber-500/10 px-1.5 py-0.5 rounded text-[10px]">
+                          {r.code || r.name}
+                        </span>
+                        <span>{r.name}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3 border-t border-border">
+                <Button type="button" variant="outline" onClick={() => setBulkRemoveRoleModalOpen(false)} disabled={bulkRemoveRoleLoading} className="h-9">
+                  Hủy
+                </Button>
+                <Button
+                  onClick={handleBulkRemoveRole}
+                  disabled={bulkRemoveRoleLoading || !selectedRemoveRoleId}
+                  className="h-9 bg-amber-600 text-white hover:bg-amber-700 gap-1.5 min-w-[120px] justify-center"
+                >
+                  {bulkRemoveRoleLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Đang xử lý...</span>
+                    </>
+                  ) : (
+                    <>
+                      <UserX className="h-4 w-4" />
+                      <span>Xác nhận gỡ</span>
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       )}
