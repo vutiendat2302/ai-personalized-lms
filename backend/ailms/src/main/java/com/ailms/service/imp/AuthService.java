@@ -110,7 +110,7 @@ public class AuthService implements IAuthService { // login - register
             userEntity.setDateOfBirth(null);
         }
         // Chưa xác thực email -> chưa cho login
-        userEntity.setStatus(UserStatusEnum.PENDING_VERIFICATION);
+        userEntity.setStatus(UserStatusEnum.VERIFICATION);
         userEntity.setPhone(request.getPhone());
         // Mã hóa mật khẩu trước khi lưu
         userEntity.setPasswordHash(passwordEncoder.encode(request.getPassword()));

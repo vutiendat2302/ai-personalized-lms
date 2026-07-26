@@ -31,16 +31,26 @@ public interface UserRepository extends BaseRepository<UserEntity, Long> {
 
     UserEntity findByUsername(String userName);
 
-    @Query("SELECT u.gender, COUNT(u) FROM UserEntity u WHERE u.status != com.ailms.entity.enums.UserStatusEnum.DELETED GROUP BY u.gender")
+    @Query("SELECT u.gender, COUNT(u) FROM UserEntity u WHERE u.status != UserStatusEnum.DELETED GROUP BY u.gender")
     java.util.List<Object[]> countUsersGroupByGender();
 
-    @Query("SELECT MONTH(u.createdAt), COUNT(u) FROM UserEntity u WHERE YEAR(u.createdAt) = :year AND u.status != com.ailms.entity.enums.UserStatusEnum.DELETED GROUP BY MONTH(u.createdAt)")
+    @Query("SELECT MONTH(u.createdAt), COUNT(u) FROM UserEntity u WHERE YEAR(u.createdAt) = :year AND u.status != UserStatusEnum.DELETED GROUP BY MONTH(u.createdAt)")
     java.util.List<Object[]> countMonthlyNewUsersByYear(@Param("year") int year);
 
     List<UserEntity> findAllByStatusNot(UserStatusEnum userStatusEnum);
 
     @Query("SELECT u.status, COUNT(u) FROM UserEntity u GROUP BY u.status")
     List<Object[]> countUsersGroupByStatus();
+
+    /**
+     * Lấy danh sách user theo tên role, dùng cho việc gửi thông báo theo role.
+     */
+    @Query("""
+            SELECT DISTINCT ur.userEntity FROM UserRoleEntity ur
+            WHERE ur.roleEntity.name = :roleName
+            AND ur.userEntity.status != com.ailms.entity.enums.UserStatusEnum.DELETED
+            """)
+    List<UserEntity> findUsersByRoleName(@Param("roleName") String roleName);
 }
 
 

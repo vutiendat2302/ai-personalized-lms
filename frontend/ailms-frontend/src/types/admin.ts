@@ -221,3 +221,16 @@ export interface BulkCreateEmployeeRequest {
   roleCode?: string;
 }
 
+export interface CreateCategoryRequest {
+  name: string;
+  code?: string;
+  description?: string;
+}
+
+export interface UpdateCategoryRequest {
+  name?: string;
+  code?: string;
+  description?: string;
+  status?: string;
+}
+

@@ -69,7 +69,7 @@ export const userApi = {
     httpClient.get<ApiResponse<Record<string, number>>>("/v1/users/stats/by-status"),
 
   getStatsByAgeGroup: () =>
-    httpClient.get<ApiResponse<Record<string, number>>>("/v1/users/employees/stats/by-age-group"),
+    httpClient.get<ApiResponse<Record<string, number>>>("/v1/users/stats/by-age-group"),
 
   getEmployeeStatsByStatus: () =>
     httpClient.get<ApiResponse<Record<string, number>>>("/v1/users/employees/stats/by-status"),

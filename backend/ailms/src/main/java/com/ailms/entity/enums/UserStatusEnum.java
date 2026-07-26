@@ -10,13 +10,11 @@ package com.ailms.entity.enums;
  */
 public enum UserStatusEnum {
 
-    INACTIVE,
-
     ACTIVE,
 
     LOCKED,
 
-    PENDING_VERIFICATION,
+    VERIFICATION,
 
     DELETED
 }

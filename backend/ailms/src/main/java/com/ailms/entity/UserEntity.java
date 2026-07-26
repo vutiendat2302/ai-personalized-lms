@@ -96,15 +96,15 @@ public class UserEntity extends BaseEntity{
     /**
      * Trạng thái tài khoản.
      * Giá trị được lưu dưới dạng chuỗi (EnumType.STRING).
-     * INACTIVE
      * ACTIVE
      * LOCKED
-     * PENDING_VERIFICATION
+     * VERIFICATION
+     * DELETE
      */
     @Column(name = "status")
     @Enumerated(EnumType.STRING)
     @Builder.Default
-    private UserStatusEnum status = UserStatusEnum.INACTIVE;
+    private UserStatusEnum status = UserStatusEnum.ACTIVE;
 
     /**
      * Thời điểm người dùng đăng nhập gần nhất.

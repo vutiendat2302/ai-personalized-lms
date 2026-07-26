@@ -4,6 +4,22 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 import { permissionApi } from "@/api/permissions/permissionApi";
 import type { PermissionResponse } from "@/types/admin";
 import {
@@ -16,8 +32,32 @@ import {
   X,
   ArrowLeft,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
+
+const getPageNumbers = (currentPage: number, total: number) => {
+  const pages: (number | string)[] = [];
+  if (total <= 7) {
+    for (let i = 0; i < total; i++) pages.push(i);
+  } else {
+    pages.push(0);
+    if (currentPage > 2) {
+      pages.push("...");
+    }
+    const start = Math.max(1, currentPage - 1);
+    const end = Math.min(total - 2, currentPage + 1);
+    for (let i = start; i <= end; i++) {
+      pages.push(i);
+    }
+    if (currentPage < total - 3) {
+      pages.push("...");
+    }
+    pages.push(total - 1);
+  }
+  return pages;
+};
 
 export const PermissionManagement: React.FC = () => {
   const [permissions, setPermissions] = useState<PermissionResponse[]>([]);
@@ -30,16 +70,22 @@ export const PermissionManagement: React.FC = () => {
 
   // Pagination
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
+  const [jumpPageInput, setJumpPageInput] = useState<string>("1");
 
-  // Modals state
+  // Modals
   const [permissionModalOpen, setPermissionModalOpen] = useState(false);
   const [editingPermission, setEditingPermission] = useState<PermissionResponse | null>(null);
 
   useEffect(() => {
-    fetchPermissions();
+    setJumpPageInput(String(page + 1));
   }, [page]);
+
+  useEffect(() => {
+    fetchPermissions();
+  }, [page, pageSize]);
 
   const showBanner = (msg: string, isError = false) => {
     if (isError) {
@@ -56,7 +102,7 @@ export const PermissionManagement: React.FC = () => {
     try {
       const params: any = {
         page,
-        size: 10,
+        size: pageSize,
         sort: "id:desc"
       };
       if (searchPermission) params.search = searchPermission;
@@ -199,125 +245,224 @@ export const PermissionManagement: React.FC = () => {
           </Button>
         </CardHeader>
 
-        {/* Search */}
-        <div className="p-4 bg-muted/20 border-b border-border/80 flex gap-3">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Tìm theo Tên quyền, Thực thể (Entity) hoặc Hành động (Action)..."
-              value={searchPermission}
-              onChange={(e) => setSearchPermission(e.target.value)}
-              className="w-full pl-9 pr-4 py-1.5 rounded-lg border border-border bg-background text-sm outline-none focus:ring-2 focus:ring-primary/20"
-            />
+        {/* Search & Toolbar */}
+        <div className="p-4 bg-muted/20 border-b border-border/30 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-12 gap-3 items-end">
+          <div className="flex flex-col gap-1 lg:col-span-6">
+            <Label className="text-[11px] font-bold text-muted-foreground">Từ khóa tìm kiếm</Label>
+            <div className="relative w-full">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <Input
+                type="text"
+                placeholder="Tìm theo Tên quyền, Thực thể (Entity) hoặc Hành động (Action)..."
+                value={searchPermission}
+                onChange={(e) => setSearchPermission(e.target.value)}
+                className="pl-8 h-9 text-xs border border-border bg-background rounded-lg focus-visible:ring-2 focus-visible:ring-primary/20"
+              />
+            </div>
           </div>
-          <Button onClick={() => { setPage(0); fetchPermissions(); }} size="sm" className="h-9 font-bold bg-muted text-foreground hover:bg-muted/80 px-4">
-            Tìm
-          </Button>
+
+          <div className="flex flex-col gap-1 lg:col-span-2 justify-end">
+            <Button
+              onClick={() => { setPage(0); fetchPermissions(); }}
+              size="sm"
+              className="h-9 font-semibold bg-primary text-primary-foreground hover:bg-primary/95 text-xs rounded-lg px-4"
+            >
+              <Search className="h-3.5 w-3.5 mr-1" /> Tìm kiếm
+            </Button>
+          </div>
         </div>
 
         {/* Table Content */}
         <CardContent className="p-0 relative">
           {loading && (
-            <div className="absolute inset-0 bg-background/50 backdrop-blur-xs flex items-center justify-center z-10">
-              <Loader2 className="h-6 w-6 text-primary animate-spin" />
+            <div className="absolute inset-0 bg-background/60 backdrop-blur-xs flex items-center justify-center z-20">
+              <Loader2 className="h-8 w-8 text-primary animate-spin" />
             </div>
           )}
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead>
-                <tr className="border-b border-border/85 text-muted-foreground text-xs font-semibold bg-muted/10">
-                  <th className="py-3 px-4 w-12 text-center">STT</th>
-                  <th className="py-3 px-2">Tên quyền</th>
-                  <th className="py-3 px-2">Thực thể (Entity)</th>
-                  <th className="py-3 px-2">Hành động (Action)</th>
-                  <th className="py-3 px-2">Mô tả</th>
-                  <th className="py-3 px-4 text-right">Thao tác</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/60">
-                {permissions.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="py-8 text-center text-muted-foreground text-sm">
-                      Không tìm thấy quyền hạn nào.
-                    </td>
-                  </tr>
-                ) : (
-                  permissions.map((p, index) => (
-                    <tr key={p.id || index} className="hover:bg-muted/10 transition-colors">
-                      <td className="py-3 px-4 font-bold text-xs text-muted-foreground text-center">{page * 10 + index + 1}</td>
-                      <td className="py-3 px-2 font-bold text-foreground text-xs">{p.name}</td>
-                      <td className="py-3 px-2">
-                        <span className="px-2 py-0.5 rounded text-[10px] bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200 font-bold uppercase">
-                          {p.entity}
-                        </span>
-                      </td>
-                      <td className="py-3 px-2">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
-                          p.action === "READ" ? "bg-green-500/10 text-green-600" :
-                          p.action === "WRITE" ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive"
-                        }`}>
-                          {p.action}
-                        </span>
-                      </td>
-                      <td className="py-3 px-2 text-xs text-muted-foreground">{p.description}</td>
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <Button
-                            onClick={() => { setEditingPermission(p); setPermissionModalOpen(true); }}
-                            variant="ghost"
-                            size="icon-xs"
-                            title="Chỉnh sửa"
-                            className="text-muted-foreground hover:bg-muted"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            onClick={() => handleDeletePermission(p.id, p.name)}
-                            variant="ghost"
-                            size="icon-xs"
-                            title="Xóa"
-                            className="text-destructive hover:bg-destructive/10"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+          <Table containerClassName="max-h-[calc(100vh-320px)] min-h-[350px] overflow-auto border-b border-border/20" className="-mt-3 pb-4">
+            <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur-md shadow-2xs border-b border-border/40">
+              <TableRow className="border-b border-border/30 bg-muted/20 hover:bg-muted/20">
+                <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pl-4">Tên quyền</TableHead>
+                <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Thực thể (Entity)</TableHead>
+                <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Hành động (Action)</TableHead>
+                <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Mô tả</TableHead>
+                <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider text-right pr-4">Thao tác</TableHead>
+              </TableRow>
+            </TableHeader>
+
+            <TableBody className="opacity-90">
+              {permissions.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="py-12 text-center text-muted-foreground text-sm">
+                    Không tìm thấy quyền hạn nào.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                permissions.map((p, index) => (
+                  <TableRow key={p.id || index} className="hover:bg-foreground/10 transition-colors border-border/30">
+                    <TableCell className="font-semibold text-xs text-foreground pl-4">{p.name}</TableCell>
+                    <TableCell>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] bg-muted text-muted-foreground font-extrabold uppercase border border-border/40">
+                        {p.entity}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <span className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] uppercase ${
+                        p.action === "READ" ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" :
+                        p.action === "WRITE" ? "bg-primary/10 text-primary border border-primary/20" : "bg-rose-500/10 text-rose-600 border border-rose-500/20"
+                      }`}>
+                        {p.action}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{p.description || "N/A"}</TableCell>
+                    <TableCell className="text-right pr-4">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          onClick={() => { setEditingPermission(p); setPermissionModalOpen(true); }}
+                          variant="ghost"
+                          size="icon"
+                          title="Chỉnh sửa"
+                          className="h-7 w-7 text-muted-foreground hover:bg-muted"
+                        >
+                          <Edit className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          onClick={() => handleDeletePermission(p.id, p.name)}
+                          variant="ghost"
+                          size="icon"
+                          title="Xóa"
+                          className="h-7 w-7 text-rose-600 hover:bg-rose-500/10"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </CardContent>
 
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="p-4 border-t border-border flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">Tổng số: {totalElements} quyền hạn</span>
-            <div className="flex gap-2">
+        {/* Modern Table Footer */}
+        <div className="px-5 py-3 border-t border-border/40 bg-card/40 flex flex-col md:flex-row items-center justify-between gap-4 text-xs">
+          {/* Left: Total Results Summary */}
+          <div className="text-muted-foreground font-medium">
+            Showing <span className="font-semibold text-foreground">{totalElements === 0 ? 0 : page * pageSize + 1}</span> to{" "}
+            <span className="font-semibold text-foreground">{Math.min((page + 1) * pageSize, totalElements)}</span> of{" "}
+            <span className="font-semibold text-foreground">{totalElements}</span> results
+          </div>
+
+          <div className="flex flex-wrap items-center gap-5">
+            {/* Middle: Rows per page Select */}
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground font-medium">Rows per page:</span>
+              <Select
+                value={String(pageSize)}
+                onValueChange={(val) => {
+                  setPageSize(Number(val));
+                  setPage(0);
+                }}
+              >
+                <SelectTrigger className="h-8 w-16 text-xs bg-background border border-border/40 rounded-lg font-semibold">
+                  <SelectValue placeholder={String(pageSize)} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="20">20</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Go to Page Input */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const pageNum = parseInt(jumpPageInput, 10);
+                if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
+                  setPage(pageNum - 1);
+                } else {
+                  setJumpPageInput(String(page + 1));
+                }
+              }}
+              className="flex items-center gap-1.5"
+            >
+              <span className="text-muted-foreground font-medium">Go to:</span>
+              <Input
+                type="number"
+                min={1}
+                max={totalPages || 1}
+                value={jumpPageInput}
+                onChange={(e) => setJumpPageInput(e.target.value)}
+                onBlur={() => {
+                  const pageNum = parseInt(jumpPageInput, 10);
+                  if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
+                    setPage(pageNum - 1);
+                  } else {
+                    setJumpPageInput(String(page + 1));
+                  }
+                }}
+                className="h-8 w-14 text-center text-xs font-semibold bg-background border border-border/40 rounded-lg px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                title="Nhập số trang và nhấn Enter"
+              />
+            </form>
+
+            {/* Right: Numbered Pagination Buttons */}
+            <div className="flex items-center gap-1">
               <Button
                 disabled={page === 0}
-                onClick={() => setPage(prev => prev - 1)}
+                onClick={() => setPage((prev) => prev - 1)}
                 variant="outline"
                 size="sm"
-                className="h-8"
+                className="h-8 px-2.5 text-xs font-semibold gap-1 border-border/40 rounded-lg hover:bg-muted"
               >
-                Trước
+                <ChevronLeft className="h-3.5 w-3.5" />
+                <span>Previous</span>
               </Button>
-              <span className="text-xs font-semibold py-1 px-3 bg-muted rounded">Trang {page + 1} / {totalPages}</span>
+
+              {getPageNumbers(page, totalPages).map((p, pIdx) => {
+                if (p === "...") {
+                  return (
+                    <span key={`dots-${pIdx}`} className="px-2 text-muted-foreground font-bold pointer-events-none">
+                      ...
+                    </span>
+                  );
+                }
+                const pageNum = p as number;
+                const isCurrent = pageNum === page;
+                return (
+                  <Button
+                    key={pageNum}
+                    onClick={() => setPage(pageNum)}
+                    variant={isCurrent ? "default" : "outline"}
+                    size="sm"
+                    className={cn(
+                      "h-8 min-w-[32px] px-2 text-xs font-semibold rounded-lg transition-all",
+                      isCurrent
+                        ? "bg-primary text-primary-foreground shadow-xs"
+                        : "border-border/40 text-foreground hover:bg-muted/70"
+                    )}
+                  >
+                    {pageNum + 1}
+                  </Button>
+                );
+              })}
+
               <Button
-                disabled={page >= totalPages - 1}
-                onClick={() => setPage(prev => prev + 1)}
+                disabled={page >= totalPages - 1 || totalPages === 0}
+                onClick={() => setPage((prev) => prev + 1)}
                 variant="outline"
                 size="sm"
-                className="h-8"
+                className="h-8 px-2.5 text-xs font-semibold gap-1 border-border/40 rounded-lg hover:bg-muted"
               >
-                Sau
+                <span>Next</span>
+                <ChevronRight className="h-3.5 w-3.5" />
               </Button>
             </div>
           </div>
-        )}
+        </div>
       </Card>
 
       {/* Permission Create/Edit Modal */}

@@ -4,6 +4,22 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 import { courseApi } from "@/api/courses/courseApi";
 import type { CourseResponse, CategoryResponse } from "@/types/admin";
 import {
@@ -18,8 +34,32 @@ import {
   ExternalLink,
   Loader2,
   Check,
-  AlertCircle
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
+
+const getPageNumbers = (currentPage: number, total: number) => {
+  const pages: (number | string)[] = [];
+  if (total <= 7) {
+    for (let i = 0; i < total; i++) pages.push(i);
+  } else {
+    pages.push(0);
+    if (currentPage > 2) {
+      pages.push("...");
+    }
+    const start = Math.max(1, currentPage - 1);
+    const end = Math.min(total - 2, currentPage + 1);
+    for (let i = start; i <= end; i++) {
+      pages.push(i);
+    }
+    if (currentPage < total - 3) {
+      pages.push("...");
+    }
+    pages.push(total - 1);
+  }
+  return pages;
+};
 
 export const CourseManagement: React.FC = () => {
   const [activeTab, setActiveTab] = useState<"courses" | "categories">("courses");
@@ -35,12 +75,24 @@ export const CourseManagement: React.FC = () => {
 
   // Pagination states
   const [coursePage, setCoursePage] = useState(0);
+  const [coursePageSize, setCoursePageSize] = useState(10);
   const [courseTotalPages, setCourseTotalPages] = useState(0);
   const [courseTotalElements, setCourseTotalElements] = useState(0);
+  const [courseJumpPageInput, setCourseJumpPageInput] = useState<string>("1");
 
   const [categoryPage, setCategoryPage] = useState(0);
+  const [categoryPageSize, setCategoryPageSize] = useState(10);
   const [categoryTotalPages, setCategoryTotalPages] = useState(0);
   const [categoryTotalElements, setCategoryTotalElements] = useState(0);
+  const [categoryJumpPageInput, setCategoryJumpPageInput] = useState<string>("1");
+
+  useEffect(() => {
+    setCourseJumpPageInput(String(coursePage + 1));
+  }, [coursePage]);
+
+  useEffect(() => {
+    setCategoryJumpPageInput(String(categoryPage + 1));
+  }, [categoryPage]);
 
   // Search states
   const [searchCourseName, setSearchCourseName] = useState("");
@@ -68,7 +120,7 @@ export const CourseManagement: React.FC = () => {
     } else {
       fetchCategories();
     }
-  }, [activeTab, coursePage, categoryPage]);
+  }, [activeTab, coursePage, coursePageSize, categoryPage, categoryPageSize]);
 
   const showBanner = (msg: string, isError = false) => {
     if (isError) {
@@ -96,7 +148,7 @@ export const CourseManagement: React.FC = () => {
     try {
       const params: any = {
         page: coursePage,
-        size: 10,
+        size: coursePageSize,
         sortBy: "id",
         sortDirection: "DESC"
       };
@@ -127,7 +179,7 @@ export const CourseManagement: React.FC = () => {
     try {
       const params: any = {
         page: categoryPage,
-        size: 10,
+        size: categoryPageSize,
         sortBy: "id",
         sortDirection: "DESC"
       };
@@ -351,184 +403,289 @@ export const CourseManagement: React.FC = () => {
               </Button>
             </CardHeader>
 
-            {/* Course Filters */}
-            <div className="p-4 bg-muted/20 border-b border-border/80 flex flex-wrap gap-3">
-              <div className="relative flex-1 min-w-[200px]">
-                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                <input
-                  type="text"
-                  placeholder="Tìm kiếm theo tên khóa học..."
-                  value={searchCourseName}
-                  onChange={(e) => setSearchCourseName(e.target.value)}
-                  className="w-full pl-9 pr-4 py-1.5 rounded-lg border border-border bg-background text-sm outline-none focus:ring-2 focus:ring-primary/20"
-                />
+            {/* Course Filters & Toolbar */}
+            <div className="p-4 bg-muted/20 border-b border-border/30 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-12 gap-3 items-end">
+              <div className="flex flex-col gap-1 lg:col-span-4">
+                <Label className="text-[11px] font-bold text-muted-foreground">Từ khóa tìm kiếm</Label>
+                <div className="relative w-full">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+                  <Input
+                    type="text"
+                    placeholder="Tìm kiếm theo tên khóa học..."
+                    value={searchCourseName}
+                    onChange={(e) => setSearchCourseName(e.target.value)}
+                    className="pl-8 h-9 text-xs border border-border bg-background rounded-lg focus-visible:ring-2 focus-visible:ring-primary/20"
+                  />
+                </div>
               </div>
 
-              <select
-                value={searchCourseCategory}
-                onChange={(e) => setSearchCourseCategory(e.target.value)}
-                className="px-3 py-1.5 rounded-lg border border-border bg-background text-sm outline-none"
-              >
-                <option value="">Tất cả danh mục</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
+              <div className="flex flex-col gap-1 lg:col-span-3">
+                <Label className="text-[11px] font-bold text-muted-foreground">Danh mục</Label>
+                <Select value={searchCourseCategory} onValueChange={(val) => setSearchCourseCategory(val === "ALL" || !val ? "" : val)}>
+                  <SelectTrigger className="h-9 text-xs bg-background border border-border rounded-lg font-semibold">
+                    <SelectValue placeholder="Tất cả danh mục" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">Tất cả danh mục</SelectItem>
+                    {categories.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-              <select
-                value={searchCourseLevel}
-                onChange={(e) => setSearchCourseLevel(e.target.value)}
-                className="px-3 py-1.5 rounded-lg border border-border bg-background text-sm outline-none"
-              >
-                <option value="">Tất cả cấp độ</option>
-                <option value="BEGINNER">BEGINNER</option>
-                <option value="INTERMEDIATE">INTERMEDIATE</option>
-                <option value="ADVANCED">ADVANCED</option>
-              </select>
+              <div className="flex flex-col gap-1 lg:col-span-2">
+                <Label className="text-[11px] font-bold text-muted-foreground">Cấp độ</Label>
+                <Select value={searchCourseLevel} onValueChange={(val) => setSearchCourseLevel(val === "ALL" || !val ? "" : val)}>
+                  <SelectTrigger className="h-9 text-xs bg-background border border-border rounded-lg font-semibold">
+                    <SelectValue placeholder="Tất cả cấp độ" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">Tất cả cấp độ</SelectItem>
+                    <SelectItem value="BEGINNER">BEGINNER</SelectItem>
+                    <SelectItem value="INTERMEDIATE">INTERMEDIATE</SelectItem>
+                    <SelectItem value="ADVANCED">ADVANCED</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-              <select
-                value={searchCourseStatus}
-                onChange={(e) => setSearchCourseStatus(e.target.value)}
-                className="px-3 py-1.5 rounded-lg border border-border bg-background text-sm outline-none"
-              >
-                <option value="">Tất cả trạng thái</option>
-                <option value="ACTIVE">Hoạt động</option>
-                <option value="INACTIVE">Tạm ngưng</option>
-              </select>
+              <div className="flex flex-col gap-1 lg:col-span-2">
+                <Label className="text-[11px] font-bold text-muted-foreground">Trạng thái</Label>
+                <Select value={searchCourseStatus} onValueChange={(val) => setSearchCourseStatus(val === "ALL" || !val ? "" : val)}>
+                  <SelectTrigger className="h-9 text-xs bg-background border border-border rounded-lg font-semibold">
+                    <SelectValue placeholder="Tất cả trạng thái" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">Tất cả trạng thái</SelectItem>
+                    <SelectItem value="ACTIVE">Hoạt động</SelectItem>
+                    <SelectItem value="INACTIVE">Tạm ngưng</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-              <Button onClick={() => { setCoursePage(0); fetchCourses(); }} size="sm" className="h-9 px-4 font-bold bg-muted hover:bg-muted/80 text-foreground">
-                Lọc
-              </Button>
+              <div className="flex flex-col gap-1 lg:col-span-1 justify-end">
+                <Button onClick={() => { setCoursePage(0); fetchCourses(); }} size="sm" className="h-9 font-semibold bg-primary text-primary-foreground hover:bg-primary/95 text-xs rounded-lg px-3">
+                  <Search className="h-3.5 w-3.5" />
+                </Button>
+              </div>
             </div>
 
             {/* Courses Table */}
             <CardContent className="p-0 relative">
               {loading && (
-                <div className="absolute inset-0 bg-background/50 backdrop-blur-xs flex items-center justify-center z-10">
-                  <Loader2 className="h-6 w-6 text-primary animate-spin" />
+                <div className="absolute inset-0 bg-background/60 backdrop-blur-xs flex items-center justify-center z-20">
+                  <Loader2 className="h-8 w-8 text-primary animate-spin" />
                 </div>
               )}
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                  <thead>
-                    <tr className="border-b border-border/85 text-muted-foreground text-xs font-semibold bg-muted/10">
-                      <th className="py-3 px-4 w-12 text-center">STT</th>
-                      <th className="py-3 px-2">Tên khóa học</th>
-                      <th className="py-3 px-2">Danh mục</th>
-                      <th className="py-3 px-2">Cấp độ</th>
-                      <th className="py-3 px-2">Liên kết</th>
-                      <th className="py-3 px-2">Trạng thái</th>
-                      <th className="py-3 px-4 text-right">Thao tác</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/60">
-                    {courses.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} className="py-8 text-center text-muted-foreground text-sm">
-                          Không tìm thấy khóa học nào.
-                        </td>
-                      </tr>
-                    ) : (
-                      courses.map((course, index) => (
-                        <tr key={course.id || index} className="hover:bg-muted/10 transition-colors">
-                          <td className="py-3 px-4 font-bold text-xs text-muted-foreground text-center">{coursePage * 10 + index + 1}</td>
-                          <td className="py-3 px-2">
-                            <div>
-                              <p className="font-bold text-foreground">{course.name}</p>
-                              <p className="text-xs text-muted-foreground line-clamp-1 max-w-xs">{course.description}</p>
-                            </div>
-                          </td>
-                          <td className="py-3 px-2">
-                            <span className="px-2 py-0.5 rounded text-xs bg-slate-100 dark:bg-slate-800 text-foreground font-semibold">
-                              {course.categoryName}
-                            </span>
-                          </td>
-                          <td className="py-3 px-2">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                              course.level === "BEGINNER" ? "bg-green-500/10 text-green-600" :
-                              course.level === "INTERMEDIATE" ? "bg-amber-500/10 text-amber-600" : "bg-destructive/10 text-destructive"
-                            }`}>
-                              {course.level}
-                            </span>
-                          </td>
-                          <td className="py-3 px-2 text-xs">
-                            <a
-                              href={course.link}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-primary hover:underline flex items-center gap-1 w-fit"
+              <Table containerClassName="max-h-[calc(100vh-320px)] min-h-[350px] overflow-auto border-b border-border/20" className="-mt-3 pb-4">
+                <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur-md shadow-2xs border-b border-border/40">
+                  <TableRow className="border-b border-border/30 bg-muted/20 hover:bg-muted/20">
+                    <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pl-4">Tên khóa học</TableHead>
+                    <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Danh mục</TableHead>
+                    <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Cấp độ</TableHead>
+                    <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Liên kết</TableHead>
+                    <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Trạng thái</TableHead>
+                    <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider text-right pr-4">Thao tác</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody className="opacity-90">
+                  {courses.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="py-12 text-center text-muted-foreground text-sm">
+                        Không tìm thấy khóa học nào.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    courses.map((course, index) => (
+                      <TableRow key={course.id || index} className="hover:bg-foreground/10 transition-colors border-border/30">
+                        <TableCell className="pl-4">
+                          <div>
+                            <p className="font-semibold text-xs text-foreground">{course.name}</p>
+                            <p className="text-[10px] text-muted-foreground line-clamp-1 max-w-xs">{course.description}</p>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] bg-muted text-muted-foreground font-semibold border border-border/40">
+                            {course.categoryName}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                            course.level === "BEGINNER" ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" :
+                            course.level === "INTERMEDIATE" ? "bg-amber-500/10 text-amber-600 border border-amber-500/20" : "bg-rose-500/10 text-rose-600 border border-rose-500/20"
+                          }`}>
+                            {course.level}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          <a
+                            href={course.link}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-primary hover:underline font-semibold flex items-center gap-1 w-fit"
+                          >
+                            <span>Học liệu</span>
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        </TableCell>
+                        <TableCell>
+                          <button
+                            onClick={() => handleToggleCourseStatus(course)}
+                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold transition-all ${
+                              course.status === "ACTIVE" ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" : "bg-rose-500/10 text-rose-600 border border-rose-500/20"
+                            }`}
+                          >
+                            {course.status === "ACTIVE" ? "Hoạt động" : "Tạm ngưng"}
+                          </button>
+                        </TableCell>
+                        <TableCell className="text-right pr-4">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              onClick={() => { setEditingCourse(course); setCourseModalOpen(true); }}
+                              variant="ghost"
+                              size="icon"
+                              title="Chỉnh sửa"
+                              className="h-7 w-7 text-muted-foreground hover:bg-muted"
                             >
-                              <span>Học liệu</span>
-                              <ExternalLink className="h-3 w-3" />
-                            </a>
-                          </td>
-                          <td className="py-3 px-2">
-                            <button
-                              onClick={() => handleToggleCourseStatus(course)}
-                              className={`px-2.5 py-0.5 rounded text-[10px] font-bold ${
-                                course.status === "ACTIVE" ? "bg-green-500/10 text-green-600" : "bg-destructive/10 text-destructive"
-                              }`}
+                              <Edit className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              onClick={() => handleDeleteCourse(course.id, course.name)}
+                              variant="ghost"
+                              size="icon"
+                              title="Xóa"
+                              className="h-7 w-7 text-rose-600 hover:bg-rose-500/10"
                             >
-                              {course.status === "ACTIVE" ? "Hoạt động" : "Tạm ngưng"}
-                            </button>
-                          </td>
-                          <td className="py-3 px-4 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
-                              <Button
-                                onClick={() => { setEditingCourse(course); setCourseModalOpen(true); }}
-                                variant="ghost"
-                                size="icon-xs"
-                                title="Chỉnh sửa"
-                                className="text-muted-foreground hover:bg-muted"
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                onClick={() => handleDeleteCourse(course.id, course.name)}
-                                variant="ghost"
-                                size="icon-xs"
-                                title="Xóa"
-                                className="text-destructive hover:bg-destructive/10"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
             </CardContent>
 
-            {/* Pagination */}
-            {courseTotalPages > 1 && (
-              <div className="p-4 border-t border-border flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">Tổng số: {courseTotalElements} khóa học</span>
-                <div className="flex gap-2">
+            {/* Modern Table Footer */}
+            <div className="px-5 py-3 border-t border-border/40 bg-card/40 flex flex-col md:flex-row items-center justify-between gap-4 text-xs">
+              {/* Left: Total Results Summary */}
+              <div className="text-muted-foreground font-medium">
+                Showing <span className="font-semibold text-foreground">{courseTotalElements === 0 ? 0 : coursePage * coursePageSize + 1}</span> to{" "}
+                <span className="font-semibold text-foreground">{Math.min((coursePage + 1) * coursePageSize, courseTotalElements)}</span> of{" "}
+                <span className="font-semibold text-foreground">{courseTotalElements}</span> results
+              </div>
+
+              <div className="flex flex-wrap items-center gap-5">
+                {/* Middle: Rows per page Select */}
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground font-medium">Rows per page:</span>
+                  <Select
+                    value={String(coursePageSize)}
+                    onValueChange={(val) => {
+                      setCoursePageSize(Number(val));
+                      setCoursePage(0);
+                    }}
+                  >
+                    <SelectTrigger className="h-8 w-16 text-xs bg-background border border-border/40 rounded-lg font-semibold">
+                      <SelectValue placeholder={String(coursePageSize)} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="20">20</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Go to Page Input */}
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const pageNum = parseInt(courseJumpPageInput, 10);
+                    if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= courseTotalPages) {
+                      setCoursePage(pageNum - 1);
+                    } else {
+                      setCourseJumpPageInput(String(coursePage + 1));
+                    }
+                  }}
+                  className="flex items-center gap-1.5"
+                >
+                  <span className="text-muted-foreground font-medium">Go to:</span>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={courseTotalPages || 1}
+                    value={courseJumpPageInput}
+                    onChange={(e) => setCourseJumpPageInput(e.target.value)}
+                    onBlur={() => {
+                      const pageNum = parseInt(courseJumpPageInput, 10);
+                      if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= courseTotalPages) {
+                        setCoursePage(pageNum - 1);
+                      } else {
+                        setCourseJumpPageInput(String(coursePage + 1));
+                      }
+                    }}
+                    className="h-8 w-14 text-center text-xs font-semibold bg-background border border-border/40 rounded-lg px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    title="Nhập số trang và nhấn Enter"
+                  />
+                </form>
+
+                {/* Right: Numbered Pagination Buttons */}
+                <div className="flex items-center gap-1">
                   <Button
                     disabled={coursePage === 0}
-                    onClick={() => setCoursePage(prev => prev - 1)}
+                    onClick={() => setCoursePage((prev) => prev - 1)}
                     variant="outline"
                     size="sm"
-                    className="h-8"
+                    className="h-8 px-2.5 text-xs font-semibold gap-1 border-border/40 rounded-lg hover:bg-muted"
                   >
-                    Trước
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                    <span>Previous</span>
                   </Button>
-                  <span className="text-xs font-semibold py-1 px-3 bg-muted rounded">Trang {coursePage + 1} / {courseTotalPages}</span>
+
+                  {getPageNumbers(coursePage, courseTotalPages).map((p, pIdx) => {
+                    if (p === "...") {
+                      return (
+                        <span key={`dots-${pIdx}`} className="px-2 text-muted-foreground font-bold pointer-events-none">
+                          ...
+                        </span>
+                      );
+                    }
+                    const pageNum = p as number;
+                    const isCurrent = pageNum === coursePage;
+                    return (
+                      <Button
+                        key={pageNum}
+                        onClick={() => setCoursePage(pageNum)}
+                        variant={isCurrent ? "default" : "outline"}
+                        size="sm"
+                        className={cn(
+                          "h-8 min-w-[32px] px-2 text-xs font-semibold rounded-lg transition-all",
+                          isCurrent
+                            ? "bg-primary text-primary-foreground shadow-xs"
+                            : "border-border/40 text-foreground hover:bg-muted/70"
+                        )}
+                      >
+                        {pageNum + 1}
+                      </Button>
+                    );
+                  })}
+
                   <Button
-                    disabled={coursePage >= courseTotalPages - 1}
-                    onClick={() => setCoursePage(prev => prev + 1)}
+                    disabled={coursePage >= courseTotalPages - 1 || courseTotalPages === 0}
+                    onClick={() => setCoursePage((prev) => prev + 1)}
                     variant="outline"
                     size="sm"
-                    className="h-8"
+                    className="h-8 px-2.5 text-xs font-semibold gap-1 border-border/40 rounded-lg hover:bg-muted"
                   >
-                    Sau
+                    <span>Next</span>
+                    <ChevronRight className="h-3.5 w-3.5" />
                   </Button>
                 </div>
               </div>
-            )}
+            </div>
           </>
         ) : (
           <>
@@ -551,128 +708,229 @@ export const CourseManagement: React.FC = () => {
               </Button>
             </CardHeader>
 
-            {/* Category Filters */}
-            <div className="p-4 bg-muted/20 border-b border-border/80 flex flex-wrap gap-3">
-              <div className="relative flex-1 min-w-[200px]">
-                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                <input
-                  type="text"
-                  placeholder="Tìm kiếm danh mục..."
-                  value={searchCategoryName}
-                  onChange={(e) => setSearchCategoryName(e.target.value)}
-                  className="w-full pl-9 pr-4 py-1.5 rounded-lg border border-border bg-background text-sm outline-none focus:ring-2 focus:ring-primary/20"
-                />
+            {/* Category Filters & Toolbar */}
+            <div className="p-4 bg-muted/20 border-b border-border/30 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-12 gap-3 items-end">
+              <div className="flex flex-col gap-1 lg:col-span-6">
+                <Label className="text-[11px] font-bold text-muted-foreground">Từ khóa tìm kiếm</Label>
+                <div className="relative w-full">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+                  <Input
+                    type="text"
+                    placeholder="Tìm kiếm danh mục..."
+                    value={searchCategoryName}
+                    onChange={(e) => setSearchCategoryName(e.target.value)}
+                    className="pl-8 h-9 text-xs border border-border bg-background rounded-lg focus-visible:ring-2 focus-visible:ring-primary/20"
+                  />
+                </div>
               </div>
 
-              <select
-                value={searchCategoryStatus}
-                onChange={(e) => setSearchCategoryStatus(e.target.value)}
-                className="px-3 py-1.5 rounded-lg border border-border bg-background text-sm outline-none"
-              >
-                <option value="">Tất cả trạng thái</option>
-                <option value="ACTIVE">Hoạt động</option>
-                <option value="INACTIVE">Tạm ngưng</option>
-              </select>
+              <div className="flex flex-col gap-1 lg:col-span-4">
+                <Label className="text-[11px] font-bold text-muted-foreground">Trạng thái</Label>
+                <Select value={searchCategoryStatus} onValueChange={(val) => setSearchCategoryStatus(val === "ALL" || !val ? "" : val)}>
+                  <SelectTrigger className="h-9 text-xs bg-background border border-border rounded-lg font-semibold">
+                    <SelectValue placeholder="Tất cả trạng thái" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">Tất cả trạng thái</SelectItem>
+                    <SelectItem value="ACTIVE">Hoạt động</SelectItem>
+                    <SelectItem value="INACTIVE">Tạm ngưng</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex flex-col gap-1 lg:col-span-2 justify-end">
+                <Button onClick={() => { setCategoryPage(0); fetchCategories(); }} size="sm" className="h-9 font-semibold bg-primary text-primary-foreground hover:bg-primary/95 text-xs rounded-lg px-4">
+                  <Search className="h-3.5 w-3.5 mr-1" /> Lọc
+                </Button>
+              </div>
             </div>
 
             {/* Categories Table */}
             <CardContent className="p-0 relative">
               {loading && (
-                <div className="absolute inset-0 bg-background/50 backdrop-blur-xs flex items-center justify-center z-10">
-                  <Loader2 className="h-6 w-6 text-primary animate-spin" />
+                <div className="absolute inset-0 bg-background/60 backdrop-blur-xs flex items-center justify-center z-20">
+                  <Loader2 className="h-8 w-8 text-primary animate-spin" />
                 </div>
               )}
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                  <thead>
-                    <tr className="border-b border-border/85 text-muted-foreground text-xs font-semibold bg-muted/10">
-                      <th className="py-3 px-4 w-12 text-center">STT</th>
-                      <th className="py-3 px-2">Tên danh mục</th>
-                      <th className="py-3 px-2">Mô tả</th>
-                      <th className="py-3 px-2">Trạng thái</th>
-                      <th className="py-3 px-4 text-right">Thao tác</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/60">
-                    {categories.length === 0 ? (
-                      <tr>
-                        <td colSpan={5} className="py-8 text-center text-muted-foreground text-sm">
-                          Không tìm thấy danh mục nào.
-                        </td>
-                      </tr>
-                    ) : (
-                      categories.map((category, index) => (
-                        <tr key={category.id || index} className="hover:bg-muted/10 transition-colors">
-                          <td className="py-3 px-4 font-bold text-xs text-muted-foreground text-center">{categoryPage * 10 + index + 1}</td>
-                          <td className="py-3 px-2 font-bold text-foreground">{category.name}</td>
-                          <td className="py-3 px-2 text-xs text-muted-foreground">{category.description}</td>
-                          <td className="py-3 px-2">
-                            <button
-                              onClick={() => handleToggleCategoryStatus(category)}
-                              className={`px-2.5 py-0.5 rounded text-[10px] font-bold ${
-                                category.status === "ACTIVE" ? "bg-green-500/10 text-green-600" : "bg-destructive/10 text-destructive"
-                              }`}
+              <Table containerClassName="max-h-[calc(100vh-320px)] min-h-[350px] overflow-auto border-b border-border/20" className="-mt-3 pb-4">
+                <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur-md shadow-2xs border-b border-border/40">
+                  <TableRow className="border-b border-border/30 bg-muted/20 hover:bg-muted/20">
+                    <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pl-4">Tên danh mục</TableHead>
+                    <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Mô tả</TableHead>
+                    <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Trạng thái</TableHead>
+                    <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider text-right pr-4">Thao tác</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody className="opacity-90">
+                  {categories.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="py-12 text-center text-muted-foreground text-sm">
+                        Không tìm thấy danh mục nào.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    categories.map((category, index) => (
+                      <TableRow key={category.id || index} className="hover:bg-foreground/10 transition-colors border-border/30">
+                        <TableCell className="font-semibold text-xs text-foreground pl-4">{category.name}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{category.description || "N/A"}</TableCell>
+                        <TableCell>
+                          <button
+                            onClick={() => handleToggleCategoryStatus(category)}
+                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold transition-all ${
+                              category.status === "ACTIVE" ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" : "bg-rose-500/10 text-rose-600 border border-rose-500/20"
+                            }`}
+                          >
+                            {category.status === "ACTIVE" ? "Hoạt động" : "Tạm ngưng"}
+                          </button>
+                        </TableCell>
+                        <TableCell className="text-right pr-4">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              onClick={() => { setEditingCategory(category); setCategoryModalOpen(true); }}
+                              variant="ghost"
+                              size="icon"
+                              title="Chỉnh sửa"
+                              className="h-7 w-7 text-muted-foreground hover:bg-muted"
                             >
-                              {category.status === "ACTIVE" ? "Hoạt động" : "Tạm ngưng"}
-                            </button>
-                          </td>
-                          <td className="py-3 px-4 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
-                              <Button
-                                onClick={() => { setEditingCategory(category); setCategoryModalOpen(true); }}
-                                variant="ghost"
-                                size="icon-xs"
-                                title="Chỉnh sửa"
-                                className="text-muted-foreground hover:bg-muted"
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                onClick={() => handleDeleteCategory(category.id, category.name)}
-                                variant="ghost"
-                                size="icon-xs"
-                                title="Xóa"
-                                className="text-destructive hover:bg-destructive/10"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                              <Edit className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              onClick={() => handleDeleteCategory(category.id, category.name)}
+                              variant="ghost"
+                              size="icon"
+                              title="Xóa"
+                              className="h-7 w-7 text-rose-600 hover:bg-rose-500/10"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
             </CardContent>
 
-            {/* Pagination */}
-            {categoryTotalPages > 1 && (
-              <div className="p-4 border-t border-border flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">Tổng số: {categoryTotalElements} danh mục</span>
-                <div className="flex gap-2">
+            {/* Modern Table Footer */}
+            <div className="px-5 py-3 border-t border-border/40 bg-card/40 flex flex-col md:flex-row items-center justify-between gap-4 text-xs">
+              {/* Left: Total Results Summary */}
+              <div className="text-muted-foreground font-medium">
+                Showing <span className="font-semibold text-foreground">{categoryTotalElements === 0 ? 0 : categoryPage * categoryPageSize + 1}</span> to{" "}
+                <span className="font-semibold text-foreground">{Math.min((categoryPage + 1) * categoryPageSize, categoryTotalElements)}</span> of{" "}
+                <span className="font-semibold text-foreground">{categoryTotalElements}</span> results
+              </div>
+
+              <div className="flex flex-wrap items-center gap-5">
+                {/* Middle: Rows per page Select */}
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground font-medium">Rows per page:</span>
+                  <Select
+                    value={String(categoryPageSize)}
+                    onValueChange={(val) => {
+                      setCategoryPageSize(Number(val));
+                      setCategoryPage(0);
+                    }}
+                  >
+                    <SelectTrigger className="h-8 w-16 text-xs bg-background border border-border/40 rounded-lg font-semibold">
+                      <SelectValue placeholder={String(categoryPageSize)} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="20">20</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Go to Page Input */}
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const pageNum = parseInt(categoryJumpPageInput, 10);
+                    if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= categoryTotalPages) {
+                      setCategoryPage(pageNum - 1);
+                    } else {
+                      setCategoryJumpPageInput(String(categoryPage + 1));
+                    }
+                  }}
+                  className="flex items-center gap-1.5"
+                >
+                  <span className="text-muted-foreground font-medium">Go to:</span>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={categoryTotalPages || 1}
+                    value={categoryJumpPageInput}
+                    onChange={(e) => setCategoryJumpPageInput(e.target.value)}
+                    onBlur={() => {
+                      const pageNum = parseInt(categoryJumpPageInput, 10);
+                      if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= categoryTotalPages) {
+                        setCategoryPage(pageNum - 1);
+                      } else {
+                        setCategoryJumpPageInput(String(categoryPage + 1));
+                      }
+                    }}
+                    className="h-8 w-14 text-center text-xs font-semibold bg-background border border-border/40 rounded-lg px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    title="Nhập số trang và nhấn Enter"
+                  />
+                </form>
+
+                {/* Right: Numbered Pagination Buttons */}
+                <div className="flex items-center gap-1">
                   <Button
                     disabled={categoryPage === 0}
-                    onClick={() => setCategoryPage(prev => prev - 1)}
+                    onClick={() => setCategoryPage((prev) => prev - 1)}
                     variant="outline"
                     size="sm"
-                    className="h-8"
+                    className="h-8 px-2.5 text-xs font-semibold gap-1 border-border/40 rounded-lg hover:bg-muted"
                   >
-                    Trước
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                    <span>Previous</span>
                   </Button>
-                  <span className="text-xs font-semibold py-1 px-3 bg-muted rounded">Trang {categoryPage + 1} / {categoryTotalPages}</span>
+
+                  {getPageNumbers(categoryPage, categoryTotalPages).map((p, pIdx) => {
+                    if (p === "...") {
+                      return (
+                        <span key={`dots-${pIdx}`} className="px-2 text-muted-foreground font-bold pointer-events-none">
+                          ...
+                        </span>
+                      );
+                    }
+                    const pageNum = p as number;
+                    const isCurrent = pageNum === categoryPage;
+                    return (
+                      <Button
+                        key={pageNum}
+                        onClick={() => setCategoryPage(pageNum)}
+                        variant={isCurrent ? "default" : "outline"}
+                        size="sm"
+                        className={cn(
+                          "h-8 min-w-[32px] px-2 text-xs font-semibold rounded-lg transition-all",
+                          isCurrent
+                            ? "bg-primary text-primary-foreground shadow-xs"
+                            : "border-border/40 text-foreground hover:bg-muted/70"
+                        )}
+                      >
+                        {pageNum + 1}
+                      </Button>
+                    );
+                  })}
+
                   <Button
-                    disabled={categoryPage >= categoryTotalPages - 1}
-                    onClick={() => setCategoryPage(prev => prev + 1)}
+                    disabled={categoryPage >= categoryTotalPages - 1 || categoryTotalPages === 0}
+                    onClick={() => setCategoryPage((prev) => prev + 1)}
                     variant="outline"
                     size="sm"
-                    className="h-8"
+                    className="h-8 px-2.5 text-xs font-semibold gap-1 border-border/40 rounded-lg hover:bg-muted"
                   >
-                    Sau
+                    <span>Next</span>
+                    <ChevronRight className="h-3.5 w-3.5" />
                   </Button>
                 </div>
               </div>
-            )}
+            </div>
           </>
         )}
       </Card>

@@ -214,9 +214,9 @@ public class UserController {
     /**
      * Số lượng nhân viên theo độ tuổi
      */
-    @GetMapping("/employees/stats/by-age-group")
-    public ResponseEntity<ApiResponse<Map<String, Long>>> countEmployeesByAgeGroup() {
-        Map<String, Long> stats = userService.countEmployeesByAgeGroup();
+    @GetMapping("/stats/by-age-group")
+    public ResponseEntity<ApiResponse<Map<String, Long>>> countUserByAgeGroup() {
+        Map<String, Long> stats = userService.countUsersByAgeGroup();
         return ResponseEntity.ok(ApiResponse.of("Get employee count by age group successfully", stats));
     }
 

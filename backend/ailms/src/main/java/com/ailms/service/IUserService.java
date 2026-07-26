@@ -151,7 +151,7 @@ public interface IUserService {
     /**
      * Số lượng nhân viên theo độ tuổi
      */
-    Map<String, Long> countEmployeesByAgeGroup();
+    Map<String, Long> countUsersByAgeGroup();
 
 
     /**

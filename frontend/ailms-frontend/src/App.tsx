@@ -13,6 +13,14 @@ import { CouponManagement } from "./pages/admin/CouponManagement";
 import { HRManagement } from "./pages/admin/HRManagement";
 import { ApprovalCenterPage } from "./pages/admin/ApprovalCenterPage";
 import { CategoryTeacherAssignPage } from "./pages/admin/CategoryTeacherAssignPage";
+import { DepartmentManagement } from "./pages/admin/DepartmentManagement";
+import { RevenueManagement } from "./pages/admin/RevenueManagement";
+import { QuizManagement } from "./pages/admin/QuizManagement";
+import { AssignmentManagement } from "./pages/admin/AssignmentManagement";
+import { ClassroomManagement } from "./pages/admin/ClassroomManagement";
+import { OnlineScheduleManagement } from "./pages/admin/OnlineScheduleManagement";
+import { WorkScheduleManagement } from "./pages/admin/WorkScheduleManagement";
+import { FulltimeAttendanceManagement } from "./pages/admin/FulltimeAttendanceManagement";
 import { LearningAnalytics } from "./pages/LearningAnalytics";
 import { CertificateVerifyPage } from "./pages/CertificateVerifyPage";
 import { ActivityLog } from "./pages/ActivityLog";
@@ -28,13 +36,23 @@ import { useModalStore } from "./store/useModalStore";
 
 // Component to reset scroll position to top on route change
 const ScrollToTop: React.FC = () => {
-  const { pathname, search } = useLocation();
+  const { pathname, search, hash} = useLocation();
 
   useEffect(() => {
-    if (!window.location.hash) {
+      if (hash) {
+        const timer = setTimeout(() => {
+          const id = hash.replace("#", "");
+          const el = document.getElementById(id);
+
+          if (el) {
+            el.scrollIntoView({behavior: "smooth", block: "start"});
+          }
+        }, 100);
+        return () => clearTimeout(timer);
+      }
+
       window.scrollTo(0, 0);
-    }
-  }, [pathname, search]);
+  }, [pathname, search, hash]);
 
   return null;
 };
@@ -97,6 +115,14 @@ function App() {
                 <Route path="/admin/hr" element={<HRManagement />} />
                 <Route path="/admin/approval-center" element={<ApprovalCenterPage />} />
                 <Route path="/admin/category-teachers" element={<CategoryTeacherAssignPage />} />
+                <Route path="/admin/department" element={<DepartmentManagement />} />
+                <Route path="/admin/revenue" element={<RevenueManagement />} />
+                <Route path="/admin/quizzes" element={<QuizManagement />} />
+                <Route path="/admin/assignments" element={<AssignmentManagement />} />
+                <Route path="/admin/classrooms" element={<ClassroomManagement />} />
+                <Route path="/admin/online-schedule" element={<OnlineScheduleManagement />} />
+                <Route path="/admin/work-schedule" element={<WorkScheduleManagement />} />
+                <Route path="/admin/fulltime-attendance" element={<FulltimeAttendanceManagement />} />
                 <Route path="/analytics" element={<LearningAnalytics />} />
               </Route>
             </Route>

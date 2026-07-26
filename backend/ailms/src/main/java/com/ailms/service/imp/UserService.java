@@ -107,7 +107,7 @@ public class UserService implements IUserService {
             user.setStatus(request.getStatus() != null ? request.getStatus() : UserStatusEnum.ACTIVE);
         } else {
             user.setPasswordHash(passwordEncoder.encode("A" + UUID.randomUUID()));
-            user.setStatus(UserStatusEnum.PENDING_VERIFICATION);
+            user.setStatus(UserStatusEnum.VERIFICATION);
         }
 
         user = userRepository.save(user);
@@ -192,8 +192,7 @@ public class UserService implements IUserService {
         UserEntity user;
         if (existingUserOpt.isPresent()) {
             user = existingUserOpt.get();
-            if (user.getStatus() != UserStatusEnum.INACTIVE
-                    && user.getStatus() != UserStatusEnum.PENDING_VERIFICATION) {
+            if (user.getStatus() != UserStatusEnum.VERIFICATION) {
                 throw new BusinessException("User account is already active or locked.");
             }
         } else {
@@ -202,7 +201,7 @@ public class UserService implements IUserService {
             user.setUsername(request.getEmail());
 
             user.setEmail(request.getEmail());
-            user.setStatus(UserStatusEnum.INACTIVE);
+            user.setStatus(UserStatusEnum.VERIFICATION);
             user.setPasswordHash(passwordEncoder.encode(UUID.randomUUID().toString()));
             log.info("Luu User");
             user = userRepository.save(user);
@@ -621,20 +620,23 @@ public class UserService implements IUserService {
         countMap.put("NAM", 0L);
         countMap.put("NU", 0L);
         countMap.put("KHAC", 0L);
-        countMap.put("CHUA_XAC_DINH", 0L);
 
         for (Object[] row : results) {
             Integer gender = (Integer) row[0];
             Long count = (Long) row[1];
             if (gender == null) {
-                countMap.put("CHUA_XAC_DINH", countMap.get("CHUA_XAC_DINH") + count);
-            } else if (gender == 0) {
-                countMap.put("NAM", countMap.get("NAM") + count);
-            } else if (gender == 1) {
-                countMap.put("NU", countMap.get("NU") + count);
-            } else {
-                countMap.put("KHAC", countMap.get("KHAC") + count);
+                continue;
             }
+            String key;
+            if (gender == 0) {
+                key = "NAM";
+            } else if (gender == 1) {
+                key = "NU";
+            } else {
+                key = "KHAC";
+            }
+
+            countMap.put(key, countMap.getOrDefault(key, 0L) + count);
         }
         return countMap;
     }
@@ -657,7 +659,7 @@ public class UserService implements IUserService {
 
     @Transactional(readOnly = true)
     @Override
-    public Map<String, Long> countEmployeesByAgeGroup() {
+    public Map<String, Long> countUsersByAgeGroup() {
         log.info("Thống kê số lượng user theo độ tuổi");
         List<UserEntity> users = userRepository.findAllByStatusNot(UserStatusEnum.DELETED);
         Map<String, Long> ageGroupMap = new LinkedHashMap<>();
@@ -667,7 +669,6 @@ public class UserService implements IUserService {
         ageGroupMap.put("24 - 34", 0L);
         ageGroupMap.put("35 - 54", 0L);
         ageGroupMap.put("55+", 0L);
-        ageGroupMap.put("CHUA_XAC_DINH", 0L);
 
         LocalDate now = LocalDate.now();
         for (UserEntity user : users) {
@@ -676,7 +677,6 @@ public class UserService implements IUserService {
             }
 
             if (user.getDateOfBirth() == null) {
-                ageGroupMap.merge("CHUA_XAC_DINH", 1L, Long::sum);
                 continue;
             }
 

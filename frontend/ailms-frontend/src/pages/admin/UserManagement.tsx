@@ -1,9 +1,16 @@
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { userApi } from "@/api/users/userApi";
 import { roleApi } from "@/api/roles/roleApi";
 import type {
@@ -12,6 +19,22 @@ import type {
   UserDetailResponse,
   MonthlyUserCountResponse
 } from "@/types/admin";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from "@/components/ui/table";
+import { Checkbox } from "@/components/ui/checkbox";
+import { cn } from "@/lib/utils";
 import {
   Users,
   Plus,
@@ -37,6 +60,8 @@ import {
   BarChart3,
   Filter,
   ArrowUpDown,
+  ChevronLeft,
+  ChevronRight,
   Award,
   BookOpen,
   Star,
@@ -44,7 +69,8 @@ import {
   ShieldCheck,
   FileSpreadsheet,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Calendar as CalendarIcon
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -63,17 +89,120 @@ import {
 } from "recharts";
 
 // Color palettes for Recharts
-const ROLE_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899", "#6366f1"];
-const GENDER_COLORS = ["#0284c7", "#f43f5e", "#64748b"];
-const STATUS_COLORS = ["#10b981", "#ef4444", "#f59e0b", "#6366f1"];
-const AGE_COLORS = ["#8b5cf6", "#3b82f6", "#06b6d4", "#10b981"];
+const ROLE_COLORS = ["#7b2525", "#ba6a4c", "#ff97d0", "#fe7f2d", "#2b5748", "#4e220f"];
+const GENDER_COLORS = ["#7b2525", "#ba6a4c", "#ff97d0","#fe7f2d"];
+const STATUS_COLORS = ["#ff97d0","#2b5748", "#be1a1a", "#4e220f"];
+const AGE_COLORS = ["#7b2525", "#be1a1a", "#ff97d0","#eee0cc"];
 
 const MONTH_NAMES = [
   "Thg 1", "Thg 2", "Thg 3", "Thg 4", "Thg 5", "Thg 6",
   "Thg 7", "Thg 8", "Thg 9", "Thg 10", "Thg 11", "Thg 12"
 ];
 
+const parseYYYYMMDD = (str: string) => {
+  if (!str) return undefined;
+  const parts = str.split("-");
+  if (parts.length === 3) {
+    const y = parseInt(parts[0], 10);
+    const m = parseInt(parts[1], 10) - 1;
+    const d = parseInt(parts[2], 10);
+    return new Date(y, m, d);
+  }
+  return undefined;
+};
+
+const formatDateDisplay = (str: string) => {
+  if (!str) return "";
+  const dateObj = parseYYYYMMDD(str);
+  if (!dateObj) return str;
+  const dd = String(dateObj.getDate()).padStart(2, "0");
+  const mm = String(dateObj.getMonth() + 1).padStart(2, "0");
+  const yyyy = dateObj.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+};
+
+const parseDDMMYYYYToYYYYMMDD = (str: string): string | null => {
+  if (!str) return null;
+  const clean = str.trim();
+  const parts = clean.split(/[/.-]/);
+  if (parts.length === 3) {
+    let day = parseInt(parts[0], 10);
+    let month = parseInt(parts[1], 10);
+    let year = parseInt(parts[2], 10);
+
+    if (parts[0].length === 4) {
+      year = parseInt(parts[0], 10);
+      month = parseInt(parts[1], 10);
+      day = parseInt(parts[2], 10);
+    }
+
+    if (!isNaN(day) && !isNaN(month) && !isNaN(year) && year >= 1900 && year <= 2100 && month >= 1 && month <= 12) {
+      const maxDays = new Date(year, month, 0).getDate();
+      if (day >= 1 && day <= maxDays) {
+        const yyyyStr = String(year);
+        const mmStr = String(month).padStart(2, '0');
+        const ddStr = String(day).padStart(2, '0');
+        return `${yyyyStr}-${mmStr}-${ddStr}`;
+      }
+    }
+  }
+  return null;
+};
+
+const formatAsDDMMYYYYMask = (val: string, prevVal: string = ""): string => {
+  if (prevVal.length > val.length) {
+    return val;
+  }
+  const digits = val.replace(/\D/g, "");
+  if (digits.length === 0) return "";
+  if (digits.length <= 2) {
+    if (digits.length === 2) return `${digits}/`;
+    return digits;
+  }
+  if (digits.length <= 4) {
+    const day = digits.slice(0, 2);
+    const month = digits.slice(2);
+    if (month.length === 2) return `${day}/${month}/`;
+    return `${day}/${month}`;
+  }
+  const day = digits.slice(0, 2);
+  const month = digits.slice(2, 4);
+  const year = digits.slice(4, 8);
+  return `${day}/${month}/${year}`;
+};
+
+const isInvalidDateInput = (inputVal: string): boolean => {
+  if (!inputVal || !inputVal.trim()) return false;
+  if (inputVal.length === 10) {
+    return parseDDMMYYYYToYYYYMMDD(inputVal) === null;
+  }
+  return false;
+};
+
+const getPageNumbers = (currentPage: number, total: number) => {
+  const pages: (number | string)[] = [];
+  if (total <= 7) {
+    for (let i = 0; i < total; i++) pages.push(i);
+  } else {
+    pages.push(0);
+    if (currentPage > 2) {
+      pages.push("...");
+    }
+    const start = Math.max(1, currentPage - 1);
+    const end = Math.min(total - 2, currentPage + 1);
+    for (let i = start; i <= end; i++) {
+      pages.push(i);
+    }
+    if (currentPage < total - 3) {
+      pages.push("...");
+    }
+    pages.push(total - 1);
+  }
+  return pages;
+};
+
 export const UserManagement: React.FC = () => {
+  const location = useLocation();
   // Main Data States
   const [users, setUsers] = useState<UserResponse[]>([]);
   const [roles, setRoles] = useState<RoleResponse[]>([]);
@@ -88,6 +217,14 @@ export const UserManagement: React.FC = () => {
   const [ageStats, setAgeStats] = useState<Array<{ name: string; value: number }>>([]);
   const [monthlyUsers, setMonthlyUsers] = useState<Array<{ month: string; count: number }>>([]);
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  
+  const currentYear = new Date().getFullYear();
+  const earliestDataYear = 2023; // năm bắt đầu có dữ liệu, có thể fetch từ API
+  const years = Array.from(
+    { length: currentYear - earliestDataYear + 1 },
+    (_, i) => currentYear - i
+  );
+
   const [showOptionalCharts, setShowOptionalCharts] = useState<boolean>(true);
 
   // Filters & Sorting
@@ -95,7 +232,11 @@ export const UserManagement: React.FC = () => {
   const [filterRole, setFilterRole] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [startDate, setStartDate] = useState("");
+  const [startDateInput, setStartDateInput] = useState("");
+  const [startCalendarMonth, setStartCalendarMonth] = useState<Date | undefined>(undefined);
   const [endDate, setEndDate] = useState("");
+  const [endDateInput, setEndDateInput] = useState("");
+  const [endCalendarMonth, setEndCalendarMonth] = useState<Date | undefined>(undefined);
   const [sortBy, setSortBy] = useState("id");
   const [sortDir, setSortDir] = useState<"ASC" | "DESC">("DESC");
 
@@ -104,6 +245,11 @@ export const UserManagement: React.FC = () => {
   const [pageSize, setPageSize] = useState(10);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
+  const [jumpPageInput, setJumpPageInput] = useState<string>("1");
+
+  useEffect(() => {
+    setJumpPageInput(String(page + 1));
+  }, [page]);
 
   // UI Banner & Loading
   const [loading, setLoading] = useState(false);
@@ -114,6 +260,21 @@ export const UserManagement: React.FC = () => {
   // Modals state
   const [userModalOpen, setUserModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserResponse | null>(null);
+  const [modalDateOfBirth, setModalDateOfBirth] = useState<string>("");
+  const [modalDateInputVal, setModalDateInputVal] = useState<string>("");
+
+  useEffect(() => {
+    if (userModalOpen) {
+      if (editingUser && editingUser.dateOfBirth) {
+        const dob = editingUser.dateOfBirth.slice(0, 10);
+        setModalDateOfBirth(dob);
+        setModalDateInputVal(formatDateDisplay(dob));
+      } else {
+        setModalDateOfBirth("");
+        setModalDateInputVal("");
+      }
+    }
+  }, [editingUser, userModalOpen]);
 
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -136,6 +297,49 @@ export const UserManagement: React.FC = () => {
   const [selectedUserDetail, setSelectedUserDetail] = useState<UserDetailResponse | null>(null);
   const [userDetailLoading, setUserDetailLoading] = useState(false);
   const [detailActiveTab, setDetailActiveTab] = useState<"basic" | "system" | "academic" | "work">("basic");
+
+  // Sticky Sub-navbar Tab State & Scroll Handling
+  const [activeTab, setActiveTab] = useState<"statistics" | "management">(() => {
+    return location.hash === "#management" ? "management" : "statistics";
+  });
+
+  const [modalCalendarMonth, setModalCalendarMonth] = useState<Date | undefined>(
+    parseYYYYMMDD(modalDateOfBirth) || new Date(2000, 0)
+  );
+
+  const scrollToSection = (sectionId: "statistics" | "management") => {
+    setActiveTab(sectionId);
+    const element = document.getElementById(sectionId);
+    if (element) {
+      const offset = 130;
+      const bodyRect = document.body.getBoundingClientRect().top;
+      const elementRect = element.getBoundingClientRect().top;
+      const elementPosition = elementRect - bodyRect;
+      const offsetPosition = elementPosition - offset;
+
+      window.scrollTo({
+        top: offsetPosition,
+        behavior: "smooth"
+      });
+    }
+  };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const mgmtEl = document.getElementById("management");
+      if (mgmtEl) {
+        const rect = mgmtEl.getBoundingClientRect();
+        if (rect.top <= 200) {
+          setActiveTab("management");
+        } else {
+          setActiveTab("statistics");
+        }
+      }
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   useEffect(() => {
     fetchRoles();
@@ -197,7 +401,7 @@ export const UserManagement: React.FC = () => {
       if (genderRes?.data?.success && genderRes.data.data) {
         const genderMap: Record<string, string> = { "0": "Nam", "1": "Nữ", "2": "Khác" };
         const formatted = Object.entries(genderRes.data.data).map(([key, val]) => ({
-          name: genderMap[key] || `Mã ${key}`,
+          name: genderMap[key] || key,
           value: Number(val)
         }));
         setGenderStats(formatted);
@@ -551,8 +755,9 @@ export const UserManagement: React.FC = () => {
     }
   };
 
-  const handleSelectAllUsers = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.checked) {
+  const handleSelectAllUsers = (checkedOrEvent: boolean | React.ChangeEvent<HTMLInputElement>) => {
+    const isChecked = typeof checkedOrEvent === "boolean" ? checkedOrEvent : checkedOrEvent.target.checked;
+    if (isChecked) {
       setSelectedUserIds(users.map(u => String(u.id)));
     } else {
       setSelectedUserIds([]);
@@ -573,382 +778,403 @@ export const UserManagement: React.FC = () => {
       
       {/* Toast Notification Banners */}
       {successBanner && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl bg-emerald-600 text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl bg-success-forest text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
           <CheckCircle2 className="h-5 w-5 shrink-0" />
           <span className="text-sm font-semibold">{successBanner}</span>
         </div>
       )}
 
       {errorBanner && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl bg-rose-600 text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl bg-destructive text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
           <AlertCircle className="h-5 w-5 shrink-0" />
           <span className="text-sm font-semibold">{errorBanner}</span>
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-border/60 pb-5">
+      {/* Page Title Header */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-border/30 pb-4">
         <div>
-          <div className="flex items-center gap-2 text-xs font-bold text-primary mb-1">
+          <div className="flex items-center gap-2 text-sm font-bold text-primary mb-1">
             <Link to="/dashboard" className="flex items-center gap-1 hover:underline">
               <ArrowLeft className="h-3.5 w-3.5" />
-              <span>Quay lại Dashboard</span>
+              <span>Quay lại Tổng quan</span>
             </Link>
           </div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-foreground flex items-center gap-3">
-            <div className="p-2.5 rounded-2xl bg-primary/10 text-primary">
+          <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-foreground flex items-center gap-3 mt-5">
+            <div className="p-2.5 rounded-2xl bg-primary/10 text-primary ">
               <Users className="h-7 w-7" />
             </div>
             <span>Quản lý Người dùng</span>
           </h1>
         </div>
+      </div>
 
-        {/* Sub Nav Navigation */}
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="default" size="sm" className="h-9 font-bold bg-primary text-primary-foreground">
-            <Users className="h-4 w-4 mr-1.5" />
-            <span>Người dùng</span>
-          </Button>
-          <Link to="/admin/roles">
-            <Button variant="outline" size="sm" className="h-9 font-semibold hover:bg-muted">
-              Vai trò
-            </Button>
-          </Link>
-          <Link to="/admin/permissions">
-            <Button variant="outline" size="sm" className="h-9 font-semibold hover:bg-muted">
-              Quyền hạn
-            </Button>
-          </Link>
-          <Link to="/admin/courses">
-            <Button variant="outline" size="sm" className="h-9 font-semibold hover:bg-muted">
-              Khóa học
-            </Button>
-          </Link>
+      {/* STICKY SUB-NAVBAR */}
+      <div className="sticky top-16 bg-card/85 backdrop-blur-md border-b border-border/30 z-30 shadow-xs -mx-4 sm:-mx-6 lg:-mx-10 px-4 sm:px-6 lg:px-10 transition-all duration-200">
+        <div className="flex items-center justify-between h-12">
+          <div className="flex gap-6 md:gap-8 h-full items-center text-base font-semibold">
+            <button
+              onClick={() => scrollToSection("statistics")}
+              className={`flex items-center gap-2 h-full border-b-2 transition-colors cursor-pointer ${
+                activeTab === "statistics"
+                  ? "border-primary text-primary font-extrabold"
+                  : "border-transparent text-muted-foreground hover:text-foreground hover:bg-neutral-soft-gray/50"
+              }`}
+            >
+              <BarChart3 className="h-4 w-4" />
+              <span>Thống kê & Phân tích</span>
+            </button>
+
+            <button
+              onClick={() => scrollToSection("management")}
+              className={`flex items-center gap-2 h-full border-b-2 transition-colors cursor-pointer ${
+                activeTab === "management"
+                  ? "border-primary text-primary font-extrabold"
+                  : "border-transparent text-muted-foreground hover:text-foreground hover:bg-neutral-soft-gray/50"
+              }`}
+            >
+              <Users className="h-4 w-4" />
+              <span>Danh sách Quản lý</span>
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Top Section: Stat Boxes */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-        
-        {/* Stat Box 1: Students */}
-        <Card className="border-border shadow-sm hover:shadow-md transition-shadow bg-card overflow-hidden relative">
-          <div className="absolute top-0 right-0 p-4 opacity-10 text-primary">
-            <GraduationCap className="h-24 w-24" />
-          </div>
-          <CardHeader className="pb-2">
-            <CardDescription className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Học viên (Students)
-            </CardDescription>
-            <CardTitle className="text-3xl font-black text-foreground flex items-center gap-2 mt-1">
-              <span>{statsLoading ? "..." : studentCount.toLocaleString()}</span>
-              <span className="text-xs font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full flex items-center gap-0.5">
-                <TrendingUp className="h-3 w-3" /> Student
-              </span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <p className="text-xs text-muted-foreground">Tổng số tài khoản học viên trong hệ thống</p>
-          </CardContent>
-        </Card>
-
-        {/* Stat Box 2: Employees */}
-        <Card className="border-border shadow-sm hover:shadow-md transition-shadow bg-card overflow-hidden relative">
-          <div className="absolute top-0 right-0 p-4 opacity-10 text-indigo-500">
-            <Briefcase className="h-24 w-24" />
-          </div>
-          <CardHeader className="pb-2">
-            <CardDescription className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Nhân viên & Giảng viên (Staff)
-            </CardDescription>
-            <CardTitle className="text-3xl font-black text-foreground flex items-center gap-2 mt-1">
-              <span>{statsLoading ? "..." : employeeCount.toLocaleString()}</span>
-              <span className="text-xs font-bold text-indigo-600 bg-indigo-500/10 px-2 py-0.5 rounded-full flex items-center gap-0.5">
-                <UserCheck className="h-3 w-3" /> Staff
-              </span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <p className="text-xs text-muted-foreground">Tổng số giảng viên & cán bộ nhân viên</p>
-          </CardContent>
-        </Card>
-
-        {/* Stat Box 3: Total Accounts */}
-        <Card className="border-border shadow-sm hover:shadow-md transition-shadow bg-card overflow-hidden relative">
-          <div className="absolute top-0 right-0 p-4 opacity-10 text-amber-500">
-            <Users className="h-24 w-24" />
-          </div>
-          <CardHeader className="pb-2">
-            <CardDescription className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Tổng số tài khoản (Total Users)
-            </CardDescription>
-            <CardTitle className="text-3xl font-black text-foreground flex items-center gap-2 mt-1">
-              <span>{totalElements.toLocaleString()}</span>
-              <span className="text-xs font-bold text-amber-600 bg-amber-500/10 px-2 py-0.5 rounded-full">
-                Hệ thống
-              </span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <p className="text-xs text-muted-foreground">Tài khoản ghi nhận trên hệ thống</p>
-          </CardContent>
-        </Card>
-
-        {/* Stat Box 4: Active Ratio */}
-        <Card className="border-border shadow-sm hover:shadow-md transition-shadow bg-card overflow-hidden relative">
-          <div className="absolute top-0 right-0 p-4 opacity-10 text-emerald-500">
-            <ShieldCheck className="h-24 w-24" />
-          </div>
-          <CardHeader className="pb-2">
-            <CardDescription className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Trạng thái Hoạt động
-            </CardDescription>
-            <CardTitle className="text-3xl font-black text-foreground flex items-center gap-2 mt-1">
-              <span>
-                {statusStats.find(s => s.name === "ACTIVE")?.value || totalElements}
-              </span>
-              <span className="text-xs font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full">
-                Active
-              </span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <p className="text-xs text-muted-foreground">Tài khoản đang sẵn sàng hoạt động</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Middle Section: Main Charts (Pie & Line Charts) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        {/* Pie Chart: Distribution by Role */}
-        <Card className="lg:col-span-5 border-border shadow-sm bg-card flex flex-col justify-between">
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <PieIcon className="h-5 w-5 text-primary" />
-                <CardTitle className="text-base font-bold">Cơ cấu theo Vai trò</CardTitle>
-              </div>
-              <span className="text-[11px] font-semibold bg-muted px-2 py-0.5 rounded-full text-muted-foreground">
-                Pie Chart
-              </span>
+      <section id="statistics" className="space-y-8 scroll-mt-36">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mt-15">
+          
+          {/* Stat Box 1: Students */}
+          <Card className="border-border shadow-sm hover:shadow-md transition-shadow bg-card overflow-hidden relative">
+            <div className="absolute top-0 right-0 p-4 opacity-10 text-success-forest">
+              <GraduationCap className="h-20 w-20" />
             </div>
-            <CardDescription className="text-xs">
-              Tỷ lệ phân bổ tài khoản người dùng theo vai trò hệ thống
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-4 flex-1 flex items-center justify-center min-h-[280px]">
-            {roleStats.length > 0 ? (
-              <ResponsiveContainer width="100%" height={260}>
-                <PieChart>
-                  <Pie
-                    data={roleStats}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={55}
-                    outerRadius={85}
-                    paddingAngle={4}
-                    dataKey="value"
-                  >
-                    {roleStats.map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={ROLE_COLORS[index % ROLE_COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    formatter={(value: any) => [`${value} người dùng`, "Số lượng"]}
-                    contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)" }}
-                  />
-                  <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: "12px" }} />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="text-center text-xs text-muted-foreground py-8">
-                Đang tải dữ liệu biểu đồ vai trò...
-              </div>
-            )}
-          </CardContent>
-        </Card>
+            <CardHeader className="pb-2">
+              <CardDescription className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                Học viên
+              </CardDescription>
+              <CardTitle className="text-4xl font-black text-foreground flex items-center gap-2 mt-1">
+                <span className="text-success-forest">{statsLoading ? "..." : studentCount.toLocaleString()}</span>
+                <span className="text-sm font-bold text-success-forest bg-emerald-500/10 px-2 py-0.5 rounded-full flex items-center gap-0.5">
+                  <TrendingUp className="h-3 w-3" /> Student
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <p className="text-sm font-medium text-muted-foreground">Tổng số tài khoản học viên trong hệ thống</p>
+            </CardContent>
+          </Card>
 
-        {/* Line Chart: Monthly New Users */}
-        <Card className="lg:col-span-7 border-border shadow-sm bg-card flex flex-col justify-between">
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-emerald-500" />
-                <CardTitle className="text-base font-bold">Người dùng mới theo tháng</CardTitle>
-              </div>
-              <div className="flex items-center gap-2">
-                <Label className="text-xs text-muted-foreground">Năm:</Label>
-                <select
-                  value={selectedYear}
-                  onChange={(e) => setSelectedYear(Number(e.target.value))}
-                  className="px-2.5 py-1 rounded-lg border border-border bg-background text-xs font-semibold outline-none focus:ring-2 focus:ring-primary/20"
-                >
-                  <option value={2026}>2026</option>
-                  <option value={2025}>2025</option>
-                  <option value={2024}>2024</option>
-                </select>
-              </div>
+          {/* Stat Box 2: Employees */}
+          <Card className="border-border shadow-sm hover:shadow-md transition-shadow bg-card overflow-hidden relative">
+            <div className="absolute top-0 right-0 p-4 opacity-10 text-brand-cobalt">
+              <Briefcase className="h-20 w-20" />
             </div>
-            <CardDescription className="text-xs">
-              Thống kê lượng người dùng mới đăng ký từng tháng trong năm {selectedYear}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="pt-4 flex-1 flex items-center justify-center min-h-[280px]">
-            {monthlyUsers.length > 0 ? (
-              <ResponsiveContainer width="100%" height={260}>
-                <AreaChart data={monthlyUsers} margin={{ top: 10, right: 20, left: -20, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorMonthlyCount" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                  <XAxis dataKey="month" tickLine={false} style={{ fontSize: "11px" }} />
-                  <YAxis tickLine={false} axisLine={false} style={{ fontSize: "11px" }} />
-                  <Tooltip
-                    formatter={(val: any) => [`${val} tài khoản mới`, "Số lượng"]}
-                    contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)" }}
-                  />
-                  <Area type="monotone" dataKey="count" stroke="#10b981" strokeWidth={2.5} fillOpacity={1} fill="url(#colorMonthlyCount)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="text-center text-xs text-muted-foreground py-8">
-                Đang tải dữ liệu biểu đồ người dùng mới...
-              </div>
-            )}
-          </CardContent>
-        </Card>
+            <CardHeader className="pb-2">
+              <CardDescription className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                Nhân viên
+              </CardDescription>
+              <CardTitle className="text-4xl font-bold text-foreground flex items-center gap-2 mt-1">
+                <span className="text-brand-cobalt">{statsLoading ? "..." : employeeCount.toLocaleString()}</span>
+                <span className="text-sm font-bold text-brand-cobalt bg-indigo-500/10 px-2 py-0.5 rounded-full flex items-center gap-0.5">
+                  <UserCheck className="h-3 w-3" /> Staff
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <p className="text-sm  font-medium text-muted-foreground">Tổng số  nhân viên</p>
+            </CardContent>
+          </Card>
 
-      </div>
+          {/* Stat Box 3: Total Accounts */}
+          <Card className="border-border shadow-sm hover:shadow-md transition-shadow bg-card overflow-hidden relative">
+            <div className="absolute top-0 right-0 p-4 opacity-10 text-muted-foreground">
+              <Users className="h-20 w-20" />
+            </div>
+            <CardHeader className="pb-2">
+              <CardDescription className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                Tổng số tài khoản
+              </CardDescription>
+              <CardTitle className="text-4xl font-black text-foreground flex items-center gap-2 mt-1">
+                <span className="text-muted-foreground">{totalElements.toLocaleString()}</span>
+                <span className="text-sm font-bold text-muted-foreground bg-amber-500/10 px-2 py-0.5 rounded-full">
+                  Hệ thống
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <p className="text-sm font-medium text-muted-foreground">Tài khoản ghi nhận trên hệ thống</p>
+            </CardContent>
+          </Card>
 
-      {/* Optional Collapsible Combined Charts Section (Giới tính, Trạng thái, Độ tuổi) */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <Button
-            onClick={() => setShowOptionalCharts(!showOptionalCharts)}
-            variant="ghost"
-            size="sm"
-            className="text-xs font-bold gap-2 text-muted-foreground hover:text-foreground p-0 h-auto"
-          >
-            {showOptionalCharts ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            <span>Biểu đồ gộp bổ sung (Giới tính, Trạng thái, Độ tuổi)</span>
-          </Button>
+          {/* Stat Box 4: Active Ratio */}
+          <Card className="border-border shadow-sm hover:shadow-md transition-shadow bg-card overflow-hidden relative">
+            <div className="absolute top-0 right-0 p-4 opacity-10 text-green-300">
+              <ShieldCheck className="h-20 w-20" />
+            </div>
+            <CardHeader className="pb-2">
+              <CardDescription className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                Trạng thái Hoạt động
+              </CardDescription>
+              <CardTitle className="text-4xl font-black text-foreground flex items-center gap-2 mt-1">
+                <span className="text-green-300">
+                  {statusStats.find(s => s.name === "ACTIVE")?.value || totalElements}
+                </span>
+                <span className="text-sm font-bold text-green-300 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                  Active
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <p className="text-sm text-muted-foreground">Tài khoản hoạt động</p>
+            </CardContent>
+          </Card>
         </div>
 
-        {showOptionalCharts && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in-50 duration-200">
-            
-            {/* Chart: Users by Gender */}
-            <Card className="border-border shadow-sm bg-card">
-              <CardHeader className="pb-1">
-                <CardTitle className="text-sm font-bold flex items-center gap-1.5">
-                  <PieIcon className="h-4 w-4 text-sky-500" />
-                  <span>Theo Giới tính</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-2 min-h-[200px] flex items-center justify-center">
-                {genderStats.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={180}>
-                    <PieChart>
-                      <Pie
-                        data={genderStats}
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={65}
-                        dataKey="value"
-                      >
-                        {genderStats.map((_, idx) => (
-                          <Cell key={`gender-${idx}`} fill={GENDER_COLORS[idx % GENDER_COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(v: any) => [`${v} người`, "Số lượng"]} />
-                      <Legend verticalAlign="bottom" wrapperStyle={{ fontSize: "11px" }} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <p className="text-xs text-muted-foreground">Không có dữ liệu giới tính</p>
-                )}
-              </CardContent>
-            </Card>
+        {/* Middle Section: Main Charts (Pie & Line Charts) */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          
+          {/* Pie Chart: Distribution by Role */}
+          <Card className="lg:col-span-5 border-border shadow-sm bg-card flex flex-col justify-between">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <PieIcon className="h-5 w-5 text-primary" />
+                  <CardTitle className="text-lg font-semibold">Cơ cấu theo Vai trò</CardTitle>
+                </div>
+              </div>
+              <CardDescription className="text-sm">
+                Tỷ lệ phân bổ tài khoản người dùng theo vai trò hệ thống
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-4 flex-1 flex items-center justify-center min-h-[280px]">
+              {roleStats.length > 0 ? (
+                <ResponsiveContainer width="100%" height={260}>
+                  <PieChart>
+                    <Pie
+                      data={roleStats}  // Dữ liệu hiển thị
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={55} // Bán kính trong
+                      outerRadius={85}
+                      paddingAngle={4} // Khoảng cách giữa các phần
+                      dataKey="value"
+                    >
+                      {roleStats.map((_, index) => (
+                        <Cell key={`cell-${index}`} fill={ROLE_COLORS[index % ROLE_COLORS.length]} />
+                      ))}
+                    </Pie>
 
-            {/* Chart: Users by Status */}
-            <Card className="border-border shadow-sm bg-card">
-              <CardHeader className="pb-1">
-                <CardTitle className="text-sm font-bold flex items-center gap-1.5">
-                  <PieIcon className="h-4 w-4 text-emerald-500" />
-                  <span>Theo Trạng thái</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-2 min-h-[200px] flex items-center justify-center">
-                {statusStats.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={180}>
-                    <PieChart>
-                      <Pie
-                        data={statusStats}
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={65}
-                        dataKey="value"
-                      >
-                        {statusStats.map((_, idx) => (
-                          <Cell key={`status-${idx}`} fill={STATUS_COLORS[idx % STATUS_COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(v: any) => [`${v} tài khoản`, "Số lượng"]} />
-                      <Legend verticalAlign="bottom" wrapperStyle={{ fontSize: "11px" }} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <p className="text-xs text-muted-foreground">Không có dữ liệu trạng thái</p>
-                )}
-              </CardContent>
-            </Card>
+                    {/* Tooltip hiển thị khi di chuột vào từng phần */}
+                    <Tooltip
+                      formatter={(value: any) => [`${value} người dùng`, "Số lượng"]}
+                      contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)" }}
+                    />
+                    {/* Chú thích màu tương ứng với từng vai trò */}
+                    <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: "14px" }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="text-center text-sm text-muted-foreground py-8">
+                  Đang tải dữ liệu biểu đồ vai trò...
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
-            {/* Chart: Employees by Age Group */}
-            <Card className="border-border shadow-sm bg-card">
-              <CardHeader className="pb-1">
-                <CardTitle className="text-sm font-bold flex items-center gap-1.5">
-                  <BarChart3 className="h-4 w-4 text-purple-500" />
-                  <span>Độ tuổi Nhân viên</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-2 min-h-[200px] flex items-center justify-center">
-                {ageStats.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={180}>
-                    <BarChart data={ageStats} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                      <XAxis dataKey="name" style={{ fontSize: "10px" }} />
-                      <YAxis style={{ fontSize: "10px" }} />
-                      <Tooltip formatter={(v: any) => [`${v} nhân viên`, "Số lượng"]} />
-                      <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                        {ageStats.map((_, idx) => (
-                          <Cell key={`age-${idx}`} fill={AGE_COLORS[idx % AGE_COLORS.length]} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <p className="text-xs text-muted-foreground">Chưa có thống kê độ tuổi</p>
-                )}
-              </CardContent>
-            </Card>
+          {/* Line Chart: Monthly New Users */}
+          <Card className="lg:col-span-7 border-border shadow-sm bg-card flex flex-col justify-between">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-success-forest" />
+                  <CardTitle className="text-lg font-semibold">Người dùng mới theo tháng</CardTitle>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Label className="text-sm font-semibold text-muted-foreground">Năm:</Label>
+                  <Select
+                    value={String(selectedYear)}
+                    onValueChange={(val) => setSelectedYear(Number(val))}
+                  >
+                    <SelectTrigger className="w-[100px] h-8 border-border/40 text-sm font-semibold">
+                      <SelectValue placeholder="Chọn năm" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {years.map((year) => (
+                        <SelectItem key={year} value={String(year)}>
+                          {year}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <CardDescription className="text-sm">
+                Thống kê lượng người dùng mới đăng ký từng tháng trong năm {selectedYear}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-4 flex-1 flex items-center justify-center min-h-[280px]">
+              {monthlyUsers.length > 0 ? (
+                <ResponsiveContainer width="100%" height={260}>
+                  <AreaChart data={monthlyUsers} margin={{ top: 10, right: 20, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorMonthlyCount" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                    <XAxis dataKey="month" tickLine={false} style={{ fontSize: "11px" }} />
+                    <YAxis tickLine={false} axisLine={false} style={{ fontSize: "11px" }} />
+                    <Tooltip
+                      formatter={(val: any) => [`${val} tài khoản mới`, "Số lượng"]}
+                      contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)" }}
+                    />
+                    <Area type="monotone" dataKey="count" stroke="#10b981" strokeWidth={2.5} fillOpacity={1} fill="url(#colorMonthlyCount)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="text-center text-sm text-muted-foreground py-8">
+                  Đang tải dữ liệu biểu đồ người dùng mới...
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
+        </div>
+
+        {/* Optional Collapsible Combined Charts Section (Giới tính, Trạng thái, Độ tuổi) */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <Button
+              onClick={() => setShowOptionalCharts(!showOptionalCharts)}
+              variant="ghost"
+              size="lg"
+              className="text-lg font-semibold gap-2 text-muted-foreground hover:opacity-80 hover:text-foreground p-0 h-auto"
+            >
+              {showOptionalCharts ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              <span>Biểu đồ phân bổ  Người dùng</span>
+            </Button>
           </div>
-        )}
-      </div>
 
+          {showOptionalCharts && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in-50 duration-200">
+              
+              {/* Chart: Users by Gender */}
+              <Card className="border-border shadow-sm bg-card">
+                <CardHeader className="pb-1">
+                  <CardTitle className="text-lg font-semibold flex items-center gap-1.5">
+                    <PieIcon className="h-4 w-4 text-sky-500" />
+                    <span>Theo Giới tính</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="min-h-[200px] flex items-center justify-center">
+                  {genderStats.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={180}>
+                      <PieChart>
+                        <Pie
+                          data={genderStats}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={35}
+                          outerRadius={65}
+                          paddingAngle={4}
+                          dataKey="value"
+                        >
+                          {genderStats.map((_, idx) => (
+                            <Cell key={`gender-${idx}`} fill={GENDER_COLORS[idx % GENDER_COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(v: any) => [`${v} người`, "Số lượng"]} />
+                        <Legend verticalAlign="bottom" height={-20} iconType="circle" wrapperStyle={{ fontSize: "14px" }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Không có dữ liệu giới tính</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Chart: Users by Status */}
+              <Card className="border-border shadow-sm bg-card">
+                <CardHeader className="pb-1">
+                  <CardTitle className="text-lg font-semibold flex items-center gap-1.5">
+                    <PieIcon className="h-4 w-4 text-emerald-500" />
+                    <span>Theo Trạng thái</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="min-h-[200px] flex items-center justify-center">
+                  {statusStats.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={180}>
+                      <PieChart>
+                        <Pie
+                          data={statusStats}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={35}
+                          outerRadius={65}
+                          paddingAngle={4}
+                          dataKey="value"
+                        >
+                          {statusStats.map((_, idx) => (
+                            <Cell key={`status-${idx}`} fill={STATUS_COLORS[idx % STATUS_COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(v: any) => [`${v} tài khoản`, "Số lượng"]} />
+                        <Legend verticalAlign="bottom" height={-20} iconType="circle" wrapperStyle={{ fontSize: "14px" }} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Không có dữ liệu trạng thái</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Chart: Employees by Age Group */}
+              <Card className="border-border shadow-sm bg-card">
+                <CardHeader className="pb-1">
+                  <CardTitle className="text-lg font-semibold flex items-center gap-1.5">
+                    <BarChart3 className="h-4 w-4 text-purple-500" />
+                    <span>Theo Độ tuổi</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-2 min-h-[200px] flex items-center justify-center">
+                  {ageStats.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={180}>
+                      <BarChart data={ageStats} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                        <XAxis dataKey="name" style={{ fontSize: "10px" }} />
+                        <YAxis style={{ fontSize: "10px" }} />
+                        <Tooltip formatter={(v: any) => [`${v} nhân viên`, "Số lượng"]} />
+                        <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                          {ageStats.map((_, idx) => (
+                            <Cell key={`age-${idx}`} fill={AGE_COLORS[idx % AGE_COLORS.length]} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Chưa có thống kê độ tuổi</p>
+                  )}
+                </CardContent>
+              </Card>
+
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section id="management" className="scroll-mt-36">
       {/* Main Table Container */}
       <Card className="border-border shadow-sm bg-card overflow-hidden">
         
         {/* Table Header & Quick Action Buttons */}
-        <CardHeader className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 pb-4 border-b border-border bg-card">
+        <CardHeader className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 pb-4 border-b border-border/30 bg-card">
           <div>
-            <CardTitle className="text-xl font-black tracking-tight font-heading flex items-center gap-2">
-              <span>Danh sách Người dùng Hệ thống</span>
+            <CardTitle className="text-xl font-semibold tracking-tight font-heading flex items-center gap-2">
+              <span>Danh sách Người dùng</span>
             </CardTitle>
-            <CardDescription className="text-xs text-muted-foreground mt-0.5">
+            <CardDescription className="text-sm text-muted-foreground mt-0.5">
               Tìm kiếm, lọc nâng cao, gán vai trò, quản lý trạng thái và thao tác hàng loạt.
             </CardDescription>
           </div>
@@ -960,10 +1186,10 @@ export const UserManagement: React.FC = () => {
               onClick={handleExportUsersExcel}
               variant="outline"
               size="sm"
-              className="h-9 gap-1.5 font-semibold text-emerald-600 border-emerald-500/30 hover:bg-emerald-500/10"
+              className="h-9 gap-1.5 font-semibold text-success-forest border-emerald-500/30 hover:bg-emerald-500/10"
             >
               <FileSpreadsheet className="h-4 w-4" />
-              <span>Xuất Excel / CSV</span>
+              <span>Xuất File CSV</span>
             </Button>
 
             {/* Bulk Add Employees Button */}
@@ -971,7 +1197,7 @@ export const UserManagement: React.FC = () => {
               onClick={() => setBulkCreateEmployeesModalOpen(true)}
               variant="outline"
               size="sm"
-              className="h-9 gap-1.5 font-semibold text-indigo-600 border-indigo-500/30 hover:bg-indigo-500/10"
+              className="h-9 gap-1.5 font-semibold text-brand-cobalt border-indigo-500/30 hover:bg-indigo-500/10"
             >
               <UserPlus className="h-4 w-4" />
               <span>Thêm nhân viên</span>
@@ -982,9 +1208,9 @@ export const UserManagement: React.FC = () => {
               onClick={() => setInviteModalOpen(true)}
               variant="outline"
               size="sm"
-              className="h-9 gap-1.5 font-semibold"
+              className="h-9 gap-1.5 font-semibold text-brand-primary border-border/40 hover:bg-brand-cobalt/50"
             >
-              <Mail className="h-4 w-4 text-primary" />
+              <Mail className="h-4 w-4 text-brand-primary" />
               <span>Mời nhân viên</span>
             </Button>
 
@@ -993,108 +1219,267 @@ export const UserManagement: React.FC = () => {
               onClick={() => { setEditingUser(null); setUserModalOpen(true); }}
               variant="default"
               size="sm"
-              className="h-9 gap-1.5 font-semibold bg-primary text-primary-foreground hover:bg-primary/95 shadow-xs"
+              className="h-9 gap-1.5 font-semibold bg-primary text-primary-foreground hover:bg-accent/70 shadow-xs"
             >
               <Plus className="h-4 w-4" />
               <span>Tạo tài khoản</span>
             </Button>
           </div>
         </CardHeader>
+        
 
         {/* Toolbar: Search, Filters & Date Pickers */}
-        <form onSubmit={handleSearchSubmit} className="p-4 bg-muted/20 border-b border-border/80 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-12 gap-3">
-          
+        <form
+          onSubmit={handleSearchSubmit}
+          className="-mt-1 pb-4 pl-4 pr-4 bg-muted/20 border-b border-border/30 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-12 gap-3 items-end"
+        >
           {/* Keyword Search */}
-          <div className="relative lg:col-span-4">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Tìm theo Tên, Username, Email, SĐT..."
-              value={searchKeyword}
-              onChange={(e) => setSearchKeyword(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 rounded-lg border border-border bg-background text-xs outline-none focus:ring-2 focus:ring-primary/20"
-            />
+          <div className="flex flex-col gap-1 lg:col-span-3">
+            <Label className="text-sm font-bold text-muted-foreground">Từ khóa tìm kiếm</Label>
+            <div className="relative w-full">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <Input
+                type="text"
+                placeholder="Tìm tên, username, email..."
+                value={searchKeyword}
+                onChange={(e) => setSearchKeyword(e.target.value)}
+                className="pl-8 h-9 text-sm border border-border/30 bg-background rounded-lg focus-visible:ring-2 focus-visible:ring-primary/20 placeholder:opacity-50"
+              />
+            </div>
           </div>
 
           {/* Role Filter */}
-          <select
-            value={filterRole}
-            onChange={(e) => setFilterRole(e.target.value)}
-            className="lg:col-span-2 px-3 py-1.5 rounded-lg border border-border bg-background text-xs outline-none"
-          >
-            <option value="">Tất cả vai trò</option>
-            {roles.map((r) => (
-              <option key={r.name} value={r.name}>{r.name}</option>
-            ))}
-          </select>
-
-          {/* Status Filter */}
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="lg:col-span-2 px-3 py-1.5 rounded-lg border border-border bg-background text-xs outline-none"
-          >
-            <option value="">Tất cả trạng thái</option>
-            <option value="ACTIVE">ACTIVE (Đang hoạt động)</option>
-            <option value="INACTIVE">INACTIVE (Ngưng hoạt động)</option>
-            <option value="BLOCKED">BLOCKED (Đã khóa)</option>
-            <option value="PENDING">PENDING (Chờ xác nhận)</option>
-          </select>
-
-          {/* Start Date Filter */}
-          <input
-            type="date"
-            title="Từ ngày tạo"
-            value={startDate}
-            onChange={(e) => setStartDate(e.target.value)}
-            className="lg:col-span-1.5 px-2 py-1.5 rounded-lg border border-border bg-background text-xs outline-none"
-          />
-
-          {/* Filter Submit Button */}
-          <div className="lg:col-span-2.5 flex items-center gap-2">
-            <Button type="submit" size="sm" className="h-8 font-semibold bg-muted text-foreground hover:bg-muted/80 flex-1 text-xs">
-              <Filter className="h-3.5 w-3.5 mr-1" /> Tìm kiếm
-            </Button>
-            {(searchKeyword || filterRole || filterStatus || startDate || endDate) && (
-              <Button
-                type="button"
-                onClick={() => {
-                  setSearchKeyword("");
-                  setFilterRole("");
-                  setFilterStatus("");
-                  setStartDate("");
-                  setEndDate("");
-                  setPage(0);
-                }}
-                variant="ghost"
-                size="sm"
-                className="h-8 text-xs text-muted-foreground"
-              >
-                Xóa lọc
-              </Button>
-            )}
+          <div className="flex flex-col gap-1 lg:col-span-2">
+            <Label className="text-sm font-bold text-muted-foreground">Vai trò</Label>
+            <Select
+              value={filterRole || "Tất cả"}
+              onValueChange={(val) => setFilterRole(val === "Tất cả" || !val ? "" : val)}
+            >
+              <SelectTrigger className="h-9! text-sm border border-border/30 bg-background rounded-lg w-full">
+                <SelectValue placeholder="Tất cả vai trò"/>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Tất cả">Tất cả vai trò</SelectItem>
+                {roles.map((r) => (
+                  <SelectItem key={r.name} value={r.name}>
+                    {r.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
+          {/* Status Filter */}
+          <div className="flex flex-col gap-1 lg:col-span-2">
+            <Label className="text-sm font-bold text-muted-foreground">Trạng thái</Label>
+            <Select
+              value={filterStatus || "Tất cả"}
+              onValueChange={(val) => setFilterStatus(val === "Tất cả" || !val ? "" : val)}
+            >
+              <SelectTrigger className="h-9! text-sm border border-border/30 bg-background rounded-lg w-full">
+                <SelectValue placeholder="Tất cả trạng thái" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Tất cả">Tất cả trạng thái</SelectItem>
+                <SelectItem value="ACTIVE">ACTIVE</SelectItem>
+                <SelectItem value="DELETED">DELETED</SelectItem>
+                <SelectItem value="LOCKED">LOCKED</SelectItem>
+                <SelectItem value="VERIFICATION">VERIFICATION</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Start Date Filter */}
+          <div className="flex flex-col gap-1 lg:col-span-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm font-bold text-muted-foreground">Từ ngày</Label>
+              {isInvalidDateInput(startDateInput) && (
+                <span className="text-sm text-destructive font-semibold">Sai định dạng</span>
+              )}
+            </div>
+            <Popover>
+              <PopoverTrigger
+                nativeButton={false}
+                render={
+                  <div className="relative w-full">
+                    <CalendarIcon className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none z-10" />
+                    <Input
+                      type="text"
+                      placeholder="dd/mm/yyyy"
+                      value={startDateInput}
+                      onChange={(e) => {
+                        const val = formatAsDDMMYYYYMask(e.target.value, startDateInput);
+                        setStartDateInput(val);
+                        const yyyymmdd = parseDDMMYYYYToYYYYMMDD(val);
+                        if (yyyymmdd) {
+                          setStartDate(yyyymmdd);
+                          setStartCalendarMonth(parseYYYYMMDD(yyyymmdd));
+                        } else if (!val) {
+                          setStartDate("");
+                        }
+                      }}
+                      maxLength={10}
+                      className={cn(
+                        "pl-8 h-9 text-sm border border-border/30 bg-background rounded-lg focus-visible:ring-2 focus-visible:ring-primary/20 placeholder:opacity-50",
+                        isInvalidDateInput(startDateInput) && "border-destructive text-destructive focus-visible:ring-destructive/30"
+                      )}
+                    />
+                  </div>
+                }
+              />
+              <PopoverContent className="w-auto p-0 z-50 bg-popover border border-border/30 shadow-xl rounded-xl" align="start">
+                <CalendarComponent
+                  mode="single"
+                  captionLayout="dropdown"
+                  startMonth={new Date(1990, 0)}
+                  endMonth={new Date(2030, 11)}
+                  selected={parseYYYYMMDD(startDate)}
+                  month={startCalendarMonth}
+                  onMonthChange={setStartCalendarMonth}
+                  onSelect={(date) => {
+                    if (date) {
+                      const yyyy = date.getFullYear();
+                      const mm = String(date.getMonth() + 1).padStart(2, "0");
+                      const dd = String(date.getDate()).padStart(2, "0");
+                      const yyyymmdd = `${yyyy}-${mm}-${dd}`;
+                      setStartDate(yyyymmdd);
+                      setStartDateInput(`${dd}/${mm}/${yyyy}`);
+                      setStartCalendarMonth(date);
+                    } else {
+                      setStartDate("");
+                      setStartDateInput("");
+                    }
+                  }}
+                  autoFocus
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          {/* End Date Filter */}
+          <div className="flex flex-col gap-1 lg:col-span-2">
+            <div className="flex items-center justify-between">
+              <Label className="text-sm font-bold text-muted-foreground">Đến ngày</Label>
+              {isInvalidDateInput(endDateInput) && (
+                <span className="text-sm text-destructive font-semibold">Sai định dạng</span>
+              )}
+            </div>
+            <Popover>
+              <PopoverTrigger
+                nativeButton={false}
+                render={
+                  <div className="relative w-full">
+                    <CalendarIcon className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none z-10" />
+                    <Input
+                      type="text"
+                      placeholder="dd/mm/yyyy"
+                      value={endDateInput}
+                      onChange={(e) => {
+                        const val = formatAsDDMMYYYYMask(e.target.value, endDateInput);
+                        setEndDateInput(val);
+                        const yyyymmdd = parseDDMMYYYYToYYYYMMDD(val);
+                        if (yyyymmdd) {
+                          setEndDate(yyyymmdd);
+                          setEndCalendarMonth(parseYYYYMMDD(yyyymmdd));
+                        } else if (!val) {
+                          setEndDate("");
+                        }
+                      }}
+                      maxLength={10}
+                      className={cn(
+                        "pl-8 h-9 text-sm border border-border/30 bg-background rounded-lg focus-visible:ring-2 focus-visible:ring-primary/20 placeholder:opacity-50",
+                        isInvalidDateInput(endDateInput) && "border-destructive text-destructive focus-visible:ring-destructive/30"
+                      )}
+                    />
+                  </div>
+                }
+              />
+              <PopoverContent className="w-auto p-0 z-50 bg-popover border border-border/30 shadow-xl rounded-xl" align="start">
+                <CalendarComponent
+                  mode="single"
+                  captionLayout="dropdown"
+                  startMonth={new Date(1990, 0)}
+                  endMonth={new Date(2030, 11)}
+                  selected={parseYYYYMMDD(endDate)}
+                  month={endCalendarMonth}
+                  onMonthChange={setEndCalendarMonth}
+                  onSelect={(date) => {
+                    if (date) {
+                      const yyyy = date.getFullYear();
+                      const mm = String(date.getMonth() + 1).padStart(2, "0");
+                      const dd = String(date.getDate()).padStart(2, "0");
+                      const yyyymmdd = `${yyyy}-${mm}-${dd}`;
+                      setEndDate(yyyymmdd);
+                      setEndDateInput(`${dd}/${mm}/${yyyy}`);
+                      setEndCalendarMonth(date);
+                    } else {
+                      setEndDate("");
+                      setEndDateInput("");
+                    }
+                  }}
+                  autoFocus
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          {/* Filter Action Buttons */}
+          <div className="flex flex-col gap-1 lg:col-span-1 justify-end">
+            <div className="flex items-center gap-1.5 w-full">
+              <Button
+                type="submit"
+                size="lg"
+                className="h-9.5! font-semibold bg-primary text-primary-foreground hover:bg-accent/70 flex-1 text-sm rounded-lg"
+                title="Lọc dữ liệu"
+              >
+                <Filter className="h-3.5 w-3.5 mr-1" /> Lọc
+              </Button>
+
+              {(searchKeyword || filterRole || filterStatus || startDate || startDateInput || endDate || endDateInput) && (
+                <Button
+                  type="button"
+                  onClick={() => {
+                    setSearchKeyword("");
+                    setFilterRole("");
+                    setFilterStatus("");
+                    setStartDate("");
+                    setStartDateInput("");
+                    setEndDate("");
+                    setEndDateInput("");
+                    setPage(0);
+                  }}
+                  variant="outline"
+                  size="lg"
+                  className="h-9.25! text-xs text-muted-foreground hover:text-foreground rounded-lg px-2 border border-border/30 bg-background"
+                  title="Xóa bộ lọc"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              )}
+            </div>
+          </div>
         </form>
 
+
+        {/* Table */}
         {/* Batch Operations Bar (Trục thao tác hàng loạt khi chọn checkbox) */}
         {selectedUserIds.length > 0 && (
-          <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/20 flex flex-wrap items-center justify-between gap-3 animate-in fade-in-50 duration-200">
-            <div className="flex items-center gap-2 text-xs font-bold text-primary">
+          <div className="py-2.5 -mt-4 bg-primary/10 border-b border-primary/20 flex flex-wrap items-center justify-between gap-3 animate-in fade-in-50 duration-200">
+            <div className="pl-2 flex items-center gap-2 text-sm font-semibold text-primary">
               <CheckCircle2 className="h-4 w-4" />
               <span>Đã chọn {selectedUserIds.length} tài khoản</span>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 pr-4">
               
               {/* Bulk Assign Role */}
               <Button
                 onClick={() => setBulkAssignRoleModalOpen(true)}
                 variant="outline"
                 size="sm"
-                className="h-8 text-xs gap-1 bg-background"
+                className="h-8 text-sm gap-1 border-border/30 bg-primary hover:bg-accent/70 text-primary-foreground hover:text-primary-foreground "
               >
-                <UserCheck className="h-3.5 w-3.5 text-primary" />
+                <UserCheck className="h-3.5 w-3.5 text-primary-foreground" />
                 <span>Gán vai trò</span>
               </Button>
 
@@ -1103,9 +1488,9 @@ export const UserManagement: React.FC = () => {
                 onClick={() => setBulkEmailModalOpen(true)}
                 variant="outline"
                 size="sm"
-                className="h-8 text-xs gap-1 bg-background"
+                className="h-8 text-sm border-border/30 gap-1 bg-primary hover:bg-accent/70 text-primary-foreground hover:text-primary-foreground"
               >
-                <Mail className="h-3.5 w-3.5 text-sky-600" />
+                <Mail className="h-3.5 w-3.5 text-primary-foreground" />
                 <span>Gửi Email</span>
               </Button>
 
@@ -1114,7 +1499,7 @@ export const UserManagement: React.FC = () => {
                 onClick={handleBulkDelete}
                 variant="destructive"
                 size="sm"
-                className="h-8 text-xs gap-1"
+                className="h-8 text-sm border-border/30 gap-1 bg-destructive hover:bg-accent/70 text-primary-foreground hover:text-primary-foreground"
               >
                 <Trash2 className="h-3.5 w-3.5" />
                 <span>Xóa chọn</span>
@@ -1124,7 +1509,7 @@ export const UserManagement: React.FC = () => {
                 onClick={() => setSelectedUserIds([])}
                 variant="ghost"
                 size="sm"
-                className="h-8 text-xs text-muted-foreground"
+                className="h-8 text-sm border-border/30 gap-1 bg-background hover:bg-accent/70 text-primary hover:text-primary-foreground"
               >
                 Bỏ chọn
               </Button>
@@ -1141,262 +1526,346 @@ export const UserManagement: React.FC = () => {
             </div>
           )}
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left">
-              <thead>
-                <tr className="border-b border-border/85 text-muted-foreground font-semibold bg-muted/20 uppercase tracking-wider text-[11px]">
-                  <th className="py-3 px-3 w-8">
-                    <input
-                      type="checkbox"
-                      checked={users.length > 0 && selectedUserIds.length === users.length}
-                      onChange={handleSelectAllUsers}
-                      className="rounded border-border text-primary focus:ring-0 cursor-pointer"
-                    />
-                  </th>
-                  <th className="py-3 px-2 w-10 text-center">STT</th>
-                  
-                  <th className="py-3 px-3 cursor-pointer select-none" onClick={() => handleSort("fullName")}>
-                    <div className="flex items-center gap-1">
-                      <span>Người dùng</span>
-                      <ArrowUpDown className="h-3 w-3 opacity-50" />
-                    </div>
-                  </th>
+          <Table containerClassName="max-h-[calc(100vh-240px)] min-h-[240px] overflow-auto border-b border-border/20 ">
+            <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur-md shadow-2xs border-b border-border/40">
+              <TableRow className="border-b border-border/30 bg-muted/20 hover:bg-muted/20">
+                <TableHead className="w-8 pb-4">
+                  <Checkbox
+                    checked={users.length > 0 && selectedUserIds.length === users.length}
+                    onCheckedChange={(checked) => handleSelectAllUsers(!!checked)}
+                    className="translate-y-0.5 border-border/30"
+                  />
+                </TableHead>
+                
+                <TableHead className="cursor-pointer pb-4 select-none text-sm font-semibold text-muted-foreground uppercase tracking-wider" onClick={() => handleSort("fullName")}>
+                  <div className="flex items-center gap-1 pl-2">
+                    <span>Người dùng</span>
+                    <ArrowUpDown className="h-3 w-3 opacity-50" />
+                  </div>
+                </TableHead>
 
-                  <th className="py-3 px-3 cursor-pointer select-none" onClick={() => handleSort("email")}>
-                    <div className="flex items-center gap-1">
-                      <span>Liên hệ</span>
-                      <ArrowUpDown className="h-3 w-3 opacity-50" />
-                    </div>
-                  </th>
+                <TableHead className="cursor-pointer pb-4 select-none text-sm font-semibold text-muted-foreground uppercase tracking-wider" onClick={() => handleSort("email")}>
+                  <div className="flex items-center gap-1">
+                    <span>Liên hệ</span>
+                    <ArrowUpDown className="h-3 w-3 opacity-50" />
+                  </div>
+                </TableHead>
 
-                  <th className="py-3 px-3">Vai trò</th>
+                <TableHead className="text-sm pb-4 text-center font-semibold text-muted-foreground uppercase tracking-wider">Vai trò</TableHead>
 
-                  <th className="py-3 px-3 cursor-pointer select-none" onClick={() => handleSort("status")}>
-                    <div className="flex items-center gap-1">
-                      <span>Trạng thái</span>
-                      <ArrowUpDown className="h-3 w-3 opacity-50" />
-                    </div>
-                  </th>
+                <TableHead className="cursor-pointer pb-4 select-none text-sm font-semibold text-muted-foreground uppercase tracking-wider" onClick={() => handleSort("status")}>
+                  <div className="flex items-center gap-1 justify-center">
+                    <span>Trạng thái</span>
+                    <ArrowUpDown className="h-3 w-3 opacity-50" />
+                  </div>
+                </TableHead>
 
-                  <th className="py-3 px-3 cursor-pointer select-none" onClick={() => handleSort("createdAt")}>
-                    <div className="flex items-center gap-1">
-                      <span>Ngày tham gia</span>
-                      <ArrowUpDown className="h-3 w-3 opacity-50" />
-                    </div>
-                  </th>
+                <TableHead className="cursor-pointer pb-4 select-none text-sm font-semibold text-muted-foreground uppercase tracking-wider" onClick={() => handleSort("createdAt")}>
+                  <div className="flex items-center gap-1 justify-center">
+                    <span>Ngày tham gia</span>
+                    <ArrowUpDown className="h-3 w-3 opacity-50" />
+                  </div>
+                </TableHead>
 
-                  <th className="py-3 px-4 text-right">Thao tác</th>
-                </tr>
-              </thead>
+                <TableHead className="text-sm text-center pb-4 font-semibold text-muted-foreground uppercase tracking-wider">Thao tác</TableHead>
+              </TableRow>
+            </TableHeader>
 
-              <tbody className="divide-y divide-border/60">
-                {users.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="py-12 text-center text-muted-foreground text-sm">
-                      Không tìm thấy tài khoản người dùng nào thỏa mãn.
-                    </td>
-                  </tr>
-                ) : (
-                  users.map((u, index) => (
-                    <tr key={u.id || index} className="hover:bg-muted/15 transition-colors">
-                      <td className="py-3 px-3">
-                        <input
-                          type="checkbox"
-                          checked={selectedUserIds.includes(String(u.id))}
-                          onChange={() => handleSelectUser(u.id)}
-                          className="rounded border-border text-primary focus:ring-0 cursor-pointer"
-                        />
-                      </td>
+            <TableBody className="opacity-90">
+              {users.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="py-12 text-center text-muted-foreground text-sm">
+                    Không tìm thấy tài khoản người dùng nào thỏa mãn.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                users.map((u, index) => (
+                  <TableRow key={u.id || index} className="hover:bg-foreground/10 transition-colors border-border/30">
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedUserIds.includes(String(u.id))}
+                        onCheckedChange={() => handleSelectUser(u.id)}
+                        className="translate-y-0.5 border-border/30"
+                      />
+                    </TableCell>
 
-                      <td className="py-3 px-2 text-center font-bold text-muted-foreground text-[11px]">
-                        {page * pageSize + index + 1}
-                      </td>
-
-                      {/* User Info Column */}
-                      <td className="py-3 px-3">
-                        <div className="flex items-center gap-2.5">
-                          <div className="h-8 w-8 rounded-full bg-primary/10 text-primary font-extrabold flex items-center justify-center text-xs shrink-0 border border-primary/20 overflow-hidden">
-                            {u.avatarUrl ? (
-                              <img src={u.avatarUrl} alt={u.fullName} className="h-full w-full object-cover" />
-                            ) : (
-                              u.fullName ? u.fullName.charAt(0).toUpperCase() : "U"
-                            )}
-                          </div>
-                          <div>
-                            <p
-                              onClick={() => handleViewUserDetail(u.id)}
-                              className="font-bold text-foreground hover:text-primary cursor-pointer transition-colors"
-                            >
-                              {u.fullName || "Chưa cập nhật"}
-                            </p>
-                            <p className="text-[10px] text-muted-foreground">@{u.username}</p>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Contact Info Column */}
-                      <td className="py-3 px-3 text-[11px]">
-                        <p className="font-semibold text-foreground">{u.email}</p>
-                        <p className="text-muted-foreground">{u.phone || "SĐT: N/A"}</p>
-                      </td>
-
-                      {/* Roles Column */}
-                      <td className="py-3 px-3">
-                        <div className="flex flex-wrap gap-1">
-                          {u.roles && u.roles.length > 0 ? (
-                            u.roles.map((roleName, rIdx) => (
-                              <span
-                                key={rIdx}
-                                className="px-2 py-0.5 rounded-full text-[10px] bg-primary/10 text-primary font-extrabold uppercase border border-primary/20"
-                              >
-                                {roleName.replace("ROLE_", "")}
-                              </span>
-                            ))
+                    {/* User Info Column */}
+                    <TableCell>
+                      <div className="flex items-center gap-2.5">
+                        <div className="h-8 w-8 rounded-full bg-primary/10 text-primary font-semibold flex items-center justify-center text-xs shrink-0 border border-primary/20 overflow-hidden">
+                          {u.avatarUrl ? (
+                            <img src={u.avatarUrl} alt={u.fullName} className="h-full w-full object-cover" />
                           ) : (
-                            <span className="text-[10px] text-muted-foreground italic">Chưa phân vai trò</span>
+                            u.fullName ? u.fullName.charAt(0).toUpperCase() : "U"
                           )}
                         </div>
-                      </td>
-
-                      {/* Status Column */}
-                      <td className="py-3 px-3">
-                        <span className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] inline-flex items-center gap-1 ${
-                          u.status === "ACTIVE"
-                            ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20"
-                            : u.status === "BLOCKED"
-                            ? "bg-rose-500/10 text-rose-600 border border-rose-500/20"
-                            : "bg-amber-500/10 text-amber-600 border border-amber-500/20"
-                        }`}>
-                          <span className={`h-1.5 w-1.5 rounded-full ${
-                            u.status === "ACTIVE" ? "bg-emerald-500" : u.status === "BLOCKED" ? "bg-rose-500" : "bg-amber-500"
-                          }`} />
-                          {u.status || "ACTIVE"}
-                        </span>
-                      </td>
-
-                      {/* Created At */}
-                      <td className="py-3 px-3 text-muted-foreground text-[11px]">
-                        {u.createdAt ? u.createdAt.slice(0, 10) : "N/A"}
-                      </td>
-
-                      {/* Actions Column */}
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1">
-                          
-                          {/* Detail Button */}
-                          <Button
+                        <div className="text-center justify-center">
+                          <p
                             onClick={() => handleViewUserDetail(u.id)}
-                            variant="ghost"
-                            size="icon"
-                            title="Xem chi tiết đầy đủ"
-                            className="h-7 w-7 text-sky-600 hover:bg-sky-500/10"
+                            className="font-semibold text-foreground hover:text-primary cursor-pointer transition-colors"
                           >
-                            <Eye className="h-3.5 w-3.5" />
-                          </Button>
-
-                          {/* Assign Role */}
-                          <Button
-                            onClick={() => { setAssigningUser(u); setAssignRoleModalOpen(true); }}
-                            variant="ghost"
-                            size="icon"
-                            title="Gán vai trò"
-                            className="h-7 w-7 text-primary hover:bg-primary/10"
-                          >
-                            <UserCheck className="h-3.5 w-3.5" />
-                          </Button>
-
-                          {/* Quick Toggle Lock / Unlock */}
-                          <Button
-                            onClick={() => handleQuickToggleStatus(u)}
-                            variant="ghost"
-                            size="icon"
-                            title={u.status === "ACTIVE" ? "Khóa tài khoản" : "Mở khóa tài khoản"}
-                            className={`h-7 w-7 ${
-                              u.status === "ACTIVE" ? "text-amber-600 hover:bg-amber-500/10" : "text-emerald-600 hover:bg-emerald-500/10"
-                            }`}
-                          >
-                            {u.status === "ACTIVE" ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}
-                          </Button>
-
-                          {/* Edit User */}
-                          <Button
-                            onClick={() => { setEditingUser(u); setUserModalOpen(true); }}
-                            variant="ghost"
-                            size="icon"
-                            title="Chỉnh sửa thông tin"
-                            className="h-7 w-7 text-muted-foreground hover:bg-muted"
-                          >
-                            <Edit className="h-3.5 w-3.5" />
-                          </Button>
-
-                          {/* Delete User */}
-                          <Button
-                            onClick={() => handleDeleteUser(u.id)}
-                            variant="ghost"
-                            size="icon"
-                            title="Xóa tài khoản"
-                            className="h-7 w-7 text-rose-600 hover:bg-rose-500/10"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                            {u.fullName || "Chưa cập nhật"}
+                          </p>
+                          <p className="text-sm text-muted-foreground">{u.username}</p>
                         </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                      </div>
+                    </TableCell>
+
+                    {/* Contact Info Column */}
+                    <TableCell>
+                      <p className="font-semibold text-foreground text-lg">{u.email}</p>
+                      <p className="text-muted-foreground text-sm">{u.phone || ""}</p>
+                    </TableCell>
+
+                    {/* Roles Column */}
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1 justify-center">
+                        {u.roles && u.roles.length > 0 ? (
+                          u.roles.map((roleName, rIdx) => (
+                            <span
+                              key={rIdx}
+                              className="px-2 py-0.5 rounded-full text-sm bg-primary/10 text-primary font-semibold uppercase border border-primary/20"
+                            >
+                              {roleName.replace("ROLE_", "")}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-[10px] text-muted-foreground italic">Chưa phân vai trò</span>
+                        )}
+                      </div>
+                    </TableCell>
+
+                    {/* Status Column */}
+                    <TableCell className=" text-center">
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full font-semibold text-sm inline-flex items-center gap-1 ${
+                          u.status === "ACTIVE"
+                            ? "bg-success-forest/10 text-success-forest border border-success-forest/20"
+                            : u.status === "LOCKED"
+                            ? "bg-destructive/10 text-destructive border border-destructive/20"
+                            : u.status === "DELETED"
+                            ? "bg-alert-crimson/10 text-alert-crimson border border-alert-crimson/20"
+                            : u.status === "VERIFICATION"
+                            ? "bg-alert-orange/10 text-alert-orange border border-border/40"
+                            : "bg-accent/10 text-accent border border-accent/20"
+                            
+                        }`}
+                      >
+                        <span
+                          className={`h-1.5 w-1.5 rounded-full ${
+                            u.status === "ACTIVE"
+                              ? "bg-success-forest"
+                              : u.status === "LOCKED"
+                              ? "bg-destructive"
+                              : u.status === "DELETED"
+                              ? "bg-alert-crimson"
+                              : u.status === "VERIFICATION"
+                              ? "bg-alert-orange"
+                              : "bg-muted-foreground"
+                          }`}
+                        />
+                        {u.status || "ACTIVE"}
+                      </span>
+                    </TableCell>
+
+                    {/* Created At */}
+                    <TableCell className="text-muted-foreground text-sm font-semibold text-center">
+                      {u.createdAt
+                        ? (() => {
+                            const date = new Date(u.createdAt);
+                            const dd = String(date.getDate()).padStart(2, "0");
+                            const mm = String(date.getMonth() + 1).padStart(2, "0");
+                            const yyyy = date.getFullYear();
+                            return `${dd}/${mm}/${yyyy}`;
+                          })()
+                        : ""}
+                    </TableCell>
+
+                    {/* Actions Column */}
+                    <TableCell className="text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        
+                        {/* Detail Button */}
+                        <Button
+                          onClick={() => handleViewUserDetail(u.id)}
+                          variant="ghost"
+                          size="icon"
+                          title="Xem chi tiết đầy đủ"
+                          className="h-7 w-7 text-sky-600 hover:bg-sky-500/10"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                        </Button>
+
+                        {/* Assign Role */}
+                        <Button
+                          onClick={() => { setAssigningUser(u); setAssignRoleModalOpen(true); }}
+                          variant="ghost"
+                          size="icon"
+                          title="Gán vai trò"
+                          className="h-7 w-7 text-primary hover:bg-primary/10"
+                        >
+                          <UserCheck className="h-3.5 w-3.5" />
+                        </Button>
+
+                        {/* Quick Toggle Lock / Unlock */}
+                        <Button
+                          onClick={() => handleQuickToggleStatus(u)}
+                          variant="ghost"
+                          size="icon"
+                          title={u.status === "ACTIVE" ? "Khóa tài khoản" : "Mở khóa tài khoản"}
+                          className={`h-7 w-7 ${
+                            u.status === "ACTIVE" ? "text-amber-600 hover:bg-amber-500/10" : "text-emerald-600 hover:bg-emerald-500/10"
+                          }`}
+                        >
+                          {u.status === "ACTIVE" ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}
+                        </Button>
+
+                        {/* Edit User */}
+                        <Button
+                          onClick={() => { setEditingUser(u); setUserModalOpen(true); }}
+                          variant="ghost"
+                          size="icon"
+                          title="Chỉnh sửa thông tin"
+                          className="h-7 w-7 text-muted-foreground hover:bg-muted"
+                        >
+                          <Edit className="h-3.5 w-3.5" />
+                        </Button>
+
+                        {/* Delete User */}
+                        <Button
+                          onClick={() => handleDeleteUser(u.id)}
+                          variant="ghost"
+                          size="icon"
+                          title="Xóa tài khoản"
+                          className="h-7 w-7 text-rose-600 hover:bg-rose-500/10"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
         </CardContent>
+        
 
-        {/* Pagination Footer */}
-        <div className="p-4 border-t border-border flex flex-col sm:flex-row items-center justify-between gap-3 bg-muted/10">
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-muted-foreground">
-              Tổng số: <strong>{totalElements}</strong> người dùng
-            </span>
+        {/* Modern Table Footer */}
+        <div className="px-5 py-3 bg-card/40 flex flex-col md:flex-row items-center justify-between gap-4 text-sm">
+          {/* Left: Total Results Summary */}
+          <div className="text-muted-foreground font-medium">
+            Hiển thị từ <span className="font-semibold text-foreground">{totalElements === 0 ? 0 : page * pageSize + 1}</span> đến {" "}
+            <span className="font-semibold text-foreground">{Math.min((page + 1) * pageSize, totalElements)}</span> trong {" "}
+            <span className="font-semibold text-foreground">{totalElements}</span> người.
+          </div>
 
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs text-muted-foreground">Số bản ghi/trang:</span>
-              <select
-                value={pageSize}
-                onChange={(e) => {
-                  setPageSize(Number(e.target.value));
+          <div className="flex flex-wrap items-center gap-5">
+            {/* Middle: Rows per page Select */}
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground font-medium">Số hàng:</span>
+              <Select
+                value={String(pageSize)}
+                onValueChange={(val) => {
+                  setPageSize(Number(val));
                   setPage(0);
                 }}
-                className="px-2 py-0.5 rounded border border-border bg-background text-xs font-semibold"
               >
-                <option value={10}>10</option>
-                <option value={20}>20</option>
-                <option value={50}>50</option>
-              </select>
+                <SelectTrigger className="h-8 w-16 text-sm bg-background border border-border/40 rounded-lg font-semibold">
+                  <SelectValue placeholder={String(pageSize)} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="20">20</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-          </div>
 
-          <div className="flex items-center gap-2">
-            <Button
-              disabled={page === 0}
-              onClick={() => setPage(prev => prev - 1)}
-              variant="outline"
-              size="sm"
-              className="h-8 text-xs font-semibold"
+            {/* Go to Page Input */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const pageNum = parseInt(jumpPageInput, 10);
+                if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
+                  setPage(pageNum - 1);
+                } else {
+                  setJumpPageInput(String(page + 1));
+                }
+              }}
+              className="flex items-center gap-1.5"
             >
-              Trang trước
-            </Button>
+              <span className="text-muted-foreground font-medium">Trang:</span>
+              <Input
+                type="number"
+                min={1}
+                max={totalPages || 1}
+                value={jumpPageInput}
+                onChange={(e) => setJumpPageInput(e.target.value)}
+                onBlur={() => {
+                  const pageNum = parseInt(jumpPageInput, 10);
+                  if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
+                    setPage(pageNum - 1);
+                  } else {
+                    setJumpPageInput(String(page + 1));
+                  }
+                }}
+                className="h-8 w-14 text-center text-sm font-semibold bg-background border border-border/40 rounded-lg px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                title="Nhập số trang và nhấn Enter"
+              />
+            </form>
 
-            <span className="text-xs font-bold py-1 px-3 bg-muted rounded-md border border-border">
-              {page + 1} / {totalPages || 1}
-            </span>
+            {/* Right: Numbered Pagination Buttons */}
+            <div className="flex items-center gap-1">
+              <Button
+                disabled={page === 0}
+                onClick={() => setPage((prev) => prev - 1)}
+                variant="outline"
+                size="sm"
+                className="h-8 px-2.5 text-sm font-semibold gap-1 border-border/40 rounded-lg hover:bg-accent/70"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </Button>
 
-            <Button
-              disabled={page >= totalPages - 1}
-              onClick={() => setPage(prev => prev + 1)}
-              variant="outline"
-              size="sm"
-              className="h-8 text-xs font-semibold"
-            >
-              Trang sau
-            </Button>
+              {getPageNumbers(page, totalPages).map((p, pIdx) => {
+                if (p === "...") {
+                  return (
+                    <span key={`dots-${pIdx}`} className="px-2 text-muted-foreground font-bold pointer-events-none">
+                      ...
+                    </span>
+                  );
+                }
+                const pageNum = p as number;
+                const isCurrent = pageNum === page;
+                return (
+                  <Button
+                    key={pageNum}
+                    onClick={() => setPage(pageNum)}
+                    variant={isCurrent ? "default" : "outline"}
+                    size="sm"
+                    className={cn(
+                      "h-8 min-w-[32px] px-2 text-xs font-semibold rounded-lg transition-all",
+                      isCurrent
+                        ? "bg-primary text-primary-foreground shadow-xs"
+                        : "border-border/40 text-foreground hover:bg-accent/70"
+                    )}
+                  >
+                    {pageNum + 1}
+                  </Button>
+                );
+              })}
+
+              <Button
+                disabled={page >= totalPages - 1 || totalPages === 0}
+                onClick={() => setPage((prev) => prev + 1)}
+                variant="outline"
+                size="sm"
+                className="h-8 px-2.5 text-xs font-semibold gap-1 border-border/40 rounded-lg hover:bg-accent/70"
+              >
+                <ChevronRight className="h-3.5 w-3.5 hover:text-primary-foreground" />
+              </Button>
+            </div>
           </div>
         </div>
       </Card>
@@ -1747,7 +2216,61 @@ export const UserManagement: React.FC = () => {
 
                 <div className="space-y-1">
                   <Label className="text-xs font-semibold">Ngày sinh</Label>
-                  <Input type="date" name="dateOfBirth" defaultValue={editingUser?.dateOfBirth ? editingUser.dateOfBirth.slice(0, 10) : ""} className="h-9" />
+                  <input type="hidden" name="dateOfBirth" value={modalDateOfBirth} />
+                  <Popover>
+                    <PopoverTrigger
+                      nativeButton={false}
+                      render={
+                        <div className="relative w-full">
+                          <CalendarIcon className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none z-10" />
+                          <Input
+                            type="text"
+                            placeholder="dd/mm/yyyy"
+                            value={modalDateInputVal}
+                            onChange={(e) => {
+                              const val = formatAsDDMMYYYYMask(e.target.value, modalDateInputVal);
+                              setModalDateInputVal(val);
+                              const yyyymmdd = parseDDMMYYYYToYYYYMMDD(val);
+                              if (yyyymmdd) {
+                                setModalDateOfBirth(yyyymmdd);
+                                setModalCalendarMonth(parseYYYYMMDD(yyyymmdd));
+                              } else if (!val) {
+                                setModalDateOfBirth("");
+                              }
+                            }}
+                            maxLength={10}
+                            className="pl-8 h-9 text-xs border-border bg-background focus-visible:ring-2 focus-visible:ring-primary/20"
+                          />
+                        </div>
+                      }
+                    />
+                    <PopoverContent className="w-auto p-0 z-50 bg-popover border border-border shadow-xl rounded-xl" align="start">
+                      <CalendarComponent
+                        mode="single"
+                        captionLayout="dropdown"
+                        startMonth={new Date(1950, 0)}
+                        endMonth={new Date()}
+                        selected={parseYYYYMMDD(modalDateOfBirth)}
+                        month={modalCalendarMonth}
+                        onMonthChange={setModalCalendarMonth}
+                        onSelect={(date) => {
+                          if (date) {
+                            const yyyy = date.getFullYear();
+                            const mm = String(date.getMonth() + 1).padStart(2, "0");
+                            const dd = String(date.getDate()).padStart(2, "0");
+                            const yyyymmdd = `${yyyy}-${mm}-${dd}`;
+                            setModalDateOfBirth(yyyymmdd);
+                            setModalDateInputVal(`${dd}/${mm}/${yyyy}`);
+                            setModalCalendarMonth(date);
+                          } else {
+                            setModalDateOfBirth("");
+                            setModalDateInputVal("");
+                          }
+                        }}
+                        autoFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
                 </div>
               </div>
 
@@ -1784,6 +2307,17 @@ export const UserManagement: React.FC = () => {
                   placeholder="teacher1@ailms.edu.vn&#10;teacher2@ailms.edu.vn&#10;staff1@ailms.edu.vn"
                   required
                   className="w-full rounded-lg border border-input bg-background p-3 text-xs outline-none focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold">Mã phòng ban (ID tùy chọn)</Label>
+                <Input
+                  type="text"
+                  placeholder="Nhập ID phòng ban (nếu có)..."
+                  value={bulkEmployeeDeptId}
+                  onChange={(e) => setBulkEmployeeDeptId(e.target.value)}
+                  className="h-9"
                 />
               </div>
 
@@ -1979,7 +2513,8 @@ export const UserManagement: React.FC = () => {
           </div>
         </div>
       )}
-
+    </section>
     </div>
+    
   );
 };

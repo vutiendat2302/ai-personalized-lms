@@ -6,12 +6,20 @@ import {
   Users,
   Shield,
   Key,
+  Building2,
   BookOpen,
+  Video,
+  Calendar,
+  Briefcase,
+  Clock,
   ShoppingBag,
   Tag,
+  DollarSign,
   UserCheck,
   CheckSquare,
   GraduationCap,
+  HelpCircle,
+  FileCode2,
   BarChart3,
   Activity,
   ChevronRight
@@ -45,7 +53,7 @@ export const AdminSidebar: React.FC = () => {
     {
       title: "TRANG CHỦ",
       items: [
-        { label: "TỔNG QUAN", path: "/dashboard", icon: LayoutDashboard },
+        { label: "Tổng Quan", path: "/dashboard", icon: LayoutDashboard },
       ],
     },
     {
@@ -54,14 +62,19 @@ export const AdminSidebar: React.FC = () => {
         { label: "Quản lý người dùng", path: "/admin/users", icon: Users },
         { label: "Quản lý vai trò", path: "/admin/roles", icon: Shield },
         { label: "Quản lý quyền hạn", path: "/admin/permissions", icon: Key },
-        { label: "Quản lý phòng ban", path: "/admin/department", icon: Key},
+        { label: "Quản lý phòng ban", path: "/admin/department", icon: Building2 },
       ],
     },
     {
       title: "ĐÀO TẠO & KINH DOANH",
       items: [
         { label: "Quản lý khóa học", path: "/admin/courses", icon: BookOpen },
+        { label: "Quản lý lớp học online", path: "/admin/classrooms", icon: Video },
+        { label: "Thời khóa biểu online", path: "/admin/online-schedule", icon: Calendar },
+        { label: "Quản lý Quizz", path: "/admin/quizzes", icon: HelpCircle },
+        { label: "Quản lý Assignment", path: "/admin/assignments", icon: FileCode2 },
         { label: "Quản lý đơn hàng", path: "/admin/orders", icon: ShoppingBag },
+        { label: "Quản lý doanh thu", path: "/admin/revenue", icon: DollarSign },
         { label: "Quản lý mã giảm giá", path: "/admin/coupons", icon: Tag },
       ],
     },
@@ -69,6 +82,8 @@ export const AdminSidebar: React.FC = () => {
       title: "NHÂN SỰ & VẬN HÀNH",
       items: [
         { label: "Quản lý nhân sự (HR)", path: "/admin/hr", icon: UserCheck },
+        { label: "Điểm danh NV Full-time", path: "/admin/fulltime-attendance", icon: Clock },
+        { label: "Quản lý lịch làm việc", path: "/admin/work-schedule", icon: Briefcase },
         { label: "Trung tâm phê duyệt", path: "/admin/approval-center", icon: CheckSquare },
         { label: "Phân công giảng viên", path: "/admin/category-teachers", icon: GraduationCap },
       ],
@@ -84,7 +99,7 @@ export const AdminSidebar: React.FC = () => {
 
   return (
     <aside
-      className={`shrink-0 bg-card border-r border-border/60 min-h-[calc(100vh-4rem)] flex flex-col transition-all duration-300 select-none ${
+      className={`sticky top-16 h-[calc(100vh-4rem)] shrink-0 bg-card border-r border-border/60 flex flex-col transition-all duration-300 select-none overflow-hidden ${
         isCollapsed ? "w-16" : "w-64"
       }`}
     >
