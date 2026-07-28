@@ -8,6 +8,7 @@ import com.ailms.entity.TeachingSessionPaymentEntity;
 import com.ailms.entity.enums.BaseStatusEnum;
 import com.ailms.entity.enums.EmployeeStatusEnum;
 import com.ailms.entity.enums.SessionPaymentStatusEnum;
+import com.ailms.entity.enums.UserStatusEnum;
 import com.ailms.event.AuditLogEvent;
 import com.ailms.exception.BusinessException;
 import com.ailms.exception.ResourceNotFoundException;
@@ -93,7 +94,7 @@ public class TeachingSessionPaymentService implements ITeachingSessionPaymentSer
         EmployeeEntity employee = employeeRepository.findById(employeeId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Employee", employeeId));
 
-        if (employee.getStatus() == EmployeeStatusEnum.DELETE) {
+        if (employee.getUserEntity().getStatus() == UserStatusEnum.DELETED) {
             throw new BusinessException("Employee is deleted. Cannot create payment.");
         }
 
@@ -201,7 +202,7 @@ public class TeachingSessionPaymentService implements ITeachingSessionPaymentSer
         if (request.getEmployeeId() != null && !request.getEmployeeId().equals(existing.getEmployee().getUserId())) {
             EmployeeEntity newEmployee = employeeRepository.findById(request.getEmployeeId())
                     .orElseThrow(() -> ResourceNotFoundException.of("Employee", request.getEmployeeId()));
-            if (newEmployee.getStatus() == EmployeeStatusEnum.DELETE) {
+            if (newEmployee.getUserEntity().getStatus() == UserStatusEnum.DELETED) {
                 throw new BusinessException("New employee is deleted. Cannot update payment.");
             }
             existing.setEmployee(newEmployee);

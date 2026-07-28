@@ -35,6 +35,10 @@ public class EmployeeContractResponse {
 
     private String fileKey;
 
+    private String fileName;
+
+    private Long fileSize;
+
     private BaseStatusEnum status;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")

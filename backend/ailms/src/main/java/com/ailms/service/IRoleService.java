@@ -12,6 +12,7 @@ import com.ailms.response.PageResponse;
 
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Service quản lý các vai trò (Role), gán quyền hạn và phân vai trò cho người dùng.
@@ -105,4 +106,23 @@ public interface IRoleService {
      * @return đối tượng chứa thông tin chi tiết kết quả
      */
     PermissionResponse createAndAssignPermission(Long roleId, PermissionRequest request);
+
+    Map<String, Object> getRoleOverviewStats();
+    Map<String, Long> getRolePermissionsDistribution();
+    void removeUserFromRole(Long roleId, Long userId);
+    void bulkDeleteCustomRoles(List<Long> roleIds);
+
+    /**
+     * Tổng số role
+     */
+
+
+    /**
+     * Số lượng role hệ thống và role custom
+     */
+
+    /**
+     *
+     */
 }
+

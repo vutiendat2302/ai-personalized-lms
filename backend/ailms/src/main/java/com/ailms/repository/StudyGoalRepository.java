@@ -14,4 +14,9 @@ public interface StudyGoalRepository extends BaseRepository<StudyGoalEntity, Lon
     void deleteByUserId(Long userId);
 
     List<StudyGoalEntity> findByCourseId(Long courseId);
+
+    @org.springframework.data.jpa.repository.Query("SELECT g.studyGoalTypeEnum, COUNT(g) FROM StudyGoalEntity g WHERE g.status = com.ailms.entity.enums.StudyGoalStatusEnum.IN_PROGRESS GROUP BY g.studyGoalTypeEnum")
+    List<Object[]> countActiveGoalsByGoalType();
 }
+
+

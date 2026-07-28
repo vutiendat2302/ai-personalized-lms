@@ -23,7 +23,8 @@ import {
   BarChart3,
   Activity,
   ChevronRight,
-  Trash2
+  Trash2,
+  FileText,
 } from "lucide-react";
 
 interface SidebarGroup {
@@ -60,10 +61,12 @@ export const AdminSidebar: React.FC = () => {
     {
       title: "HỆ THỐNG & PHÂN QUYỀN",
       items: [
-        { label: "Quản lý người dùng", path: "/admin/users", icon: Users },
+        { label: "Quản lý nhân viên", path: "/admin/employees", icon: Briefcase },
+        { label: "Quản lý học viên", path: "/admin/students", icon: GraduationCap },
         { label: "Quản lý vai trò", path: "/admin/roles", icon: Shield },
         { label: "Quản lý quyền hạn", path: "/admin/permissions", icon: Key },
         { label: "Quản lý phòng ban", path: "/admin/department", icon: Building2 },
+        { label: "Quản lý hợp đồng", path: "/admin/contracts", icon: FileText },
         { label: "Thùng rác hệ thống", path: "/admin/trash", icon: Trash2 },
       ],
     },

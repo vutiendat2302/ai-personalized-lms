@@ -136,10 +136,6 @@ public interface IUserService {
      */
     long countStudents();
 
-    /**
-     * Lấy ra số lượng nhân viên
-     */
-    long countEmployees();
 
     /**
      * Số lượng user theo từng vai trò
@@ -160,12 +156,6 @@ public interface IUserService {
      * Số lượng nhân viên theo độ tuổi
      */
     Map<String, Long> countUsersByAgeGroup();
-
-
-    /**
-     * Số lượng nhân viên theo trạng thái
-     */
-    Map<String, Long> countEmployeesByStatus();
 
     /**
      * Lấy số lượng người dùng mới theo tháng (trả v danh sách năm đó (12 tháng))

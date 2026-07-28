@@ -45,6 +45,23 @@ const httpClient = axios.create({
 
   // Gửi kèm Cookie trong mọi request
   withCredentials: true,
+
+  // Format array params as param=val1&param=val2 (e.g. sort=fullName:desc&sort=id:desc)
+  paramsSerializer: (params) => {
+    const parts: string[] = [];
+    Object.keys(params).forEach((key) => {
+      const val = params[key];
+      if (val === undefined || val === null || val === "") return;
+      if (Array.isArray(val)) {
+        val.forEach((item) => {
+          parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(item)}`);
+        });
+      } else {
+        parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(val)}`);
+      }
+    });
+    return parts.join("&");
+  },
 });
 
 /* ============================================================
@@ -184,4 +201,5 @@ httpClient.interceptors.response.use(
   }
 );
 
+export { httpClient };
 export default httpClient;

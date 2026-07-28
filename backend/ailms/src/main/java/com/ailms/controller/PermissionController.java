@@ -59,4 +59,15 @@ public class PermissionController {
         permissionService.deletePermission(id);
         return ResponseEntity.ok(ApiResponse.message("Permission deleted successfully"));
     }
+
+    @GetMapping("/stats/overview")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> getOverviewStats() {
+        return ResponseEntity.ok(ApiResponse.of("Permission overview stats", permissionService.getPermissionOverviewStats()));
+    }
+
+    @GetMapping("/{id}/roles")
+    public ResponseEntity<ApiResponse<List<com.ailms.response.RoleResponse>>> getRolesByPermissionId(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.of("Roles using permission retrieved", permissionService.getRolesByPermissionId(id)));
+    }
 }
+

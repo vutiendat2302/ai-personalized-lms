@@ -299,4 +299,55 @@ public class RoleService implements IRoleService {
         return permissionMapper.toPermissionResponse(permission);
     }
 
+    @Override
+    public java.util.Map<String, Object> getRoleOverviewStats() {
+        log.info("Getting role overview stats");
+        java.util.Map<String, Object> map = new java.util.HashMap<>();
+        map.put("totalRoles", roleRepository.count());
+        map.put("systemRoles", roleRepository.countSystemRoles());
+        map.put("customRoles", roleRepository.countCustomRoles());
+        map.put("unusedRoles", roleRepository.countUnusedRoles());
+        map.put("emptyRoles", roleRepository.countEmptyRoles());
+        return map;
+    }
+
+    @Override
+    public java.util.Map<String, Long> getRolePermissionsDistribution() {
+        log.info("Getting role permissions distribution");
+        java.util.Map<String, Long> map = new java.util.LinkedHashMap<>();
+        List<Object[]> rows = roleRepository.countPermissionsByRole();
+        for (Object[] r : rows) {
+            String roleName = (String) r[0];
+            Long count = (Long) r[1];
+            map.put(roleName, count);
+        }
+        return map;
+    }
+
+    @Transactional
+    @Override
+    public void removeUserFromRole(Long roleId, Long userId) {
+        log.info("Removing user {} from role {}", userId, roleId);
+        List<UserRoleEntity> userRoles = userRoleRepository.findByRoleEntity_Id(roleId);
+        for (UserRoleEntity ur : userRoles) {
+            if (ur.getUserEntity().getId().equals(userId)) {
+                userRoleRepository.delete(ur);
+            }
+        }
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "REMOVE_USER_ROLE", "USER_ROLE", roleId, null, userId));
+    }
+
+    @Transactional
+    @Override
+    public void bulkDeleteCustomRoles(List<Long> roleIds) {
+        log.info("Bulk deleting custom unused roles: {}", roleIds);
+        for (Long id : roleIds) {
+            RoleEntity role = roleRepository.findById(id).orElse(null);
+            if (role != null && Boolean.FALSE.equals(role.getIsSystem())) {
+                if (!userRoleRepository.existsByRoleEntity_Id(id)) {
+                    roleRepository.delete(role);
+                }
+            }
+        }
+    }
 }

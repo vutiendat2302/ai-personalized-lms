@@ -89,7 +89,7 @@ public class SalaryService implements ISalaryService {
         EmployeeEntity employee = employeeRepository.findById(request.getEmployeeId())
                 .orElseThrow(() -> ResourceNotFoundException.of("Employee", request.getEmployeeId()));
 
-        if (employee.getStatus() == EmployeeStatusEnum.DELETE) {
+        if (employee.getUserEntity().getStatus() == UserStatusEnum.DELETED) {
             throw new BusinessException("Employee is deleted. Cannot create salary record.");
         }
 

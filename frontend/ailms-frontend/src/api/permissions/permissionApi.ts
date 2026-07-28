@@ -20,4 +20,18 @@ export const permissionApi = {
 
   deletePermission: (id: string) =>
     httpClient.delete<ApiResponse<void>>(`/v1/permissions/${id}`),
+
+  getOverviewStats: () =>
+    httpClient.get<ApiResponse<{
+      totalPermissions: number;
+      totalEntities: number;
+      orphanPermissions: number;
+      permissionsByEntity: Record<string, number>;
+      topUsedPermissions: Record<string, number>;
+      permissionsByAction: Record<string, number>;
+    }>>("/v1/permissions/stats/overview").then(res => res.data.data),
+
+  getRolesByPermissionId: (id: string) =>
+    httpClient.get<ApiResponse<any[]>>(`/v1/permissions/${id}/roles`).then(res => res.data.data),
 };
+

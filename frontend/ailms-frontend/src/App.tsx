@@ -5,6 +5,8 @@ import { Landing } from "./pages/Landing";
 import { Dashboard } from "./pages/Dashboard";
 import { Profile } from "./pages/Profile";
 import { UserManagement } from "./pages/admin/UserManagement";
+import { StudentManagement } from "./pages/admin/StudentManagement";
+import { EmployeeManagement } from "./pages/admin/EmployeeManagement";
 import { RoleManagement } from "./pages/admin/RoleManagement";
 import { PermissionManagement } from "./pages/admin/PermissionManagement";
 import { CourseManagement } from "./pages/admin/CourseManagement";
@@ -15,6 +17,7 @@ import { TrashManagement } from "./pages/admin/TrashManagement";
 import { ApprovalCenterPage } from "./pages/admin/ApprovalCenterPage";
 import { CategoryTeacherAssignPage } from "./pages/admin/CategoryTeacherAssignPage";
 import { DepartmentManagement } from "./pages/admin/DepartmentManagement";
+import { ContractManagement } from "./pages/admin/ContractManagement";
 import { RevenueManagement } from "./pages/admin/RevenueManagement";
 import { QuizManagement } from "./pages/admin/QuizManagement";
 import { AssignmentManagement } from "./pages/admin/AssignmentManagement";
@@ -110,6 +113,8 @@ function App() {
             <Route element={<ProtectedRoute allowedRoles={[UserRole.ADMIN]} />}>
               <Route element={<AdminLayout />}>
                 <Route path="/admin/users" element={<UserManagement />} />
+                <Route path="/admin/students" element={<StudentManagement />} />
+                <Route path="/admin/employees" element={<EmployeeManagement />} />
                 <Route path="/admin/roles" element={<RoleManagement />} />
                 <Route path="/admin/permissions" element={<PermissionManagement />} />
                 <Route path="/admin/courses" element={<CourseManagement />} />
@@ -120,6 +125,7 @@ function App() {
                 <Route path="/admin/approval-center" element={<ApprovalCenterPage />} />
                 <Route path="/admin/category-teachers" element={<CategoryTeacherAssignPage />} />
                 <Route path="/admin/department" element={<DepartmentManagement />} />
+                <Route path="/admin/contracts" element={<ContractManagement />} />
                 <Route path="/admin/revenue" element={<RevenueManagement />} />
                 <Route path="/admin/quizzes" element={<QuizManagement />} />
                 <Route path="/admin/assignments" element={<AssignmentManagement />} />

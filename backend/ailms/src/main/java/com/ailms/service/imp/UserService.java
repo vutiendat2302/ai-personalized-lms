@@ -1,4 +1,5 @@
 package com.ailms.service.imp;
+import com.ailms.common.util.CsvBuilder;
 import com.ailms.common.util.CsvExport;
 import com.ailms.event.AuditLogEvent;
 import com.ailms.service.IEmailService;
@@ -17,6 +18,8 @@ import com.ailms.repository.*;
 import com.ailms.repository.specification.UserSpecification;
 import com.ailms.request.*;
 import com.ailms.response.*;
+import com.ailms.common.util.CodeGenerator;
+import com.ailms.entity.enums.EmploymentTypeEnum;
 import com.ailms.exception.DuplicateResourceException;
 import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.exception.BusinessException;
@@ -114,6 +117,7 @@ public class UserService implements IUserService {
         user = userRepository.save(user);
 
         assignRolesToUser(user, request.getRoleIds(), adminId);
+        autoProvisionEmployeeProfileIfStaffRole(user, request.getRoleIds());
 
         if (!hasPassword) {
             String token = jwtUtils.generateSetPasswordToken(user.getId());
@@ -231,6 +235,7 @@ public class UserService implements IUserService {
                     userRoleRepository.save(userRole);
                 });
             }
+            autoProvisionEmployeeProfileIfStaffRole(user, roleIds);
         }
         String token = jwtUtils.generateSetPasswordToken(user.getId());
         log.info("Invite token = {}", token);
@@ -274,6 +279,14 @@ public class UserService implements IUserService {
         user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
         user.setStatus(UserStatusEnum.ACTIVE);
         userRepository.save(user);
+
+        // Kích hoạt trạng thái hồ sơ nhân viên nếu đang ở PROBATION/chờ
+        employeeRepository.findById(user.getId()).ifPresent(emp -> {
+            if (emp.getStatus() == EmployeeStatusEnum.PROBATION) {
+                emp.setStatus(EmployeeStatusEnum.ACTIVE);
+                employeeRepository.save(emp);
+            }
+        });
 
         // Assign Roles
         if (!roleIds.isBlank()) {
@@ -558,6 +571,8 @@ public class UserService implements IUserService {
             userRoleRepository.save(ur);
         }
 
+        autoProvisionEmployeeProfileIfStaffRole(user, request.getRoleIds());
+
         eventPublisher.publishEvent(new AuditLogEvent(this, "assign_roles", "user", currentAdminId, null, request.getRoleIds()));
     }
 
@@ -683,12 +698,6 @@ public class UserService implements IUserService {
         return studentProfileService.countStudents();
     }
 
-    @Override
-    public long countEmployees() {
-        log.info("Lấy ra số lượng nhân viên");
-        return employeeService.countEmployees();
-    }
-
     @Transactional(readOnly = true)
     @Override
     public Map<String, Long> countUsersByRole() {
@@ -800,22 +809,6 @@ public class UserService implements IUserService {
 
     @Transactional(readOnly = true)
     @Override
-    public Map<String, Long> countEmployeesByStatus() {
-        log.info("Thống kê số lượng nhân viên theo trạng thái");
-        List<Object[]> results = employeeRepository.countEmployeesGroupByStatus(EmployeeStatusEnum.DELETE);
-        Map<String, Long> statusMap = new HashMap<>();
-        for (Object[] row : results) {
-            EmployeeStatusEnum status = (EmployeeStatusEnum) row[0];
-            Long count = (Long) row[1];
-            if (status != null) {
-                statusMap.put(status.name(), count);
-            }
-        }
-        return statusMap;
-    }
-
-    @Transactional(readOnly = true)
-    @Override
     public List<MonthlyUserCountResponse> getMonthlyNewUsers(Integer year) {
         int targetYear = (year != null && year > 0) ? year : LocalDate.now().getYear();
         log.info("Lấy số lượng người dùng mới theo tháng trong năm: {}", targetYear);
@@ -884,7 +877,7 @@ public class UserService implements IUserService {
     @Transactional(readOnly = true)
     @Override
     public byte[] exportUsersToExcel(UserSearchRequest request) {
-        log.info("Xuất file danh sách người dùng qua CsvExport util");
+        log.info("Xuất file danh sách người dùng qua CsvBuilder");
 
         if (request != null) {
             request.setSize(10000);
@@ -899,7 +892,6 @@ public class UserService implements IUserService {
                 "Số điện thoại", "Giới tính", "Trạng thái", "Vai trò", "Ngày tạo"
         );
 
-
         List<Function<UserResponse, Object>> extractors = List.of(
                 UserResponse::getId,
                 UserResponse::getUsername,
@@ -909,94 +901,104 @@ public class UserService implements IUserService {
                 u -> u.getGender() == null ? "Chưa xác định" : (u.getGender() == 0 ? "Nam" : (u.getGender() == 1 ? "Nữ" : "Khác")),
                 u -> u.getStatus() != null ? u.getStatus().name() : "",
                 u -> u.getRoles() != null ? String.join("; ", u.getRoles()) : "",
-                u -> u.getCreatedAt() != null ? u.getCreatedAt().toString() : ""
+                u -> u.getCreatedAt() != null ? u.getCreatedAt() : ""
         );
 
-        return CsvExport.exportToCsv(headers, users, extractors, true);
+        return CsvBuilder.create()
+                .tableFromList(headers, users, extractors, "Không có dữ liệu người dùng")
+                .build();
     }
 
     @Transactional(readOnly = true)
     @Override
     public byte[] exportUserDetailToExcel(Long userId) {
-        log.info("Xuất file Excel chi tiết người dùng: {}", userId);
+        log.info("Xuất file Excel chi tiết người dùng via CsvBuilder: {}", userId);
         UserDetailResponse detail = getUserDetail(userId);
 
-        StringBuilder sb = new StringBuilder();
-        sb.append("\uFEFF"); // UTF-8 BOM
+        CsvBuilder builder = CsvBuilder.create();
 
-        // 1. THÔNG TIN TÀI KHOẢN (USER ACCOUNT)
-        sb.append("=== THÔNG TIN TÀI KHOẢN ===\n");
-        sb.append("Trường,Giá trị\n");
+        // 1. THÔNG TIN TÀI KHOẢN
         UserResponse acc = detail.getUserAccount();
         if (acc != null) {
-            sb.append("ID,").append(acc.getId() != null ? acc.getId() : "").append("\n");
-            sb.append("Tên đăng nhập,").append(escapeCsvValue(acc.getUsername())).append("\n");
-            sb.append("Email,").append(escapeCsvValue(acc.getEmail())).append("\n");
-            sb.append("Họ và tên,").append(escapeCsvValue(acc.getFullName())).append("\n");
-            sb.append("Số điện thoại,").append(escapeCsvValue(acc.getPhone())).append("\n");
-            sb.append("Giới tính,").append(acc.getGender() == null ? "Chưa xác định" : (acc.getGender() == 0 ? "Nam" : (acc.getGender() == 1 ? "Nữ" : "Khác"))).append("\n");
-            sb.append("Trạng thái,").append(acc.getStatus() != null ? acc.getStatus().name() : "").append("\n");
-            sb.append("Vai trò,").append(acc.getRoles() != null ? escapeCsvValue(String.join("; ", acc.getRoles())) : "").append("\n");
-            sb.append("Ngày sinh,").append(acc.getDateOfBirth() != null ? acc.getDateOfBirth().toString() : "").append("\n");
-            sb.append("Đăng nhập gần nhất,").append(acc.getLastLoginAt() != null ? acc.getLastLoginAt().toString() : "").append("\n");
+            LinkedHashMap<String, Object> accFields = new LinkedHashMap<>();
+            accFields.put("ID", acc.getId());
+            accFields.put("Tên đăng nhập", acc.getUsername());
+            accFields.put("Email", acc.getEmail());
+            accFields.put("Họ và tên", acc.getFullName());
+            accFields.put("Số điện thoại", acc.getPhone());
+            accFields.put("Giới tính", acc.getGender() == null ? "Chưa xác định" : (acc.getGender() == 0 ? "Nam" : (acc.getGender() == 1 ? "Nữ" : "Khác")));
+            accFields.put("Trạng thái", acc.getStatus());
+            accFields.put("Vai trò", acc.getRoles() != null ? String.join("; ", acc.getRoles()) : "");
+            accFields.put("Ngày sinh", acc.getDateOfBirth());
+            accFields.put("Đăng nhập gần nhất", acc.getLastLoginAt());
+
+            builder.section("THÔNG TIN TÀI KHOẢN")
+                   .keyValueBlock(accFields)
+                   .blankLine();
         }
-        sb.append("\n");
 
-        // 2. THÔNG TIN CÁ NHÂN HỌC VIÊN (NẾU CÓ)
+        // 2. THÔNG TIN CÁ NHÂN HỌC VIÊN
         if (detail.getStudentProfile() != null) {
-            sb.append("=== THÔNG TIN CÁ NHÂN HỌC VIÊN ===\n");
-            sb.append("Trường,Giá trị\n");
             StudentProfileResponse st = detail.getStudentProfile();
-            sb.append("Mã học viên,").append(escapeCsvValue(st.getStudentCode())).append("\n");
-            sb.append("Trình độ học vấn,").append(escapeCsvValue(st.getEducationLevel())).append("\n");
-            sb.append("Trường học,").append(escapeCsvValue(st.getSchoolName())).append("\n");
-            sb.append("Mục tiêu,").append(escapeCsvValue(st.getGoal())).append("\n");
-            sb.append("Mô tả,").append(escapeCsvValue(st.getDescription())).append("\n");
-            sb.append("Vị thành niên (<18 tuổi),").append(Boolean.TRUE.equals(st.getIsMinor()) ? "Có" : "Không").append("\n");
-            sb.append("Đã tạo mục tiêu,").append(Boolean.TRUE.equals(st.getHasGoal()) ? "Rồi" : "Chưa").append("\n");
-            sb.append("\n");
+            LinkedHashMap<String, Object> stFields = new LinkedHashMap<>();
+            stFields.put("Mã học viên", st.getStudentCode());
+            stFields.put("Trình độ học vấn", st.getEducationLevel());
+            stFields.put("Trường học", st.getSchoolName());
+            stFields.put("Mục tiêu", st.getGoal());
+            stFields.put("Mô tả", st.getDescription());
+            stFields.put("Vị thành niên (<18 tuổi)", Boolean.TRUE.equals(st.getIsMinor()) ? "Có" : "Không");
+            stFields.put("Đã tạo mục tiêu", Boolean.TRUE.equals(st.getHasGoal()) ? "Rồi" : "Chưa");
 
-            // THÔNG TIN PHỤ HUYNH / NGƯỜI GIÁM HỘ
+            builder.section("THÔNG TIN CÁ NHÂN HỌC VIÊN")
+                   .keyValueBlock(stFields)
+                   .blankLine();
+
             if (detail.getGuardians() != null && !detail.getGuardians().isEmpty()) {
-                sb.append("=== DANH SÁCH PHỤ HUYNH / NGƯỜI GIÁM HỘ ===\n");
-                sb.append("STT,Họ và tên,Số điện thoại,Mối quan hệ,Email,Địa chỉ\n");
-                int gIndex = 1;
-                for (GuardianResponse g : detail.getGuardians()) {
-                    sb.append(gIndex++).append(",")
-                            .append(escapeCsvValue(g.getFullName())).append(",")
-                            .append(escapeCsvValue(g.getPhone())).append(",")
-                            .append(escapeCsvValue(g.getRelationship().name())).append(",")
-                            .append(escapeCsvValue(g.getEmail())).append(",")
-                            .append(escapeCsvValue(g.getAddress())).append("\n");
-                }
-                sb.append("\n");
+                builder.section("DANH SÁCH PHỤ HUYNH / NGƯỜI GIÁM HỘ")
+                       .tableFromList(
+                               List.of("Họ và tên", "Số điện thoại", "Mối quan hệ", "Email", "Địa chỉ"),
+                               detail.getGuardians(),
+                               List.of(
+                                       GuardianResponse::getFullName,
+                                       GuardianResponse::getPhone,
+                                       g -> g.getRelationship() != null ? g.getRelationship().name() : "",
+                                       GuardianResponse::getEmail,
+                                       GuardianResponse::getAddress
+                               ),
+                               "Chưa có thông tin người giám hộ"
+                       )
+                       .blankLine();
             }
         }
 
-        // 3. THÔNG TIN CÁ NHÂN NHÂN VIÊN (NẾU CÓ)
+        // 3. THÔNG TIN CÁ NHÂN NHÂN VIÊN
         if (detail.getEmployeeProfile() != null) {
-            sb.append("=== THÔNG TIN CÁ NHÂN NHÂN VIÊN ===\n");
-            sb.append("Trường,Giá trị\n");
             EmployeeResponse emp = detail.getEmployeeProfile();
-            sb.append("Mã nhân viên,").append(escapeCsvValue(emp.getEmployeeCode())).append("\n");
-            sb.append("Phòng ban,").append(emp.getDepartmentName() != null ? escapeCsvValue(emp.getDepartmentName()) : "").append("\n");
-            sb.append("Chức vụ,").append(escapeCsvValue(emp.getPosition())).append("\n");
-            sb.append("Loại hình làm việc,").append(emp.getEmploymentTypeEnum() != null ? emp.getEmploymentTypeEnum().name() : "").append("\n");
-            sb.append("Trạng thái nhân sự,").append(emp.getStatus() != null ? emp.getStatus().name() : "").append("\n");
-            sb.append("Ngày bắt đầu làm việc,").append(emp.getStartDate() != null ? emp.getStartDate().toString() : "").append("\n");
-            sb.append("Ngày kết thúc,").append(emp.getEndDate() != null ? emp.getEndDate().toString() : "").append("\n");
-            sb.append("\n");
+            LinkedHashMap<String, Object> empFields = new LinkedHashMap<>();
+            empFields.put("Mã nhân viên", emp.getEmployeeCode());
+            empFields.put("Phòng ban", emp.getDepartmentName());
+            empFields.put("Chức vụ", emp.getPosition());
+            empFields.put("Loại hình làm việc", emp.getEmploymentTypeEnum());
+            empFields.put("Trạng thái nhân sự", emp.getStatus());
+            empFields.put("Ngày bắt đầu làm việc", emp.getStartDate());
+            empFields.put("Ngày kết thúc", emp.getEndDate());
+
+            builder.section("THÔNG TIN CÁ NHÂN NHÂN VIÊN")
+                   .keyValueBlock(empFields)
+                   .blankLine();
         }
 
         // 4. THÔNG TIN HỆ THỐNG
-        sb.append("=== THÔNG TIN HỆ THỐNG ===\n");
-        sb.append("Trường,Giá trị\n");
-        sb.append("ID người tạo,").append(detail.getCreatedBy() != null ? detail.getCreatedBy() : "").append("\n");
-        sb.append("ID người cập nhật,").append(detail.getUpdatedBy() != null ? detail.getUpdatedBy() : "").append("\n");
-        sb.append("Thời gian tạo,").append(detail.getCreatedAt() != null ? detail.getCreatedAt().toString() : "").append("\n");
-        sb.append("Thời gian cập nhật,").append(detail.getUpdatedAt() != null ? detail.getUpdatedAt().toString() : "").append("\n");
+        LinkedHashMap<String, Object> sysFields = new LinkedHashMap<>();
+        sysFields.put("ID người tạo", detail.getCreatedBy());
+        sysFields.put("ID người cập nhật", detail.getUpdatedBy());
+        sysFields.put("Thời gian tạo", detail.getCreatedAt());
+        sysFields.put("Thời gian cập nhật", detail.getUpdatedAt());
 
-        return sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        builder.section("THÔNG TIN HỆ THỐNG")
+               .keyValueBlock(sysFields);
+
+        return builder.build();
     }
 
     private String escapeCsvValue(String value) {
@@ -1138,6 +1140,42 @@ public class UserService implements IUserService {
         result.put("failureCount", failureCount);
         result.put("errors", errors);
         return result;
+    }
+
+    /**
+     * Tự động khởi tạo hồ sơ nhân sự (EmployeeEntity) riêng biệt nếu User được gán vai trò nhân sự/cán bộ.
+     */
+    private void autoProvisionEmployeeProfileIfStaffRole(UserEntity user, List<Long> roleIds) {
+        if (user == null || user.getId() == null) return;
+        if (employeeRepository.existsById(user.getId())) return;
+
+        boolean isStaff = false;
+        if (roleIds != null && !roleIds.isEmpty()) {
+            for (Long rId : roleIds) {
+                Optional<RoleEntity> rOpt = roleRepository.findById(rId);
+                if (rOpt.isPresent() && !"STUDENT".equalsIgnoreCase(rOpt.get().getCode())) {
+                    isStaff = true;
+                    break;
+                }
+            }
+        }
+
+        if (isStaff) {
+            UserEntity managedUser = userRepository.findById(user.getId()).orElse(user);
+            EmployeeStatusEnum empStatus = managedUser.getStatus() == UserStatusEnum.VERIFICATION
+                    ? EmployeeStatusEnum.PROBATION
+                    : EmployeeStatusEnum.ACTIVE;
+
+            EmployeeEntity employee = EmployeeEntity.builder()
+                    .userEntity(managedUser)
+                    .employeeCode(CodeGenerator.generate("EP", employeeRepository::existsByEmployeeCode))
+                    .status(empStatus)
+                    .employmentTypeEnum(EmploymentTypeEnum.FULL_TIME)
+                    .startDate(LocalDateTime.now())
+                    .build();
+            employeeRepository.save(employee);
+            log.info("Auto-provisioned EmployeeEntity profile for staff User ID: {}", managedUser.getId());
+        }
     }
 }
 

@@ -1,6 +1,8 @@
 package com.ailms.service.imp;
 import com.ailms.common.converter.SimpleJsonWriter;
+import com.ailms.entity.RolePermissionEntity;
 import com.ailms.event.AuditLogEvent;
+import com.ailms.response.RoleResponse;
 import com.ailms.service.IPermissionService;
 
 
@@ -23,7 +25,10 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -32,7 +37,9 @@ public class PermissionService implements IPermissionService{
     private final PermissionRepository permissionRepository;
     private final PermissionMapper permissionMapper;
     private final RolePermissionRepository rolePermissionRepository;
+    private final com.ailms.mapper.RoleMapper roleMapper;
     private final ApplicationEventPublisher applicationEventPublisher;
+
 
     @Transactional(readOnly = true)
     @Override
@@ -102,4 +109,45 @@ public class PermissionService implements IPermissionService{
     public List<PermissionResponse> getAllPermissions() {
         return permissionRepository.findAll().stream().map(permissionMapper::toPermissionResponse).toList();
     }
+
+    @Override
+    public Map<String, Object> getPermissionOverviewStats() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("totalPermissions", permissionRepository.count());
+        map.put("totalEntities", permissionRepository.countDistinctEntities());
+        map.put("orphanPermissions", permissionRepository.countOrphanPermissions());
+
+        // Count by Entity
+        Map<String, Long> byEntity = new LinkedHashMap<>();
+        for (Object[] r : permissionRepository.countPermissionsByEntity()) {
+            byEntity.put((String) r[0], (Long) r[1]);
+        }
+        map.put("permissionsByEntity", byEntity);
+
+        // Top Used Permissions
+        Map<String, Long> topUsed = new LinkedHashMap<>();
+        for (Object[] r : permissionRepository.findTopUsedPermissions()) {
+            topUsed.put((String) r[0], (Long) r[1]);
+        }
+        map.put("topUsedPermissions", topUsed);
+
+        // Count by Action
+        Map<String, Long> byAction = new LinkedHashMap<>();
+        for (Object[] r : permissionRepository.countPermissionsByAction()) {
+            byAction.put((String) r[0], (Long) r[1]);
+        }
+        map.put("permissionsByAction", byAction);
+
+        return map;
+    }
+
+    @Override
+    public List<RoleResponse> getRolesByPermissionId(Long permissionId) {
+        List<RolePermissionEntity> rps = rolePermissionRepository.findByPermissionEntity_Id(permissionId);
+        return rps.stream()
+                .map(rp -> roleMapper.toRoleResponse(rp.getRoleEntity()))
+                .toList();
+    }
+
 }
+

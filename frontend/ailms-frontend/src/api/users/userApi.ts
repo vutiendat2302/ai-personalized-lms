@@ -40,6 +40,16 @@ export const userApi = {
   getUsers: (params?: any) =>
     httpClient.get<ApiResponse<any>>("/v1/users/page", { params }),
 
+  getUsersPage: (params?: any) =>
+    httpClient.get<ApiResponse<any>>("/v1/users/page", { params }),
+
+
+  getStudentsPage: (params?: any) =>
+    httpClient.get<ApiResponse<any>>("/v1/users/students/page", { params }),
+
+  getEmployeesPage: (params?: any) =>
+    httpClient.get<ApiResponse<any>>("/v1/users/employees/page", { params }),
+
   inviteUser: (payload: InviteUserRequest) =>
     httpClient.post<ApiResponse<void>>("/v1/users/invite", payload),
 
@@ -59,9 +69,6 @@ export const userApi = {
   getStudentCount: () =>
     httpClient.get<ApiResponse<number>>("/v1/users/students/count"),
 
-  getEmployeeCount: () =>
-    httpClient.get<ApiResponse<number>>("/v1/users/employees/count"),
-
   getStatsByRole: () =>
     httpClient.get<ApiResponse<Record<string, number>>>("/v1/users/stats/by-role"),
 
@@ -74,9 +81,7 @@ export const userApi = {
   getStatsByAgeGroup: () =>
     httpClient.get<ApiResponse<Record<string, number>>>("/v1/users/stats/by-age-group"),
 
-  getEmployeeStatsByStatus: () =>
-    httpClient.get<ApiResponse<Record<string, number>>>("/v1/users/employees/stats/by-status"),
-
+  
   getMonthlyNewUsers: (year?: number) =>
     httpClient.get<ApiResponse<MonthlyUserCountResponse[]>>("/v1/users/stats/monthly-new-users", {
       params: year ? { year } : {}
@@ -103,7 +108,7 @@ export const userApi = {
       responseType: "blob"
     }),
 
-  // Trash & Hard Delete API for Users
+  // Trash & Hard Delete API for Users & System Entities
   getTrashUsers: () =>
     httpClient.get<ApiResponse<UserResponse[]>>("/v1/users/trash"),
 
@@ -115,5 +120,16 @@ export const userApi = {
       "/v1/users/trash/bulk-hard-delete",
       ids.map((id) => String(id))
     ),
+
+  restoreUser: (id: string | number) =>
+    httpClient.post<ApiResponse<void>>(`/v1/users/trash/${id}/restore`),
+
+  bulkRestoreUsers: (ids: (string | number)[]) =>
+    httpClient.post<ApiResponse<any>>("/v1/users/trash/bulk-restore", ids.map(id => String(id))),
+
+  checkChildRecords: (id: string | number, entityType: string) =>
+    httpClient.get<ApiResponse<{ hasChildren: boolean; childTables: string[] }>>(`/v1/users/trash/${id}/check-children`, { params: { entityType } })
+      .then(res => res.data.data),
 };
+
 

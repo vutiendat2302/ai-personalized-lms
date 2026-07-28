@@ -11,6 +11,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Arrays;
 import java.util.List;
+import com.ailms.entity.enums.UserStatusEnum;
+import com.ailms.repository.*;
 
 @RestController
 @RequestMapping("${api.prefix}/admin/dashboard")
@@ -26,7 +28,7 @@ public class AdminDashboardController {
 
     @GetMapping("/stats")
     public ResponseEntity<ApiResponse<AdminDashboardStatsResponse>> getDashboardStats() {
-        long totalUsers = userRepository.count();
+        long totalUsers = userRepository.countByStatusNot(UserStatusEnum.DELETED);
         long totalRoles = roleRepository.count();
         long totalPermissions = permissionRepository.count();
         long totalCourses = courseRepository.count();

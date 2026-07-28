@@ -6,6 +6,7 @@ import com.ailms.entity.EmployeeEntity;
 import com.ailms.entity.enums.AttendanceStatusEnum;
 import com.ailms.entity.enums.EmployeeStatusEnum;
 import com.ailms.entity.enums.LeaveStatusEnum;
+import com.ailms.entity.enums.UserStatusEnum;
 import com.ailms.event.AuditLogEvent;
 import com.ailms.exception.BusinessException;
 import com.ailms.exception.DuplicateResourceException;
@@ -86,7 +87,7 @@ public class AttendanceService implements IAttendanceService {
         EmployeeEntity employee = employeeRepository.findById(employeeId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Employee", employeeId));
 
-        if (employee.getStatus() == EmployeeStatusEnum.DELETE || employee.getStatus() == EmployeeStatusEnum.TERMINATED) {
+        if (employee.getUserEntity().getStatus() == UserStatusEnum.DELETED || employee.getStatus() == EmployeeStatusEnum.TERMINATED) {
             throw new BusinessException("Employee is inactive/deleted/terminated. Cannot check-in.");
         }
 
@@ -126,7 +127,7 @@ public class AttendanceService implements IAttendanceService {
             throw new DuplicateResourceException("Da check out");
         }
 
-        AttendanceEntity existing = openAttendances.get(0);
+        AttendanceEntity existing = openAttendances.getFirst();
 
         LocalDateTime checkOutTime = LocalDateTime.now();
 
@@ -155,7 +156,7 @@ public class AttendanceService implements IAttendanceService {
         EmployeeEntity employee = employeeRepository.findById(request.getEmployeeId())
                 .orElseThrow(() -> ResourceNotFoundException.of("Employee", request.getEmployeeId()));
 
-        if (employee.getStatus() == EmployeeStatusEnum.DELETE || employee.getStatus() == EmployeeStatusEnum.TERMINATED) {
+        if (employee.getUserEntity().getStatus() == UserStatusEnum.DELETED || employee.getStatus() == EmployeeStatusEnum.TERMINATED) {
             throw new BusinessException("Employee is inactive/deleted/terminated. Cannot create attendance.");
         }
 

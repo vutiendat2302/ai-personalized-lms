@@ -27,6 +27,7 @@ import org.springframework.http.HttpHeaders;
 public class UserController {
 
     private final IUserService userService;
+    private final com.ailms.service.IEmployeeService employeeService;
 
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<UserResponse>> getUserById(@PathVariable Long id) {
@@ -112,6 +113,27 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.of("Users retrieved successfully", page));
     }
 
+    /**
+     * Lấy danh sách học viên (User có StudentProfile) có phân trang.
+     */
+    @GetMapping("/students/page")
+    public ResponseEntity<ApiResponse<PageResponse<UserResponse>>> getStudentsPage(
+            UserSearchRequest request) {
+        request.setRoleType("STUDENT");
+        PageResponse<UserResponse> page = userService.getUsers(request);
+        return ResponseEntity.ok(ApiResponse.of("Students retrieved successfully", page));
+    }
+
+    /**
+     * Lấy danh sách nhân viên (EmployeeEntity) có phân trang.
+     */
+    @GetMapping("/employees/page")
+    public ResponseEntity<ApiResponse<PageResponse<EmployeeResponse>>> getEmployeesPage(
+            EmployeeSearchRequest request) {
+        PageResponse<EmployeeResponse> page = employeeService.search(request);
+        return ResponseEntity.ok(ApiResponse.of("Employees retrieved successfully", page));
+    }
+
     @PostMapping("/bulk-delete")
     public ResponseEntity<ApiResponse<Map<String, Object>>> bulkDelete(@Valid @RequestBody BulkDeleteRequest request) {
         Map<String, Object> response = userService.bulkDelete(request);
@@ -178,14 +200,6 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.of("Get student count successfully", count));
     }
 
-    /**
-     * Lấy ra số lượng nhân viên
-     */
-    @GetMapping("/employees/count")
-    public ResponseEntity<ApiResponse<Long>> countEmployees() {
-        long count = userService.countEmployees();
-        return ResponseEntity.ok(ApiResponse.of("Get employee count successfully", count));
-    }
 
     /**
      * Số lượng user theo từng vai trò
@@ -222,15 +236,6 @@ public class UserController {
     public ResponseEntity<ApiResponse<Map<String, Long>>> countUserByAgeGroup() {
         Map<String, Long> stats = userService.countUsersByAgeGroup();
         return ResponseEntity.ok(ApiResponse.of("Get employee count by age group successfully", stats));
-    }
-
-    /**
-     * Số lượng nhân viên theo trạng thái
-     */
-    @GetMapping("/employees/stats/by-status")
-    public ResponseEntity<ApiResponse<Map<String, Long>>> countEmployeesByStatus() {
-        Map<String, Long> stats = userService.countEmployeesByStatus();
-        return ResponseEntity.ok(ApiResponse.of("Get employee count by status successfully", stats));
     }
 
     /**

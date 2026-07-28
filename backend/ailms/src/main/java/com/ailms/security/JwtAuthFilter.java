@@ -111,11 +111,14 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 }
             }
         } catch (UsernameNotFoundException e) {
-            throw UsernameNotFoundException.of("User authentication", e.getMessage());
+            log.warn("User not found during JWT authentication: {}", e.getMessage());
+            SecurityContextHolder.clearContext();
         } catch (TokenExpiredException e) {
-            throw TokenExpiredException.of("Token", e.getMessage());
+            log.warn("JWT token expired: {}", e.getMessage());
+            SecurityContextHolder.clearContext();
         } catch (Exception ex) {
             log.error("Cannot set user authentication: {}", ex.getMessage());
+            SecurityContextHolder.clearContext();
         }
 
         filterChain.doFilter(request, response);

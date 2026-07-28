@@ -1944,8 +1944,6 @@ export const UserManagement: React.FC = () => {
 
                 <TableHead className="text-sm pb-4 text-center font-semibold text-muted-foreground uppercase tracking-wider">Vai trò</TableHead>
 
-                <TableHead className="text-sm pb-4 text-center font-semibold text-muted-foreground uppercase tracking-wider">Phòng ban</TableHead>
-
                 <TableHead
                   className="cursor-pointer pb-4 select-none text-sm font-semibold uppercase tracking-wider text-center group"
                   onClick={() => handleSort("status")}
@@ -2056,17 +2054,6 @@ export const UserManagement: React.FC = () => {
                           <span className="text-[10px] text-muted-foreground italic">Chưa phân vai trò</span>
                         )}
                       </div>
-                    </TableCell>
-
-                    {/* Department Code Column */}
-                    <TableCell className="text-center">
-                      {u.departmentCode ? (
-                        <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-500/10 text-brand-cobalt border border-indigo-500/20 uppercase">
-                          {u.departmentCode}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground text-xs">--</span>
-                      )}
                     </TableCell>
 
                     {/* Status Column */}
@@ -2776,7 +2763,7 @@ export const UserManagement: React.FC = () => {
               {/* PHÒNG BAN: TÌM KIẾM + DROPDOWN DỮ LIỆU THỰC TẾ (HIỂN THỊ MÃ CODE, TRẢ VỀ ID) */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <Label className="text-xs font-semibold">Phòng ban (Hiển thị Mã code - Trả ID)</Label>
+                  <Label className="text-sm font-semibold">Phòng ban (Hiển thị Mã code - Trả ID)</Label>
                   {loadingDeptsAndRoles && <Loader2 className="h-3 w-3 animate-spin text-primary" />}
                 </div>
 

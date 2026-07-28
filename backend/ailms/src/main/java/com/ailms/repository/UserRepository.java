@@ -39,6 +39,8 @@ public interface UserRepository extends BaseRepository<UserEntity, Long> {
 
     List<UserEntity> findAllByStatusNot(UserStatusEnum userStatusEnum);
 
+    long countByStatusNot(UserStatusEnum userStatusEnum);
+
     @Query("SELECT u.status, COUNT(u) FROM UserEntity u GROUP BY u.status")
     List<Object[]> countUsersGroupByStatus();
 

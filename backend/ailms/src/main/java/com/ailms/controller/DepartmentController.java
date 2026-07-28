@@ -66,4 +66,16 @@ public class DepartmentController {
         List<EmployeeResponse> response = departmentService.getEmployeesByDepartmentId(id);
         return ResponseEntity.ok(ApiResponse.of("Employees in department retrieved successfully", response));
     }
+
+    @GetMapping("/stats/overview")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> getOverviewStats() {
+        return ResponseEntity.ok(ApiResponse.of("Department overview stats", departmentService.getDepartmentOverviewStats()));
+    }
+
+    @PostMapping("/transfer-employees")
+    public ResponseEntity<ApiResponse<Void>> transferEmployees(@RequestParam Long targetDeptId, @RequestBody List<Long> employeeIds) {
+        departmentService.transferEmployees(targetDeptId, employeeIds);
+        return ResponseEntity.ok(ApiResponse.message("Employees transferred successfully"));
+    }
 }
+

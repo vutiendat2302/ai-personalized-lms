@@ -5,10 +5,7 @@ import com.ailms.entity.EmployeeContractEntity;
 import com.ailms.entity.EmployeeEntity;
 import com.ailms.entity.LeaveRequestEntity;
 import com.ailms.entity.UserEntity;
-import com.ailms.entity.enums.BaseStatusEnum;
-import com.ailms.entity.enums.EmployeeStatusEnum;
-import com.ailms.entity.enums.LeaveStatusEnum;
-import com.ailms.entity.enums.LeaveTypeEnum;
+import com.ailms.entity.enums.*;
 import com.ailms.event.AuditLogEvent;
 import com.ailms.exception.BusinessException;
 import com.ailms.exception.ResourceNotFoundException;
@@ -90,7 +87,7 @@ public class LeaveRequestService implements ILeaveRequestService {
         EmployeeEntity employee = employeeRepository.findById(request.getEmployeeId())
                 .orElseThrow(() -> ResourceNotFoundException.of("Employee", request.getEmployeeId()));
 
-        if (employee.getStatus() == EmployeeStatusEnum.DELETE || employee.getStatus() == EmployeeStatusEnum.TERMINATED) {
+        if (employee.getUserEntity().getStatus() == UserStatusEnum.DELETED || employee.getStatus() == EmployeeStatusEnum.TERMINATED) {
             throw new BusinessException("Employee is inactive/deleted/terminated. Cannot request leave.");
         }
 

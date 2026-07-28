@@ -43,4 +43,19 @@ export const roleApi = {
 
   createAndAssignPermission: (id: string, payload: PermissionRequest) =>
     httpClient.post<ApiResponse<PermissionResponse>>(`/v1/roles/${id}/permissions/create`, payload),
+
+  getOverviewStats: () =>
+    httpClient.get<ApiResponse<{ totalRoles: number; systemRoles: number; customRoles: number; unusedRoles: number; emptyRoles: number }>>("/v1/roles/stats/overview")
+      .then(res => res.data.data),
+
+  getPermissionsDistribution: () =>
+    httpClient.get<ApiResponse<Record<string, number>>>("/v1/roles/stats/permissions-distribution")
+      .then(res => res.data.data),
+
+  removeUserFromRole: (roleId: string, userId: string) =>
+    httpClient.delete<ApiResponse<void>>(`/v1/roles/${roleId}/users/${userId}`),
+
+  bulkDeleteRoles: (roleIds: string[]) =>
+    httpClient.post<ApiResponse<void>>("/v1/roles/bulk-delete", roleIds),
 };
+

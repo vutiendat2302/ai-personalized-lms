@@ -13,6 +13,8 @@ public interface EmployeeContractMapper {
 
     @Mapping(target = "employeeId", source = "employee.userId")
     @Mapping(target = "fileKey", expression = "java(entity.getFileMetadata() != null ? \"/api/v1/files/download?fileKey=\" + entity.getFileMetadata().getFileKey() : null)")
+    @Mapping(target = "fileName", source = "fileMetadata.originalName")
+    @Mapping(target = "fileSize", source = "fileMetadata.fileSize")
     EmployeeContractResponse toResponse(EmployeeContractEntity entity);
 
     List<EmployeeContractResponse> toResponseList(List<EmployeeContractEntity> list);

@@ -77,6 +77,12 @@ public class EmployeeEntity extends BaseEntity {
     private LocalDateTime endDate;
 
     /**
+     * Dia chi cua nhan vien
+     */
+    @Column(name = "address")
+    private String address;
+
+    /**
      * Trạng thái nhân sự (ACTIVE, PROBATION, SUSPENDED, TERMINATED).
      */
     @Column(name = "status")

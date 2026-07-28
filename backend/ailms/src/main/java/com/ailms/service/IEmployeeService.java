@@ -1,13 +1,11 @@
 package com.ailms.service;
 
-import com.ailms.request.CreateEmployeeContractRequest;
-import com.ailms.request.CreateEmployeeRequest;
-import com.ailms.request.EmployeeSearchRequest;
-import com.ailms.request.UpdateEmployeeRequest;
+import com.ailms.request.*;
 import com.ailms.response.EmployeeResponse;
 import com.ailms.response.PageResponse;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Service quản lý thông tin và hồ sơ nhân sự (nhân viên/giáo viên).
@@ -21,6 +19,11 @@ public interface IEmployeeService {
      * @return trang kết quả chứa danh sách đã được phân trang
      */
     PageResponse<EmployeeResponse> search(EmployeeSearchRequest request);
+
+    /**
+     * Đồng bộ khởi tạo thủ công các tài khoản nhân sự chưa có hồ sơ Employee.
+     */
+    void syncMissingStaffEmployeeProfiles();
 
     /**
      * Lấy danh sách tất cả các bản ghi.
@@ -106,7 +109,63 @@ public interface IEmployeeService {
     /**
      * Xóa cứng hàng loạt danh sách nhân viên theo IDs.
      */
-    java.util.Map<String, Object> bulkHardDelete(List<Long> ids);
+    Map<String, Object> bulkHardDelete(List<Long> ids);
+
+    /**
+     * Thống kê trạng thái hợp đồng nhân viên theo năm (tùy chọn).
+     */
+    Map<String, Long> getContractStatusStats(Integer year);
+
+    /**
+     * Lấy số hợp đồng thử việc sắp hết hạn trong 7 ngày tới (Real-time).
+     */
+    long getExpiringProbationCount();
+
+    /**
+     * Gửi email/notification thông báo HR về các hợp đồng thử việc sắp hết hạn.
+     */
+    void notifyExpiringProbation();
+
+    /**
+     * Thống kê số lượng nhân viên theo vai trò nội bộ theo năm (tùy chọn).
+     */
+    Map<String, Long> getStaffRoleStats(Integer year);
+
+    /**
+     * Số lượng nhân viên theo trạng thái (Real-time).
+     */
+    Map<String, Long> countEmployeesByStatus();
+
+    /**
+     * Số lượng nhân viên theo phòng ban theo năm (tùy chọn).
+     */
+    Map<String, Long> countEmployeesByDepartment(Integer year);
+
+    /**
+     * Số lượng nhân viên theo loại hình hợp đồng theo năm (tùy chọn).
+     */
+    Map<String, Long> countEmployeesByEmploymentType(Integer year);
+
+    /**
+     * Số lượng nhân viên theo giới tính theo năm (tùy chọn).
+     */
+    Map<String, Long> getEmployeeStatsByGender(Integer year);
+
+    /**
+     * Số lượng nhân viên theo độ tuổi theo năm (tùy chọn).
+     */
+    Map<String, Long> getEmployeeStatsByAgeGroup(Integer year);
+
+    /**
+     * Xuất file excel danh sách nhân viên, chứa thông tin của nhân viên (chi tiết)
+     */
+    byte[] exportEmployeeToExcel(EmployeeSearchRequest request);
+
+    /**
+     * Xuất file excel chi tiết 1 người dùng (gồm tài khoản, hồ sơ cá nhân nhân viên và hệ thống (hợp đồng, chấm công, đơn giá dạy với ta, lương, ... )
+     */
+    byte[] exportEmployeeDetailToExcel(Long userId);
 }
+
 
 

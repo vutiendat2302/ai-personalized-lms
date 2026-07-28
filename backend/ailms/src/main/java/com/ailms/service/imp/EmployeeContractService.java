@@ -1,6 +1,7 @@
 package com.ailms.service.imp;
 import com.ailms.common.converter.SimpleJsonWriter;
 import com.ailms.entity.FileMetadataEntity;
+import com.ailms.entity.enums.UserStatusEnum;
 import com.ailms.event.AuditLogEvent;
 import com.ailms.repository.specification.EmployeeContractSpecification;
 import com.ailms.request.CreateEmployeeContractRequest;
@@ -98,7 +99,7 @@ public class EmployeeContractService implements IEmployeeContractService {
         EmployeeEntity employee = employeeRepository.findById(request.getEmployeeId())
                 .orElseThrow(() -> ResourceNotFoundException.of("Employee", request.getEmployeeId()));
 
-        if (employee.getStatus() == EmployeeStatusEnum.DELETE) {
+        if (employee.getUserEntity().getStatus() == UserStatusEnum.DELETED) {
             throw new BusinessException("Employee is deleted. Cannot create contract.");
         }
 

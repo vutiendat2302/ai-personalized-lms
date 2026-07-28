@@ -118,6 +118,42 @@ public class StudentProfileController {
         return ResponseEntity.ok(ApiResponse.of("Total students count retrieved successfully", response));
     }
 
+    @GetMapping("/stats/overview")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> getOverviewStats() {
+        return ResponseEntity.ok(ApiResponse.of("Overview stats", studentProfileService.getStudentOverviewStats()));
+    }
+
+    @GetMapping("/stats/onboarding")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Long>>> getOnboardingStats() {
+        return ResponseEntity.ok(ApiResponse.of("Onboarding stats", studentProfileService.getStudentOnboardingStats()));
+    }
+
+    @GetMapping("/stats/goals")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Long>>> getGoalTypeStats() {
+        return ResponseEntity.ok(ApiResponse.of("Goal type stats", studentProfileService.getStudentGoalTypeStats()));
+    }
+
+    @GetMapping("/stats/leaderboard")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> getStreakLeaderboard() {
+        return ResponseEntity.ok(ApiResponse.of("Streak leaderboard", studentProfileService.getStudentStreakLeaderboard()));
+    }
+
+    @GetMapping("/stats/activity-trend")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Long>>> getActivityTrend() {
+        return ResponseEntity.ok(ApiResponse.of("Activity trend 30 days", studentProfileService.getStudentActivityTrend30Days()));
+    }
+
+    @GetMapping("/stats/inactive-warning")
+    public ResponseEntity<ApiResponse<Long>> getInactiveWarningCount(@RequestParam(defaultValue = "7") int days) {
+        return ResponseEntity.ok(ApiResponse.of("Inactive warning count", studentProfileService.getInactiveStudentCount(days)));
+    }
+
+    @GetMapping("/stats/interests")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Long>>> getTopInterests() {
+        return ResponseEntity.ok(ApiResponse.of("Top interests stats", studentProfileService.getTopStudentInterests()));
+    }
+
+
 
     private Long getCurrentUserId() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();

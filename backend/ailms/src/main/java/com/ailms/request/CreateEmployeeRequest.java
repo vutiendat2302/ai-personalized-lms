@@ -34,6 +34,8 @@ public class CreateEmployeeRequest {
 
     private Long departmentId;
 
+    private String address;
+
     private String position;
 
     private EmploymentTypeEnum employmentTypeEnum;

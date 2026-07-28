@@ -2,6 +2,7 @@ package com.ailms.service.imp;
 import com.ailms.common.converter.SimpleJsonWriter;
 import com.ailms.common.util.CodeGenerator;
 import com.ailms.entity.CategoryEntity;
+import com.ailms.entity.enums.UserStatusEnum;
 import com.ailms.event.AuditLogEvent;
 import com.ailms.service.IDepartmentService;
 
@@ -21,6 +22,7 @@ import com.ailms.response.DepartmentResponse;
 import com.ailms.response.EmployeeResponse;
 import com.ailms.response.PageResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
@@ -35,6 +37,7 @@ import com.ailms.common.util.SortFieldResolver;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
+@Slf4j
 public class DepartmentService implements IDepartmentService {
 
     private static final String RESOURCE_NAME = "Department";
@@ -72,7 +75,7 @@ public class DepartmentService implements IDepartmentService {
         DepartmentEntity entity = findEntityById(id);
         String oldValue = SimpleJsonWriter.toJson(entity);
         if (request.getStatus() == BaseStatusEnum.INACTIVE) {
-            boolean hasActiveEmployees = employeeRepository.existsByDepartment_IdAndStatusNot(id, EmployeeStatusEnum.DELETE);
+            boolean hasActiveEmployees = employeeRepository.existsByDepartment_IdAndUserEntity_StatusNot(id, UserStatusEnum.DELETED);
             if (hasActiveEmployees) {
                 throw new BusinessException("Cannot set department to INACTIVE while it still has active employees.");
             }
@@ -89,7 +92,7 @@ public class DepartmentService implements IDepartmentService {
     public void delete(Long id) {
         DepartmentEntity entity = findEntityById(id);
         String oldValue = SimpleJsonWriter.toJson(entity);
-        boolean hasActiveEmployees = employeeRepository.existsByDepartment_IdAndStatusNot(id, EmployeeStatusEnum.DELETE);
+        boolean hasActiveEmployees = employeeRepository.existsByDepartment_IdAndUserEntity_StatusNot(id, UserStatusEnum.DELETED);
         if (hasActiveEmployees) {
             throw new BusinessException("Cannot delete department that has active employees");
         }
@@ -135,8 +138,51 @@ public class DepartmentService implements IDepartmentService {
         return employeeMapper.toResponseList(employees);
     }
 
+    @Override
+    public java.util.Map<String, Object> getDepartmentOverviewStats() {
+        log.info("Getting department overview stats");
+        java.util.Map<String, Object> map = new java.util.HashMap<>();
+        map.put("totalDepartments", departmentRepository.count());
+        map.put("activeDepartments", departmentRepository.countActiveDepartments());
+        map.put("emptyDepartments", departmentRepository.countEmptyDepartments());
+
+        // Count Employees by Department (Horizontal Bar Chart)
+        java.util.Map<String, Long> employeesByDept = new java.util.LinkedHashMap<>();
+        for (Object[] r : departmentRepository.countEmployeesByDepartment()) {
+            employeesByDept.put((String) r[0], (Long) r[1]);
+        }
+        map.put("employeesByDepartment", employeesByDept);
+
+        // Employment Type breakdown by Department
+        java.util.List<java.util.Map<String, Object>> typeBreakdown = new java.util.ArrayList<>();
+        for (Object[] r : departmentRepository.countEmploymentTypesByDepartment()) {
+            java.util.Map<String, Object> item = new java.util.HashMap<>();
+            item.put("deptName", r[0]);
+            item.put("employmentType", r[1] != null ? r[1].toString() : "FULL_TIME");
+            item.put("count", r[2]);
+            typeBreakdown.add(item);
+        }
+        map.put("employmentTypeBreakdown", typeBreakdown);
+
+        return map;
+    }
+
+    @Transactional
+    @Override
+    public void transferEmployees(Long targetDeptId, List<Long> employeeIds) {
+        log.info("Transferring {} employees to department {}", employeeIds.size(), targetDeptId);
+        DepartmentEntity targetDept = findEntityById(targetDeptId);
+        List<EmployeeEntity> employees = employeeRepository.findAllById(employeeIds);
+        for (EmployeeEntity emp : employees) {
+            emp.setDepartment(targetDept);
+        }
+        employeeRepository.saveAll(employees);
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "TRANSFER_EMPLOYEES", "DEPARTMENT", targetDeptId, null, employeeIds));
+    }
+
     private DepartmentEntity findEntityById(Long id) {
         return departmentRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
     }
 }
+

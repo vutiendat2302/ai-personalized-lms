@@ -12,7 +12,6 @@ export interface UserResponse {
   createdAt: string;
   updatedAt: string | null;
   roles: string[];
-  departmentCode?: string | null;
 }
 
 export interface RoleResponse {
@@ -35,8 +34,8 @@ export interface PermissionResponse {
   action: string;
   description: string;
   createdAt: string;
-  createdBy: number | null;
-  updatedBy: number | null;
+  createdBy: string;
+  updatedBy: string;
   updatedAt: string | null;
 }
 

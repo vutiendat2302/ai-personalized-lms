@@ -5,11 +5,11 @@ package com.ailms.entity.enums;
  * ACTIVE: Dang lam viec
  * ON_LEAVE: Dang nghi phep hoac tam nghi
  * TERMINATED: Da nghi viec hoac cham dut hop dong
- * DELETE: Da bi xoa
+ * PROBATION: thử việc, chờ nhận việc
  */
 public enum EmployeeStatusEnum {
     ACTIVE,
     ON_LEAVE,
     TERMINATED,
-    DELETE
+    PROBATION
 }

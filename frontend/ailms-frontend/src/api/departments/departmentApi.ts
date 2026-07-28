@@ -64,4 +64,17 @@ export const departmentApi = {
 
   getEmployeesByDepartmentId: (id: number | string) =>
     httpClient.get<ApiResponse<any[]>>(`/v1/departments/${id}/employees`),
+
+  getOverviewStats: () =>
+    httpClient.get<ApiResponse<{
+      totalDepartments: number;
+      activeDepartments: number;
+      emptyDepartments: number;
+      employeesByDepartment: Record<string, number>;
+      employmentTypeBreakdown: Array<{ deptName: string; employmentType: string; count: number }>;
+    }>>("/v1/departments/stats/overview").then(res => res.data.data),
+
+  transferEmployees: (targetDeptId: number | string, employeeIds: (number | string)[]) =>
+    httpClient.post<ApiResponse<void>>("/v1/departments/transfer-employees", employeeIds, { params: { targetDeptId } }),
 };
+

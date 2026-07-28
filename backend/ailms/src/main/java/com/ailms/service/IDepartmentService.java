@@ -62,4 +62,8 @@ public interface IDepartmentService {
      * Lấy danh sách nhân viên thuộc phòng ban.
      */
     List<EmployeeResponse> getEmployeesByDepartmentId(Long id);
+
+    java.util.Map<String, Object> getDepartmentOverviewStats();
+    void transferEmployees(Long targetDeptId, List<Long> employeeIds);
 }
+

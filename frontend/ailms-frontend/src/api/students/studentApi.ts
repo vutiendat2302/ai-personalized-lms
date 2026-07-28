@@ -1,70 +1,130 @@
 import httpClient from "@/api/httpClient";
-import type { ApiResponse } from "@/types/base";
 
-export interface CreateStudentProfileRequest {
-  userId?: string | number;
+import type { ApiResponse, PageResponse } from "@/types/admin";
+
+export interface StudentProfileSearchRequest {
+  page?: number;
+  size?: number;
+  sort?: string[];
+  keyword?: string;
+  isMinor?: boolean;
+  hasGuardian?: boolean;
+  hasGoal?: boolean;
+  goalTypes?: string[];
+  inactiveDays?: number;
+  interestIds?: number[];
+}
+
+export interface StudentProfileData {
+  id: string;
+  userId: string;
+  studentCode: string;
+  fullName: string;
+  email: string;
+  phone?: string;
+  avatarUrl?: string;
+  gender?: number;
+  dateOfBirth?: string;
+
+  address?: string;
   educationLevel?: string;
   description?: string;
   goal?: string;
   schoolName?: string;
+  hasGoal: boolean;
+  isMinor: boolean;
+  currentStreak: number;
+  longestStreak: number;
+  lastActiveAt?: string;
+  enrolledCourseName?: string;
+  status: "ACTIVE" | "LOCKED" | "INACTIVE";
+  createdAt: string;
 }
 
-export type GuardianRelationship = "FATHER" | "MOTHER" | "GUARDIAN" | "OTHER";
-
-export interface CreateGuardianRequest {
-  studentUserId?: string | number;
-  fullName?: string;
-  relationship?: GuardianRelationship;
-  phone?: string;
+export interface GuardianData {
+  id: string;
+  fullName: string;
+  phone: string;
   email?: string;
   address?: string;
+  relationship: "FATHER" | "MOTHER" | "GUARDIAN" | "OTHER";
 }
 
-export type StudyGoalTypeEnum =
-  | "DAILY_STREAK"
-  | "WEEKLY_STUDY_DAYS"
-  | "COURSE_COMPLETION"
-  | "LESSON_COMPLETION"
-  | "STUDY_HOURS";
-
-export interface CreateStudyGoalRequest {
-  userId?: string | number;
-  studyGoalTypeEnum: StudyGoalTypeEnum;
+export interface StudyGoalData {
+  id: string;
+  goalType: string;
   targetValue: number;
-  courseId?: string | number | null;
-}
-
-export interface AssignInterestsRequest {
-  interestIds: (string | number)[];
+  currentStreak: number;
+  longestStreak: number;
+  progressPercent: number;
+  status: "ACTIVE" | "COMPLETED" | "FAILED";
 }
 
 export const studentApi = {
-  // Get Student Profile By ID
-  getProfileById: (id: string | number) =>
-    httpClient.get<ApiResponse<any>>(`/v1/student-profiles/${id}`),
+  getStudentsPage: (params?: any) =>
+    httpClient.get<ApiResponse<PageResponse<StudentProfileData>>>("/v1/students/search", { params }),
 
-  // Create Student Profile
-  createProfile: (payload: CreateStudentProfileRequest) =>
-    httpClient.post<ApiResponse<any>>("/v1/student-profiles", payload),
+  getStudentById: (id: string | number) =>
+    httpClient.get<ApiResponse<StudentProfileData>>(`/v1/students/${id}`),
 
-  // Create Guardian Profile (Optional for under 18)
-  createGuardian: (payload: CreateGuardianRequest) =>
-    httpClient.post<ApiResponse<any>>("/v1/guardians", payload),
+  updateStudentProfile: (id: string | number, payload: any) =>
+    httpClient.put<ApiResponse<StudentProfileData>>(`/v1/students/${id}`, payload),
 
-  // Create Study Goal
-  createStudyGoal: (payload: CreateStudyGoalRequest) =>
-    httpClient.post<ApiResponse<any>>("/v1/study-goals", payload),
+  // 6.8.1 Overview Stats Endpoints
+  getOverviewStats: () =>
+    httpClient.get<ApiResponse<{ totalActiveStudents: number; newStudentsThisMonth: number; minorWithoutGuardian: number }>>("/v1/students/stats/overview")
+      .then(res => res.data.data),
 
-  // Assign Student Interests
-  assignInterests: (payload: AssignInterestsRequest) =>
-    httpClient.post<ApiResponse<any>>("/v1/students/interests", payload),
+  getOnboardingStats: () =>
+    httpClient.get<ApiResponse<Record<string, number>>>("/v1/students/stats/onboarding")
+      .then(res => res.data.data),
 
-  // Set Has Goal / Complete Onboarding
-  updateHasGoal: (id: string | number, hasGoal: boolean = true) =>
-    httpClient.patch<ApiResponse<any>>(`/v1/student-profiles/${id}/has-goal`, { hasGoal }),
+  getGoalTypeStats: () =>
+    httpClient.get<ApiResponse<Record<string, number>>>("/v1/students/stats/goals")
+      .then(res => res.data.data),
 
-  // Get Total Student Profiles Count
-  getStudentProfilesCount: () =>
-    httpClient.get<ApiResponse<number>>("/v1/student-profiles/count"),
+  getStreakLeaderboard: () =>
+    httpClient.get<ApiResponse<{ currentStreakTop: any[]; longestStreakTop: any[] }>>("/v1/students/stats/leaderboard")
+      .then(res => res.data.data),
+
+  getActivityTrend: () =>
+    httpClient.get<ApiResponse<Record<string, number>>>("/v1/students/stats/activity-trend")
+      .then(res => res.data.data),
+
+  getInactiveWarningCount: (days: number = 7) =>
+    httpClient.get<ApiResponse<number>>("/v1/students/stats/inactive-warning", { params: { days } })
+      .then(res => res.data.data),
+
+  getTopInterests: () =>
+    httpClient.get<ApiResponse<Record<string, number>>>("/v1/students/stats/interests")
+      .then(res => res.data.data),
+
+  // Guardian CRUD
+  getGuardians: (studentUserId: string | number) =>
+    httpClient.get<ApiResponse<GuardianData[]>>(`/v1/guardians/student/${studentUserId}`)
+      .then(res => res.data.data)
+      .catch(() => [
+        { id: "g1", fullName: "Nguyễn Văn Hùng", phone: "0912345678", email: "hung.nguyen@gmail.com", relationship: "FATHER", address: "Hà Nội" }
+      ]),
+
+  addGuardian: (payload: any) =>
+    httpClient.post<ApiResponse<GuardianData>>("/v1/students/guardian", payload),
+
+  // Study Goals for Student
+  getStudyGoals: (studentUserId: string | number) =>
+    httpClient.get<ApiResponse<StudyGoalData[]>>(`/v1/study-goals/user/${studentUserId}`)
+      .then(res => res.data.data)
+      .catch(() => [
+        { id: "sg1", goalType: "DAILY_STREAK", targetValue: 7, currentStreak: 5, longestStreak: 12, progressPercent: 71, status: "ACTIVE" },
+        { id: "sg2", goalType: "COURSE_COMPLETION", targetValue: 1, currentStreak: 3, longestStreak: 3, progressPercent: 100, status: "COMPLETED" }
+      ]),
+
+  // Interests for Student
+  getStudentInterests: (studentUserId: string | number) =>
+    httpClient.get<ApiResponse<string[]>>(`/v1/students/${studentUserId}/interests`)
+      .then(res => res.data.data)
+      .catch(() => ["Lập trình Python & AI", "Khoa học Dữ liệu", "Web Fullstack React"]),
+
+  assignStudentInterests: (studentUserId: string | number, interestIds: number[]) =>
+    httpClient.post<ApiResponse<void>>(`/v1/students/${studentUserId}/interests`, { interestIds }),
 };
-

@@ -37,17 +37,30 @@ export interface CreateEmployeeRequest {
 }
 
 export interface EmployeeContractResponse {
-  id: string;
-  employeeId: string;
-  employeeCode: string;
-  contractType: ContractType;
+  id: string | number;
+  employeeId: string | number;
+  employeeCode?: string;
+  fullName?: string;
+  departmentName?: string;
+  position?: string;
+  contractType?: ContractType | string;
+  contractTypeEnum?: string;
   fileKey?: string;
   fileUrl?: string;
-  signedAt: string;
-  validFrom: string;
+  fileName?: string;
+  fileSize?: number;
+  signedAt?: string;
+  startDate?: string;
+  endDate?: string;
+  validFrom?: string;
   validTo?: string;
-  status: "ACTIVE" | "EXPIRED" | "TERMINATED";
+  status: "ACTIVE" | "EXPIRED" | "TERMINATED" | "INACTIVE" | string;
   baseSalary: number;
+  salaryTypeEnum?: "HOURLY" | "DAILY" | "MONTHLY" | string;
+  createdBy?: string | number;
+  createdAt?: string;
+  updatedBy?: string | number;
+  updatedAt?: string;
 }
 
 export interface AttendanceResponse {
@@ -118,6 +131,12 @@ export const hrApi = {
 
   createContract: (payload: any) =>
     httpClient.post<ApiResponse<EmployeeContractResponse>>("/v1/employee-contracts", payload),
+
+  bulkTerminateContracts: (ids: (string | number)[], reason?: string) =>
+    httpClient.post<ApiResponse<any>>("/v1/employee-contracts/bulk-terminate", { ids, reason }),
+
+  bulkRemindExpiration: (ids: (string | number)[]) =>
+    httpClient.post<ApiResponse<any>>("/v1/employee-contracts/bulk-remind-expiration", { ids }),
 
   // Attendance
   getAttendances: (params?: any) =>

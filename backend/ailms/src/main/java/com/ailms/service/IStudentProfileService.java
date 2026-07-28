@@ -117,5 +117,14 @@ public interface IStudentProfileService {
      * @return StudentProfileResponse hoặc null
      */
     StudentProfileResponse findByIdOrNull(Long id);
+
+    java.util.Map<String, Object> getStudentOverviewStats();
+    java.util.Map<String, Long> getStudentOnboardingStats();
+    java.util.Map<String, Long> getStudentGoalTypeStats();
+    java.util.Map<String, Object> getStudentStreakLeaderboard();
+    java.util.Map<String, Long> getStudentActivityTrend30Days();
+    long getInactiveStudentCount(int days);
+    java.util.Map<String, Long> getTopStudentInterests();
 }
+
 

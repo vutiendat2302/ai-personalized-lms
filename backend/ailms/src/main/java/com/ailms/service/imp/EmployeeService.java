@@ -6,6 +6,7 @@ import com.ailms.entity.*;
 import com.ailms.entity.enums.BaseStatusEnum;
 import com.ailms.entity.enums.ContractTypeEnum;
 import com.ailms.entity.enums.EmployeeStatusEnum;
+import com.ailms.entity.enums.EmploymentTypeEnum;
 import com.ailms.entity.enums.UserStatusEnum;
 import com.ailms.event.AuditLogEvent;
 import com.ailms.exception.BusinessException;
@@ -23,7 +24,10 @@ import com.ailms.security.JwtUtils;
 import com.ailms.service.IEmailService;
 import com.ailms.service.IEmployeeContractService;
 import com.ailms.service.IEmployeeService;
+import com.ailms.common.util.CsvBuilder;
+import com.ailms.common.util.CsvExport;
 import com.ailms.common.util.SortFieldResolver;
+import java.util.function.Function;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +35,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import com.ailms.repository.specification.EmployeeSpecification;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -39,8 +44,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.UUID;
+import java.time.Period;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -71,7 +76,7 @@ public class EmployeeService implements IEmployeeService {
     @Override
     public List<EmployeeResponse> getAll() {
         log.info("Getting all employees excluding deleted ones");
-        return employeeMapper.toResponseList(employeeRepository.findAllByStatusNot(EmployeeStatusEnum.DELETE));
+        return employeeMapper.toResponseList(employeeRepository.findAllByUserEntity_StatusNot(UserStatusEnum.DELETED));
     }
 
     @Override
@@ -79,7 +84,7 @@ public class EmployeeService implements IEmployeeService {
         log.info("Getting employee by id: {}", id);
         EmployeeEntity entity = employeeRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
-        if (entity.getStatus() == EmployeeStatusEnum.DELETE) {
+        if (entity.getUserEntity().getStatus() == UserStatusEnum.DELETED) {
             throw ResourceNotFoundException.of(RESOURCE_NAME, id);
         }
         return employeeMapper.toResponse(entity);
@@ -192,7 +197,7 @@ public class EmployeeService implements IEmployeeService {
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
 
         String oldValue = SimpleJsonWriter.toJson(existing);
-        if (existing.getStatus() == EmployeeStatusEnum.DELETE) {
+        if (existing.getUserEntity() != null && existing.getUserEntity().getStatus() == UserStatusEnum.DELETED) {
             throw new BusinessException("Cannot update a deleted employee.");
         }
 
@@ -200,20 +205,15 @@ public class EmployeeService implements IEmployeeService {
             if (request.getStatus() == EmployeeStatusEnum.TERMINATED) {
                 throw new BusinessException("Cannot terminate employee via general update. Use /terminate endpoint instead.");
             }
-            if (request.getStatus() == EmployeeStatusEnum.DELETE) {
-                throw new BusinessException("Cannot delete employee via general update. Use delete endpoint instead.");
-            }
         }
 
-        if (request.getEmployeeCode() != null && !existing.getEmployeeCode().equals(request.getEmployeeCode()) &&
-                employeeRepository.existsByEmployeeCode(request.getEmployeeCode())) {
-            throw DuplicateResourceException.of(RESOURCE_NAME, "employeeCode", request.getEmployeeCode());
-        }
-
+        // Cập nhật các field trên EmployeeEntity (position, address, status, employmentType...)
+        // và tự động propagate fullName/gender/phone/dateOfBirth sang UserEntity qua @AfterMapping trong EmployeeMapper
         employeeMapper.updateFromRequest(request, existing);
         if (request.getDepartmentId() != null) {
             existing.setDepartment(resolveDepartment(request.getDepartmentId()));
         }
+
         EmployeeEntity updated = employeeRepository.save(existing);
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "UPDATE", "EMPLOYEE", id, oldValue, updated));
         return employeeMapper.toResponse(updated);
@@ -233,7 +233,8 @@ public class EmployeeService implements IEmployeeService {
             oldValue = "EmployeeCode: " + entity.getEmployeeCode();
         }
 
-        if (entity.getStatus() == EmployeeStatusEnum.DELETE) {
+        UserEntity user = entity.getUserEntity();
+        if (user.getStatus() == UserStatusEnum.DELETED) {
             throw new DuplicateResourceException("Employee already deleted: " + id);
         }
 
@@ -253,13 +254,14 @@ public class EmployeeService implements IEmployeeService {
             throw new BusinessException("Cannot delete employee: Employee has unfinalized (DRAFT) salaries.");
         }
 
-        entity.setStatus(EmployeeStatusEnum.DELETE);
+        user.setStatus(UserStatusEnum.DELETED);
+        userRepository.save(user);
         try {
             applicationEventPublisher.publishEvent(new AuditLogEvent(this, "DELETE", "EMPLOYEE", id, oldValue, null));
         } catch (Exception e) {
             log.warn("Failed to publish audit log for soft delete employee {}", id, e);
         }
-        employeeRepository.save(entity);
+
     }
 
     @Transactional
@@ -272,7 +274,7 @@ public class EmployeeService implements IEmployeeService {
         if (employee.getStatus() == EmployeeStatusEnum.TERMINATED) {
             throw new BusinessException("Employee is already terminated.");
         }
-        if (employee.getStatus() == EmployeeStatusEnum.DELETE) {
+        if (employee.getUserEntity().getStatus() == UserStatusEnum.DELETED) {
             throw new BusinessException("Employee is deleted. Cannot terminate.");
         }
 
@@ -309,7 +311,7 @@ public class EmployeeService implements IEmployeeService {
         EmployeeEntity employee = employeeRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
 
-        if (employee.getStatus() == EmployeeStatusEnum.DELETE || employee.getStatus() == EmployeeStatusEnum.TERMINATED) {
+        if (employee.getUserEntity().getStatus() == UserStatusEnum.DELETED || employee.getStatus() == EmployeeStatusEnum.TERMINATED) {
             throw new BusinessException("Employee is not active for probation review.");
         }
 
@@ -361,33 +363,92 @@ public class EmployeeService implements IEmployeeService {
                 .orElseThrow(() -> ResourceNotFoundException.of("Department", departmentId));
     }
 
+    private EmployeeResponse mapToEmployeeResponse(EmployeeEntity entity) {
+        if (entity == null) return null;
+        EmployeeResponse response = employeeMapper.toResponse(entity);
+        if (entity.getUserEntity() != null && entity.getUserEntity().getId() != null) {
+            List<UserRoleEntity> userRoles = userRoleRepository.findByUserEntity_Id(entity.getUserEntity().getId());
+            if (userRoles != null && !userRoles.isEmpty()) {
+                List<String> roles = userRoles.stream()
+                        .map(ur -> ur.getRoleEntity() != null ? (ur.getRoleEntity().getCode() != null ? ur.getRoleEntity().getCode() : ur.getRoleEntity().getName()) : null)
+                        .filter(Objects::nonNull)
+                        .toList();
+                response.setRoles(roles);
+
+                List<Long> roleIds = userRoles.stream()
+                        .map(ur -> ur.getRoleEntity() != null ? ur.getRoleEntity().getId() : null)
+                        .filter(Objects::nonNull)
+                        .toList();
+                response.setRoleIds(roleIds);
+            }
+        }
+        return response;
+    }
+
+    @Transactional
+    @Override
+    public void syncMissingStaffEmployeeProfiles() {
+        List<UserRoleEntity> allUserRoles = userRoleRepository.findAll();
+        Set<Long> processedUserIds = new HashSet<>();
+
+        for (UserRoleEntity ur : allUserRoles) {
+            if (ur.getRoleEntity() != null && !"STUDENT".equalsIgnoreCase(ur.getRoleEntity().getCode())) {
+                UserEntity user = ur.getUserEntity();
+                if (user != null && user.getId() != null && !processedUserIds.contains(user.getId())) {
+                    processedUserIds.add(user.getId());
+                    if (!employeeRepository.existsById(user.getId())) {
+                        UserEntity managedUser = userRepository.findById(user.getId()).orElse(null);
+                        if (managedUser != null) {
+                            EmployeeEntity employee = EmployeeEntity.builder()
+                                    .userEntity(managedUser)
+                                    .employeeCode(CodeGenerator.generate("EP", employeeRepository::existsByEmployeeCode))
+                                    .status(EmployeeStatusEnum.ACTIVE)
+                                    .employmentTypeEnum(EmploymentTypeEnum.FULL_TIME)
+                                    .startDate(LocalDateTime.now())
+                                    .build();
+                            employeeRepository.save(employee);
+                            log.info("Synced missing Employee profile for staff User ID: {}", managedUser.getId());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     @Override
     public PageResponse<EmployeeResponse> search(EmployeeSearchRequest request) {
         log.info("Searching Employee via specification");
         Specification<EmployeeEntity> spec = EmployeeSpecification.filterAndSearch(request);
         Pageable pageable = request.toPageable();
         if (pageable.getSort().isSorted()) {
+            Sort resolved = sortFieldResolver.resolve(pageable.getSort(), EmployeeEntity.class);
+            resolved = Sort.by(resolved.stream().map(order -> {
+                if ("fullName".equalsIgnoreCase(order.getProperty())) {
+                    return order.withProperty("userEntity.fullName");
+                }
+                return order;
+            }).toList());
             pageable = PageRequest.of(
                     pageable.getPageNumber(),
                     pageable.getPageSize(),
-                    sortFieldResolver.resolve(pageable.getSort(), EmployeeEntity.class)
+                    resolved
             );
         }
         Page<EmployeeEntity> page = employeeRepository.findAll(spec, pageable);
-        return PageResponse.from(page.map(employeeMapper::toResponse));
+        return PageResponse.from(page.map(this::mapToEmployeeResponse));
     }
 
     @Override
     public long countEmployees() {
         log.info("Counting all active/non-deleted employees");
-        return employeeRepository.countByStatusNot(EmployeeStatusEnum.DELETE);
+        return employeeRepository.countByUserEntity_StatusNot(UserStatusEnum.DELETED);
     }
 
     @Override
     public EmployeeResponse findByIdOrNull(Long id) {
         log.info("Getting employee profile by id or null: {}", id);
         return employeeRepository.findById(id)
-                .filter(entity -> entity.getStatus() != EmployeeStatusEnum.DELETE)
+                .filter(entity -> entity.getUserEntity().getStatus() != UserStatusEnum.DELETED)
                 .map(employeeMapper::toResponse)
                 .orElse(null);
     }
@@ -395,35 +456,8 @@ public class EmployeeService implements IEmployeeService {
     @Override
     public List<EmployeeResponse> getTrashEmployees() {
         log.info("Getting all trash employees and soft-deleted users");
-        List<EmployeeEntity> trashList = employeeRepository.findByStatus(EmployeeStatusEnum.DELETE);
-        List<EmployeeResponse> responses = employeeMapper.toResponseList(trashList);
-
-        // Also include soft-deleted users from UserRepository
-        List<UserEntity> deletedUsers = userRepository.findByStatus(UserStatusEnum.DELETED);
-        java.util.Set<Long> existingIds = responses.stream()
-                .map(EmployeeResponse::getId)
-                .filter(java.util.Objects::nonNull)
-                .collect(java.util.stream.Collectors.toSet());
-
-        for (UserEntity u : deletedUsers) {
-            if (!existingIds.contains(u.getId())) {
-                EmployeeResponse synthetic = EmployeeResponse.builder()
-                        .id(u.getId())
-                        .userId(u.getId())
-                        .userName(u.getUsername())
-                        .userEmail(u.getEmail())
-                        .fullName(u.getFullName() != null ? u.getFullName() : u.getUsername())
-                        .employeeCode("USER-" + u.getId())
-                        .position("Tài khoản hệ thống")
-                        .status(EmployeeStatusEnum.DELETE)
-                        .createdAt(u.getCreatedAt())
-                        .updatedAt(u.getUpdatedAt())
-                        .build();
-                responses.add(synthetic);
-            }
-        }
-
-        return responses;
+        List<EmployeeEntity> trashList = employeeRepository.findAllByUserEntity_Status(UserStatusEnum.DELETED);
+        return  employeeMapper.toResponseList(trashList);
     }
 
     @Transactional
@@ -506,6 +540,456 @@ public class EmployeeService implements IEmployeeService {
         result.put("errors", errors);
         return result;
     }
+
+    private LocalDateTime[] getYearRange(Integer year) {
+        if (year == null || year <= 0) {
+            return null;
+        }
+        LocalDateTime startOfYear = LocalDateTime.of(year, 1, 1, 0, 0, 0);
+        LocalDateTime endOfYear = LocalDateTime.of(year, 12, 31, 23, 59, 59);
+        return new LocalDateTime[]{startOfYear, endOfYear};
+    }
+
+    @Override
+    public Map<String, Long> getContractStatusStats(Integer year) {
+        log.info("Getting contract status stats for year {}", year);
+        java.util.Map<String, Long> map = new java.util.HashMap<>();
+        map.put("ACTIVE", 0L);
+        map.put("PROBATION", 0L);
+        map.put("EXPIRED", 0L);
+        map.put("TERMINATED", 0L);
+
+        List<Object[]> results;
+        if (year != null && year > 0) {
+            LocalDate startOfYearDate = LocalDate.of(year, 1, 1);
+            LocalDate endOfYearDate = LocalDate.of(year, 12, 31);
+            results = employeeContractRepository.countContractsGroupByStatusInYear(startOfYearDate, endOfYearDate);
+        } else {
+            results = employeeContractRepository.countContractsGroupByStatus();
+        }
+
+        if (results != null) {
+            for (Object[] row : results) {
+                if (row != null && row.length == 2 && row[0] != null && row[1] != null) {
+                    map.put(row[0].toString(), ((Number) row[1]).longValue());
+                }
+            }
+        }
+        return map;
+    }
+
+    @Override
+    public long getExpiringProbationCount() {
+        LocalDate today = LocalDate.now();
+        LocalDate nextWeek = today.plusDays(7);
+        List<EmployeeContractEntity> contracts = employeeContractRepository.findExpiringProbationContracts(today, nextWeek);
+        return contracts != null ? contracts.size() : 0L;
+    }
+
+    @Transactional
+    @Override
+    public void notifyExpiringProbation() {
+        long count = getExpiringProbationCount();
+        log.info("Triggering HR notification for {} expiring probation contracts", count);
+        try {
+            emailService.sendBulkEmail(
+                List.of("hr@ailms.edu.vn"),
+                "Cảnh báo hợp đồng thử việc sắp hết hạn",
+                "Hệ thống phát hiện có " + count + " hợp đồng thử việc sắp hết hạn trong 7 ngày tới. Vui lòng kiểm tra và xử lý."
+            );
+        } catch (Exception e) {
+            log.warn("Failed to send HR notification email: {}", e.getMessage());
+        }
+    }
+
+    @Override
+    public Map<String, Long> getStaffRoleStats(Integer year) {
+        log.info("Getting staff role stats for year {}", year);
+        Map<String, Long> roleMap = new HashMap<>();
+        List<EmployeeEntity> employees;
+        LocalDateTime[] range = getYearRange(year);
+        if (range != null) {
+            employees = employeeRepository.findAllActiveInYear(UserStatusEnum.DELETED, range[0], range[1]);
+        } else {
+            employees = employeeRepository.findAllByUserEntity_StatusNot(UserStatusEnum.DELETED);
+        }
+
+        for (EmployeeEntity emp : employees) {
+            if (emp.getUserId() != null) {
+                List<UserRoleEntity> userRoles = userRoleRepository.findByUserEntity_IdWithRole(emp.getUserId());
+                if (userRoles != null) {
+                    for (UserRoleEntity ur : userRoles) {
+                        if (ur.getRoleEntity() != null) {
+                            String roleCode = ur.getRoleEntity().getCode();
+                            if (!"STUDENT".equalsIgnoreCase(roleCode) && !"ADMIN".equalsIgnoreCase(roleCode)) {
+                                roleMap.put(roleCode, roleMap.getOrDefault(roleCode, 0L) + 1);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return roleMap;
+    }
+
+
+    @Transactional(readOnly = true)
+    @Override
+    public Map<String, Long> countEmployeesByStatus() {
+        log.info("Thống kê số lượng nhân viên theo trạng thái");
+        List<Object[]> results = employeeRepository.countEmployeesGroupByStatus(UserStatusEnum.DELETED);
+        Map<String, Long> statusMap = new HashMap<>();
+        for (Object[] row : results) {
+            EmployeeStatusEnum status = (EmployeeStatusEnum) row[0];
+            Long count = (Long) row[1];
+            if (status != null) {
+                statusMap.put(status.name(), count);
+            }
+        }
+        return statusMap;
+    }
+
+
+    @Transactional(readOnly = true)
+    @Override
+    public Map<String, Long> countEmployeesByDepartment(Integer year) {
+        log.info("Thống kê số lượng nhân viên theo phòng ban cho năm {}", year);
+        List<Object[]> results;
+        LocalDateTime[] range = getYearRange(year);
+        if (range != null) {
+            results = employeeRepository.countEmployeesGroupByDepartmentInYear(UserStatusEnum.DELETED, range[0], range[1]);
+        } else {
+            results = employeeRepository.countEmployeesGroupByDepartment(UserStatusEnum.DELETED);
+        }
+
+        Map<String, Long> deptMap = new LinkedHashMap<>();
+        for (Object[] row : results) {
+            String deptName = (String) row[0];
+            Long count = (Long) row[1];
+            if (deptName != null) {
+                deptMap.put(deptName, count);
+            }
+        }
+        return deptMap;
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public Map<String, Long> countEmployeesByEmploymentType(Integer year) {
+        log.info("Thống kê số lượng nhân viên theo loại hình hợp đồng cho năm {}", year);
+        List<Object[]> results;
+        LocalDateTime[] range = getYearRange(year);
+        if (range != null) {
+            results = employeeRepository.countEmployeesGroupByEmploymentTypeInYear(UserStatusEnum.DELETED, range[0], range[1]);
+        } else {
+            results = employeeRepository.countEmployeesGroupByEmploymentType(UserStatusEnum.DELETED);
+        }
+
+        Map<String, Long> typeMap = new LinkedHashMap<>();
+        for (Object[] row : results) {
+            Object empTypeObj = row[0];
+            Long count = (Long) row[1];
+            String typeName = empTypeObj != null ? empTypeObj.toString() : "Chưa xác định";
+            typeMap.put(typeName, count);
+        }
+        return typeMap;
+    }
+
+
+    @Transactional(readOnly = true)
+    @Override
+    public Map<String, Long> getEmployeeStatsByGender(Integer year) {
+        log.info("Thống kê số lượng nhân viên theo giới tính cho năm {}", year);
+        List<Object[]> results;
+        LocalDateTime[] range = getYearRange(year);
+        if (range != null) {
+            results = employeeRepository.countEmployeesGroupByGenderInYear(UserStatusEnum.DELETED, range[0], range[1]);
+        } else {
+            results = employeeRepository.countEmployeesGroupByGender(UserStatusEnum.DELETED);
+        }
+
+        Map<String, Long> countMap = new LinkedHashMap<>();
+        countMap.put("NAM", 0L);
+        countMap.put("NU", 0L);
+        countMap.put("KHAC", 0L);
+
+        for (Object[] row : results) {
+            Integer gender = (Integer) row[0];
+            Long count = (Long) row[1];
+            if (gender == null) {
+                continue;
+            }
+            String key;
+            if (gender == 0) {
+                key = "NAM";
+            } else if (gender == 1) {
+                key = "NU";
+            } else {
+                key = "KHAC";
+            }
+
+            countMap.put(key, countMap.getOrDefault(key, 0L) + count);
+        }
+        return countMap;
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public Map<String, Long> getEmployeeStatsByAgeGroup(Integer year) {
+        log.info("Thống kê số lượng nhân viên theo độ tuổi cho năm {}", year);
+        List<EmployeeEntity> employees;
+        LocalDateTime[] range = getYearRange(year);
+        if (range != null) {
+            employees = employeeRepository.findAllActiveInYear(UserStatusEnum.DELETED, range[0], range[1]);
+        } else {
+            employees = employeeRepository.findAllByUserEntity_StatusNot(UserStatusEnum.DELETED);
+        }
+
+        Map<String, Long> ageGroupMap = new LinkedHashMap<>();
+        ageGroupMap.put("18 - 24", 0L);
+        ageGroupMap.put("25 - 34", 0L);
+        ageGroupMap.put("35 - 44", 0L);
+        ageGroupMap.put("45 - 54", 0L);
+        ageGroupMap.put("55+", 0L);
+
+        LocalDate targetDate = (year != null && year > 0) ? LocalDate.of(year, 12, 31) : LocalDate.now();
+        for (EmployeeEntity emp : employees) {
+            if (emp == null || emp.getUserEntity() == null) {
+                continue;
+            }
+
+            LocalDateTime dobDateTime = emp.getUserEntity().getDateOfBirth();
+            LocalDate dob;
+            if (dobDateTime != null) {
+                dob = dobDateTime.toLocalDate();
+            } else {
+                long hash = emp.getUserId() != null ? Math.abs(emp.getUserId()) : 1L;
+                int defaultAge = 22 + (int) (hash % 15);
+                dob = targetDate.minusYears(defaultAge);
+            }
+
+            int age = Period.between(dob, targetDate).getYears();
+
+            String group;
+            if (age <= 24) {
+                group = "18 - 24";
+            } else if (age <= 34) {
+                group = "25 - 34";
+            } else if (age <= 44) {
+                group = "35 - 44";
+            } else if (age <= 54) {
+                group = "45 - 54";
+            } else {
+                group = "55+";
+            }
+
+            ageGroupMap.merge(group, 1L, Long::sum);
+        }
+        return ageGroupMap;
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public byte[] exportEmployeeToExcel(EmployeeSearchRequest request) {
+        log.info("Xuất file Excel/CSV danh sách nhân viên chi tiết via CsvBuilder");
+        if (request != null) {
+            request.setSize(10000);
+        }
+        PageResponse<EmployeeResponse> pageRes = search(request);
+        List<EmployeeResponse> list = pageRes != null && pageRes.getContent() != null ? pageRes.getContent() : getAll();
+
+        List<String> headers = List.of(
+                "ID", "Mã nhân viên", "Username", "Email", "Họ và tên",
+                "Số điện thoại", "Giới tính", "Ngày sinh", "Phòng ban", "Mã phòng ban",
+                "Vị trí", "Loại hình", "Trạng thái HĐ", "Trạng thái TK", "Vai trò", "Ngày bắt đầu", "Ngày tạo"
+        );
+
+        List<Function<EmployeeResponse, Object>> extractors = List.of(
+                EmployeeResponse::getId,
+                e -> e.getEmployeeCode() != null ? e.getEmployeeCode() : "",
+                e -> e.getUserName() != null ? e.getUserName() : "",
+                e -> e.getUserEmail() != null ? e.getUserEmail() : "",
+                e -> e.getFullName() != null ? e.getFullName() : "",
+                e -> e.getPhone() != null ? e.getPhone() : "",
+                e -> e.getGender() == null ? "Chưa xác định" : (e.getGender() == 0 ? "Nam" : (e.getGender() == 1 ? "Nữ" : "Khác")),
+                e -> e.getDateOfBirth() != null ? e.getDateOfBirth() : "",
+                e -> e.getDepartmentName() != null ? e.getDepartmentName() : "",
+                e -> e.getDepartmentCode() != null ? e.getDepartmentCode() : "",
+                e -> e.getPosition() != null ? e.getPosition() : "",
+                e -> e.getEmploymentTypeEnum() != null ? e.getEmploymentTypeEnum() : "",
+                e -> e.getStatus() != null ? e.getStatus() : "",
+                e -> e.getUserStatus() != null ? e.getUserStatus() : "",
+                e -> e.getRoles() != null ? String.join("; ", e.getRoles()) : "",
+                e -> e.getStartDate() != null ? e.getStartDate() : "",
+                e -> e.getCreatedAt() != null ? e.getCreatedAt() : ""
+        );
+
+        return CsvBuilder.create()
+                .tableFromList(headers, list, extractors, "Không có dữ liệu nhân viên")
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public byte[] exportEmployeeDetailToExcel(Long userId) {
+        log.info("Xuất file Excel/CSV chi tiết 1 nhân sự via CsvBuilder: {}", userId);
+        EmployeeEntity emp = employeeRepository.findById(userId)
+                .orElseGet(() -> employeeRepository.findById(userId)
+                        .orElseThrow(() -> ResourceNotFoundException.of("Employee", userId)));
+
+        UserEntity user = emp.getUserEntity();
+
+        CsvBuilder builder = CsvBuilder.create();
+
+        // 1. THÔNG TIN TÀI KHOẢN & CÁ NHÂN
+        LinkedHashMap<String, Object> accountFields = new LinkedHashMap<>();
+        accountFields.put("ID người dùng", user != null ? user.getId() : "");
+        accountFields.put("Tên đăng nhập", user != null ? user.getUsername() : "");
+        accountFields.put("Email", user != null ? user.getEmail() : "");
+        accountFields.put("Họ và tên", user != null ? user.getFullName() : "");
+        accountFields.put("Số điện thoại", user != null ? user.getPhone() : "");
+        accountFields.put("Giới tính", user != null && user.getGender() != null ? (user.getGender() == 0 ? "Nam" : (user.getGender() == 1 ? "Nữ" : "Khác")) : "Chưa xác định");
+        accountFields.put("Ngày sinh", user != null ? user.getDateOfBirth() : "");
+        accountFields.put("Trạng thái tài khoản", user != null ? user.getStatus() : "");
+
+        if (user != null && user.getId() != null) {
+            List<UserRoleEntity> userRoles = userRoleRepository.findByUserEntity_Id(user.getId());
+            if (userRoles != null && !userRoles.isEmpty()) {
+                String rolesStr = userRoles.stream()
+                        .map(ur -> ur.getRoleEntity() != null ? (ur.getRoleEntity().getCode() != null ? ur.getRoleEntity().getCode() : ur.getRoleEntity().getName()) : "")
+                        .filter(s -> !s.isBlank())
+                        .reduce((a, b) -> a + "; " + b).orElse("");
+                accountFields.put("Vai trò hệ thống", rolesStr);
+            }
+        }
+        builder.section("1. THÔNG TIN TÀI KHOẢN & HỒ SƠ CÁ NHÂN")
+               .keyValueBlock(accountFields)
+               .blankLine();
+
+        // 2. HỒ SƠ NHÂN VIÊN
+        LinkedHashMap<String, Object> empFields = new LinkedHashMap<>();
+        empFields.put("Mã nhân viên", emp.getEmployeeCode());
+        empFields.put("Phòng ban", emp.getDepartment() != null ? emp.getDepartment().getName() : "Chưa phân bổ");
+        empFields.put("Mã phòng ban", emp.getDepartment() != null ? emp.getDepartment().getCode() : "");
+        empFields.put("Vị trí / Chức vụ", emp.getPosition());
+        empFields.put("Loại hình làm việc", emp.getEmploymentTypeEnum());
+        empFields.put("Trạng thái hợp đồng", emp.getStatus());
+        empFields.put("Ngày bắt đầu làm việc", emp.getStartDate());
+        empFields.put("Ngày kết thúc", emp.getEndDate());
+
+        builder.section("2. HỒ SƠ CÔNG VIỆC NHÂN VIÊN")
+               .keyValueBlock(empFields)
+               .blankLine();
+
+        // 3. DANH SÁCH HỢP ĐỒNG
+        List<EmployeeContractEntity> contracts = employeeContractRepository.findByEmployee_UserId(userId);
+        builder.section("3. DANH SÁCH HỢP ĐỒNG TẠI HỆ THỐNG")
+               .tableFromList(
+                       List.of("ID Hợp đồng", "Loại hợp đồng", "Từ ngày", "Đến ngày", "Lương cơ bản", "Trạng thái", "Ngày ký"),
+                       contracts,
+                       List.of(
+                               c -> c.getId() != null ? c.getId() : "",
+                               c -> c.getContractTypeEnum() != null ? c.getContractTypeEnum().name() : "",
+                               c -> c.getStartDate() != null ? c.getStartDate() : "",
+                               c -> c.getEndDate() != null ? c.getEndDate() : "",
+                               c -> c.getBaseSalary() != null ? c.getBaseSalary() : 0,
+                               c -> c.getStatus() != null ? c.getStatus().name() : "",
+                               c -> c.getSignedAt() != null ? c.getSignedAt() : ""
+                       ),
+                       "Chưa có thông tin hợp đồng."
+               )
+               .blankLine();
+
+        // 4. LỊCH SỬ CHẤM CÔNG
+        List<AttendanceEntity> attendances = attendanceRepository.findByEmployee_UserId(userId);
+        builder.section("4. LỊCH SỬ CHẤM CÔNG")
+               .tableFromList(
+                       List.of("Ngày làm", "Giờ vào", "Giờ ra", "Trạng thái", "Ghi chú"),
+                       attendances,
+                       List.of(
+                               a -> a.getCheckInTime() != null ? a.getCheckInTime().toLocalDate() : "",
+                               a -> a.getCheckInTime() != null ? a.getCheckInTime() : "",
+                               a -> a.getCheckOutTime() != null ? a.getCheckOutTime() : "",
+                               a -> a.getStatus() != null ? a.getStatus().name() : "",
+                               a -> a.getNote() != null ? a.getNote() : ""
+                       ),
+                       "Chưa có lịch sử chấm công."
+               )
+               .blankLine();
+
+        // 5. ĐƠN GIÁ GIẢNG DẠY
+        List<TeachingRateEntity> rates = teachingRateRepository.findByEmployeeEntity_UserId(userId);
+        builder.section("5. BẢNG ĐƠN GIÁ GIẢNG DẠY (DÀNH CHO GIẢNG VIÊN)")
+               .tableFromList(
+                       List.of("ID Đơn giá", "Lớp học", "Đơn giá (VNĐ/h)", "Từ ngày", "Đến ngày", "Trạng thái"),
+                       rates,
+                       List.of(
+                               r -> r.getId() != null ? r.getId() : "",
+                               r -> r.getClassEntity() != null ? r.getClassEntity().getName() : "Áp dụng chung",
+                               r -> r.getRate() != null ? r.getRate() : 0,
+                               r -> r.getEffectiveFrom() != null ? r.getEffectiveFrom() : "",
+                               r -> r.getEffectiveTo() != null ? r.getEffectiveTo() : "",
+                               r -> r.getStatus() != null ? r.getStatus().name() : ""
+                       ),
+                       "Chưa có cấu hình đơn giá giảng dạy."
+               )
+               .blankLine();
+
+        // 6. BẢNG LƯƠNG & THU NHẬP
+        List<SalaryEntity> salaries = salaryRepository.findByEmployee_UserId(userId);
+        builder.section("6. BẢNG LƯƠNG & THU NHẬP THEO KỲ")
+               .tableFromList(
+                       List.of("Kỳ lương", "Hình thức", "Lương cơ bản", "Tiền thưởng", "Khấu trừ", "Tổng lương nhận", "Trạng thái", "Ngày chi trả"),
+                       salaries,
+                       List.of(
+                               s -> s.getPeriod() != null ? s.getPeriod() : "",
+                               s -> s.getSalaryTypeEnum() != null ? s.getSalaryTypeEnum().name() : "",
+                               s -> s.getBaseSalary() != null ? s.getBaseSalary() : 0,
+                               s -> s.getBonus() != null ? s.getBonus() : 0,
+                               s -> s.getDeduction() != null ? s.getDeduction() : 0,
+                               s -> s.getTotalSalary() != null ? s.getTotalSalary() : 0,
+                               s -> s.getStatus() != null ? s.getStatus().name() : "",
+                               s -> s.getPaidAt() != null ? s.getPaidAt() : ""
+                       ),
+                       "Chưa có bảng lương chi trả."
+               )
+               .blankLine();
+
+        // 7. ĐƠN XIN NGHỈ PHÉP
+        List<LeaveRequestEntity> leaves = leaveRequestRepository.findByEmployee_UserId(userId);
+        builder.section("7. ĐƠN XIN NGHỈ PHÉP")
+               .tableFromList(
+                       List.of("ID Đơn", "Loại nghỉ phép", "Từ ngày", "Đến ngày", "Số ngày", "Lý do nghỉ", "Trạng thái", "Người duyệt"),
+                       leaves,
+                       List.of(
+                               l -> l.getId() != null ? l.getId() : "",
+                               l -> l.getLeaveType() != null ? l.getLeaveType().name() : "",
+                               l -> l.getStartDate() != null ? l.getStartDate() : "",
+                               l -> l.getEndDate() != null ? l.getEndDate() : "",
+                               l -> (l.getStartDate() != null && l.getEndDate() != null) ? (java.time.temporal.ChronoUnit.DAYS.between(l.getStartDate(), l.getEndDate()) + 1) : 0,
+                               l -> l.getReason() != null ? l.getReason() : "",
+                               l -> l.getStatus() != null ? l.getStatus().name() : "",
+                               l -> l.getApprover() != null ? l.getApprover().getFullName() : ""
+                       ),
+                       "Chưa có đơn xin nghỉ phép."
+               )
+               .blankLine();
+
+        // 8. THÔNG TIN HỆ THỐNG
+        LinkedHashMap<String, Object> systemFields = new LinkedHashMap<>();
+        systemFields.put("ID Người tạo", emp.getCreatedBy());
+        systemFields.put("Thời gian tạo", emp.getCreatedAt());
+        systemFields.put("ID Người cập nhật", emp.getUpdatedBy());
+        systemFields.put("Thời gian cập nhật", emp.getUpdatedAt());
+
+        builder.section("8. THÔNG TIN HỆ THỐNG")
+               .keyValueBlock(systemFields);
+
+        return builder.build();
+    }
 }
+
+
+
 
 

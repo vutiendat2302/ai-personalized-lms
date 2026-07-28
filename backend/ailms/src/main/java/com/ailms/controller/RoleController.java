@@ -98,4 +98,27 @@ public class RoleController {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.of("Permission created and assigned to role successfully", response));
     }
+
+    @GetMapping("/stats/overview")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> getOverviewStats() {
+        return ResponseEntity.ok(ApiResponse.of("Role overview stats", roleService.getRoleOverviewStats()));
+    }
+
+    @GetMapping("/stats/permissions-distribution")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Long>>> getPermissionsDistribution() {
+        return ResponseEntity.ok(ApiResponse.of("Permissions distribution", roleService.getRolePermissionsDistribution()));
+    }
+
+    @DeleteMapping("/{roleId}/users/{userId}")
+    public ResponseEntity<ApiResponse<Void>> removeUserFromRole(@PathVariable Long roleId, @PathVariable Long userId) {
+        roleService.removeUserFromRole(roleId, userId);
+        return ResponseEntity.ok(ApiResponse.message("User removed from role successfully"));
+    }
+
+    @PostMapping("/bulk-delete")
+    public ResponseEntity<ApiResponse<Void>> bulkDeleteRoles(@RequestBody List<Long> roleIds) {
+        roleService.bulkDeleteCustomRoles(roleIds);
+        return ResponseEntity.ok(ApiResponse.message("Bulk roles deleted successfully"));
+    }
 }
+

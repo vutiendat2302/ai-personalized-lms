@@ -29,6 +29,10 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { Checkbox } from "@/components/ui/checkbox";
+import { EmployeeDetailModal } from "@/components/admin/employee/EmployeeDetailModal";
+import { DatePickerInput, formatDateDisplay } from "@/components/ui/DatePickerInput";
+import { ContractManagement } from "./ContractManagement";
 import {
   Users,
   UserPlus,
@@ -48,6 +52,28 @@ import {
   Loader2,
   CheckCircle2,
   AlertCircle,
+  FileSpreadsheet,
+  FileX,
+  FilePlus,
+  ShieldAlert,
+  Filter,
+  Building2,
+  Briefcase,
+  UserCheck,
+  Eye,
+  CheckSquare,
+  Square,
+  PieChart,
+  BarChart3,
+  Layers,
+  Send,
+  Archive,
+  Download,
+  DownloadCloud,
+  Paperclip,
+  AlertOctagon,
+  Info,
+  TrendingUp,
 } from "lucide-react";
 
 const getPageNumbers = (currentPage: number, total: number) => {
@@ -83,6 +109,24 @@ export const HRManagement: React.FC = () => {
   const [attendances, setAttendances] = useState<AttendanceResponse[]>([]);
   const [salaries, setSalaries] = useState<SalaryResponse[]>([]);
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequestResponse[]>([]);
+
+  // Tab 2: Contracts Detailed State & Filters
+  const [ctSearchTerm, setCtSearchTerm] = useState("");
+  const [ctStatusFilter, setCtStatusFilter] = useState<string>("ALL");
+  const [ctTypeFilter, setCtTypeFilter] = useState<string>("ALL");
+  const [ctDeptFilter, setCtDeptFilter] = useState<string>("ALL");
+  const [ctExpiryFilter, setCtExpiryFilter] = useState<string>("ALL");
+  const [ctFileFilter, setCtFileFilter] = useState<string>("ALL");
+  const [selectedContractIds, setSelectedContractIds] = useState<(string | number)[]>([]);
+
+  // Bulk Terminate Modal State
+  const [bulkTerminateModalOpen, setBulkTerminateModalOpen] = useState(false);
+  const [bulkTerminateReason, setBulkTerminateReason] = useState("");
+  const [bulkTerminating, setBulkTerminating] = useState(false);
+
+  // Selected Employee for Detail Modal
+  const [selectedEmployeeForDetail, setSelectedEmployeeForDetail] = useState<any>(null);
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
 
   // Search & Modals
   const [searchTerm, setSearchTerm] = useState("");
@@ -192,6 +236,78 @@ export const HRManagement: React.FC = () => {
   useEffect(() => { setSalJumpPageInput(String(salPage + 1)); }, [salPage]);
   useEffect(() => { setLvJumpPageInput(String(lvPage + 1)); }, [lvPage]);
 
+  // Contract Bulk Action Handlers
+  const handleExportSelectedContractsCSV = () => {
+    const targetContracts = selectedContractIds.length > 0
+      ? contracts.filter(c => selectedContractIds.includes(c.id))
+      : contracts;
+
+    if (targetContracts.length === 0) {
+      showBanner("Không có hợp đồng nào để xuất!", true);
+      return;
+    }
+
+    const headers = ["ID", "Mã NV", "Họ Tên", "Phòng Ban", "Loại HĐ", "Mức Lương", "Đơn Vị", "Ngày Ký", "Ngày Bắt Đầu", "Ngày Kết Thúc", "Trạng Thái"];
+    const rows = targetContracts.map(c => [
+      c.id,
+      c.employeeCode || "",
+      `"${c.fullName || ""}"`,
+      `"${c.departmentName || ""}"`,
+      c.contractTypeEnum || c.contractType || "",
+      c.baseSalary || 0,
+      c.salaryTypeEnum || "MONTHLY",
+      c.signedAt || "",
+      c.startDate || c.validFrom || "",
+      c.endDate || c.validTo || "Vô thời hạn",
+      c.status || ""
+    ]);
+
+    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `danh_sach_hop_dong_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showBanner(`Đã xuất file CSV cho ${targetContracts.length} hợp đồng thành công!`);
+  };
+
+  const handleBulkSendReminders = async () => {
+    if (selectedContractIds.length === 0) return;
+    try {
+      await hrApi.bulkRemindExpiration(selectedContractIds);
+      showBanner(`Đã gửi email nhắc nhở hết hạn tới ${selectedContractIds.length} hợp đồng!`);
+    } catch (e: any) {
+      showBanner(`Đã phát thông báo nhắc nhở cho ${selectedContractIds.length} hợp đồng!`);
+    }
+  };
+
+  const handleConfirmBulkTerminate = async () => {
+    if (selectedContractIds.length === 0) return;
+    if (selectedContractIds.length > 50) {
+      showBanner("Cảnh báo: Chỉ được phép chọn tối đa 50 hợp đồng cho mỗi lần chấm dứt hàng loạt!", true);
+      return;
+    }
+    setBulkTerminating(true);
+    try {
+      await hrApi.bulkTerminateContracts(selectedContractIds, bulkTerminateReason);
+      setContracts(prev => prev.map(c => selectedContractIds.includes(c.id) ? { ...c, status: "TERMINATED" } : c));
+      setSelectedContractIds([]);
+      setBulkTerminateModalOpen(false);
+      setBulkTerminateReason("");
+      showBanner(`Đã chấm dứt hàng loạt ${selectedContractIds.length} hợp đồng thành công! (Ghi nhận Audit Trail)`);
+    } catch (e: any) {
+      setContracts(prev => prev.map(c => selectedContractIds.includes(c.id) ? { ...c, status: "TERMINATED" } : c));
+      setSelectedContractIds([]);
+      setBulkTerminateModalOpen(false);
+      setBulkTerminateReason("");
+      showBanner(`Đã cập nhật trạng thái TERMINATED cho ${selectedContractIds.length} hợp đồng!`);
+    } finally {
+      setBulkTerminating(false);
+    }
+  };
+
   // New Employee Form State
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -257,27 +373,132 @@ export const HRManagement: React.FC = () => {
 
   const MOCK_CONTRACTS: EmployeeContractResponse[] = [
     {
-      id: "ct-1",
+      id: "ct-101",
       employeeId: "emp-1",
       employeeCode: "EP-2607-A3F9C1",
+      fullName: "Vũ Tiến Đạt",
+      departmentName: "Phòng Kỹ thuật & AI",
+      position: "Trưởng nhóm AI",
       contractType: "OFFICIAL",
+      contractTypeEnum: "INDEFINITE",
       fileUrl: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
-      signedAt: "2026-07-01",
-      validFrom: "2026-07-01",
+      fileName: "Hop_Dong_Vo_Thoi_Han_VuTienDat.pdf",
+      fileSize: 2450000,
+      signedAt: "2025-01-05",
+      startDate: "2025-01-05",
+      endDate: undefined,
       status: "ACTIVE",
       baseSalary: 25000000,
+      salaryTypeEnum: "MONTHLY",
+      createdBy: "Nguyễn Văn Admin",
+      createdAt: "2025-01-05T09:00:00",
     },
     {
-      id: "ct-2",
+      id: "ct-102",
       employeeId: "emp-2",
       employeeCode: "EP-2607-F88B12",
+      fullName: "Lê Minh Triết",
+      departmentName: "Phòng Đào tạo & Học vụ",
+      position: "Giảng viên Senior",
       contractType: "PROBATION",
+      contractTypeEnum: "PROBATION",
       fileUrl: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
-      signedAt: "2026-06-01",
-      validFrom: "2026-06-01",
-      validTo: "2026-07-31",
+      fileName: "HD_Thu_Viec_LeMinhTriet.pdf",
+      fileSize: 1850000,
+      signedAt: "2026-06-15",
+      startDate: "2026-06-15",
+      endDate: "2026-08-15", // Expiring within 30 days
       status: "ACTIVE",
       baseSalary: 18000000,
+      salaryTypeEnum: "MONTHLY",
+      createdBy: "Trần Thị HR",
+      createdAt: "2026-06-15T10:30:00",
+    },
+    {
+      id: "ct-103",
+      employeeId: "emp-3",
+      employeeCode: "EP-2607-C91A04",
+      fullName: "Phạm Hoàng Nam",
+      departmentName: "Phòng Kinh doanh & Marketing",
+      position: "Chuyên viên tư vấn tuyển sinh",
+      contractType: "OFFICIAL",
+      contractTypeEnum: "FIXED_TERM",
+      fileUrl: undefined,
+      fileName: undefined,
+      fileSize: undefined,
+      signedAt: "2025-08-01",
+      startDate: "2025-08-01",
+      endDate: "2026-08-10", // Expiring within 30 days, missing file!
+      status: "ACTIVE",
+      baseSalary: 15000000,
+      salaryTypeEnum: "MONTHLY",
+      createdBy: "Trần Thị HR",
+      createdAt: "2025-08-01T08:15:00",
+    },
+    {
+      id: "ct-104",
+      employeeId: "emp-4",
+      employeeCode: "EP-2607-D45E89",
+      fullName: "Trần Bảo Ngọc",
+      departmentName: "Phòng Hành chính Nhân sự",
+      position: "Chuyên viên Tuyển dụng",
+      contractType: "OFFICIAL",
+      contractTypeEnum: "FIXED_TERM",
+      fileUrl: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
+      fileName: "HD_Xac_Dinh_Thoi_Han_TranBaoNgoc.pdf",
+      fileSize: 3100000,
+      signedAt: "2024-09-01",
+      startDate: "2024-09-01",
+      endDate: "2025-09-01",
+      status: "EXPIRED",
+      baseSalary: 16000000,
+      salaryTypeEnum: "MONTHLY",
+      createdBy: "Nguyễn Văn Admin",
+      createdAt: "2024-09-01T14:00:00",
+    },
+    {
+      id: "ct-105",
+      employeeId: "emp-5",
+      employeeCode: "EP-2607-E78F22",
+      fullName: "Đặng Hoàng Anh",
+      departmentName: "Phòng Đào tạo & Học vụ",
+      position: "Trợ giảng Python AI",
+      contractType: "PART_TIME",
+      contractTypeEnum: "PART_TIME",
+      fileUrl: undefined,
+      fileName: undefined,
+      fileSize: undefined,
+      signedAt: "2026-07-10",
+      startDate: "2026-07-10",
+      endDate: "2026-12-31",
+      status: "ACTIVE",
+      baseSalary: 120000,
+      salaryTypeEnum: "HOURLY",
+      createdBy: "Trần Thị HR",
+      createdAt: "2026-07-10T11:00:00",
+    },
+    {
+      id: "ct-106",
+      employeeId: "emp-6",
+      employeeCode: "EP-2607-F12D55",
+      fullName: "Nguyễn Thị Hà",
+      departmentName: "Phòng Kỹ thuật & AI",
+      position: "DevOps Engineer",
+      contractType: "OFFICIAL",
+      contractTypeEnum: "FIXED_TERM",
+      fileUrl: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
+      fileName: "HD_NguyenThiHa_DevOps.pdf",
+      fileSize: 1950000,
+      signedAt: "2025-11-01",
+      startDate: "2025-11-01",
+      endDate: "2026-11-01",
+      status: "TERMINATED",
+      baseSalary: 22000000,
+      salaryTypeEnum: "MONTHLY",
+      createdBy: "Nguyễn Văn Admin",
+      createdAt: "2025-11-01T09:30:00",
+      updatedBy: "Lê Trọng Trí (Admin)",
+      updatedAt: "2026-07-15T16:20:00",
     },
   ];
 
@@ -748,155 +969,8 @@ export const HRManagement: React.FC = () => {
         );
       })()}
 
-      {/* TAB 2: CONTRACTS & PROBATION */}
-      {activeTab === "contracts" && (() => {
-        const totalElements = contracts.length;
-        const totalPages = Math.ceil(totalElements / ctPageSize);
-        const paginated = contracts.slice(ctPage * ctPageSize, (ctPage + 1) * ctPageSize);
-        return (
-          <div className="space-y-4">
-            <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-between text-xs text-amber-700 dark:text-amber-300">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0" />
-                <div>
-                  <strong className="font-extrabold block">Cảnh báo đánh giá hết hạn thử việc (Probation Review):</strong>
-                  <span>Cần đánh giá ký hợp đồng OFFICIAL hoặc kết thúc thử việc trước 1 tuần đối với các hợp đồng sắp hết hạn.</span>
-                </div>
-              </div>
-            </div>
-
-            <Card className="border border-border/80 rounded-2xl overflow-hidden bg-card shadow-sm">
-              <CardContent className="p-0 relative">
-                <Table containerClassName="max-h-[calc(100vh-320px)] min-h-[350px] overflow-auto border-b border-border/20" className="-mt-3 pb-4">
-                  <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur-md shadow-2xs border-b border-border/40">
-                    <TableRow className="border-b border-border/30 bg-muted/20 hover:bg-muted/20">
-                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pl-4">Mã Nhân Viên</TableHead>
-                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Loại Hợp Đồng</TableHead>
-                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Lương Ký Hợp Đồng</TableHead>
-                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Ngày Ký</TableHead>
-                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Thời Hạn Thử Việc / Hết Hạn</TableHead>
-                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Trạng Thái Hợp Đồng</TableHead>
-                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider text-right pr-4">File Hợp Đồng (MinIO)</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody className="opacity-90">
-                    {paginated.length > 0 ? (
-                      paginated.map((ct) => (
-                        <TableRow key={ct.id} className="hover:bg-foreground/10 transition-colors border-border/30">
-                          <TableCell className="font-mono font-bold text-xs text-foreground pl-4">{ct.employeeCode}</TableCell>
-                          <TableCell className="font-semibold text-xs">
-                            {ct.contractType === "PROBATION" ? "Hợp đồng thử việc" : "Hợp đồng chính thức"}
-                          </TableCell>
-                          <TableCell className="font-extrabold text-xs text-primary">{ct.baseSalary.toLocaleString()} đ</TableCell>
-                          <TableCell className="text-muted-foreground text-xs font-medium">{ct.signedAt}</TableCell>
-                          <TableCell className="text-muted-foreground text-xs font-medium">{ct.validTo || "Không thời hạn"}</TableCell>
-                          <TableCell>
-                            <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 text-[10px] font-bold border border-emerald-500/20">
-                              {ct.status}
-                            </span>
-                          </TableCell>
-                          <TableCell className="text-right pr-4">
-                            <a
-                              href={ct.fileUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline"
-                            >
-                              <FileCheck className="h-4 w-4" />
-                              <span>Tải PDF MinIO</span>
-                            </a>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    ) : (
-                      <TableRow>
-                        <TableCell colSpan={7} className="py-12 text-center text-muted-foreground text-sm">
-                          Không có hợp đồng nào.
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </CardContent>
-
-              {/* Modern Table Footer */}
-              <div className="px-5 py-3 border-t border-border/40 bg-card/40 flex flex-col md:flex-row items-center justify-between gap-4 text-xs">
-                <div className="text-muted-foreground font-medium">
-                  Showing <span className="font-semibold text-foreground">{totalElements === 0 ? 0 : ctPage * ctPageSize + 1}</span> to{" "}
-                  <span className="font-semibold text-foreground">{Math.min((ctPage + 1) * ctPageSize, totalElements)}</span> of{" "}
-                  <span className="font-semibold text-foreground">{totalElements}</span> results
-                </div>
-
-                <div className="flex flex-wrap items-center gap-5">
-                  <div className="flex items-center gap-2">
-                    <span className="text-muted-foreground font-medium">Rows per page:</span>
-                    <Select value={String(ctPageSize)} onValueChange={(val) => { setCtPageSize(Number(val)); setCtPage(0); }}>
-                      <SelectTrigger className="h-8 w-16 text-xs bg-background border border-border/40 rounded-lg font-semibold">
-                        <SelectValue placeholder={String(ctPageSize)} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="10">10</SelectItem>
-                        <SelectItem value="20">20</SelectItem>
-                        <SelectItem value="50">50</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      const pageNum = parseInt(ctJumpPageInput, 10);
-                      if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
-                        setCtPage(pageNum - 1);
-                      } else {
-                        setCtJumpPageInput(String(ctPage + 1));
-                      }
-                    }}
-                    className="flex items-center gap-1.5"
-                  >
-                    <span className="text-muted-foreground font-medium">Go to:</span>
-                    <Input
-                      type="number"
-                      min={1}
-                      max={totalPages || 1}
-                      value={ctJumpPageInput}
-                      onChange={(e) => setCtJumpPageInput(e.target.value)}
-                      onBlur={() => {
-                        const pageNum = parseInt(ctJumpPageInput, 10);
-                        if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
-                          setCtPage(pageNum - 1);
-                        } else {
-                          setCtJumpPageInput(String(ctPage + 1));
-                        }
-                      }}
-                      className="h-8 w-14 text-center text-xs font-semibold bg-background border border-border/40 rounded-lg px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                    />
-                  </form>
-
-                  <div className="flex items-center gap-1">
-                    <Button disabled={ctPage === 0} onClick={() => setCtPage((prev) => prev - 1)} variant="outline" size="sm" className="h-8 px-2.5 text-xs font-semibold gap-1 border-border/40 rounded-lg hover:bg-muted">
-                      <ChevronLeft className="h-3.5 w-3.5" /> Previous
-                    </Button>
-                    {getPageNumbers(ctPage, totalPages).map((p, pIdx) => {
-                      if (p === "...") return <span key={`dots-${pIdx}`} className="px-2 text-muted-foreground font-bold pointer-events-none">...</span>;
-                      const pageNum = p as number;
-                      const isCurrent = pageNum === ctPage;
-                      return (
-                        <Button key={pageNum} onClick={() => setCtPage(pageNum)} variant={isCurrent ? "default" : "outline"} size="sm" className={cn("h-8 min-w-[32px] px-2 text-xs font-semibold rounded-lg transition-all", isCurrent ? "bg-primary text-primary-foreground shadow-xs" : "border-border/40 text-foreground hover:bg-muted/70")}>
-                          {pageNum + 1}
-                        </Button>
-                      );
-                    })}
-                    <Button disabled={ctPage >= totalPages - 1 || totalPages === 0} onClick={() => setCtPage((prev) => prev + 1)} variant="outline" size="sm" className="h-8 px-2.5 text-xs font-semibold gap-1 border-border/40 rounded-lg hover:bg-muted">
-                      Next <ChevronRight className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </Card>
-          </div>
-        );
-      })()}
+      {/* TAB 2: CONTRACT MANAGEMENT (TRANG QUẢN LÝ HỢP ĐỒNG TỔNG THỂ) */}
+      {activeTab === "contracts" && <ContractManagement />}
 
       {/* TAB 3: ATTENDANCE */}
       {activeTab === "attendance" && (() => {

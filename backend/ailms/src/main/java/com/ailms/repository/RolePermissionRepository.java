@@ -38,5 +38,7 @@ public interface RolePermissionRepository extends BaseRepository<RolePermissionE
             @Param("permissionIds") Set<Long> permissionIds);
 
     void deleteByRoleEntity_Id(Long roleId);
+
+    List<RolePermissionEntity> findByPermissionEntity_Id(Long permissionId);
 }
 
