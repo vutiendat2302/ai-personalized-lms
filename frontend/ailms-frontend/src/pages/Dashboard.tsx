@@ -6,6 +6,7 @@ import { degreeApi } from "@/api/degrees/degreeApi";
 import { adminApi } from "@/api/admin/adminApi";
 import { userApi } from "@/api/users/userApi";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -277,6 +278,12 @@ export const Dashboard: React.FC = () => {
   const [employeeSalaryInput, setEmployeeSalaryInput] = useState<string>("");
   const [employeePositionInput, setEmployeePositionInput] = useState<string>("");
   const [employeeDepartmentInput, setEmployeeDepartmentInput] = useState<string>("");
+
+  // Confirm Dialog states
+  const [confirmDeleteUserObj, setConfirmDeleteUserObj] = useState<{ id: number; name?: string } | null>(null);
+  const [confirmBulkDeleteDashUsers, setConfirmBulkDeleteDashUsers] = useState(false);
+  const [confirmDeleteRoleObj, setConfirmDeleteRoleObj] = useState<{ id: number; name: string } | null>(null);
+  const [confirmDeletePermObj, setConfirmDeletePermObj] = useState<{ id: number; name: string } | null>(null);
 
   useEffect(() => {
     if (!isAdmin) {
@@ -553,12 +560,16 @@ export const Dashboard: React.FC = () => {
   };
 
   const handleDeleteUser = (id: number) => {
-    if (window.confirm("Bạn có chắc chắn muốn xóa người dùng này?")) {
-      const updated = users.filter((u) => u.id !== id);
-      updateLocalStorage(updated, roles, permissions);
-      showBanner("Xóa người dùng thành công!");
-      setSelectedUserIds(selectedUserIds.filter(selectedId => selectedId !== id));
-    }
+    setConfirmDeleteUserObj({ id });
+  };
+
+  const confirmDeleteUserAction = () => {
+    if (!confirmDeleteUserObj) return;
+    const updated = users.filter((u) => u.id !== confirmDeleteUserObj.id);
+    updateLocalStorage(updated, roles, permissions);
+    showBanner("Xóa người dùng thành công!");
+    setSelectedUserIds(selectedUserIds.filter((selectedId) => selectedId !== confirmDeleteUserObj.id));
+    setConfirmDeleteUserObj(null);
   };
 
   const handleInviteUser = (e: React.FormEvent) => {
@@ -585,12 +596,15 @@ export const Dashboard: React.FC = () => {
   // Bulk operations
   const handleBulkDelete = () => {
     if (selectedUserIds.length === 0) return;
-    if (window.confirm(`Xóa ${selectedUserIds.length} người dùng đã chọn?`)) {
-      const updated = users.filter((u) => !selectedUserIds.includes(u.id));
-      updateLocalStorage(updated, roles, permissions);
-      showBanner("Đã xóa hàng loạt người dùng thành công!");
-      setSelectedUserIds([]);
-    }
+    setConfirmBulkDeleteDashUsers(true);
+  };
+
+  const confirmBulkDeleteDashUsersAction = () => {
+    const updated = users.filter((u) => !selectedUserIds.includes(u.id));
+    updateLocalStorage(updated, roles, permissions);
+    showBanner("Đã xóa hàng loạt người dùng thành công!");
+    setSelectedUserIds([]);
+    setConfirmBulkDeleteDashUsers(false);
   };
 
   const handleBulkAssignRole = (e: React.FormEvent) => {
@@ -620,12 +634,12 @@ export const Dashboard: React.FC = () => {
   const handleSaveRole = (e: React.FormEvent) => {
     e.preventDefault();
     const data = new FormData(e.target as HTMLFormElement);
-    const name = (data.get("name") as string).toUpperCase();
-    const description = data.get("description") as string;
+    const name = data.get("name") as string;
+    const code = (data.get("code") as string).toLowerCase().replace(/\s+/g, "_");
 
     if (editingRole) {
       const updated = roles.map((r) =>
-        r.id === editingRole.id ? { ...r, name, description } : r
+        r.id === editingRole.id ? { ...r, name, code } : r
       );
       updateLocalStorage(users, updated, permissions);
       showBanner("Cập nhật vai trò thành công!");
@@ -633,8 +647,10 @@ export const Dashboard: React.FC = () => {
       const newRole = {
         id: Date.now(),
         name,
+        code,
+        description: `Vai trò ${name}`,
+        userCount: 0,
         isSystem: false,
-        description,
         permissions: []
       };
       updateLocalStorage(users, [...roles, newRole], permissions);
@@ -657,22 +673,26 @@ export const Dashboard: React.FC = () => {
   };
 
   const handleDeleteRole = (id: number, roleName: string) => {
-    const role = roles.find(r => r.id === id);
+    const role = roles.find((r) => r.id === id);
     if (role?.isSystem) {
-      alert("Không thể xóa vai trò hệ thống!");
+      showBanner("Không thể xóa vai trò hệ thống!", true);
       return;
     }
-    if (window.confirm(`Xóa vai trò ${roleName}?`)) {
-      const updated = roles.filter((r) => r.id !== id);
-      updateLocalStorage(users, updated, permissions);
-      showBanner("Xóa vai trò thành công!");
-    }
+    setConfirmDeleteRoleObj({ id, name: roleName });
+  };
+
+  const confirmDeleteRoleAction = () => {
+    if (!confirmDeleteRoleObj) return;
+    const updated = roles.filter((r) => r.id !== confirmDeleteRoleObj.id);
+    updateLocalStorage(users, updated, permissions);
+    showBanner("Xóa vai trò thành công!");
+    setConfirmDeleteRoleObj(null);
   };
 
   const handleAssignPermissions = (e: React.FormEvent) => {
     e.preventDefault();
     const data = new FormData(e.target as HTMLFormElement);
-    const checkedPerms = data.getAll("assignedPerms").map(p => parseInt(p as string));
+    const checkedPerms = data.getAll("assignedPerms").map((p) => parseInt(p as string));
 
     const updated = roles.map((r) =>
       r.id === assigningRole.id ? { ...r, permissions: checkedPerms } : r
@@ -706,7 +726,7 @@ export const Dashboard: React.FC = () => {
         name,
         entity,
         action,
-        description
+        description,
       };
       updateLocalStorage(users, roles, [...permissions, newPerm]);
       showBanner("Tạo quyền mới thành công!");
@@ -716,16 +736,19 @@ export const Dashboard: React.FC = () => {
   };
 
   const handleDeletePermission = (id: number, name: string) => {
-    if (window.confirm(`Xóa quyền ${name}?`)) {
-      const updated = permissions.filter((p) => p.id !== id);
-      // Remove this permission from any roles as well
-      const updatedRoles = roles.map((r) => ({
-        ...r,
-        permissions: r.permissions.filter((pId: number) => pId !== id)
-      }));
-      updateLocalStorage(users, updatedRoles, updated);
-      showBanner("Xóa quyền thành công!");
-    }
+    setConfirmDeletePermObj({ id, name });
+  };
+
+  const confirmDeletePermAction = () => {
+    if (!confirmDeletePermObj) return;
+    const updated = permissions.filter((p) => p.id !== confirmDeletePermObj.id);
+    const updatedRoles = roles.map((r) => ({
+      ...r,
+      permissions: r.permissions.filter((pId: number) => pId !== confirmDeletePermObj.id),
+    }));
+    updateLocalStorage(users, updatedRoles, updated);
+    showBanner("Xóa quyền thành công!");
+    setConfirmDeletePermObj(null);
   };
 
   // ==========================================
@@ -772,7 +795,7 @@ export const Dashboard: React.FC = () => {
     if (!gradingSubmission) return;
     const numGrade = parseFloat(gradeInput);
     if (isNaN(numGrade) || numGrade < 0 || numGrade > 10) {
-      alert("Vui lòng nhập điểm số hợp lệ từ 0 đến 10");
+      showBanner("Vui lòng nhập điểm số hợp lệ từ 0 đến 10", true);
       return;
     }
     setTeacherSubmissions((prev) =>
@@ -2983,6 +3006,47 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* CONFIRM DIALOGS */}
+      <ConfirmDialog
+        open={Boolean(confirmDeleteUserObj)}
+        onOpenChange={(open) => { if (!open) setConfirmDeleteUserObj(null); }}
+        title="Xác nhận xóa người dùng"
+        description="Bạn có chắc chắn muốn xóa người dùng này khỏi hệ thống?"
+        confirmText="Xóa người dùng"
+        cancelText="Hủy bỏ"
+        onConfirm={confirmDeleteUserAction}
+      />
+
+      <ConfirmDialog
+        open={confirmBulkDeleteDashUsers}
+        onOpenChange={setConfirmBulkDeleteDashUsers}
+        title="Xác nhận xóa hàng loạt người dùng"
+        description={`Bạn có chắc chắn muốn xóa ${selectedUserIds.length} người dùng đã chọn?`}
+        confirmText="Xóa tất cả"
+        cancelText="Hủy bỏ"
+        onConfirm={confirmBulkDeleteDashUsersAction}
+      />
+
+      <ConfirmDialog
+        open={Boolean(confirmDeleteRoleObj)}
+        onOpenChange={(open) => { if (!open) setConfirmDeleteRoleObj(null); }}
+        title="Xác nhận xóa vai trò"
+        description={`Bạn có chắc chắn muốn xóa vai trò ${confirmDeleteRoleObj?.name}?`}
+        confirmText="Xóa vai trò"
+        cancelText="Hủy bỏ"
+        onConfirm={confirmDeleteRoleAction}
+      />
+
+      <ConfirmDialog
+        open={Boolean(confirmDeletePermObj)}
+        onOpenChange={(open) => { if (!open) setConfirmDeletePermObj(null); }}
+        title="Xác nhận xóa quyền"
+        description={`Bạn có chắc chắn muốn xóa quyền ${confirmDeletePermObj?.name}?`}
+        confirmText="Xóa quyền"
+        cancelText="Hủy bỏ"
+        onConfirm={confirmDeletePermAction}
+      />
 
     </div>
   );

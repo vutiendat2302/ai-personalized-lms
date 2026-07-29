@@ -3,7 +3,7 @@ import type { ApiResponse } from "@/types/base";
 import type { PermissionResponse, PermissionRequest } from "@/types/admin";
 
 export const permissionApi = {
-  getPermissions: (params?: { entity?: string; action?: string; search?: string; keyword?: string; assignedStatus?: string; page?: number; size?: number; sort?: string }) =>
+  getPermissions: (params?: { entity?: string; action?: string; search?: string; keyword?: string; assignedStatus?: string; page?: number; size?: number; sort?: string | string[] }) =>
     httpClient.get<ApiResponse<any>>("/v1/permissions/page", { params }),
 
   getAllPermissions: () =>

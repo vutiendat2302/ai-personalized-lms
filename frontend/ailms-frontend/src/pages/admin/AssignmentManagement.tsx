@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
@@ -169,10 +170,18 @@ export const AssignmentManagement: React.FC = () => {
     setIsModalOpen(true);
   };
 
+  const [actionMessage, setActionMessage] = useState<{ text: string; isError?: boolean } | null>(null);
+  const [deleteAsgConfirm, setDeleteAsgConfirm] = useState<{ id: string; title: string } | null>(null);
+
+  const showBanner = (text: string, isError = false) => {
+    setActionMessage({ text, isError });
+    setTimeout(() => setActionMessage(null), 4000);
+  };
+
   const handleSaveAssignment = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formTitle.trim()) {
-      alert("Vui lòng nhập tiêu đề Assignment!");
+      showBanner("Vui lòng nhập tiêu đề Assignment!", true);
       return;
     }
 
@@ -192,7 +201,7 @@ export const AssignmentManagement: React.FC = () => {
             : a
         )
       );
-      alert(`Cập nhật Assignment "${formTitle}" thành công!`);
+      showBanner(`Cập nhật Assignment "${formTitle}" thành công!`);
     } else {
       const newAsg: AssignmentItem = {
         id: `asg-${Date.now()}`,
@@ -207,16 +216,20 @@ export const AssignmentManagement: React.FC = () => {
         createdAt: new Date().toISOString().split("T")[0],
       };
       setAssignments((prev) => [newAsg, ...prev]);
-      alert(`Tạo mới Assignment "${formTitle}" thành công!`);
+      showBanner(`Tạo mới Assignment "${formTitle}" thành công!`);
     }
     setIsModalOpen(false);
   };
 
   const handleDeleteAssignment = (id: string, title: string) => {
-    if (confirm(`Bạn có chắc muốn xóa Assignment "${title}"?`)) {
-      setAssignments((prev) => prev.filter((a) => a.id !== id));
-      alert(`Đã xóa Assignment thành công!`);
-    }
+    setDeleteAsgConfirm({ id, title });
+  };
+
+  const confirmDeleteAsgAction = () => {
+    if (!deleteAsgConfirm) return;
+    setAssignments((prev) => prev.filter((a) => a.id !== deleteAsgConfirm.id));
+    showBanner(`Đã xóa Assignment "${deleteAsgConfirm.title}" thành công!`);
+    setDeleteAsgConfirm(null);
   };
 
   const filteredAssignments = assignments.filter((a) => {
@@ -404,7 +417,7 @@ export const AssignmentManagement: React.FC = () => {
                     <TableCell className="text-right pr-4">
                       <div className="flex items-center justify-end gap-1">
                         <Button
-                          onClick={() => alert(`Mở giao diện chấm bài cho Assignment: ${asg.title}`)}
+                          onClick={() => showBanner(`Mở giao diện chấm bài cho Assignment: ${asg.title}`)}
                           variant="ghost"
                           size="sm"
                           title="Chấm bài"
@@ -670,6 +683,30 @@ export const AssignmentManagement: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* TOAST BANNER NOTIFICATIONS */}
+      {actionMessage && (
+        <div
+          className={cn(
+            "fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300",
+            actionMessage.isError ? "bg-destructive" : "bg-emerald-600"
+          )}
+        >
+          <span className="text-sm font-semibold">{actionMessage.text}</span>
+        </div>
+      )}
+
+      {/* CONFIRM DELETE DIALOG */}
+      <ConfirmDialog
+        open={Boolean(deleteAsgConfirm)}
+        onOpenChange={(open) => { if (!open) setDeleteAsgConfirm(null); }}
+        title="Xác nhận xóa Assignment"
+        description={`Bạn có chắc muốn xóa Assignment "${deleteAsgConfirm?.title}"? Thao tác không thể hoàn tác.`}
+        confirmText="Xóa Assignment"
+        cancelText="Hủy bỏ"
+        onConfirm={confirmDeleteAsgAction}
+      />
+
     </div>
   );
 };

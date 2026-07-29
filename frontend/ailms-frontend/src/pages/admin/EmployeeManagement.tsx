@@ -88,6 +88,7 @@ import {
 import { userApi } from "@/api/users/userApi";
 import { roleApi } from "@/api/roles/roleApi";
 import { departmentApi, type DepartmentResponse } from "@/api/departments/departmentApi";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { employeeApi } from "@/api/employees/employeeApi";
 import type { UserResponse, RoleResponse } from "@/types/admin";
 import type { EmployeeExtended } from "@/types/employee";
@@ -881,18 +882,26 @@ export const EmployeeManagement: React.FC = () => {
     }
   };
 
-  const handleDeleteUser = async (id: string | number) => {
-    if (window.confirm("Bạn có chắc chắn muốn xóa tài khoản nhân sự này? (Tài khoản sẽ được chuyển vào Thùng rác)")) {
-      try {
-        const res = await userApi.deleteUser(id);
-        if (res.data?.success) {
-          showBanner("Xóa người dùng thành công!");
-          fetchUsers();
-          setSelectedUserIds(prev => prev.filter(selectedId => String(selectedId) !== String(id)));
-        }
-      } catch (err: any) {
-        showBanner(err.message || "Lỗi xóa người dùng", true);
+  const [confirmDeleteEmpId, setConfirmDeleteEmpId] = useState<string | number | null>(null);
+  const [confirmBulkDeleteEmps, setConfirmBulkDeleteEmps] = useState(false);
+
+  const handleDeleteUser = (id: string | number) => {
+    setConfirmDeleteEmpId(id);
+  };
+
+  const confirmDeleteUserAction = async () => {
+    if (!confirmDeleteEmpId) return;
+    try {
+      const res = await userApi.deleteUser(confirmDeleteEmpId);
+      if (res.data?.success) {
+        showBanner("Xóa người dùng thành công!");
+        fetchUsers();
+        setSelectedUserIds((prev) => prev.filter((selectedId) => String(selectedId) !== String(confirmDeleteEmpId)));
       }
+    } catch (err: any) {
+      showBanner(err.message || "Lỗi xóa người dùng", true);
+    } finally {
+      setConfirmDeleteEmpId(null);
     }
   };
 
@@ -1061,21 +1070,24 @@ export const EmployeeManagement: React.FC = () => {
     }
   };
 
-  const handleBulkDelete = async () => {
+  const handleBulkDelete = () => {
     if (selectedUserIds.length === 0) return;
-    if (window.confirm(`Bạn có chắc muốn xóa ${selectedUserIds.length} tài khoản đã chọn?`)) {
-      setBulkDeleteLoading(true);
-      try {
-        await userApi.bulkDelete({ userIds: selectedUserIds }).catch(() => null);
-        showBanner("Xóa hàng loạt tài khoản thành công!");
-        setUsers(prev => prev.filter(u => !selectedUserIds.includes(String(u.id))));
-        setSelectedUserIds([]);
-        fetchStatistics();
-      } catch (err: any) {
-        showBanner(err.message || "Lỗi xóa hàng loạt", true);
-      } finally {
-        setBulkDeleteLoading(false);
-      }
+    setConfirmBulkDeleteEmps(true);
+  };
+
+  const confirmBulkDeleteAction = async () => {
+    setBulkDeleteLoading(true);
+    try {
+      await userApi.bulkDelete({ userIds: selectedUserIds }).catch(() => null);
+      showBanner("Xóa hàng loạt tài khoản thành công!");
+      setUsers((prev) => prev.filter((u) => !selectedUserIds.includes(String(u.id))));
+      setSelectedUserIds([]);
+      fetchStatistics();
+    } catch (err: any) {
+      showBanner(err.message || "Lỗi xóa hàng loạt", true);
+    } finally {
+      setBulkDeleteLoading(false);
+      setConfirmBulkDeleteEmps(false);
     }
   };
 
@@ -1780,7 +1792,7 @@ export const EmployeeManagement: React.FC = () => {
                     <div className="flex items-center gap-1.5">
                       <span className="text-muted-foreground">Phòng ban & Vị trí</span>
                       <Popover>
-                        <PopoverTrigger nativeButton={false} render={<Button variant="ghost" size="icon" className="h-5 w-5 p-0 hover:bg-muted"><Filter className={`h-3.5 w-3.5 ${filterDepartmentId ? "text-primary font-bold" : "text-muted-foreground"}`} /></Button>} />
+                        <PopoverTrigger nativeButton={true} render={<Button variant="ghost" size="icon" className="h-5 w-5 p-0 hover:bg-muted"><Filter className={`h-3.5 w-3.5 ${filterDepartmentId ? "text-primary font-bold" : "text-muted-foreground"}`} /></Button>} />
                         <PopoverContent className="w-56 p-2 text-xs bg-popover border border-border shadow-xl rounded-xl">
                           <div className="font-bold mb-2 pb-1 border-b border-border/40 text-foreground">Lọc theo Phòng ban</div>
                           <Select value={filterDepartmentId || "ALL"} onValueChange={(v) => setFilterDepartmentId(v === "ALL" ? "" : v)}>
@@ -1800,7 +1812,7 @@ export const EmployeeManagement: React.FC = () => {
                     <div className="flex items-center justify-center gap-1.5">
                       <span className="text-muted-foreground">Vai trò</span>
                       <Popover>
-                        <PopoverTrigger nativeButton={false} render={<Button variant="ghost" size="icon" className="h-5 w-5 p-0 hover:bg-muted"><Filter className={`h-3.5 w-3.5 ${filterRole ? "text-primary font-bold" : "text-muted-foreground"}`} /></Button>} />
+                        <PopoverTrigger nativeButton={true} render={<Button variant="ghost" size="icon" className="h-5 w-5 p-0 hover:bg-muted"><Filter className={`h-3.5 w-3.5 ${filterRole ? "text-primary font-bold" : "text-muted-foreground"}`} /></Button>} />
                         <PopoverContent className="w-48 p-2 text-xs bg-popover border border-border shadow-xl rounded-xl">
                           <div className="font-bold mb-2 pb-1 border-b border-border/40 text-foreground">Lọc theo Vai trò</div>
                           <Select value={filterRole || "ALL"} onValueChange={(v) => setFilterRole(v === "ALL" ? "" : v)}>
@@ -1820,7 +1832,7 @@ export const EmployeeManagement: React.FC = () => {
                     <div className="flex items-center justify-center gap-1.5">
                       <span className="text-muted-foreground">Loại hình</span>
                       <Popover>
-                        <PopoverTrigger nativeButton={false} render={<Button variant="ghost" size="icon" className="h-5 w-5 p-0 hover:bg-muted"><Filter className={`h-3.5 w-3.5 ${employmentType ? "text-primary font-bold" : "text-muted-foreground"}`} /></Button>} />
+                        <PopoverTrigger nativeButton={true} render={<Button variant="ghost" size="icon" className="h-5 w-5 p-0 hover:bg-muted"><Filter className={`h-3.5 w-3.5 ${employmentType ? "text-primary font-bold" : "text-muted-foreground"}`} /></Button>} />
                         <PopoverContent className="w-48 p-2 text-xs bg-popover border border-border shadow-xl rounded-xl">
                           <div className="font-bold mb-2 pb-1 border-b border-border/40 text-foreground">Lọc loại hình làm việc</div>
                           <Select value={employmentType || "ALL"} onValueChange={(v) => setEmploymentType(v === "ALL" ? "" : v)}>
@@ -1841,7 +1853,7 @@ export const EmployeeManagement: React.FC = () => {
                     <div className="flex items-center justify-center gap-1.5">
                       <span className="text-muted-foreground">Trạng thái TK</span>
                       <Popover>
-                        <PopoverTrigger nativeButton={false} render={<Button variant="ghost" size="icon" className="h-5 w-5 p-0 hover:bg-muted"><Filter className={`h-3.5 w-3.5 ${userStatus ? "text-primary font-bold" : "text-muted-foreground"}`} /></Button>} />
+                        <PopoverTrigger nativeButton={true} render={<Button variant="ghost" size="icon" className="h-5 w-5 p-0 hover:bg-muted"><Filter className={`h-3.5 w-3.5 ${userStatus ? "text-primary font-bold" : "text-muted-foreground"}`} /></Button>} />
                         <PopoverContent className="w-52 p-2 text-xs bg-popover border border-border shadow-xl rounded-xl">
                           <div className="font-bold mb-2 pb-1 border-b border-border/40 text-foreground">Lọc trạng thái tài khoản</div>
                           <Select value={userStatus || "ALL"} onValueChange={(v) => setUserStatus(v === "ALL" ? "" : v)}>
@@ -1863,7 +1875,7 @@ export const EmployeeManagement: React.FC = () => {
                     <div className="flex items-center justify-center gap-1.5">
                       <span className="text-muted-foreground">Trạng thái NV</span>
                       <Popover>
-                        <PopoverTrigger nativeButton={false} render={<Button variant="ghost" size="icon" className="h-5 w-5 p-0 hover:bg-muted"><Filter className={`h-3.5 w-3.5 ${contractStatus ? "text-primary font-bold" : "text-muted-foreground"}`} /></Button>} />
+                        <PopoverTrigger nativeButton={true} render={<Button variant="ghost" size="icon" className="h-5 w-5 p-0 hover:bg-muted"><Filter className={`h-3.5 w-3.5 ${contractStatus ? "text-primary font-bold" : "text-muted-foreground"}`} /></Button>} />
                         <PopoverContent className="w-56 p-2 text-xs bg-popover border border-border shadow-xl rounded-xl">
                           <div className="font-bold mb-2 pb-1 border-b border-border/40 text-foreground">Lọc trạng thái nhân viên</div>
                           <Select value={contractStatus || "ALL"} onValueChange={(v) => setContractStatus(v === "ALL" ? "" : v)}>
@@ -2602,6 +2614,30 @@ export const EmployeeManagement: React.FC = () => {
         </div>
       )}
 
+      {/* CONFIRM DELETE EMPLOYEE DIALOG */}
+      <ConfirmDialog
+        open={Boolean(confirmDeleteEmpId)}
+        onOpenChange={(open) => { if (!open) setConfirmDeleteEmpId(null); }}
+        title="Xác nhận xóa tài khoản Nhân sự"
+        description="Bạn có chắc chắn muốn xóa tài khoản nhân sự này? (Tài khoản sẽ được chuyển vào Thùng rác)"
+        confirmText="Xóa vào Thùng rác"
+        cancelText="Hủy bỏ"
+        onConfirm={confirmDeleteUserAction}
+      />
+
+      {/* CONFIRM BULK DELETE EMPLOYEES DIALOG */}
+      <ConfirmDialog
+        open={confirmBulkDeleteEmps}
+        onOpenChange={setConfirmBulkDeleteEmps}
+        title="Xác nhận xóa hàng loạt Nhân sự"
+        description={`Bạn có chắc chắn muốn xóa ${selectedUserIds.length} tài khoản nhân sự đã chọn?`}
+        confirmText="Xóa tất cả"
+        cancelText="Hủy bỏ"
+        onConfirm={confirmBulkDeleteAction}
+      />
+
     </div>
   );
 };
+
+

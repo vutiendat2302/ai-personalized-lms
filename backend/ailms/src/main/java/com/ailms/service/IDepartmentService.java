@@ -6,6 +6,7 @@ import com.ailms.response.EmployeeResponse;
 import com.ailms.response.PageResponse;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Service quản lý các phòng ban tổ chức trong hệ thống.
@@ -63,7 +64,12 @@ public interface IDepartmentService {
      */
     List<EmployeeResponse> getEmployeesByDepartmentId(Long id);
 
-    java.util.Map<String, Object> getDepartmentOverviewStats();
+    /**
+     * Lấy thống kê tổng quan phòng ban, có thể lọc theo năm.
+     * @param year năm cần lọc, null = tất cả
+     */
+    Map<String, Object> getDepartmentOverviewStats(Integer year);
     void transferEmployees(Long targetDeptId, List<Long> employeeIds);
+    void removeEmployeesFromDepartment(List<Long> employeeIds);
 }
 

@@ -157,9 +157,16 @@ export const ApprovalCenterPage: React.FC = () => {
     },
   ]);
 
+  const [actionMessage, setActionMessage] = useState<{ text: string; isError?: boolean } | null>(null);
+
+  const showBanner = (text: string, isError = false) => {
+    setActionMessage({ text, isError });
+    setTimeout(() => setActionMessage(null), 4000);
+  };
+
   const handleApprove = (req: ApprovalRequest) => {
     if (req.requesterId === currentUserId) {
-      alert("Bạn không thể tự phê duyệt yêu cầu do chính mình tạo ra.");
+      showBanner("Bạn không thể tự phê duyệt yêu cầu do chính mình tạo ra.", true);
       return;
     }
 
@@ -181,12 +188,12 @@ export const ApprovalCenterPage: React.FC = () => {
           : r
       )
     );
-    alert(`Đã phê duyệt yêu cầu ${req.id} thành công.`);
+    showBanner(`Đã phê duyệt yêu cầu ${req.id} thành công.`);
   };
 
   const handleConfirmReject = () => {
     if (!rejectReason.trim()) {
-      alert("Vui lòng nhập lý do từ chối.");
+      showBanner("Vui lòng nhập lý do từ chối.", true);
       return;
     }
     if (!rejectModalRequest) return;
@@ -213,7 +220,7 @@ export const ApprovalCenterPage: React.FC = () => {
         )
       );
 
-      alert(`Đã từ chối yêu cầu ${rejectModalRequest.id}.`);
+      showBanner(`Đã từ chối yêu cầu ${rejectModalRequest.id}.`);
       setRejectModalRequest(null);
       setRejectReason("");
       setSubmitting(false);
@@ -639,6 +646,19 @@ export const ApprovalCenterPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* TOAST BANNER NOTIFICATIONS */}
+      {actionMessage && (
+        <div
+          className={cn(
+            "fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300",
+            actionMessage.isError ? "bg-destructive" : "bg-emerald-600"
+          )}
+        >
+          <span className="text-sm font-semibold">{actionMessage.text}</span>
+        </div>
+      )}
+
     </div>
   );
 };

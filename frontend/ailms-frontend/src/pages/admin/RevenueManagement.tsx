@@ -185,7 +185,12 @@ export const RevenueManagement: React.FC = () => {
     .reduce((acc, cur) => acc + cur.amount, 0);
 
   const completedTxCount = transactions.filter((tx) => tx.status === "COMPLETED").length;
-  const avgOrderValue = completedTxCount > 0 ? totalCompletedRevenue / completedTxCount : 0;
+  const [actionMessage, setActionMessage] = useState<{ text: string; isError?: boolean } | null>(null);
+
+  const showBanner = (text: string, isError = false) => {
+    setActionMessage({ text, isError });
+    setTimeout(() => setActionMessage(null), 4000);
+  };
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-8 space-y-6 animate-in fade-in duration-300">
@@ -215,7 +220,7 @@ export const RevenueManagement: React.FC = () => {
           </Select>
 
           <Button
-            onClick={() => alert("Đang xuất file báo cáo doanh thu Excel / CSV...")}
+            onClick={() => showBanner("Đang xuất file báo cáo doanh thu Excel / CSV...")}
             variant="outline"
             className="rounded-xl font-bold text-xs gap-1 h-9"
           >
@@ -693,6 +698,19 @@ export const RevenueManagement: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* TOAST BANNER NOTIFICATIONS */}
+      {actionMessage && (
+        <div
+          className={cn(
+            "fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300",
+            actionMessage.isError ? "bg-destructive" : "bg-emerald-600"
+          )}
+        >
+          <span className="text-sm font-semibold">{actionMessage.text}</span>
+        </div>
+      )}
+
     </div>
   );
 };

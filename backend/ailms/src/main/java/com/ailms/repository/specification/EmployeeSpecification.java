@@ -26,6 +26,9 @@ public final class EmployeeSpecification {
         builder.likeAnyIfPresent(request.getKeyword(), "employeeCode", "position", "userEntity.fullName", "userEntity.email");
         builder.equalIfPresent("employmentTypeEnum", request.getEmploymentTypeEnum());
         builder.equalIfPresent("department.id", request.getDepartmentId());
+        if (Boolean.TRUE.equals(request.getUnassignedOnly())) {
+            builder.custom((root, query, cb) -> cb.isNull(root.get("department")));
+        }
         builder.equalIfPresent("userEntity.gender", request.getGender());
         builder.greaterOrEqualIfPresent("startDate", request.getStartDateFrom());
         builder.lessOrEqualIfPresent("endDate", request.getEndDateTo());

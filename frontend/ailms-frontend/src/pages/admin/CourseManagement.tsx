@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -264,32 +265,45 @@ export const CourseManagement: React.FC = () => {
     }
   };
 
-  const handleDeleteCourse = async (id: string, name: string) => {
-    if (window.confirm(`Bạn có chắc chắn muốn xóa khóa học "${name}"?`)) {
-      try {
-        const res = await courseApi.deleteCourse(id);
-        if (res.data.success) {
-          showBanner("Xóa khóa học thành công!");
-          fetchCourses();
-        }
-      } catch (err: any) {
-        showBanner(err.message || "Lỗi khi xóa khóa học", true);
+  const [deleteCourseConfirm, setDeleteCourseConfirm] = useState<{ id: string; name: string } | null>(null);
+  const [deleteCategoryConfirm, setDeleteCategoryConfirm] = useState<{ id: string; name: string } | null>(null);
+
+  const handleDeleteCourse = (id: string, name: string) => {
+    setDeleteCourseConfirm({ id, name });
+  };
+
+  const confirmDeleteCourseAction = async () => {
+    if (!deleteCourseConfirm) return;
+    try {
+      const res = await courseApi.deleteCourse(deleteCourseConfirm.id);
+      if (res.data.success) {
+        showBanner("Xóa khóa học thành công!");
+        fetchCourses();
       }
+    } catch (err: any) {
+      showBanner(err.message || "Lỗi khi xóa khóa học", true);
+    } finally {
+      setDeleteCourseConfirm(null);
     }
   };
 
-  const handleDeleteCategory = async (id: string, name: string) => {
-    if (window.confirm(`Bạn có chắc chắn muốn xóa danh mục "${name}"?`)) {
-      try {
-        const res = await courseApi.deleteCategory(id);
-        if (res.data.success) {
-          showBanner("Xóa danh mục thành công!");
-          fetchCategoriesList();
-          fetchCategories();
-        }
-      } catch (err: any) {
-        showBanner(err.message || "Lỗi khi xóa danh mục", true);
+  const handleDeleteCategory = (id: string, name: string) => {
+    setDeleteCategoryConfirm({ id, name });
+  };
+
+  const confirmDeleteCategoryAction = async () => {
+    if (!deleteCategoryConfirm) return;
+    try {
+      const res = await courseApi.deleteCategory(deleteCategoryConfirm.id);
+      if (res.data.success) {
+        showBanner("Xóa danh mục thành công!");
+        fetchCategoriesList();
+        fetchCategories();
       }
+    } catch (err: any) {
+      showBanner(err.message || "Lỗi khi xóa danh mục", true);
+    } finally {
+      setDeleteCategoryConfirm(null);
     }
   };
 
@@ -1045,6 +1059,27 @@ export const CourseManagement: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* CONFIRM DELETE DIALOGS */}
+      <ConfirmDialog
+        open={Boolean(deleteCourseConfirm)}
+        onOpenChange={(open) => { if (!open) setDeleteCourseConfirm(null); }}
+        title="Xác nhận xóa khóa học"
+        description={`Bạn có chắc chắn muốn xóa khóa học "${deleteCourseConfirm?.name}"? Thao tác không thể hoàn tác.`}
+        confirmText="Xóa khóa học"
+        cancelText="Hủy bỏ"
+        onConfirm={confirmDeleteCourseAction}
+      />
+
+      <ConfirmDialog
+        open={Boolean(deleteCategoryConfirm)}
+        onOpenChange={(open) => { if (!open) setDeleteCategoryConfirm(null); }}
+        title="Xác nhận xóa danh mục"
+        description={`Bạn có chắc chắn muốn xóa danh mục "${deleteCategoryConfirm?.name}"? Thao tác không thể hoàn tác.`}
+        confirmText="Xóa danh mục"
+        cancelText="Hủy bỏ"
+        onConfirm={confirmDeleteCategoryAction}
+      />
 
     </div>
   );

@@ -11,7 +11,7 @@ import type {
 } from "@/types/admin";
 
 export const roleApi = {
-  getRoles: (params?: { isSystem?: boolean; keyword?: string; page?: number; size?: number; sort?: string }) =>
+  getRoles: (params?: { isSystem?: boolean; keyword?: string; page?: number; size?: number; sort?: string | string[] }) =>
     httpClient.get<ApiResponse<any>>("/v1/roles/page", { params }),
 
   getAllRoles: () =>

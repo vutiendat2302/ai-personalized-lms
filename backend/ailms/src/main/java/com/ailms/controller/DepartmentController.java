@@ -13,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("${api.prefix}/departments")
@@ -68,14 +69,21 @@ public class DepartmentController {
     }
 
     @GetMapping("/stats/overview")
-    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> getOverviewStats() {
-        return ResponseEntity.ok(ApiResponse.of("Department overview stats", departmentService.getDepartmentOverviewStats()));
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getOverviewStats(
+            @RequestParam(required = false) Integer year) {
+        return ResponseEntity.ok(ApiResponse.of("Department overview stats", departmentService.getDepartmentOverviewStats(year)));
     }
 
     @PostMapping("/transfer-employees")
     public ResponseEntity<ApiResponse<Void>> transferEmployees(@RequestParam Long targetDeptId, @RequestBody List<Long> employeeIds) {
         departmentService.transferEmployees(targetDeptId, employeeIds);
         return ResponseEntity.ok(ApiResponse.message("Employees transferred successfully"));
+    }
+
+    @PostMapping("/remove-employees")
+    public ResponseEntity<ApiResponse<Void>> removeEmployees(@RequestBody List<Long> employeeIds) {
+        departmentService.removeEmployeesFromDepartment(employeeIds);
+        return ResponseEntity.ok(ApiResponse.message("Employees removed from department successfully"));
     }
 }
 

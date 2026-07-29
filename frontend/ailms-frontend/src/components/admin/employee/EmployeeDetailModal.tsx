@@ -59,6 +59,7 @@ import type {
 } from "@/types/employee";
 import { employeeApi } from "@/api/employees/employeeApi";
 import { DatePickerInput, formatDateDisplay } from "@/components/ui/DatePickerInput";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { departmentApi, type DepartmentResponse } from "@/api/departments/departmentApi";
 
 interface EmployeeDetailModalProps {
@@ -292,15 +293,23 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
     }
   };
 
-  const handleTerminateSingleContract = async (contractId: string | number) => {
-    if (!window.confirm("Bạn có chắc chắn muốn chấm dứt hợp đồng này không?")) return;
+  const [confirmTerminateContractId, setConfirmTerminateContractId] = useState<string | number | null>(null);
+
+  const handleTerminateSingleContract = (contractId: string | number) => {
+    setConfirmTerminateContractId(contractId);
+  };
+
+  const confirmTerminateContractAction = async () => {
+    if (!confirmTerminateContractId) return;
     try {
-      await employeeApi.terminateContract(contractId);
+      await employeeApi.terminateContract(confirmTerminateContractId);
       const updatedContracts = await employeeApi.getContractsByEmployeeId(employee.id);
       setContracts(updatedContracts);
       showBanner("Đã chấm dứt hợp đồng thành công! Trạng thái hợp đồng đã chuyển sang TERMINATED.");
     } catch (e: any) {
       showBanner(e.message || "Lỗi chấm dứt hợp đồng", true);
+    } finally {
+      setConfirmTerminateContractId(null);
     }
   };
 
@@ -1379,6 +1388,16 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
         </div>
 
       </div>
+
+      <ConfirmDialog
+        open={Boolean(confirmTerminateContractId)}
+        onOpenChange={(open) => { if (!open) setConfirmTerminateContractId(null); }}
+        title="Xác nhận chấm dứt Hợp đồng"
+        description="Bạn có chắc chắn muốn chấm dứt hợp đồng này không? Trạng thái hợp đồng sẽ chuyển sang TERMINATED."
+        confirmText="Chấm dứt HĐ"
+        cancelText="Hủy bỏ"
+        onConfirm={confirmTerminateContractAction}
+      />
     </div>
   );
 };

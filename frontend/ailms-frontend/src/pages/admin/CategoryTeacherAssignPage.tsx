@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -140,16 +141,24 @@ export const CategoryTeacherAssignPage: React.FC = () => {
     },
   ];
 
-  const handleUnassignClick = (tc: CategoryTeacher) => {
+  const showBanner = (text: string, isError = false) => {
+    setActionMessage({ text, isError });
+    setTimeout(() => setActionMessage(null), 4000);
+  };
+
+  const handleRemoveAssignment = (tc: CategoryTeacher) => {
     if (tc.activeCourseCount && tc.activeCourseCount > 0) {
       setUnassignWarningModal(tc);
       return;
     }
+    setUnassignTeacherConfirm(tc);
+  };
 
-    if (confirm(`Xác nhận hủy gán giảng viên ${tc.teacherName} khỏi danh mục ${selectedCategory.name}?`)) {
-      setAssignedTeachers((prev) => prev.filter((t) => t.id !== tc.id));
-      alert("Đã hủy gán giảng viên thành công!");
-    }
+  const confirmUnassignTeacherAction = () => {
+    if (!unassignTeacherConfirm) return;
+    setAssignedTeachers((prev) => prev.filter((t) => t.id !== unassignTeacherConfirm.id));
+    showBanner("Đã hủy gán giảng viên thành công!");
+    setUnassignTeacherConfirm(null);
   };
 
   const handleAssignTeacher = (emp: typeof AVAILABLE_TEACHERS[0]) => {
@@ -169,7 +178,7 @@ export const CategoryTeacherAssignPage: React.FC = () => {
     };
 
     setAssignedTeachers((prev) => [...prev, newAssignment]);
-    alert(`Đã gán giảng viên ${emp.name} vào lĩnh vực ${selectedCategory.name} thành công!`);
+    showBanner(`Đã gán giảng viên ${emp.name} vào lĩnh vực ${selectedCategory.name} thành công!`);
     setIsAssignModalOpen(false);
   };
 
@@ -546,6 +555,30 @@ export const CategoryTeacherAssignPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* TOAST BANNER NOTIFICATIONS */}
+      {actionMessage && (
+        <div
+          className={cn(
+            "fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300",
+            actionMessage.isError ? "bg-destructive" : "bg-emerald-600"
+          )}
+        >
+          <span className="text-sm font-semibold">{actionMessage.text}</span>
+        </div>
+      )}
+
+      {/* CONFIRM UNASSIGN TEACHER DIALOG */}
+      <ConfirmDialog
+        open={Boolean(unassignTeacherConfirm)}
+        onOpenChange={(open) => { if (!open) setUnassignTeacherConfirm(null); }}
+        title="Xác nhận hủy gán Giảng viên"
+        description={`Bạn có chắc chắn muốn hủy gán giảng viên ${unassignTeacherConfirm?.teacherName} khỏi danh mục ${selectedCategory.name}?`}
+        confirmText="Hủy gán"
+        cancelText="Hủy bỏ"
+        onConfirm={confirmUnassignTeacherAction}
+      />
+
     </div>
   );
 };

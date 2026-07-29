@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/select";
 import { userApi } from "@/api/users/userApi";
 import { roleApi } from "@/api/roles/roleApi";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { departmentApi, type DepartmentResponse } from "@/api/departments/departmentApi";
 import type {
   UserResponse,
@@ -722,19 +723,27 @@ export const UserManagement: React.FC = () => {
     }
   };
 
-  const handleDeleteUser = async (id: string | number) => {
-    if (window.confirm("Bạn có chắc chắn muốn xóa người dùng này?")) {
-      try {
-        const res = await userApi.deleteUser(id);
-        if (res.data.success) {
-          showBanner("Xóa người dùng thành công!");
-          fetchUsers();
-          fetchStatistics();
-          setSelectedUserIds(prev => prev.filter(selectedId => String(selectedId) !== String(id)));
-        }
-      } catch (err: any) {
-        showBanner(err.message || "Lỗi xóa người dùng", true);
+  const [confirmDeleteUserId, setConfirmDeleteUserId] = useState<string | number | null>(null);
+  const [confirmBulkDeleteUsers, setConfirmBulkDeleteUsers] = useState(false);
+
+  const handleDeleteUser = (id: string | number) => {
+    setConfirmDeleteUserId(id);
+  };
+
+  const confirmDeleteUserAction = async () => {
+    if (!confirmDeleteUserId) return;
+    try {
+      const res = await userApi.deleteUser(confirmDeleteUserId);
+      if (res.data.success) {
+        showBanner("Xóa người dùng thành công!");
+        fetchUsers();
+        fetchStatistics();
+        setSelectedUserIds((prev) => prev.filter((selectedId) => String(selectedId) !== String(confirmDeleteUserId)));
       }
+    } catch (err: any) {
+      showBanner(err.message || "Lỗi xóa người dùng", true);
+    } finally {
+      setConfirmDeleteUserId(null);
     }
   };
 
@@ -803,23 +812,26 @@ export const UserManagement: React.FC = () => {
   };
 
   // Bulk operations
-  const handleBulkDelete = async () => {
+  const handleBulkDelete = () => {
     if (selectedUserIds.length === 0) return;
-    if (window.confirm(`Bạn có chắc muốn xóa ${selectedUserIds.length} tài khoản đã chọn?`)) {
-      setBulkDeleteLoading(true);
-      try {
-        const res = await userApi.bulkDelete({ userIds: selectedUserIds });
-        if (res.data.success) {
-          showBanner("Xóa hàng loạt tài khoản thành công!");
-          fetchUsers();
-          fetchStatistics();
-          setSelectedUserIds([]);
-        }
-      } catch (err: any) {
-        showBanner(err.message || "Lỗi xóa hàng loạt", true);
-      } finally {
-        setBulkDeleteLoading(false);
+    setConfirmBulkDeleteUsers(true);
+  };
+
+  const confirmBulkDeleteUsersAction = async () => {
+    setBulkDeleteLoading(true);
+    try {
+      const res = await userApi.bulkDelete({ userIds: selectedUserIds });
+      if (res.data.success) {
+        showBanner("Xóa hàng loạt tài khoản thành công!");
+        fetchUsers();
+        fetchStatistics();
+        setSelectedUserIds([]);
       }
+    } catch (err: any) {
+      showBanner(err.message || "Lỗi xóa hàng loạt", true);
+    } finally {
+      setBulkDeleteLoading(false);
+      setConfirmBulkDeleteUsers(false);
     }
   };
 
@@ -3162,8 +3174,29 @@ export const UserManagement: React.FC = () => {
           </div>
         </div>
       )}
+      {/* CONFIRM DELETE USER DIALOG */}
+      <ConfirmDialog
+        open={Boolean(confirmDeleteUserId)}
+        onOpenChange={(open) => { if (!open) setConfirmDeleteUserId(null); }}
+        title="Xác nhận xóa người dùng"
+        description="Bạn có chắc chắn muốn xóa người dùng này? Thao tác không thể hoàn tác."
+        confirmText="Xóa người dùng"
+        cancelText="Hủy bỏ"
+        onConfirm={confirmDeleteUserAction}
+      />
+
+      {/* CONFIRM BULK DELETE USERS DIALOG */}
+      <ConfirmDialog
+        open={confirmBulkDeleteUsers}
+        onOpenChange={setConfirmBulkDeleteUsers}
+        title="Xác nhận xóa hàng loạt người dùng"
+        description={`Bạn có chắc chắn muốn xóa ${selectedUserIds.length} tài khoản người dùng đã chọn?`}
+        confirmText="Xóa tất cả"
+        cancelText="Hủy bỏ"
+        onConfirm={confirmBulkDeleteUsersAction}
+      />
     </section>
     </div>
-    
   );
 };
+

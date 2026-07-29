@@ -1,7 +1,6 @@
 import httpClient from "@/api/httpClient";
 import type { ApiResponse } from "@/types/base";
 import type {
-  EmployeeExtended,
   EmployeeContractItem,
   AttendanceRecordItem,
   TeachingRateItem,
@@ -11,6 +10,9 @@ import type {
   ApprovalRequestItem,
   EmployeeAuditLogItem,
 } from "@/types/employee";
+
+
+import type { PageResponse } from "@/types/admin";
 
 export const employeeApi = {
   syncMissingProfiles: async () => {

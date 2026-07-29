@@ -5,6 +5,7 @@ import {
 } from "@/api/hr/hrApi";
 import { employeeApi } from "@/api/employees/employeeApi";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -239,6 +240,14 @@ export const ContractManagement: React.FC = () => {
 
   // Banner Notification
   const [actionMessage, setActionMessage] = useState<{ text: string; isError?: boolean } | null>(null);
+  const [terminateConfirmContract, setTerminateConfirmContract] = useState<{ id: string | number; name: string } | null>(null);
+
+  const confirmTerminateContractAction = () => {
+    if (!terminateConfirmContract) return;
+    setContracts((prev) => prev.map((item) => (item.id === terminateConfirmContract.id ? { ...item, status: "TERMINATED" } : item)));
+    showBanner("Đã chấm dứt hợp đồng thành công!");
+    setTerminateConfirmContract(null);
+  };
 
   const showBanner = (text: string, isError = false) => {
     setActionMessage({ text, isError });
@@ -1282,12 +1291,7 @@ export const ContractManagement: React.FC = () => {
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => {
-                                if (window.confirm(`Chấm dứt hợp đồng của ${ct.fullName || ct.employeeCode}?`)) {
-                                  setContracts(prev => prev.map(item => item.id === ct.id ? { ...item, status: "TERMINATED" } : item));
-                                  showBanner("Đã chấm dứt hợp đồng thành công!");
-                                }
-                              }}
+                              onClick={() => setTerminateConfirmContract({ id: ct.id, name: ct.fullName || ct.employeeCode })}
                               className="h-7 w-7 text-rose-600 hover:bg-rose-500/10 cursor-pointer"
                               title="Chấm dứt hợp đồng này"
                             >
@@ -1542,6 +1546,18 @@ export const ContractManagement: React.FC = () => {
           <span className="text-sm font-semibold">{actionMessage.text}</span>
         </div>
       )}
+
+      {/* CONFIRM TERMINATE CONTRACT DIALOG */}
+      <ConfirmDialog
+        open={Boolean(terminateConfirmContract)}
+        onOpenChange={(open) => { if (!open) setTerminateConfirmContract(null); }}
+        title="Xác nhận chấm dứt Hợp đồng"
+        description={`Bạn có chắc chắn muốn chấm dứt hợp đồng của ${terminateConfirmContract?.name}?`}
+        confirmText="Chấm dứt HĐ"
+        cancelText="Hủy bỏ"
+        onConfirm={confirmTerminateContractAction}
+      />
+
     </div>
   );
 };

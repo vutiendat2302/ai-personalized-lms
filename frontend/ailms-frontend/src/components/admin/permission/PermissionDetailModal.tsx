@@ -27,6 +27,7 @@ import { userApi } from "@/api/users/userApi";
 import { auditLogApi, type AuditLogResponse } from "@/api/audit/auditLogApi";
 import type { PermissionResponse, RoleResponse } from "@/types/admin";
 import { formatDateDisplay } from "@/components/ui/DatePickerInput";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 interface PermissionDetailModalProps {
   open: boolean;
@@ -41,7 +42,6 @@ export const PermissionDetailModal: React.FC<PermissionDetailModalProps> = ({
   permission,
   onPermissionUpdated
 }) => {
-  if (!permission) return null;
 
   const [roles, setRoles] = useState<RoleResponse[]>([]);
   const [loadingRoles, setLoadingRoles] = useState(false);
@@ -126,24 +126,33 @@ export const PermissionDetailModal: React.FC<PermissionDetailModalProps> = ({
     return str;
   };
 
-  const handleRemoveRole = async (roleId: string, roleName: string) => {
-    if (!window.confirm(`Bạn có chắc chắn muốn xóa quyền "${permission.name}" khỏi Role "${roleName}"?`)) return;
-    setRemovingRoleId(roleId);
+  const [removeConfirmRole, setRemoveConfirmRole] = useState<{ id: string; name: string } | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string>("");
+
+  const handleRemoveRole = (roleId: string, roleName: string) => {
+    setRemoveConfirmRole({ id: roleId, name: roleName });
+  };
+
+  const confirmRemoveRoleAction = async () => {
+    if (!removeConfirmRole || !permission) return;
+    setRemovingRoleId(removeConfirmRole.id);
     try {
-      await permissionApi.removeRoleFromPermission(String(permission.id), roleId);
+      await permissionApi.removeRoleFromPermission(String(permission.id), removeConfirmRole.id);
       fetchRoles();
       fetchAuditLogs();
       if (onPermissionUpdated) onPermissionUpdated();
     } catch (err: any) {
-      alert(err?.response?.data?.message || err.message || "Không thể xóa Role khỏi Permission này");
+      setErrorMsg(err?.response?.data?.message || err.message || "Không thể xóa Role khỏi Permission này");
     } finally {
       setRemovingRoleId(null);
+      setRemoveConfirmRole(null);
     }
   };
 
   const handleAssignRole = async (roleId: string) => {
-    if (!roleId || roleId === "_empty") return;
+    if (!roleId || roleId === "_empty" || !permission) return;
     setAssigningRole(true);
+    setErrorMsg("");
     try {
       await permissionApi.assignRoleToPermission(String(permission.id), roleId);
       setSelectedAssignRoleId("");
@@ -152,13 +161,15 @@ export const PermissionDetailModal: React.FC<PermissionDetailModalProps> = ({
       fetchAuditLogs();
       if (onPermissionUpdated) onPermissionUpdated();
     } catch (err: any) {
-      alert(err?.response?.data?.message || err.message || "Lỗi gán Role cho Permission");
+      setErrorMsg(err?.response?.data?.message || err.message || "Lỗi gán Role cho Permission");
     } finally {
       setAssigningRole(false);
     }
   };
 
   const availableRoles = allRoles.filter(r => !roles.some(assigned => String(assigned.id) === String(r.id)));
+
+  if (!permission) return null;
   const isOrphan = (permission.roleCount || roles.length) === 0;
 
   return (
@@ -210,6 +221,10 @@ export const PermissionDetailModal: React.FC<PermissionDetailModalProps> = ({
               </CardTitle>
             </CardHeader>
             <CardContent className="p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs">
+              <div>
+                <span className="text-muted-foreground font-bold block">ID Hệ thống (ID):</span>
+                <span className="font-mono font-bold text-foreground text-sm">{permission.id}</span>
+              </div>
               <div>
                 <span className="text-muted-foreground font-bold block">Thực thể (Entity):</span>
                 <span className="font-mono font-extrabold text-foreground text-sm uppercase">{permission.entity}</span>
@@ -389,6 +404,16 @@ export const PermissionDetailModal: React.FC<PermissionDetailModalProps> = ({
 
         </div>
       </DialogContent>
+
+      <ConfirmDialog
+        open={Boolean(removeConfirmRole)}
+        onOpenChange={(open) => { if (!open) setRemoveConfirmRole(null); }}
+        title="Xác nhận gỡ Quyền khỏi Role"
+        description={`Bạn có chắc chắn muốn gỡ quyền "${permission.name}" khỏi Role "${removeConfirmRole?.name}"?`}
+        confirmText="Gỡ ngay"
+        cancelText="Hủy bỏ"
+        onConfirm={confirmRemoveRoleAction}
+      />
     </Dialog>
   );
 };

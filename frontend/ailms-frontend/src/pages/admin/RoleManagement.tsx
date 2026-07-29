@@ -88,6 +88,7 @@ import { roleApi } from "@/api/roles/roleApi";
 import type { RoleResponse } from "@/types/admin";
 
 import { RoleDetailModal } from "@/components/admin/role/RoleDetailModal";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 const ROLE_COLORS = ["#2563eb", "#7c3aed", "#db2777", "#ea580c", "#059669", "#d97706", "#4f46e5"];
 
@@ -131,8 +132,10 @@ export const RoleManagement: React.FC = () => {
   const [filterStartDate, setFilterStartDate] = useState("");
   const [filterEndDate, setFilterEndDate] = useState("");
 
-  // Multi-column sorting (PermissionManagement pattern)
-  const [sortRules, setSortRules] = useState<string[]>(["id:desc"]);
+  // Multi-column sorting (EmployeeManagement pattern)
+  const [sortRules, setSortRules] = useState<Array<{ field: string; dir: "ASC" | "DESC" }>>([
+    { field: "id", dir: "DESC" }
+  ]);
 
   // Pagination
   const [page, setPage] = useState(0);
@@ -383,7 +386,9 @@ export const RoleManagement: React.FC = () => {
   const fetchRoles = async (overrideParams?: { resetFilters?: boolean }) => {
     setLoading(true);
     try {
-      const sortParams = sortRules.length > 0 ? sortRules.join(",") : "id:desc";
+      const sortParams = sortRules.length > 0
+        ? sortRules.map(r => `${r.field}:${r.dir.toLowerCase()}`)
+        : ["id:desc"];
       const isReset = overrideParams?.resetFilters;
       const activeSearch = isReset ? "" : searchKeyword.trim();
       const activeIsSystem = isReset ? "ALL" : filterIsSystem;
@@ -446,30 +451,34 @@ export const RoleManagement: React.FC = () => {
           content = content.filter(r => r.createdAt && r.createdAt.slice(0, 10) <= activeEndDate);
         }
 
-        // Apply Client-Side Sorting
+        // Apply Client-Side Multi-Column Sorting
         if (sortRules.length > 0) {
-          const [sortField, sortDir] = sortRules[0].split(":");
-          const isAsc = sortDir.toLowerCase() === "asc";
           content.sort((a: any, b: any) => {
-            let valA = a[sortField];
-            let valB = b[sortField];
+            for (const rule of sortRules) {
+              const field = rule.field;
+              const isAsc = rule.dir === "ASC";
+              let valA = a[field];
+              let valB = b[field];
 
-            // Convert numeric values or numeric strings (permissionCount, userCount, id) to numbers
-            const numA = (valA !== null && valA !== undefined && valA !== "") ? Number(valA) : NaN;
-            const numB = (valB !== null && valB !== undefined && valB !== "") ? Number(valB) : NaN;
+              const numA = (valA !== null && valA !== undefined && valA !== "") ? Number(valA) : NaN;
+              const numB = (valB !== null && valB !== undefined && valB !== "") ? Number(valB) : NaN;
 
-            if (!isNaN(numA) && !isNaN(numB)) {
-              return isAsc ? numA - numB : numB - numA;
+              let cmp = 0;
+              if (!isNaN(numA) && !isNaN(numB)) {
+                cmp = numA - numB;
+              } else {
+                if (valA === undefined || valA === null) valA = "";
+                if (valB === undefined || valB === null) valB = "";
+                const strA = String(valA).toLowerCase();
+                const strB = String(valB).toLowerCase();
+                if (strA < strB) cmp = -1;
+                else if (strA > strB) cmp = 1;
+              }
+
+              if (cmp !== 0) {
+                return isAsc ? cmp : -cmp;
+              }
             }
-
-            if (valA === undefined || valA === null) valA = "";
-            if (valB === undefined || valB === null) valB = "";
-
-            const strA = String(valA).toLowerCase();
-            const strB = String(valB).toLowerCase();
-
-            if (strA < strB) return isAsc ? -1 : 1;
-            if (strA > strB) return isAsc ? 1 : -1;
             return 0;
           });
         }
@@ -505,32 +514,40 @@ export const RoleManagement: React.FC = () => {
     setFilterHasPermissions("ALL");
     setFilterStartDate("");
     setFilterEndDate("");
-    setSortRules(["id:desc"]);
+    setSortRules([{ field: "id", dir: "DESC" }]);
     setPage(0);
   };
 
+  // Multi-column sorting helper (Exact EmployeeManagement algorithm)
   const handleSort = (field: string) => {
-    setSortRules(prev => {
-      const primaryRule = prev.length > 0 ? prev[0] : "id:desc";
-      const [currentField, currentDir] = primaryRule.split(":");
+    setSortRules(prevRules => {
+      const existingIndex = prevRules.findIndex(r => r.field === field);
 
-      if (currentField === field) {
-        if (currentDir.toLowerCase() === "asc") {
-          return [`${field}:desc`];
+      if (existingIndex === -1) {
+        // Click 1: Sắp xếp Tăng dần (ASC)
+        const filtered = prevRules.filter(r => r.field !== "id");
+        return [...filtered, { field, dir: "ASC" }];
+      } else {
+        const currentRule = prevRules[existingIndex];
+        if (currentRule.dir === "ASC") {
+          // Click 2: Đổi sang Giảm dần (DESC)
+          const updated = [...prevRules];
+          updated[existingIndex] = { field, dir: "DESC" };
+          return updated;
+        } else {
+          // Click 3: Bỏ sắp xếp cột này
+          const updated = prevRules.filter(r => r.field !== field);
+          return updated.length === 0 ? [{ field: "id", dir: "DESC" }] : updated;
         }
-        return ["id:desc"];
       }
-      return [`${field}:asc`];
     });
     setPage(0);
   };
 
   const getSortRuleInfo = (field: string) => {
-    const primaryRule = sortRules.length > 0 ? sortRules[0] : null;
-    if (!primaryRule) return null;
-    const [f, dir] = primaryRule.split(":");
-    if (f !== field) return null;
-    return { priority: 1, dir: dir.toLowerCase() };
+    const idx = sortRules.findIndex(r => r.field === field);
+    if (idx === -1) return null;
+    return { priority: idx + 1, dir: sortRules[idx].dir };
   };
 
   const renderSortIcon = (field: string) => {
@@ -538,7 +555,8 @@ export const RoleManagement: React.FC = () => {
     if (!info) return <ArrowUpDown className="h-3.5 w-3.5 opacity-40 group-hover:opacity-100" />;
     return (
       <span className="flex items-center gap-0.5 text-primary font-bold text-xs">
-        {info.dir === "asc" ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />}
+        {info.dir === "ASC" ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />}
+        {sortRules.length > 1 && <span className="text-[10px]">{info.priority}</span>}
       </span>
     );
   };
@@ -592,21 +610,33 @@ export const RoleManagement: React.FC = () => {
     }
   };
 
-  const handleDeleteRole = async (roleId: string) => {
-    if (!window.confirm("Bạn có chắc chắn muốn xóa Role này khỏi hệ thống?")) return;
+  const [confirmDeleteRoleId, setConfirmDeleteRoleId] = useState<string | null>(null);
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+
+  const handleDeleteRole = (roleId: string) => {
+    setConfirmDeleteRoleId(roleId);
+  };
+
+  const confirmDeleteRole = async () => {
+    if (!confirmDeleteRoleId) return;
     try {
-      await roleApi.deleteRole(roleId);
+      await roleApi.deleteRole(confirmDeleteRoleId);
       showBanner("Xóa Role thành công!");
       if (detailModalOpen) setDetailModalOpen(false);
       fetchRoles();
       fetchOverviewStats();
     } catch (err: any) {
       showBanner(err.message || "Không thể xóa Role này (Role hệ thống hoặc đang có User sử dụng)", true);
+    } finally {
+      setConfirmDeleteRoleId(null);
     }
   };
 
-  const handleBulkDeleteRoles = async () => {
-    if (!window.confirm(`Bạn có chắc muốn xóa ${selectedRoleIds.length} role tùy chỉnh đã chọn?`)) return;
+  const handleBulkDeleteRoles = () => {
+    setConfirmBulkDelete(true);
+  };
+
+  const confirmBulkDeleteRoles = async () => {
     try {
       await roleApi.bulkDeleteRoles(selectedRoleIds);
       showBanner("Đã xóa hàng loạt role chọn thành công!");
@@ -615,6 +645,8 @@ export const RoleManagement: React.FC = () => {
       fetchOverviewStats();
     } catch (err: any) {
       showBanner(err?.response?.data?.message || err.message || "Lỗi xóa hàng loạt role", true);
+    } finally {
+      setConfirmBulkDelete(false);
     }
   };
 
@@ -1482,6 +1514,30 @@ export const RoleManagement: React.FC = () => {
         </DialogContent>
       </Dialog>
 
+      {/* CONFIRM DELETE ROLE DIALOG */}
+      <ConfirmDialog
+        open={Boolean(confirmDeleteRoleId)}
+        onOpenChange={(open) => { if (!open) setConfirmDeleteRoleId(null); }}
+        title="Xác nhận xóa Vai trò"
+        description="Bạn có chắc chắn muốn xóa Role này khỏi hệ thống? Thao tác không thể hoàn tác."
+        confirmText="Xóa ngay"
+        cancelText="Hủy bỏ"
+        onConfirm={confirmDeleteRole}
+      />
+
+      {/* CONFIRM BULK DELETE ROLES DIALOG */}
+      <ConfirmDialog
+        open={confirmBulkDelete}
+        onOpenChange={setConfirmBulkDelete}
+        title="Xác nhận xóa hàng loạt Role"
+        description={`Bạn có chắc chắn muốn xóa ${selectedRoleIds.length} vai trò tùy chỉnh đã chọn khỏi hệ thống?`}
+        confirmText="Xóa tất cả"
+        cancelText="Hủy bỏ"
+        onConfirm={confirmBulkDeleteRoles}
+      />
+
     </div>
   );
 };
+
+

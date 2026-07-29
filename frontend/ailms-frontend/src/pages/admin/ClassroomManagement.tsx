@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
@@ -195,10 +196,18 @@ export const ClassroomManagement: React.FC = () => {
     setIsModalOpen(true);
   };
 
+  const [actionMessage, setActionMessage] = useState<{ text: string; isError?: boolean } | null>(null);
+  const [deleteClassConfirm, setDeleteClassConfirm] = useState<{ id: string; name: string } | null>(null);
+
+  const showBanner = (text: string, isError = false) => {
+    setActionMessage({ text, isError });
+    setTimeout(() => setActionMessage(null), 4000);
+  };
+
   const handleSaveClassroom = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formName.trim()) {
-      alert("Vui lòng nhập tên lớp học!");
+      showBanner("Vui lòng nhập tên lớp học!", true);
       return;
     }
 
@@ -222,7 +231,7 @@ export const ClassroomManagement: React.FC = () => {
             : c
         )
       );
-      alert(`Cập nhật lớp học "${formName}" thành công!`);
+      showBanner(`Cập nhật lớp học "${formName}" thành công!`);
     } else {
       const newCls: ClassroomItem = {
         id: `cls-${Date.now()}`,
@@ -240,16 +249,20 @@ export const ClassroomManagement: React.FC = () => {
         startDate: new Date().toISOString().split("T")[0],
       };
       setClassrooms((prev) => [newCls, ...prev]);
-      alert(`Tạo mới lớp học online "${formName}" thành công!`);
+      showBanner(`Tạo mới lớp học online "${formName}" thành công!`);
     }
     setIsModalOpen(false);
   };
 
   const handleDeleteClassroom = (id: string, name: string) => {
-    if (confirm(`Bạn có chắc muốn xóa lớp học "${name}"?`)) {
-      setClassrooms((prev) => prev.filter((c) => c.id !== id));
-      alert("Đã xóa lớp học thành công.");
-    }
+    setDeleteClassConfirm({ id, name });
+  };
+
+  const confirmDeleteClassAction = () => {
+    if (!deleteClassConfirm) return;
+    setClassrooms((prev) => prev.filter((c) => c.id !== deleteClassConfirm.id));
+    showBanner(`Đã xóa lớp học "${deleteClassConfirm.name}" thành công.`);
+    setDeleteClassConfirm(null);
   };
 
   const filteredClassrooms = classrooms.filter((c) => {
@@ -761,6 +774,30 @@ export const ClassroomManagement: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* TOAST BANNER NOTIFICATIONS */}
+      {actionMessage && (
+        <div
+          className={cn(
+            "fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300",
+            actionMessage.isError ? "bg-destructive" : "bg-emerald-600"
+          )}
+        >
+          <span className="text-sm font-semibold">{actionMessage.text}</span>
+        </div>
+      )}
+
+      {/* CONFIRM DELETE DIALOG */}
+      <ConfirmDialog
+        open={Boolean(deleteClassConfirm)}
+        onOpenChange={(open) => { if (!open) setDeleteClassConfirm(null); }}
+        title="Xác nhận xóa lớp học"
+        description={`Bạn có chắc muốn xóa lớp học "${deleteClassConfirm?.name}"? Thao tác không thể hoàn tác.`}
+        confirmText="Xóa lớp học"
+        cancelText="Hủy bỏ"
+        onConfirm={confirmDeleteClassAction}
+      />
+
     </div>
   );
 };

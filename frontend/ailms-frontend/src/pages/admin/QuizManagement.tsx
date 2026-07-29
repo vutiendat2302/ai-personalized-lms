@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
@@ -181,10 +182,18 @@ export const QuizManagement: React.FC = () => {
     setIsModalOpen(true);
   };
 
+  const [actionMessage, setActionMessage] = useState<{ text: string; isError?: boolean } | null>(null);
+  const [deleteQuizConfirm, setDeleteQuizConfirm] = useState<{ id: string; title: string } | null>(null);
+
+  const showBanner = (text: string, isError = false) => {
+    setActionMessage({ text, isError });
+    setTimeout(() => setActionMessage(null), 4000);
+  };
+
   const handleSaveQuiz = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formTitle.trim()) {
-      alert("Vui lòng nhập tiêu đề bài Quiz!");
+      showBanner("Vui lòng nhập tiêu đề bài Quiz!", true);
       return;
     }
 
@@ -205,7 +214,7 @@ export const QuizManagement: React.FC = () => {
             : q
         )
       );
-      alert(`Cập nhật bài Quiz "${formTitle}" thành công!`);
+      showBanner(`Cập nhật bài Quiz "${formTitle}" thành công!`);
     } else {
       const newQuiz: QuizItem = {
         id: `qz-${Date.now()}`,
@@ -222,16 +231,20 @@ export const QuizManagement: React.FC = () => {
         createdAt: new Date().toISOString().split("T")[0],
       };
       setQuizzes((prev) => [newQuiz, ...prev]);
-      alert(`Tạo mới bài Quiz "${formTitle}" thành công!`);
+      showBanner(`Tạo mới bài Quiz "${formTitle}" thành công!`);
     }
     setIsModalOpen(false);
   };
 
   const handleDeleteQuiz = (id: string, title: string) => {
-    if (confirm(`Bạn có chắc muốn xóa bài Quiz "${title}"?`)) {
-      setQuizzes((prev) => prev.filter((q) => q.id !== id));
-      alert(`Đã xóa bài Quiz thành công!`);
-    }
+    setDeleteQuizConfirm({ id, title });
+  };
+
+  const confirmDeleteQuizAction = () => {
+    if (!deleteQuizConfirm) return;
+    setQuizzes((prev) => prev.filter((q) => q.id !== deleteQuizConfirm.id));
+    showBanner(`Đã xóa bài Quiz "${deleteQuizConfirm.title}" thành công!`);
+    setDeleteQuizConfirm(null);
   };
 
   const filteredQuizzes = quizzes.filter((q) => {
@@ -684,6 +697,30 @@ export const QuizManagement: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* TOAST BANNER NOTIFICATIONS */}
+      {actionMessage && (
+        <div
+          className={cn(
+            "fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300",
+            actionMessage.isError ? "bg-destructive" : "bg-emerald-600"
+          )}
+        >
+          <span className="text-sm font-semibold">{actionMessage.text}</span>
+        </div>
+      )}
+
+      {/* CONFIRM DELETE DIALOG */}
+      <ConfirmDialog
+        open={Boolean(deleteQuizConfirm)}
+        onOpenChange={(open) => { if (!open) setDeleteQuizConfirm(null); }}
+        title="Xác nhận xóa bài Quiz"
+        description={`Bạn có chắc muốn xóa bài Quiz "${deleteQuizConfirm?.title}"? Thao tác không thể hoàn tác.`}
+        confirmText="Xóa bài Quiz"
+        cancelText="Hủy bỏ"
+        onConfirm={confirmDeleteQuizAction}
+      />
+
     </div>
   );
 };

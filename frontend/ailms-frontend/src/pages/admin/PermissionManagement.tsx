@@ -82,6 +82,7 @@ import {
 import { permissionApi } from "@/api/permissions/permissionApi";
 import type { PermissionResponse } from "@/types/admin";
 import { PermissionDetailModal } from "@/components/admin/permission/PermissionDetailModal";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 const PERM_COLORS = ["#2563eb", "#7c3aed", "#db2777", "#ea580c", "#059669", "#d97706", "#06b6d4"];
 
@@ -132,8 +133,10 @@ export const PermissionManagement: React.FC = () => {
   // Newly Created Record Highlight ID
   const [newlyCreatedId, setNewlyCreatedId] = useState<string | null>(null);
 
-  // Multi-column sorting
-  const [sortRules, setSortRules] = useState<string[]>(["id:desc"]);
+  // Multi-column sorting (EmployeeManagement pattern)
+  const [sortRules, setSortRules] = useState<Array<{ field: string; dir: "ASC" | "DESC" }>>([
+    { field: "id", dir: "DESC" }
+  ]);
 
   // Pagination
   const [page, setPage] = useState(0);
@@ -312,7 +315,7 @@ export const PermissionManagement: React.FC = () => {
                 setFilterIsUsed("ALL");
                 setFilterStartDate("");
                 setFilterEndDate("");
-                setSortRules(["id:desc"]);
+                setSortRules([{ field: "id", dir: "DESC" }]);
                 setPage(0);
                 setNewlyCreatedId(String(newPerm.id));
                 setPermissions(prev => [newPerm, ...prev.filter(p => String(p.id) !== String(newPerm.id))]);
@@ -418,7 +421,11 @@ export const PermissionManagement: React.FC = () => {
   const fetchPermissions = async (overrideParams?: { sort?: string; page?: number; resetFilters?: boolean }) => {
     setLoading(true);
     try {
-      const sortParams = overrideParams?.sort || (sortRules.length > 0 ? sortRules.join(",") : "id:desc");
+      const sortParams = overrideParams?.sort
+        ? (Array.isArray(overrideParams.sort) ? overrideParams.sort : [overrideParams.sort])
+        : (sortRules.length > 0
+            ? sortRules.map(r => `${r.field}:${r.dir.toLowerCase()}`)
+            : ["id:desc"]);
       const activePage = overrideParams?.page !== undefined ? overrideParams.page : page;
 
       const params: any = {
@@ -443,29 +450,34 @@ export const PermissionManagement: React.FC = () => {
         if (filterStartDate) {
           content = content.filter(p => p.createdAt && p.createdAt.slice(0, 10) >= filterStartDate);
         }
-        // Apply client-side sorting
+        // Apply client-side multi-column sorting
         if (sortRules.length > 0) {
-          const [sortField, sortDir] = sortRules[0].split(":");
-          const isAsc = sortDir.toLowerCase() === "asc";
           content.sort((a: any, b: any) => {
-            let valA = a[sortField];
-            let valB = b[sortField];
+            for (const rule of sortRules) {
+              const field = rule.field;
+              const isAsc = rule.dir === "ASC";
+              let valA = a[field];
+              let valB = b[field];
 
-            const numA = (valA !== null && valA !== undefined && valA !== "") ? Number(valA) : NaN;
-            const numB = (valB !== null && valB !== undefined && valB !== "") ? Number(valB) : NaN;
+              const numA = (valA !== null && valA !== undefined && valA !== "") ? Number(valA) : NaN;
+              const numB = (valB !== null && valB !== undefined && valB !== "") ? Number(valB) : NaN;
 
-            if (!isNaN(numA) && !isNaN(numB)) {
-              return isAsc ? numA - numB : numB - numA;
+              let cmp = 0;
+              if (!isNaN(numA) && !isNaN(numB)) {
+                cmp = numA - numB;
+              } else {
+                if (valA === undefined || valA === null) valA = "";
+                if (valB === undefined || valB === null) valB = "";
+                const strA = String(valA).toLowerCase();
+                const strB = String(valB).toLowerCase();
+                if (strA < strB) cmp = -1;
+                else if (strA > strB) cmp = 1;
+              }
+
+              if (cmp !== 0) {
+                return isAsc ? cmp : -cmp;
+              }
             }
-
-            if (valA === undefined || valA === null) valA = "";
-            if (valB === undefined || valB === null) valB = "";
-
-            const strA = String(valA).toLowerCase();
-            const strB = String(valB).toLowerCase();
-
-            if (strA < strB) return isAsc ? -1 : 1;
-            if (strA > strB) return isAsc ? 1 : -1;
             return 0;
           });
         }
@@ -501,32 +513,40 @@ export const PermissionManagement: React.FC = () => {
     setFilterIsUsed("ALL");
     setFilterStartDate("");
     setFilterEndDate("");
-    setSortRules(["id:desc"]);
+    setSortRules([{ field: "id", dir: "DESC" }]);
     setPage(0);
   };
 
+  // Multi-column sorting helper (Exact EmployeeManagement algorithm)
   const handleSort = (field: string) => {
-    setSortRules(prev => {
-      const primaryRule = prev.length > 0 ? prev[0] : "id:desc";
-      const [currentField, currentDir] = primaryRule.split(":");
+    setSortRules(prevRules => {
+      const existingIndex = prevRules.findIndex(r => r.field === field);
 
-      if (currentField === field) {
-        if (currentDir === "asc") {
-          return [`${field}:desc`];
+      if (existingIndex === -1) {
+        // Click 1: Sắp xếp Tăng dần (ASC)
+        const filtered = prevRules.filter(r => r.field !== "id");
+        return [...filtered, { field, dir: "ASC" }];
+      } else {
+        const currentRule = prevRules[existingIndex];
+        if (currentRule.dir === "ASC") {
+          // Click 2: Đổi sang Giảm dần (DESC)
+          const updated = [...prevRules];
+          updated[existingIndex] = { field, dir: "DESC" };
+          return updated;
+        } else {
+          // Click 3: Bỏ sắp xếp cột này
+          const updated = prevRules.filter(r => r.field !== field);
+          return updated.length === 0 ? [{ field: "id", dir: "DESC" }] : updated;
         }
-        return ["id:desc"];
       }
-      return [`${field}:asc`];
     });
     setPage(0);
   };
 
   const getSortRuleInfo = (field: string) => {
-    const primaryRule = sortRules.length > 0 ? sortRules[0] : null;
-    if (!primaryRule) return null;
-    const [f, dir] = primaryRule.split(":");
-    if (f !== field) return null;
-    return { priority: 1, dir };
+    const idx = sortRules.findIndex(r => r.field === field);
+    if (idx === -1) return null;
+    return { priority: idx + 1, dir: sortRules[idx].dir };
   };
 
   const renderSortIcon = (field: string) => {
@@ -534,7 +554,7 @@ export const PermissionManagement: React.FC = () => {
     if (!info) return <ArrowUpDown className="h-3.5 w-3.5 opacity-40 group-hover:opacity-100" />;
     return (
       <span className="flex items-center gap-0.5 text-primary font-bold text-xs">
-        {info.dir === "asc" ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />}
+        {info.dir === "ASC" ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />}
         {sortRules.length > 1 && <span className="text-[10px]">{info.priority}</span>}
       </span>
     );
@@ -555,20 +575,29 @@ export const PermissionManagement: React.FC = () => {
     setDetailModalOpen(true);
   };
 
-  const handleDeletePermission = async (permId: string) => {
-    if (!window.confirm("Bạn có chắc chắn muốn xóa Permission này?")) return;
+  const [confirmDeletePermId, setConfirmDeletePermId] = useState<string | null>(null);
+  const [confirmBulkDeletePerms, setConfirmBulkDeletePerms] = useState(false);
+
+  const handleDeletePermission = (permId: string) => {
+    setConfirmDeletePermId(permId);
+  };
+
+  const confirmDeletePermission = async () => {
+    if (!confirmDeletePermId) return;
     try {
-      await permissionApi.deletePermission(permId);
+      await permissionApi.deletePermission(confirmDeletePermId);
       showBanner("Xóa Permission thành công!");
       fetchPermissions();
       fetchOverviewStats();
       fetchMetadata();
     } catch (err: any) {
       showBanner(err?.response?.data?.message || err.message || "Không thể xóa Permission đang được gán cho Role", true);
+    } finally {
+      setConfirmDeletePermId(null);
     }
   };
 
-  const handleBulkDeletePermissions = async () => {
+  const handleBulkDeletePermissions = () => {
     if (selectedPermIds.length === 0) return;
 
     // Check if any selected permission is currently assigned to a role (roleCount > 0)
@@ -580,8 +609,10 @@ export const PermissionManagement: React.FC = () => {
       return;
     }
 
-    if (!window.confirm(`Bạn có chắc chắn muốn xóa ${selectedPermIds.length} Permission đã chọn?`)) return;
+    setConfirmBulkDeletePerms(true);
+  };
 
+  const confirmBulkDeletePermissionsAction = async () => {
     try {
       await permissionApi.bulkDeletePermissions(selectedPermIds);
       showBanner(`Đã xóa thành công ${selectedPermIds.length} Permission!`);
@@ -591,6 +622,8 @@ export const PermissionManagement: React.FC = () => {
       fetchMetadata();
     } catch (err: any) {
       showBanner(err?.response?.data?.message || err.message || "Lỗi xóa hàng loạt Permission", true);
+    } finally {
+      setConfirmBulkDeletePerms(false);
     }
   };
 
@@ -599,7 +632,7 @@ export const PermissionManagement: React.FC = () => {
       
       {/* Toast Banners */}
       {actionBanner && (
-        <div className="fixed bottom-6 right-6 z-[9999] flex items-center gap-3 rounded-2xl bg-emerald-600 text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
+        <div className="fixed bottom-6 right-6 z-9999 flex items-center gap-3 rounded-2xl bg-emerald-600 text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
           <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-100" />
           <div className="flex items-center gap-3 flex-wrap text-sm font-semibold">
             <span>{actionBanner.message}</span>
@@ -615,14 +648,14 @@ export const PermissionManagement: React.FC = () => {
         </div>
       )}
       {successBanner && (
-        <div className="fixed bottom-6 right-6 z-[9999] flex items-center gap-3 rounded-2xl bg-emerald-600 text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
+        <div className="fixed bottom-6 right-6 z-9999 flex items-center gap-3 rounded-2xl bg-emerald-600 text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
           <CheckCircle2 className="h-5 w-5 shrink-0" />
           <span className="text-sm font-semibold">{successBanner}</span>
         </div>
       )}
 
       {errorBanner && (
-        <div className="fixed bottom-6 right-6 z-[9999] flex items-center gap-3 rounded-2xl bg-red-600 text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
+        <div className="fixed bottom-6 right-6 z-9999 flex items-center gap-3 rounded-2xl bg-red-600 text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
           <AlertCircle className="h-5 w-5 shrink-0" />
           <span className="text-sm font-semibold">{errorBanner}</span>
         </div>
@@ -1372,6 +1405,28 @@ export const PermissionManagement: React.FC = () => {
           </Form>
         </DialogContent>
       </Dialog>
+
+      {/* CONFIRM DELETE PERMISSION DIALOG */}
+      <ConfirmDialog
+        open={Boolean(confirmDeletePermId)}
+        onOpenChange={(open) => { if (!open) setConfirmDeletePermId(null); }}
+        title="Xác nhận xóa Permission"
+        description="Bạn có chắc chắn muốn xóa Permission này? Thao tác không thể hoàn tác."
+        confirmText="Xóa ngay"
+        cancelText="Hủy bỏ"
+        onConfirm={confirmDeletePermission}
+      />
+
+      {/* CONFIRM BULK DELETE PERMISSIONS DIALOG */}
+      <ConfirmDialog
+        open={confirmBulkDeletePerms}
+        onOpenChange={setConfirmBulkDeletePerms}
+        title="Xác nhận xóa hàng loạt Permission"
+        description={`Bạn có chắc chắn muốn xóa ${selectedPermIds.length} Permission đã chọn khỏi hệ thống?`}
+        confirmText="Xóa tất cả"
+        cancelText="Hủy bỏ"
+        onConfirm={confirmBulkDeletePermissionsAction}
+      />
 
     </div>
   );

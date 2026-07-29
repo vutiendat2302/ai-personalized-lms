@@ -17,6 +17,7 @@ public class EmployeeSearchRequest extends CommonSearchRequest<EmployeeStatusEnu
 
     private EmploymentTypeEnum employmentTypeEnum;
     private Long departmentId;
+    private Boolean unassignedOnly;
     private List<Long> roleIds;
     private Integer gender;
     private List<Long> userIds;

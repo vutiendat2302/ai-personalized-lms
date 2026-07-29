@@ -27,6 +27,8 @@ import com.ailms.service.IEmployeeService;
 import com.ailms.common.util.CsvBuilder;
 import com.ailms.common.util.CsvExport;
 import com.ailms.common.util.SortFieldResolver;
+
+import java.time.temporal.ChronoUnit;
 import java.util.function.Function;
 
 import lombok.RequiredArgsConstructor;
@@ -441,7 +443,10 @@ public class EmployeeService implements IEmployeeService {
     @Override
     public long countEmployees() {
         log.info("Counting all active/non-deleted employees");
-        return employeeRepository.countByUserEntity_StatusNot(UserStatusEnum.DELETED);
+        return employeeRepository.countByUserEntity_StatusNotAndStatusNot(
+                UserStatusEnum.DELETED,
+                EmployeeStatusEnum.TERMINATED
+        );
     }
 
     @Override
@@ -966,7 +971,7 @@ public class EmployeeService implements IEmployeeService {
                                l -> l.getLeaveType() != null ? l.getLeaveType().name() : "",
                                l -> l.getStartDate() != null ? l.getStartDate() : "",
                                l -> l.getEndDate() != null ? l.getEndDate() : "",
-                               l -> (l.getStartDate() != null && l.getEndDate() != null) ? (java.time.temporal.ChronoUnit.DAYS.between(l.getStartDate(), l.getEndDate()) + 1) : 0,
+                               l -> (l.getStartDate() != null && l.getEndDate() != null) ? (ChronoUnit.DAYS.between(l.getStartDate(), l.getEndDate()) + 1) : 0,
                                l -> l.getReason() != null ? l.getReason() : "",
                                l -> l.getStatus() != null ? l.getStatus().name() : "",
                                l -> l.getApprover() != null ? l.getApprover().getFullName() : ""

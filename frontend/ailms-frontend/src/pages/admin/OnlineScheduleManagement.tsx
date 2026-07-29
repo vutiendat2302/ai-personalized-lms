@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
@@ -206,10 +207,18 @@ export const OnlineScheduleManagement: React.FC = () => {
     setIsModalOpen(true);
   };
 
+  const [actionMessage, setActionMessage] = useState<{ text: string; isError?: boolean } | null>(null);
+  const [deleteSessionConfirmId, setDeleteSessionConfirmId] = useState<string | null>(null);
+
+  const showBanner = (text: string, isError = false) => {
+    setActionMessage({ text, isError });
+    setTimeout(() => setActionMessage(null), 4000);
+  };
+
   const handleSaveSession = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formClassName.trim()) {
-      alert("Vui lòng nhập tên ca học!");
+      showBanner("Vui lòng nhập tên ca học!", true);
       return;
     }
 
@@ -235,7 +244,7 @@ export const OnlineScheduleManagement: React.FC = () => {
             : s
         )
       );
-      alert("Cập nhật ca học thành công!");
+      showBanner("Cập nhật ca học thành công!");
     } else {
       const newSch: ScheduleSession = {
         id: `sch-${Date.now()}`,
@@ -253,16 +262,20 @@ export const OnlineScheduleManagement: React.FC = () => {
         status: formStatus,
       };
       setSessions((prev) => [newSch, ...prev]);
-      alert("Tạo lịch ca học mới thành công!");
+      showBanner("Tạo lịch ca học mới thành công!");
     }
     setIsModalOpen(false);
   };
 
   const handleDeleteSession = (id: string) => {
-    if (confirm("Bạn có chắc muốn xóa ca học này khỏi thời khóa biểu?")) {
-      setSessions((prev) => prev.filter((s) => s.id !== id));
-      alert("Đã xóa ca học thành công.");
-    }
+    setDeleteSessionConfirmId(id);
+  };
+
+  const confirmDeleteSessionAction = () => {
+    if (!deleteSessionConfirmId) return;
+    setSessions((prev) => prev.filter((s) => s.id !== deleteSessionConfirmId));
+    showBanner("Đã xóa ca học thành công.");
+    setDeleteSessionConfirmId(null);
   };
 
   const filteredSessions = sessions.filter((s) => {
@@ -839,6 +852,30 @@ export const OnlineScheduleManagement: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* TOAST BANNER NOTIFICATIONS */}
+      {actionMessage && (
+        <div
+          className={cn(
+            "fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300",
+            actionMessage.isError ? "bg-destructive" : "bg-emerald-600"
+          )}
+        >
+          <span className="text-sm font-semibold">{actionMessage.text}</span>
+        </div>
+      )}
+
+      {/* CONFIRM DELETE DIALOG */}
+      <ConfirmDialog
+        open={Boolean(deleteSessionConfirmId)}
+        onOpenChange={(open) => { if (!open) setDeleteSessionConfirmId(null); }}
+        title="Xác nhận xóa ca học"
+        description="Bạn có chắc muốn xóa ca học này khỏi thời khóa biểu? Thao tác không thể hoàn tác."
+        confirmText="Xóa ca học"
+        cancelText="Hủy bỏ"
+        onConfirm={confirmDeleteSessionAction}
+      />
+
     </div>
   );
 };

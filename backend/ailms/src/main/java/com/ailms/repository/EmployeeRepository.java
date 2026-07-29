@@ -85,6 +85,11 @@ public interface EmployeeRepository extends BaseRepository<EmployeeEntity, Long>
     List<EmployeeEntity> findAllByUserEntity_StatusNot(UserStatusEnum userStatusEnum);
 
     List<EmployeeEntity> findAllByUserEntity_Status(UserStatusEnum userStatusEnum);
+
+    long countByUserEntity_StatusNotAndStatusNot(UserStatusEnum userStatusEnum, EmployeeStatusEnum status);
+
+    @Query("SELECT COUNT(e) FROM EmployeeEntity e WHERE e.department IS NULL")
+    long countByDepartmentIsNull();
 }
 
 

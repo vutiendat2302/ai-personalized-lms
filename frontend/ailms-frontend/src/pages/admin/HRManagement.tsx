@@ -10,6 +10,7 @@ import {
   type EmploymentType,
 } from "@/api/hr/hrApi";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -159,12 +160,18 @@ export const HRManagement: React.FC = () => {
     }
   };
 
-  const handleSoftDeleteEmployee = async (id: string | number) => {
-    if (!window.confirm("Bạn có chắc chắn muốn XÓA MỀM nhân viên này? (Chuyển trạng thái sang DELETED)")) {
-      return;
-    }
+  const [softDeleteConfirmId, setSoftDeleteConfirmId] = useState<string | number | null>(null);
+  const [hardDeleteConfirmId, setHardDeleteConfirmId] = useState<string | number | null>(null);
+  const [bulkHardDeleteConfirm, setBulkHardDeleteConfirm] = useState(false);
+
+  const handleSoftDeleteEmployee = (id: string | number) => {
+    setSoftDeleteConfirmId(id);
+  };
+
+  const confirmSoftDeleteAction = async () => {
+    if (!softDeleteConfirmId) return;
     try {
-      const res = await hrApi.softDeleteEmployee(Number(id));
+      const res = await hrApi.softDeleteEmployee(Number(softDeleteConfirmId));
       if (res.data.success) {
         showBanner("Đã xóa mềm nhân viên thành công (chuyển vào Thùng rác)!");
         fetchData();
@@ -172,15 +179,19 @@ export const HRManagement: React.FC = () => {
       }
     } catch (err: any) {
       showBanner(err.message || "Lỗi xóa mềm nhân viên", true);
+    } finally {
+      setSoftDeleteConfirmId(null);
     }
   };
 
-  const handleHardDeleteEmployee = async (id: string | number) => {
-    if (!window.confirm("CẢNH BÁO: Thao tác XÓA CỨNG (Vĩnh viễn) không thể hoàn tác! Bạn có chắc muốn xóa khỏi CSDL?")) {
-      return;
-    }
+  const handleHardDeleteEmployee = (id: string | number) => {
+    setHardDeleteConfirmId(id);
+  };
+
+  const confirmHardDeleteAction = async () => {
+    if (!hardDeleteConfirmId) return;
     try {
-      const res = await hrApi.hardDeleteEmployee(Number(id));
+      const res = await hrApi.hardDeleteEmployee(Number(hardDeleteConfirmId));
       if (res.data.success) {
         showBanner("Đã xóa vĩnh viễn nhân viên thành công!");
         fetchData();
@@ -188,24 +199,29 @@ export const HRManagement: React.FC = () => {
       }
     } catch (err: any) {
       showBanner(err.message || "Lỗi xóa vĩnh viễn nhân viên", true);
+    } finally {
+      setHardDeleteConfirmId(null);
     }
   };
 
-  const handleBulkHardDelete = async () => {
+  const handleBulkHardDelete = () => {
     if (selectedTrashIds.length === 0) return;
-    if (!window.confirm(`CẢNH BÁO: Bạn có chắc chắn muốn XÓA VĨNH VIỄN ${selectedTrashIds.length} nhân viên đã chọn?`)) {
-      return;
-    }
+    setBulkHardDeleteConfirm(true);
+  };
+
+  const confirmBulkHardDeleteAction = async () => {
     try {
       const res = await hrApi.bulkHardDeleteEmployees(selectedTrashIds);
       if (res.data.success) {
-        showBanner(`Đã xóa vĩnh viễn ${selectedTrashIds.length} nhân viên khỏi Thùng rác!`);
-        setSelectedTrashIds([]);
+        showBanner(`Đã xóa vĩnh viễn ${selectedTrashIds.length} nhân viên thành công!`);
         fetchData();
         fetchTrashEmployees();
+        setSelectedTrashIds([]);
       }
     } catch (err: any) {
       showBanner(err.message || "Lỗi xóa vĩnh viễn hàng loạt", true);
+    } finally {
+      setBulkHardDeleteConfirm(false);
     }
   };
 
@@ -603,7 +619,7 @@ export const HRManagement: React.FC = () => {
   const handleCreateEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName.trim() || !email.trim()) {
-      alert("Vui lòng điền đầy đủ Họ tên và Email.");
+      showBanner("Vui lòng điền đầy đủ Họ tên và Email.", true);
       return;
     }
 
@@ -644,8 +660,8 @@ export const HRManagement: React.FC = () => {
       };
       setContracts((prev) => [newContract, ...prev]);
 
-      alert(
-        `Khởi tạo Nhân viên thành công!\nMã nhân viên tự động: ${generatedCode}\nHệ thống đã tự động gửi Email chào mừng kèm hợp đồng scan.`
+      showBanner(
+        `Khởi tạo Nhân viên thành công! Mã nhân viên: ${generatedCode}`
       );
       setIsCreateEmpOpen(false);
       setFullName("");
@@ -659,14 +675,14 @@ export const HRManagement: React.FC = () => {
     setLeaveRequests((prev) =>
       prev.map((l) => (l.id === id ? { ...l, status } : l))
     );
-    alert(`Đã cập nhật trạng thái đơn nghỉ phép thành ${status}`);
+    showBanner(`Đã cập nhật trạng thái đơn nghỉ phép thành ${status}`);
   };
 
   const handleApproveSalary = (id: string) => {
     setSalaries((prev) =>
       prev.map((s) => (s.id === id ? { ...s, status: "PAID", paidAt: new Date().toISOString() } : s))
     );
-    alert("Đã xác nhận thanh toán bảng lương thành công!");
+    showBanner("Đã xác nhận thanh toán bảng lương thành công!");
   };
 
   const filteredEmployees = employees.filter(
@@ -1556,6 +1572,38 @@ export const HRManagement: React.FC = () => {
           <span className="text-sm font-semibold">{actionMessage.text}</span>
         </div>
       )}
+
+      {/* CONFIRM DIALOGS */}
+      <ConfirmDialog
+        open={Boolean(softDeleteConfirmId)}
+        onOpenChange={(open) => { if (!open) setSoftDeleteConfirmId(null); }}
+        title="Xác nhận xóa mềm"
+        description="Bạn có chắc chắn muốn XÓA MỀM nhân viên này? (Tài khoản sẽ được chuyển vào Thùng rác)"
+        confirmText="Xóa mềm"
+        cancelText="Hủy bỏ"
+        onConfirm={confirmSoftDeleteAction}
+      />
+
+      <ConfirmDialog
+        open={Boolean(hardDeleteConfirmId)}
+        onOpenChange={(open) => { if (!open) setHardDeleteConfirmId(null); }}
+        title="CẢNH BÁO: Xác nhận xóa vĩnh viễn"
+        description="CẢNH BÁO: Thao tác XÓA CỨNG (Vĩnh viễn) không thể hoàn tác! Bạn có chắc muốn xóa khỏi CSDL?"
+        confirmText="Xóa vĩnh viễn"
+        cancelText="Hủy bỏ"
+        onConfirm={confirmHardDeleteAction}
+      />
+
+      <ConfirmDialog
+        open={bulkHardDeleteConfirm}
+        onOpenChange={setBulkHardDeleteConfirm}
+        title="CẢNH BÁO: Xóa vĩnh viễn hàng loạt"
+        description={`CẢNH BÁO: Bạn có chắc chắn muốn XÓA VĨNH VIỄN ${selectedTrashIds.length} nhân viên đã chọn khỏi CSDL?`}
+        confirmText="Xóa tất cả vĩnh viễn"
+        cancelText="Hủy bỏ"
+        onConfirm={confirmBulkHardDeleteAction}
+      />
+
     </div>
   );
 };

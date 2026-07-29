@@ -199,7 +199,7 @@ export const FulltimeAttendanceManagement: React.FC = () => {
           : a
       )
     );
-    alert(`Đã cập nhật dữ liệu điểm danh của ${editingLog.employeeName}`);
+    showBanner(`Đã cập nhật dữ liệu điểm danh của ${editingLog.employeeName}`);
     setEditingLog(null);
   };
 
@@ -226,6 +226,11 @@ export const FulltimeAttendanceManagement: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-8 space-y-6 animate-in fade-in duration-300">
+      {actionMessage && (
+        <div className={cn("fixed top-4 right-4 z-50 px-4 py-2 rounded-lg shadow-lg text-sm font-bold animate-in slide-in-from-top-2", actionMessage.isError ? "bg-rose-500 text-white" : "bg-emerald-500 text-white")}>
+          {actionMessage.text}
+        </div>
+      )}
       {/* Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -238,7 +243,7 @@ export const FulltimeAttendanceManagement: React.FC = () => {
           </p>
         </div>
         <Button
-          onClick={() => alert("Đang xuất dữ liệu bảng chấm công Excel...")}
+          onClick={() => showBanner("Đang xuất dữ liệu bảng chấm công Excel...")}
           variant="outline"
           className="rounded-xl font-bold text-xs gap-1 h-9"
         >

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { orderApi, type CouponResponse, type CreateCouponRequest, type DiscountType } from "@/api/orders/orderApi";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -155,10 +156,18 @@ export const CouponManagement: React.FC = () => {
     setTimeout(() => setCopiedCode(null), 2000);
   };
 
+  const [actionMessage, setActionMessage] = useState<{ text: string; isError?: boolean } | null>(null);
+  const [deleteCouponId, setDeleteCouponId] = useState<string | null>(null);
+
+  const showBanner = (text: string, isError = false) => {
+    setActionMessage({ text, isError });
+    setTimeout(() => setActionMessage(null), 4000);
+  };
+
   const handleCreateCoupon = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!code.trim()) {
-      alert("Vui lòng nhập mã coupon.");
+      showBanner("Vui lòng nhập mã coupon.", true);
       return;
     }
     try {
@@ -191,7 +200,7 @@ export const CouponManagement: React.FC = () => {
       };
 
       setCoupons((prev) => [newCoupon, ...prev]);
-      alert(`Đã tạo thành công mã giảm giá ${code.toUpperCase()}`);
+      showBanner(`Đã tạo thành công mã giảm giá ${code.toUpperCase()}`);
       setIsCreateModalOpen(false);
       setCode("");
     } finally {
@@ -199,18 +208,24 @@ export const CouponManagement: React.FC = () => {
     }
   };
 
-  const handleDeleteCoupon = async (id: string) => {
-    if (!confirm("Bạn có chắc chắn muốn xóa mã giảm giá này?")) return;
+  const handleDeleteCoupon = (id: string) => {
+    setDeleteCouponId(id);
+  };
+
+  const confirmDeleteCouponAction = async () => {
+    if (!deleteCouponId) return;
     try {
       try {
-        await orderApi.deleteCoupon(id);
+        await orderApi.deleteCoupon(deleteCouponId);
       } catch (e) {
         console.log("Backend delete coupon note:", e);
       }
-      setCoupons((prev) => prev.filter((c) => c.id !== id));
-      alert("Đã xóa mã giảm giá thành công.");
+      setCoupons((prev) => prev.filter((c) => c.id !== deleteCouponId));
+      showBanner("Đã xóa mã giảm giá thành công.");
     } catch (e) {
       console.error("Error deleting coupon:", e);
+    } finally {
+      setDeleteCouponId(null);
     }
   };
 
@@ -649,6 +664,30 @@ export const CouponManagement: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* TOAST BANNER NOTIFICATIONS */}
+      {actionMessage && (
+        <div
+          className={cn(
+            "fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300",
+            actionMessage.isError ? "bg-destructive" : "bg-emerald-600"
+          )}
+        >
+          <span className="text-sm font-semibold">{actionMessage.text}</span>
+        </div>
+      )}
+
+      {/* CONFIRM DELETE DIALOG */}
+      <ConfirmDialog
+        open={Boolean(deleteCouponId)}
+        onOpenChange={(open) => { if (!open) setDeleteCouponId(null); }}
+        title="Xác nhận xóa mã giảm giá"
+        description="Bạn có chắc chắn muốn xóa mã giảm giá này? Thao tác không thể hoàn tác."
+        confirmText="Xóa coupon"
+        cancelText="Hủy bỏ"
+        onConfirm={confirmDeleteCouponAction}
+      />
+
     </div>
   );
 };

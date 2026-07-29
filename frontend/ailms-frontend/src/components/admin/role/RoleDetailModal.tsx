@@ -24,6 +24,7 @@ import {
   Search
 } from "lucide-react";
 import { formatDateDisplay } from "@/components/ui/DatePickerInput";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 import { roleApi } from "@/api/roles/roleApi";
 import { permissionApi } from "@/api/permissions/permissionApi";
@@ -41,7 +42,6 @@ interface RoleDetailModalProps {
   onDeleteRole?: (roleId: string) => void;
   onShowBanner?: (msg: string, isError?: boolean) => void;
 }
-
 export const RoleDetailModal: React.FC<RoleDetailModalProps> = ({
   open,
   onClose,
@@ -52,15 +52,14 @@ export const RoleDetailModal: React.FC<RoleDetailModalProps> = ({
   onDeleteRole,
   onShowBanner
 }) => {
-  if (!role) return null;
 
   const [activeTab, setActiveTab] = useState("general");
 
   // Tab 1 General Inline Edit
   const [editingGeneral, setEditingGeneral] = useState(false);
-  const [nameInput, setNameInput] = useState(role.name || "");
-  const [codeInput, setCodeInput] = useState(role.code || "");
-  const [descriptionInput, setDescriptionInput] = useState(role.description || "");
+  const [nameInput, setNameInput] = useState(role?.name || "");
+  const [codeInput, setCodeInput] = useState(role?.code || "");
+  const [descriptionInput, setDescriptionInput] = useState(role?.description || "");
 
   // User Map for resolving CreatedBy / UpdatedBy IDs to Email/Name
   const [userMap, setUserMap] = useState<Record<string, { name: string; email: string }>>({});
@@ -81,6 +80,9 @@ export const RoleDetailModal: React.FC<RoleDetailModalProps> = ({
   // Tab 4 Audit Log
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [loadingAuditLogs, setLoadingAuditLogs] = useState(false);
+
+  const [removeUserConfirm, setRemoveUserConfirm] = useState<UserResponse | null>(null);
+  const [removeAllUsersConfirm, setRemoveAllUsersConfirm] = useState(false);
 
   useEffect(() => {
     if (role && open) {
@@ -153,6 +155,7 @@ export const RoleDetailModal: React.FC<RoleDetailModalProps> = ({
   };
 
   const handleSaveGeneral = () => {
+    if (!role) return;
     if (onUpdateRole) {
       onUpdateRole({ name: nameInput, description: descriptionInput });
     }
@@ -170,9 +173,10 @@ export const RoleDetailModal: React.FC<RoleDetailModalProps> = ({
   };
 
   const handleSavePermissionsDiff = async () => {
+    if (!role) return;
     const added = assignedPermIds.filter(id => !initialPermIds.includes(id));
     const removed = initialPermIds.filter(id => !assignedPermIds.includes(id));
-    
+
     setSavingPerms(true);
     try {
       await roleApi.assignPermissions(String(role.id), {
@@ -195,21 +199,31 @@ export const RoleDetailModal: React.FC<RoleDetailModalProps> = ({
     }
   };
 
-  const handleRemoveUserFromRole = async (user: UserResponse) => {
-    if (!window.confirm(`Bạn có chắc chắn muốn gỡ user ${user.fullName} khỏi vai trò ${role.name}?`)) return;
+  const handleRemoveUserFromRole = (user: UserResponse) => {
+    setRemoveUserConfirm(user);
+  };
+
+  const confirmRemoveUserFromRoleAction = async () => {
+    if (!removeUserConfirm || !role) return;
     try {
-      await roleApi.removeUserFromRole(String(role.id), String(user.id));
-      setRoleUsers(roleUsers.filter(u => u.id !== user.id));
-      if (onShowBanner) onShowBanner(`Đã gỡ ${user.fullName} khỏi vai trò ${role.name}!`);
+      await roleApi.removeUserFromRole(String(role.id), String(removeUserConfirm.id));
+      setRoleUsers((prev) => prev.filter((u) => u.id !== removeUserConfirm.id));
+      if (onShowBanner) onShowBanner(`Đã gỡ ${removeUserConfirm.fullName} khỏi vai trò ${role.name}!`);
       if (onPermissionUpdated) onPermissionUpdated();
     } catch (err: any) {
       if (onShowBanner) onShowBanner("Lỗi gỡ người dùng khỏi vai trò", true);
+    } finally {
+      setRemoveUserConfirm(null);
     }
   };
 
-  const handleRemoveAllUsersFromRole = async () => {
+  const handleRemoveAllUsersFromRole = () => {
     if (roleUsers.length === 0) return;
-    if (!window.confirm(`Bạn có chắc chắn muốn gỡ tất cả ${roleUsers.length} người dùng khỏi vai trò ${role.name}?`)) return;
+    setRemoveAllUsersConfirm(true);
+  };
+
+  const confirmRemoveAllUsersFromRoleAction = async () => {
+    if (!role) return;
     try {
       await roleApi.removeAllUsersFromRole(String(role.id));
       setRoleUsers([]);
@@ -217,6 +231,8 @@ export const RoleDetailModal: React.FC<RoleDetailModalProps> = ({
       if (onPermissionUpdated) onPermissionUpdated();
     } catch (err: any) {
       if (onShowBanner) onShowBanner("Lỗi gỡ tất cả người dùng khỏi vai trò", true);
+    } finally {
+      setRemoveAllUsersConfirm(false);
     }
   };
 
@@ -246,6 +262,8 @@ export const RoleDetailModal: React.FC<RoleDetailModalProps> = ({
            (u.username && u.username.toLowerCase().includes(kw)) ||
            String(u.id).includes(kw);
   });
+
+  if (!role) return null;   // ✅ đặt SAU tất cả hook, ngay trước khi dùng role.xxx ở thân component
 
   const isSystemRole = Boolean(role.isSystem);
   const isUsedByUsers = (role.userCount || roleUsers.length) > 0;
@@ -345,6 +363,11 @@ export const RoleDetailModal: React.FC<RoleDetailModalProps> = ({
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-xs font-bold text-muted-foreground">ID Hệ thống (ID)</Label>
+                  <Input value={String(role.id)} disabled className="mt-1 bg-muted/30 font-mono font-bold text-xs text-foreground cursor-not-allowed" />
+                </div>
+
                 <div>
                   <Label className="text-xs font-bold text-muted-foreground">Mã Role (Code - Cố định)</Label>
                   <Input value={codeInput} disabled className="mt-1 bg-muted/30 font-mono font-bold text-xs text-muted-foreground cursor-not-allowed" />
@@ -731,6 +754,26 @@ export const RoleDetailModal: React.FC<RoleDetailModalProps> = ({
           </div>
         </Tabs>
       </DialogContent>
+
+      <ConfirmDialog
+        open={Boolean(removeUserConfirm)}
+        onOpenChange={(open) => { if (!open) setRemoveUserConfirm(null); }}
+        title="Xác nhận gỡ Người dùng khỏi Vai trò"
+        description={`Bạn có chắc chắn muốn gỡ user ${removeUserConfirm?.fullName} khỏi vai trò ${role.name}?`}
+        confirmText="Gỡ người dùng"
+        cancelText="Hủy bỏ"
+        onConfirm={confirmRemoveUserFromRoleAction}
+      />
+
+      <ConfirmDialog
+        open={removeAllUsersConfirm}
+        onOpenChange={setRemoveAllUsersConfirm}
+        title="Xác nhận gỡ tất cả Người dùng"
+        description={`Bạn có chắc chắn muốn gỡ tất cả ${roleUsers.length} người dùng khỏi vai trò ${role.name}?`}
+        confirmText="Gỡ tất cả"
+        cancelText="Hủy bỏ"
+        onConfirm={confirmRemoveAllUsersFromRoleAction}
+      />
     </Dialog>
   );
 };

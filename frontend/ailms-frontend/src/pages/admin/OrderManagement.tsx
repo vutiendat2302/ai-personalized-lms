@@ -196,9 +196,16 @@ export const OrderManagement: React.FC = () => {
   const totalPages = Math.ceil(totalElements / pageSize);
   const paginatedOrders = filteredOrders.slice(page * pageSize, (page + 1) * pageSize);
 
+  const [actionMessage, setActionMessage] = useState<{ text: string; isError?: boolean } | null>(null);
+
+  const showBanner = (text: string, isError = false) => {
+    setActionMessage({ text, isError });
+    setTimeout(() => setActionMessage(null), 4000);
+  };
+
   const handleRefund = async (orderId: string) => {
     if (!refundReason.trim()) {
-      alert("Vui lòng nhập lý do hoàn tiền.");
+      showBanner("Vui lòng nhập lý do hoàn tiền.", true);
       return;
     }
     try {
@@ -215,7 +222,7 @@ export const OrderManagement: React.FC = () => {
         )
       );
 
-      alert(`Đã hoàn tiền đơn hàng ${orderId} thành công.`);
+      showBanner(`Đã hoàn tiền đơn hàng ${orderId} thành công.`);
       setSelectedOrder(null);
       setRefundReason("");
     } finally {
@@ -577,6 +584,19 @@ export const OrderManagement: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* TOAST BANNER NOTIFICATIONS */}
+      {actionMessage && (
+        <div
+          className={cn(
+            "fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300",
+            actionMessage.isError ? "bg-destructive" : "bg-emerald-600"
+          )}
+        >
+          <span className="text-sm font-semibold">{actionMessage.text}</span>
+        </div>
+      )}
+
     </div>
   );
 };

@@ -22,7 +22,8 @@ import java.time.LocalDateTime;
         @Index(name = "idx_user_username", columnList = "username", unique = true),
         @Index(name = "idx_user_email", columnList = "email", unique = true)
 })
-public class UserEntity extends BaseEntity{
+public class
+UserEntity extends BaseEntity{
 
     /**
      * Mã định danh người dùng (Snowflake ID 64-bit).

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
@@ -169,10 +170,18 @@ export const WorkScheduleManagement: React.FC = () => {
     setIsModalOpen(true);
   };
 
+  const [actionMessage, setActionMessage] = useState<{ text: string; isError?: boolean } | null>(null);
+  const [deleteShiftConfirm, setDeleteShiftConfirm] = useState<{ id: string; name: string } | null>(null);
+
+  const showBanner = (text: string, isError = false) => {
+    setActionMessage({ text, isError });
+    setTimeout(() => setActionMessage(null), 4000);
+  };
+
   const handleSaveShift = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formEmployeeName.trim()) {
-      alert("Vui lòng nhập tên nhân viên!");
+      showBanner("Vui lòng nhập tên nhân viên!", true);
       return;
     }
 
@@ -194,7 +203,7 @@ export const WorkScheduleManagement: React.FC = () => {
             : s
         )
       );
-      alert(`Cập nhật ca làm việc của ${formEmployeeName} thành công!`);
+      showBanner(`Cập nhật ca làm việc của ${formEmployeeName} thành công!`);
     } else {
       const newShift: WorkShiftItem = {
         id: `wsh-${Date.now()}`,
@@ -208,16 +217,20 @@ export const WorkScheduleManagement: React.FC = () => {
         status: formStatus,
       };
       setShifts((prev) => [newShift, ...prev]);
-      alert(`Phân ca làm việc mới cho ${formEmployeeName} thành công!`);
+      showBanner(`Phân ca làm việc mới cho ${formEmployeeName} thành công!`);
     }
     setIsModalOpen(false);
   };
 
   const handleDeleteShift = (id: string, name: string) => {
-    if (confirm(`Bạn có chắc muốn xóa lịch làm việc của nhân viên "${name}"?`)) {
-      setShifts((prev) => prev.filter((s) => s.id !== id));
-      alert("Đã xóa ca làm việc thành công.");
-    }
+    setDeleteShiftConfirm({ id, name });
+  };
+
+  const confirmDeleteShiftAction = () => {
+    if (!deleteShiftConfirm) return;
+    setShifts((prev) => prev.filter((s) => s.id !== deleteShiftConfirm.id));
+    showBanner("Đã xóa ca làm việc thành công.");
+    setDeleteShiftConfirm(null);
   };
 
   const filteredShifts = shifts.filter((s) => {
@@ -672,6 +685,30 @@ export const WorkScheduleManagement: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* TOAST BANNER NOTIFICATIONS */}
+      {actionMessage && (
+        <div
+          className={cn(
+            "fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300",
+            actionMessage.isError ? "bg-destructive" : "bg-emerald-600"
+          )}
+        >
+          <span className="text-sm font-semibold">{actionMessage.text}</span>
+        </div>
+      )}
+
+      {/* CONFIRM DELETE DIALOG */}
+      <ConfirmDialog
+        open={Boolean(deleteShiftConfirm)}
+        onOpenChange={(open) => { if (!open) setDeleteShiftConfirm(null); }}
+        title="Xác nhận xóa lịch làm việc"
+        description={`Bạn có chắc muốn xóa lịch làm việc của nhân viên "${deleteShiftConfirm?.name}"? Thao tác không thể hoàn tác.`}
+        confirmText="Xóa ca làm việc"
+        cancelText="Hủy bỏ"
+        onConfirm={confirmDeleteShiftAction}
+      />
+
     </div>
   );
 };

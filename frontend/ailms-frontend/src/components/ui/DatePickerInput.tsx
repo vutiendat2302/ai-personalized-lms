@@ -281,7 +281,6 @@ export const DatePickerInput: React.FC<DatePickerInputProps> = ({
             onMonthChange={setCalendarMonth}
             selected={parseYYYYMMDD(value)}
             onSelect={handleSelectDate}
-            initialFocus
           />
         </PopoverContent>
       </Popover>

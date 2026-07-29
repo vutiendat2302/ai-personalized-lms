@@ -1098,7 +1098,7 @@ export const StudentManagement: React.FC = () => {
                     <div className="flex items-center justify-center gap-1.5">
                       <span className="text-muted-foreground">Giới tính</span>
                       <Popover>
-                        <PopoverTrigger nativeButton={false} render={<Button variant="ghost" size="icon" className="h-5 w-5 p-0 hover:bg-muted"><Filter className={`h-3.5 w-3.5 ${filterGender !== "ALL" ? "text-primary font-bold" : "text-muted-foreground"}`} /></Button>} />
+                        <PopoverTrigger nativeButton={true} render={<Button variant="ghost" size="icon" className="h-5 w-5 p-0 hover:bg-muted"><Filter className={`h-3.5 w-3.5 ${filterGender !== "ALL" ? "text-primary font-bold" : "text-muted-foreground"}`} /></Button>} />
                         <PopoverContent className="w-44 p-2 text-xs bg-popover border border-border shadow-xl rounded-xl">
                           <div className="font-bold mb-2 pb-1 border-b border-border/40 text-foreground">Lọc giới tính</div>
                           <Select value={filterGender} onValueChange={setFilterGender}>
@@ -1334,3 +1334,5 @@ export const StudentManagement: React.FC = () => {
     </div>
   );
 };
+
+
