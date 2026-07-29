@@ -1,42 +1,62 @@
 import React, { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle} from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   FileKey,
   Shield,
   Clock,
   Layers,
-  CheckCircle2,
   AlertCircle,
-  Users,
   History,
-  Tag,
-  Activity,
-  Loader2
+  Loader2,
+  Trash2,
+  Plus,
 } from "lucide-react";
 import { permissionApi } from "@/api/permissions/permissionApi";
+import { roleApi } from "@/api/roles/roleApi";
+import { auditLogApi, type AuditLogResponse } from "@/api/audit/auditLogApi";
 import type { PermissionResponse, RoleResponse } from "@/types/admin";
+import { formatDateDisplay } from "@/components/ui/DatePickerInput";
 
 interface PermissionDetailModalProps {
   open: boolean;
   onClose: () => void;
   permission: PermissionResponse | null;
+  onPermissionUpdated?: () => void;
 }
 
 export const PermissionDetailModal: React.FC<PermissionDetailModalProps> = ({
   open,
   onClose,
-  permission
+  permission,
+  onPermissionUpdated
 }) => {
   if (!permission) return null;
 
   const [roles, setRoles] = useState<RoleResponse[]>([]);
   const [loadingRoles, setLoadingRoles] = useState(false);
+  const [removingRoleId, setRemovingRoleId] = useState<string | null>(null);
 
-  useEffect(() => {
+  // Assign Role State
+  const [allRoles, setAllRoles] = useState<RoleResponse[]>([]);
+  const [selectedAssignRoleId, setSelectedAssignRoleId] = useState<string>("");
+  const [showAssignSelect, setShowAssignSelect] = useState<boolean>(false);
+  const [assigningRole, setAssigningRole] = useState<boolean>(false);
+
+  // Audit Logs State
+  const [auditLogs, setAuditLogs] = useState<AuditLogResponse[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
+
+  const fetchRoles = () => {
     if (permission) {
       setLoadingRoles(true);
       permissionApi.getRolesByPermissionId(String(permission.id)).then(data => {
@@ -47,8 +67,66 @@ export const PermissionDetailModal: React.FC<PermissionDetailModalProps> = ({
         setRoles([]);
       }).finally(() => setLoadingRoles(false));
     }
-  }, [permission]);
+  };
 
+  const fetchAuditLogs = () => {
+    if (permission) {
+      setLoadingLogs(true);
+      auditLogApi.getAuditLogsByEntity("PERMISSION", permission.id).then(data => {
+        if (data?.content) setAuditLogs(data.content);
+        else if (Array.isArray(data)) setAuditLogs(data);
+        else setAuditLogs([]);
+      }).catch(err => {
+        console.error("Lỗi lấy audit log permission:", err);
+        setAuditLogs([]);
+      }).finally(() => setLoadingLogs(false));
+    }
+  };
+
+  useEffect(() => {
+    if (permission && open) {
+      fetchRoles();
+      fetchAuditLogs();
+      roleApi.getAllRoles().then(res => {
+        if (res?.data?.data) setAllRoles(res.data.data);
+        else if (Array.isArray(res?.data)) setAllRoles(res.data as any);
+      }).catch(err => console.error("Lỗi lấy danh sách tất cả role:", err));
+    }
+  }, [permission, open]);
+
+  const handleRemoveRole = async (roleId: string, roleName: string) => {
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa quyền "${permission.name}" khỏi Role "${roleName}"?`)) return;
+    setRemovingRoleId(roleId);
+    try {
+      await permissionApi.removeRoleFromPermission(String(permission.id), roleId);
+      fetchRoles();
+      fetchAuditLogs();
+      if (onPermissionUpdated) onPermissionUpdated();
+    } catch (err: any) {
+      alert(err?.response?.data?.message || err.message || "Không thể xóa Role khỏi Permission này");
+    } finally {
+      setRemovingRoleId(null);
+    }
+  };
+
+  const handleAssignRole = async (roleId: string) => {
+    if (!roleId || roleId === "_empty") return;
+    setAssigningRole(true);
+    try {
+      await permissionApi.assignRoleToPermission(String(permission.id), roleId);
+      setSelectedAssignRoleId("");
+      setShowAssignSelect(false);
+      fetchRoles();
+      fetchAuditLogs();
+      if (onPermissionUpdated) onPermissionUpdated();
+    } catch (err: any) {
+      alert(err?.response?.data?.message || err.message || "Lỗi gán Role cho Permission");
+    } finally {
+      setAssigningRole(false);
+    }
+  };
+
+  const availableRoles = allRoles.filter(r => !roles.some(assigned => String(assigned.id) === String(r.id)));
   const isOrphan = (permission.roleCount || roles.length) === 0;
 
   return (
@@ -56,7 +134,7 @@ export const PermissionDetailModal: React.FC<PermissionDetailModalProps> = ({
       <DialogContent className="max-w-4xl w-[92vw] max-h-[90vh] flex flex-col p-0 overflow-hidden rounded-2xl bg-card border border-border/40 shadow-2xl backdrop-blur-xs">
         
         {/* FIXED HEADER */}
-        <DialogHeader className="p-6 bg-gradient-to-r from-primary/10 via-card to-card border-b border-border/40 shrink-0">
+        <DialogHeader className="p-6 bg-linear-to-br from-primary/10 via-card to-card border-b border-border/40 shrink-0">
           <div className="flex items-center gap-4">
             <div className="h-14 w-14 rounded-2xl bg-primary/20 text-primary font-black text-xl flex items-center justify-center border-2 border-primary/30 shrink-0">
               <FileKey className="h-7 w-7" />
@@ -112,6 +190,22 @@ export const PermissionDetailModal: React.FC<PermissionDetailModalProps> = ({
                 <span className="text-muted-foreground font-bold block">Mã Code Duy Nhất:</span>
                 <span className="font-mono font-bold text-foreground">{permission.code}</span>
               </div>
+              <div>
+                <span className="text-muted-foreground font-bold block">Người tạo:</span>
+                <span className="font-medium text-foreground">{permission.createdBy || "System (Hệ thống)"}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground font-bold block">Ngày tạo hệ thống:</span>
+                <span className="font-mono font-medium text-foreground">{permission.createdAt ? formatDateDisplay(permission.createdAt) : "—"}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground font-bold block">Thời gian cập nhật:</span>
+                <span className="font-mono font-medium text-foreground">{permission.updatedAt ? formatDateDisplay(permission.updatedAt) : "Chưa cập nhật"}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground font-bold block">Người cập nhật:</span>
+                <span className="font-medium text-foreground">{permission.updatedBy || "—"}</span>
+              </div>
               <div className="sm:col-span-3">
                 <span className="text-muted-foreground font-bold block">Mô tả chức năng:</span>
                 <span className="text-foreground font-medium">{permission.description || "Không có mô tả chi tiết."}</span>
@@ -121,10 +215,52 @@ export const PermissionDetailModal: React.FC<PermissionDetailModalProps> = ({
 
           {/* Section 2: Bảng danh sách các Role đang sử dụng Permission này */}
           <Card className="border-border shadow-xs">
-            <CardHeader className="py-3 bg-muted/20 border-b border-border/30 flex flex-row items-center justify-between">
+            <CardHeader className="py-3 bg-muted/20 border-b border-border/30 flex flex-row items-center justify-between gap-2 flex-wrap">
               <CardTitle className="text-xs font-extrabold text-foreground flex items-center gap-1.5 uppercase">
                 <Shield className="h-4 w-4 text-purple-600" /> Danh sách Roles đang gán Quyền này ({roles.length})
               </CardTitle>
+
+              <div className="flex items-center gap-2">
+                {showAssignSelect ? (
+                  <div className="flex items-center gap-2">
+                    {assigningRole ? (
+                      <div className="flex items-center gap-1 text-xs text-purple-600 font-semibold px-2 py-1">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        <span>Đang gán...</span>
+                      </div>
+                    ) : (
+                      <Select value={selectedAssignRoleId} onValueChange={(val) => { setSelectedAssignRoleId(val); handleAssignRole(val); }}>
+                        <SelectTrigger className="h-8 w-52 text-xs font-semibold bg-background border-border">
+                          <SelectValue placeholder="-- Chọn Role muốn gán --" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableRoles.length === 0 ? (
+                            <SelectItem value="_empty" disabled>Tất cả Roles đã được gán</SelectItem>
+                          ) : (
+                            availableRoles.map(r => (
+                              <SelectItem key={r.id} value={String(r.id)}>
+                                {r.name} ({r.code})
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                    )}
+                    <Button variant="ghost" size="sm" onClick={() => setShowAssignSelect(false)} className="h-8 text-xs cursor-pointer">
+                      Hủy
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    onClick={() => setShowAssignSelect(true)}
+                    size="sm"
+                    variant="outline"
+                    className="h-8 text-xs font-semibold gap-1.5 text-purple-600 border-purple-600/30 hover:bg-purple-600/10 cursor-pointer rounded-xl"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Gán Role mới
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="p-0">
               {loadingRoles ? (
@@ -155,9 +291,26 @@ export const PermissionDetailModal: React.FC<PermissionDetailModalProps> = ({
                         </div>
                       </div>
 
-                      <Badge variant={r.isSystem ? "default" : "outline"} className="font-bold text-[10px]">
-                        {r.isSystem ? "System" : "Custom"}
-                      </Badge>
+                      <div className="flex items-center gap-3">
+                        <Badge variant={r.isSystem ? "default" : "outline"} className="font-bold text-[10px]">
+                          {r.isSystem ? "System" : "Custom"}
+                        </Badge>
+                        <Button
+                          onClick={() => handleRemoveRole(String(r.id), r.name)}
+                          disabled={removingRoleId === String(r.id)}
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 text-xs text-red-600 hover:bg-red-500/10 gap-1 font-semibold"
+                          title="Xóa Quyền này khỏi Role"
+                        >
+                          {removingRoleId === String(r.id) ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3.5 w-3.5" />
+                          )}
+                          <span>Gỡ Role</span>
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -169,14 +322,36 @@ export const PermissionDetailModal: React.FC<PermissionDetailModalProps> = ({
           <Card className="border-border shadow-xs">
             <CardHeader className="py-3 bg-muted/20 border-b border-border/30">
               <CardTitle className="text-xs font-extrabold text-foreground flex items-center gap-1.5 uppercase">
-                <History className="h-4 w-4 text-emerald-600" /> Audit Log Lịch Sử
+                <History className="h-4 w-4 text-emerald-600" /> Audit Log Lịch Sử Thao Tác
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-4 space-y-2 text-xs">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Clock className="h-3.5 w-3.5 text-primary" />
-                <span>Khởi tạo Permission mã <strong className="text-foreground">{permission.code}</strong> qua hệ thống Migration Seed.</span>
-              </div>
+            <CardContent className="p-4 space-y-3 text-xs">
+              {loadingLogs ? (
+                <div className="flex items-center justify-center gap-2 text-muted-foreground py-4">
+                  <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
+                  <span>Đang tải lịch sử thao tác...</span>
+                </div>
+              ) : auditLogs.length === 0 ? (
+                <div className="flex flex-col items-center justify-center gap-1 py-4 text-muted-foreground">
+                  <Clock className="h-6 w-6 opacity-40 text-primary" />
+                  <p>Khởi tạo Permission mã <strong className="text-foreground">{permission.code}</strong> qua hệ thống Migration Seed.</p>
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {auditLogs.map((logItem) => (
+                    <div key={logItem.id} className="p-2.5 rounded-lg bg-muted/20 border border-border/30 flex flex-col gap-1">
+                      <div className="flex items-center justify-between font-semibold">
+                        <span className="text-primary uppercase font-mono">{logItem.action}</span>
+                        <span className="text-[11px] text-muted-foreground font-mono">{logItem.occurredAt ? formatDateDisplay(logItem.occurredAt) : "N/A"}</span>
+                      </div>
+                      <div className="text-muted-foreground text-[11px] flex items-center gap-2">
+                        <span>Thực hiện bởi: <strong className="text-foreground">{logItem.userFullName || logItem.userEmail || "System"}</strong></span>
+                        {logItem.ipAddress && <span>(IP: {logItem.ipAddress})</span>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -185,3 +360,4 @@ export const PermissionDetailModal: React.FC<PermissionDetailModalProps> = ({
     </Dialog>
   );
 };
+

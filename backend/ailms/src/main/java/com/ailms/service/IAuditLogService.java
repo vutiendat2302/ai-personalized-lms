@@ -53,4 +53,6 @@ public interface IAuditLogService {
      * @return trang kết quả chứa danh sách đã được phân trang
      */
     PageResponse<AuditLogResponse> getAuditLogsByUserId(Long userId, AuditLogSearchRequest request);
+
+    PageResponse<AuditLogResponse> getAuditLogsByEntity(String entityType, Long entityId, AuditLogSearchRequest request);
 }

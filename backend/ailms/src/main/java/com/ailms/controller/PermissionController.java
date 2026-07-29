@@ -1,13 +1,11 @@
 package com.ailms.controller;
 
+import com.ailms.response.*;
 import com.ailms.service.IPermissionService;
-import com.ailms.response.PageResponse;
 import com.ailms.request.PermissionSearchRequest;
-import com.ailms.response.PermissionResponse;
 
 
 import com.ailms.request.PermissionRequest;
-import com.ailms.response.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -15,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("${api.prefix}/permissions")
@@ -61,13 +60,43 @@ public class PermissionController {
     }
 
     @GetMapping("/stats/overview")
-    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> getOverviewStats() {
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getOverviewStats() {
         return ResponseEntity.ok(ApiResponse.of("Permission overview stats", permissionService.getPermissionOverviewStats()));
     }
 
     @GetMapping("/{id}/roles")
-    public ResponseEntity<ApiResponse<List<com.ailms.response.RoleResponse>>> getRolesByPermissionId(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<List<RoleResponse>>> getRolesByPermissionId(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.of("Roles using permission retrieved", permissionService.getRolesByPermissionId(id)));
+    }
+
+    @GetMapping("/{id}/roles/count")
+    public ResponseEntity<ApiResponse<Long>> countRolesByPermissionId(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.of("Count roles using permission retrieved successfully", permissionService.countRolesByPermissionId(id)));
+    }
+
+    @DeleteMapping("/{id}/roles/{roleId}")
+    public ResponseEntity<ApiResponse<Void>> removeRoleFromPermission(
+            @PathVariable Long id, @PathVariable Long roleId) {
+        permissionService.removeRoleFromPermission(id, roleId);
+        return ResponseEntity.ok(ApiResponse.message("Role removed from permission successfully"));
+    }
+
+    @PostMapping("/{id}/roles/{roleId}")
+    public ResponseEntity<ApiResponse<Void>> assignRoleToPermission(
+            @PathVariable Long id, @PathVariable Long roleId) {
+        permissionService.assignRoleToPermission(id, roleId);
+        return ResponseEntity.ok(ApiResponse.message("Role assigned to permission successfully"));
+    }
+
+    @PostMapping("/bulk-delete")
+    public ResponseEntity<ApiResponse<Void>> bulkDeletePermissions(@RequestBody List<Long> permissionIds) {
+        permissionService.bulkDeletePermissions(permissionIds);
+        return ResponseEntity.ok(ApiResponse.message("Bulk permissions deleted successfully"));
+    }
+
+    @GetMapping("/metadata")
+    public ResponseEntity<ApiResponse<PermissionMetadataResponse>> getPermissionMetadata() {
+        return ResponseEntity.ok(ApiResponse.of("Permission metadata retrieved successfully", permissionService.getPermissionMetadata()));
     }
 }
 

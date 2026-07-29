@@ -51,4 +51,13 @@ public class AuditLogController {
         PageResponse<AuditLogResponse> response = auditLogService.getAuditLogsByUserId(userId, request);
         return ResponseEntity.ok(ApiResponse.of("User audit logs retrieved successfully", response));
     }
+
+    @GetMapping("/entity/{entityType}/{entityId}")
+    public ResponseEntity<ApiResponse<PageResponse<AuditLogResponse>>> getAuditLogsByEntity(
+            @PathVariable String entityType,
+            @PathVariable Long entityId,
+            AuditLogSearchRequest request) {
+        PageResponse<AuditLogResponse> response = auditLogService.getAuditLogsByEntity(entityType, entityId, request);
+        return ResponseEntity.ok(ApiResponse.of("Entity audit logs retrieved successfully", response));
+    }
 }

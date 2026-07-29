@@ -285,10 +285,6 @@ public class RoleService implements IRoleService {
         RoleEntity role = roleRepository.findById(roleId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Role", roleId));
 
-        if (permissionRepository.existsByCode(request.getCode())) {
-            throw DuplicateResourceException.of("Permission", "code", request.getCode());
-        }
-
         PermissionEntity permission = permissionMapper.toPermissionEntity(request);
         permission = permissionRepository.save(permission);
 

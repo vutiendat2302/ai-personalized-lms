@@ -149,4 +149,15 @@ public class AuditLogService implements IAuditLogService{
         request.setUserId(userId);
         return getAuditLogs(request);
     }
+
+    @Transactional(readOnly = true)
+    @Override
+    public PageResponse<AuditLogResponse> getAuditLogsByEntity(String entityType, Long entityId, AuditLogSearchRequest request) {
+        if (request == null) {
+            request = new AuditLogSearchRequest();
+        }
+        request.setEntityType(entityType);
+        request.setEntityId(entityId);
+        return getAuditLogs(request);
+    }
 }

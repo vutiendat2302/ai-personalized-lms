@@ -37,4 +37,7 @@ export const auditLogApi = {
 
   getAuditLogsByUserId: (userId: number) =>
     httpClient.get<ApiResponse<AuditLogResponse[]>>(`/v1/audit-log/users/${userId}`),
+
+  getAuditLogsByEntity: (entityType: string, entityId: string | number, params?: { page?: number; size?: number; sort?: string }) =>
+    httpClient.get<ApiResponse<any>>(`/v1/audit-log/entity/${entityType}/${entityId}`, { params }).then(res => res.data.data),
 };

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { DatePickerInput, formatDateDisplay } from "@/components/ui/DatePickerInput";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,10 +13,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter
+} from "@/components/ui/dialog";
 import {
   Table,
   TableHeader,
@@ -25,7 +29,6 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import {
   FileKey,
@@ -34,28 +37,21 @@ import {
   Trash2,
   Edit,
   CheckCircle2,
-  X,
   ArrowLeft,
   Loader2,
   AlertCircle,
   Eye,
-  Users,
-  KeyRound,
   BarChart3,
-  Filter,
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
   RotateCcw,
   ChevronLeft,
   ChevronRight,
-  ShieldCheck,
   ShieldAlert,
-  FileSpreadsheet,
   RefreshCw,
   Layers,
   PieChart as PieIcon,
-  Tag
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -117,10 +113,15 @@ export const PermissionManagement: React.FC = () => {
   const [filterStartDate, setFilterStartDate] = useState("");
   const [filterEndDate, setFilterEndDate] = useState("");
 
+  // Dynamic Metadata from BE (with rich default fallbacks so dropdowns are never empty)
+  const [availableEntities, setAvailableEntities] = useState<string[]>([]);
+  const [availableActions, setAvailableActions] = useState<string[]>([]);
+
+  // Newly Created Record Highlight ID
+  const [newlyCreatedId, setNewlyCreatedId] = useState<string | null>(null);
+
   // Multi-column sorting
-  const [sortRules, setSortRules] = useState<Array<{ field: string; dir: "ASC" | "DESC" }>>([
-    { field: "id", dir: "DESC" }
-  ]);
+  const [sortRules, setSortRules] = useState<string[]>(["id:desc"]);
 
   // Pagination
   const [page, setPage] = useState(0);
@@ -136,6 +137,11 @@ export const PermissionManagement: React.FC = () => {
   // Toast Banners
   const [successBanner, setSuccessBanner] = useState("");
   const [errorBanner, setErrorBanner] = useState("");
+  const [actionBanner, setActionBanner] = useState<{
+    message: string;
+    actionText?: string;
+    onAction?: () => void;
+  } | null>(null);
 
   const showBanner = (msg: string, isError = false) => {
     if (isError) {
@@ -173,9 +179,161 @@ export const PermissionManagement: React.FC = () => {
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedPermForDetail, setSelectedPermForDetail] = useState<PermissionResponse | null>(null);
 
-  // Create/Edit Modal
+  // Create/Edit Modal State
   const [formModalOpen, setFormModalOpen] = useState(false);
   const [editingPerm, setEditingPerm] = useState<PermissionResponse | null>(null);
+  const [formName, setFormName] = useState("");
+  const [formCode, setFormCode] = useState("");
+  const [formEntity, setFormEntity] = useState("");
+  const [formAction, setFormAction] = useState("");
+  const [formDescription, setFormDescription] = useState("");
+  const [formSubmitting, setFormSubmitting] = useState(false);
+
+  const handleOpenCreateModal = () => {
+    setEditingPerm(null);
+    setFormName("");
+    setFormCode("");
+    setFormEntity("USER");
+    setFormAction("VIEW");
+    setFormDescription("");
+    setFormModalOpen(true);
+  };
+
+  const handleOpenEditModal = (perm: PermissionResponse) => {
+    setEditingPerm(perm);
+    setFormName(perm.name || "");
+    setFormCode(perm.code || "");
+    setFormEntity(perm.entity || "USER");
+    setFormAction(perm.action || "VIEW");
+    setFormDescription(perm.description || "");
+    setFormModalOpen(true);
+  };
+
+  const doesPermissionMatchFilters = (perm: PermissionResponse): boolean => {
+    if (!perm) return false;
+
+    if (filterEntity !== "ALL" && perm.entity && perm.entity.toLowerCase() !== filterEntity.toLowerCase()) {
+      return false;
+    }
+    if (filterAction !== "ALL" && perm.action && perm.action.toLowerCase() !== filterAction.toLowerCase()) {
+      return false;
+    }
+
+    const roleCount = perm.roleCount || 0;
+    if (filterIsUsed === "USED" && roleCount === 0) return false;
+    if (filterIsUsed === "ORPHAN" && roleCount > 0) return false;
+
+    if (searchKeyword.trim()) {
+      const kw = searchKeyword.trim().toLowerCase();
+      const nameMatch = perm.name ? perm.name.toLowerCase().includes(kw) : false;
+      const codeMatch = perm.code ? perm.code.toLowerCase().includes(kw) : false;
+      const descMatch = perm.description ? perm.description.toLowerCase().includes(kw) : false;
+      if (!nameMatch && !codeMatch && !descMatch) return false;
+    }
+
+    if (filterStartDate && perm.createdAt) {
+      if (perm.createdAt.slice(0, 10) < filterStartDate) return false;
+    }
+    if (filterEndDate && perm.createdAt) {
+      if (perm.createdAt.slice(0, 10) > filterEndDate) return false;
+    }
+
+    return true;
+  };
+
+  const handleSavePermission = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formName.trim()) {
+      showBanner("Vui lòng nhập Tên quyền", true);
+      return;
+    }
+    setFormSubmitting(true);
+    try {
+      const payload: any = {
+        name: formName.trim(),
+        entity: formEntity.trim(),
+        action: formAction.trim(),
+        description: formDescription.trim()
+      };
+      if (editingPerm) {
+        payload.code = formCode;
+        const res = await permissionApi.updatePermission(String(editingPerm.id), payload);
+        showBanner("Cập nhật Permission thành công!");
+        const updated = res?.data?.data || (res as any)?.data || res;
+        if (updated && updated.id) {
+          setPermissions(prev => prev.map(p => String(p.id) === String(updated.id) ? { ...p, ...updated } : p));
+        } else {
+          fetchPermissions();
+        }
+        fetchOverviewStats();
+        fetchMetadata();
+      } else {
+        const res = await permissionApi.createPermission(payload);
+        const newPerm = res?.data?.data || (res as any)?.data || res;
+
+        if (newPerm && newPerm.id) {
+          const isMatch = doesPermissionMatchFilters(newPerm);
+
+          if (isMatch) {
+            setNewlyCreatedId(String(newPerm.id));
+            setPermissions(prev => [newPerm, ...prev.filter(p => String(p.id) !== String(newPerm.id))]);
+            setTotalElements(prev => prev + 1);
+            showBanner(`Tạo mới Permission ${newPerm.code} thành công!`);
+
+            setTimeout(() => {
+              setNewlyCreatedId(null);
+            }, 2500);
+          } else {
+            setActionBanner({
+              message: `Đã tạo "${newPerm.name || newPerm.code}" thành công.`,
+              actionText: "Xem bản ghi này",
+              onAction: () => {
+                setSearchKeyword("");
+                if (newPerm.entity) setFilterEntity(newPerm.entity);
+                if (newPerm.action) setFilterAction(newPerm.action);
+                setFilterIsUsed("ALL");
+                setFilterStartDate("");
+                setFilterEndDate("");
+                setSortRules(["id:desc"]);
+                setPage(0);
+
+                setNewlyCreatedId(String(newPerm.id));
+                setPermissions(prev => [newPerm, ...prev.filter(p => String(p.id) !== String(newPerm.id))]);
+                scrollToSection("management");
+                setActionBanner(null);
+                setTimeout(() => setNewlyCreatedId(null), 4000);
+              }
+            });
+            setTimeout(() => setActionBanner(null), 7000);
+          }
+        } else {
+          fetchPermissions();
+        }
+        fetchOverviewStats();
+        fetchMetadata();
+      }
+      setFormModalOpen(false);
+    } catch (err: any) {
+      showBanner(err?.response?.data?.message || err.message || "Lỗi lưu Permission", true);
+    } finally {
+      setFormSubmitting(false);
+    }
+  };
+
+  const fetchMetadata = async () => {
+    try {
+      const res = await permissionApi.getMetadata();
+      const data = (res as any)?.data || res;
+      if (data?.entities && Array.isArray(data.entities)) {
+        setAvailableEntities(data.entities);
+      }
+      if (data?.actions && Array.isArray(data.actions)) {
+        setAvailableActions( data.actions);
+      }
+    } catch (err) {
+      console.error("Lỗi lấy metadata permission:", err);
+    }
+  };
 
   useEffect(() => {
     setJumpPageInput(String(page + 1));
@@ -183,6 +341,7 @@ export const PermissionManagement: React.FC = () => {
 
   useEffect(() => {
     fetchOverviewStats();
+    fetchMetadata();
   }, []);
 
   useEffect(() => {
@@ -239,25 +398,39 @@ export const PermissionManagement: React.FC = () => {
     }
   };
 
-  const fetchPermissions = async () => {
+  const fetchPermissions = async (overrideParams?: { sort?: string; page?: number; resetFilters?: boolean }) => {
     setLoading(true);
     try {
-      const sortParams = sortRules.map(r => `${r.field}:${r.dir.toLowerCase()}`).join(",");
+      const sortParams = overrideParams?.sort || (sortRules.length > 0 ? sortRules.join(",") : "id:desc");
+      const activePage = overrideParams?.page !== undefined ? overrideParams.page : page;
+
       const params: any = {
-        page,
+        page: activePage,
         size: pageSize,
         sort: sortParams,
-        keyword: searchKeyword.trim() || undefined,
-        search: searchKeyword.trim() || undefined
+        keyword: overrideParams?.resetFilters ? undefined : (searchKeyword.trim() || undefined)
       };
-      if (filterEntity !== "ALL") params.entity = filterEntity;
-      if (filterAction !== "ALL") params.action = filterAction;
+      if (!overrideParams?.resetFilters) {
+        if (filterEntity !== "ALL") params.entity = filterEntity;
+        if (filterAction !== "ALL") params.action = filterAction;
+        if (filterIsUsed !== "ALL") params.assignedStatus = filterIsUsed;
+      }
 
       const res = await permissionApi.getPermissions(params);
 
       if (res?.data?.success && res.data.data?.content) {
         const pageData = res.data.data;
-        setPermissions(pageData.content || []);
+        let content: PermissionResponse[] = pageData.content || [];
+
+        // Apply date range filters
+        if (filterStartDate) {
+          content = content.filter(p => p.createdAt && p.createdAt.slice(0, 10) >= filterStartDate);
+        }
+        if (filterEndDate) {
+          content = content.filter(p => p.createdAt && p.createdAt.slice(0, 10) <= filterEndDate);
+        }
+
+        setPermissions(content);
         setTotalPages(pageData.totalPages || 1);
         setTotalElements(pageData.totalElements || 0);
       } else {
@@ -288,28 +461,32 @@ export const PermissionManagement: React.FC = () => {
     setFilterIsUsed("ALL");
     setFilterStartDate("");
     setFilterEndDate("");
-    setSortRules([{ field: "id", dir: "DESC" }]);
+    setSortRules(["id:desc"]);
     setPage(0);
   };
 
   const handleSort = (field: string) => {
     setSortRules(prev => {
-      const idx = prev.findIndex(r => r.field === field);
-      if (idx === -1) return [...prev, { field, dir: "ASC" }];
-      if (prev[idx].dir === "ASC") {
-        const u = [...prev];
-        u[idx] = { field, dir: "DESC" };
-        return u;
+      const primaryRule = prev.length > 0 ? prev[0] : "id:desc";
+      const [currentField, currentDir] = primaryRule.split(":");
+
+      if (currentField === field) {
+        if (currentDir === "asc") {
+          return [`${field}:desc`];
+        }
+        return ["id:desc"];
       }
-      return prev.filter(r => r.field !== field);
+      return [`${field}:asc`];
     });
     setPage(0);
   };
 
   const getSortRuleInfo = (field: string) => {
-    const idx = sortRules.findIndex(r => r.field === field);
-    if (idx === -1) return null;
-    return { priority: idx + 1, dir: sortRules[idx].dir };
+    const primaryRule = sortRules.length > 0 ? sortRules[0] : null;
+    if (!primaryRule) return null;
+    const [f, dir] = primaryRule.split(":");
+    if (f !== field) return null;
+    return { priority: 1, dir };
   };
 
   const renderSortIcon = (field: string) => {
@@ -317,7 +494,7 @@ export const PermissionManagement: React.FC = () => {
     if (!info) return <ArrowUpDown className="h-3.5 w-3.5 opacity-40 group-hover:opacity-100" />;
     return (
       <span className="flex items-center gap-0.5 text-primary font-bold text-xs">
-        {info.dir === "ASC" ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />}
+        {info.dir === "asc" ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />}
         {sortRules.length > 1 && <span className="text-[10px]">{info.priority}</span>}
       </span>
     );
@@ -345,8 +522,35 @@ export const PermissionManagement: React.FC = () => {
       showBanner("Xóa Permission thành công!");
       fetchPermissions();
       fetchOverviewStats();
+      fetchMetadata();
     } catch (err: any) {
-      showBanner(err.message || "Không thể xóa Permission đang được gán cho Role", true);
+      showBanner(err?.response?.data?.message || err.message || "Không thể xóa Permission đang được gán cho Role", true);
+    }
+  };
+
+  const handleBulkDeletePermissions = async () => {
+    if (selectedPermIds.length === 0) return;
+
+    // Check if any selected permission is currently assigned to a role (roleCount > 0)
+    const selectedPerms = permissions.filter(p => selectedPermIds.includes(String(p.id)));
+    const usedPerms = selectedPerms.filter(p => (p.roleCount || 0) > 0);
+
+    if (usedPerms.length > 0) {
+      showBanner(`Không thể xóa! Có ${usedPerms.length} Permission đang được gán cho Role (${usedPerms.map(p => p.code).join(", ")}). Vui lòng gỡ gán Role trước khi xóa!`, true);
+      return;
+    }
+
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa ${selectedPermIds.length} Permission đã chọn?`)) return;
+
+    try {
+      await permissionApi.bulkDeletePermissions(selectedPermIds);
+      showBanner(`Đã xóa thành công ${selectedPermIds.length} Permission!`);
+      setSelectedPermIds([]);
+      fetchPermissions();
+      fetchOverviewStats();
+      fetchMetadata();
+    } catch (err: any) {
+      showBanner(err?.response?.data?.message || err.message || "Lỗi xóa hàng loạt Permission", true);
     }
   };
 
@@ -354,6 +558,22 @@ export const PermissionManagement: React.FC = () => {
     <div className="mx-auto max-w-none w-full px-4 sm:px-6 lg:px-10 py-6 space-y-8 animate-in fade-in-50 duration-300">
       
       {/* Toast Banners */}
+      {actionBanner && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl bg-emerald-600 text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
+          <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-100" />
+          <div className="flex items-center gap-3 flex-wrap text-sm font-semibold">
+            <span>{actionBanner.message}</span>
+            {actionBanner.actionText && actionBanner.onAction && (
+              <button
+                onClick={actionBanner.onAction}
+                className="underline font-bold text-amber-200 hover:text-white transition-colors cursor-pointer bg-white/20 px-2.5 py-1 rounded-xl text-xs flex items-center gap-1 shadow-xs"
+              >
+                <span>[{actionBanner.actionText}]</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
       {successBanner && (
         <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl bg-emerald-600 text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
           <CheckCircle2 className="h-5 w-5 shrink-0" />
@@ -386,7 +606,10 @@ export const PermissionManagement: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <Button onClick={() => { fetchPermissions(); fetchOverviewStats(); }} variant="outline" size="sm" className="rounded-xl gap-1.5 font-semibold">
+          <Button onClick={handleOpenCreateModal} size="sm" className="rounded-xl gap-1.5 font-semibold bg-primary text-primary-foreground cursor-pointer">
+            <Plus className="h-4 w-4" /> Thêm Permission
+          </Button>
+          <Button onClick={() => { fetchPermissions(); fetchOverviewStats(); }} variant="outline" size="sm" className="rounded-xl gap-1.5 font-semibold cursor-pointer">
             <RefreshCw className={`h-4 w-4 ${loading || statsLoading ? "animate-spin" : ""}`} /> Làm mới
           </Button>
         </div>
@@ -429,7 +652,14 @@ export const PermissionManagement: React.FC = () => {
         {/* Top 2 Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {/* Card 1: Tổng số Permission / Số Entity */}
-          <Card className="border-border shadow-xs bg-card overflow-hidden relative">
+          <Card
+            onClick={() => {
+              handleResetFilters();
+              scrollToSection("management");
+              showBanner("Đã hiển thị danh sách tất cả Permission!");
+            }}
+            className="border-border shadow-xs bg-card overflow-hidden relative cursor-pointer hover:border-primary/50 transition-all"
+          >
             <div className="absolute top-0 right-0 p-4 opacity-10 text-primary">
               <FileKey className="h-24 w-24" />
             </div>
@@ -451,13 +681,18 @@ export const PermissionManagement: React.FC = () => {
                 )}
               </CardTitle>
             </CardHeader>
-            <CardContent className="pt-0"><p className="text-xs text-muted-foreground">Danh mục quyền hạn định nghĩa qua mã nguồn và migration hệ thống</p></CardContent>
+            <CardContent className="pt-0"><p className="text-xs text-muted-foreground">Danh mục quyền hạn định nghĩa qua mã nguồn và migration hệ thống &rarr;</p></CardContent>
           </Card>
 
           {/* Card 4: KPI Warning Card (Số Permission Mồ Côi Chưa Gán Role) */}
           <Card
-            onClick={() => { setFilterIsUsed("ORPHAN"); setPage(0); showBanner("Đã lọc danh sách Permission mồ côi chưa được gán cho role nào!"); }}
-            className="border-2 border-amber-500/40 bg-gradient-to-br from-amber-500/10 via-card to-card shadow-xs cursor-pointer group flex flex-col justify-between"
+            onClick={() => {
+              setFilterIsUsed("ORPHAN");
+              setPage(0);
+              scrollToSection("management");
+              showBanner("Đã lọc danh sách Permission mồ côi chưa được gán cho role nào!");
+            }}
+            className="border-2 border-amber-500/40 bg-linear-to-br from-amber-500/10 via-card to-card shadow-xs cursor-pointer hover:border-amber-500 hover:shadow-md hover:scale-[1.005] transition-all group flex flex-col justify-between"
           >
             <CardHeader className="pb-2">
               <CardDescription className="text-xs font-extrabold text-amber-600 uppercase flex items-center justify-between">
@@ -493,7 +728,7 @@ export const PermissionManagement: React.FC = () => {
               </CardTitle>
               <CardDescription className="text-xs">Phát hiện Entity nào chứa nhiều action quyền hạn nhất</CardDescription>
             </CardHeader>
-            <CardContent className="min-h-[220px] flex items-center justify-center">
+            <CardContent className="min-h-55 flex items-center justify-center">
               {statsLoading ? (
                 <div className="flex items-center justify-center gap-2 text-muted-foreground py-10">
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -529,7 +764,7 @@ export const PermissionManagement: React.FC = () => {
               </CardTitle>
               <CardDescription className="text-xs">Danh sách các quyền phổ biến nhất trong các vai trò hệ thống</CardDescription>
             </CardHeader>
-            <CardContent className="min-h-[220px] flex items-center justify-center">
+            <CardContent className="min-h-55 flex items-center justify-center">
               {statsLoading ? (
                 <div className="flex items-center justify-center gap-2 text-muted-foreground py-10">
                   <Loader2 className="h-6 w-6 animate-spin text-purple-600" />
@@ -563,7 +798,7 @@ export const PermissionManagement: React.FC = () => {
               </CardTitle>
               <CardDescription className="text-xs">Tỷ lệ các loại hành động trong toàn bộ hệ thống phân quyền</CardDescription>
             </CardHeader>
-            <CardContent className="min-h-[200px] flex items-center justify-center">
+            <CardContent className="min-h-50 flex items-center justify-center">
               {statsLoading ? (
                 <div className="flex items-center justify-center gap-2 text-muted-foreground py-10">
                   <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
@@ -604,12 +839,32 @@ export const PermissionManagement: React.FC = () => {
                 Các quyền hạn được định nghĩa cho từng Entity và Action. Chỉ xem và gán vào Role, hạn chế thêm sửa xóa trực tiếp qua UI.
               </CardDescription>
             </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                onClick={() => {
+                  fetchPermissions();
+                  fetchOverviewStats();
+                  fetchMetadata();
+                  showBanner("Đã làm mới dữ liệu bảng và bộ lọc!");
+                }}
+                variant="outline"
+                size="sm"
+                className="rounded-xl gap-1.5 font-semibold text-xs border-border/40 hover:bg-muted cursor-pointer shadow-xs"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${loading || statsLoading ? "animate-spin" : ""}`} />
+                <span>Làm mới</span>
+              </Button>
+              <Button onClick={handleOpenCreateModal} size="sm" className="rounded-xl gap-1.5 font-semibold bg-primary text-primary-foreground cursor-pointer shadow-xs">
+                <Plus className="h-4 w-4" /> Thêm Permission
+              </Button>
+            </div>
           </CardHeader>
 
           {/* 3.9.2 UNIFIED FILTER & SEARCH TOOLBAR FORM */}
           <form onSubmit={handleSearchSubmit} className="py-3 px-4 bg-muted/20 border-b border-border/30 flex flex-wrap items-end gap-3 w-full">
             {/* Search Input */}
-            <div className="flex flex-col gap-1 flex-1 min-w-[200px]">
+            <div className="flex flex-col gap-1 flex-1 min-w-50">
               <Label className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Từ khóa tìm kiếm</Label>
               <div className="relative w-full">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
@@ -623,41 +878,36 @@ export const PermissionManagement: React.FC = () => {
               </div>
             </div>
 
-            {/* Select Entity */}
-            <div className="flex flex-col gap-1 w-[150px] shrink-0">
+            {/* Select Entity (Dynamic Metadata from BE) */}
+            <div className="flex flex-col gap-1 w-37.5 shrink-0">
               <Label className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Thực thể (Entity)</Label>
               <Select value={filterEntity} onValueChange={setFilterEntity}>
                 <SelectTrigger className="h-9 text-sm border border-border/30 bg-background rounded-lg w-full"><SelectValue placeholder="Tất cả" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">Tất cả Entity</SelectItem>
-                  <SelectItem value="USER">USER</SelectItem>
-                  <SelectItem value="STUDENT">STUDENT</SelectItem>
-                  <SelectItem value="COURSE">COURSE</SelectItem>
-                  <SelectItem value="EMPLOYEE">EMPLOYEE</SelectItem>
-                  <SelectItem value="ROLE">ROLE</SelectItem>
-                  <SelectItem value="SALARY">SALARY</SelectItem>
+                  {availableEntities.map(ent => (
+                    <SelectItem key={ent} value={ent}>{ent}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
 
-            {/* Select Action */}
-            <div className="flex flex-col gap-1 w-[140px] shrink-0">
+            {/* Select Action (Dynamic Metadata from BE) */}
+            <div className="flex flex-col gap-1 w-35 shrink-0">
               <Label className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Hành động (Action)</Label>
               <Select value={filterAction} onValueChange={setFilterAction}>
                 <SelectTrigger className="h-9 text-sm border border-border/30 bg-background rounded-lg w-full"><SelectValue placeholder="Tất cả" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">Tất cả Action</SelectItem>
-                  <SelectItem value="VIEW">VIEW</SelectItem>
-                  <SelectItem value="CREATE">CREATE</SelectItem>
-                  <SelectItem value="EDIT">EDIT</SelectItem>
-                  <SelectItem value="DELETE">DELETE</SelectItem>
-                  <SelectItem value="APPROVE">APPROVE</SelectItem>
+                  {availableActions.map(act => (
+                    <SelectItem key={act} value={act}>{act}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
 
             {/* Select Is Used */}
-            <div className="flex flex-col gap-1 w-[160px] shrink-0">
+            <div className="flex flex-col gap-1 w-40 shrink-0">
               <Label className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Trạng thái Gán Role</Label>
               <Select value={filterIsUsed} onValueChange={setFilterIsUsed}>
                 <SelectTrigger className="h-9 text-sm border border-border/30 bg-background rounded-lg w-full"><SelectValue placeholder="Tất cả" /></SelectTrigger>
@@ -667,6 +917,32 @@ export const PermissionManagement: React.FC = () => {
                   <SelectItem value="ORPHAN">Mồ côi (Chưa gán Role)</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            {/* Filter Start Date */}
+            <div className="w-35 shrink-0">
+              <DatePickerInput
+                label="Từ ngày"
+                placeholder="dd/mm/yyyy"
+                value={filterStartDate}
+                onChange={(isoDate) => {
+                  setFilterStartDate(isoDate);
+                  setPage(0);
+                }}
+              />
+            </div>
+
+            {/* Filter End Date */}
+            <div className="w-35 shrink-0">
+              <DatePickerInput
+                label="Đến ngày"
+                placeholder="dd/mm/yyyy"
+                value={filterEndDate}
+                onChange={(isoDate) => {
+                  setFilterEndDate(isoDate);
+                  setPage(0);
+                }}
+              />
             </div>
 
             {/* Filter Buttons */}
@@ -681,7 +957,23 @@ export const PermissionManagement: React.FC = () => {
           </form>
 
           {/* 3.9.3 TABLE CONTAINER */}
-          <CardContent className="p-0 relative min-h-[300px]">
+          <CardContent className="p-0 relative min-h-75">
+            {selectedPermIds.length > 0 && (
+              <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-primary/10 border-b border-primary/20 text-xs animate-in fade-in-50 duration-200">
+                <div className="flex items-center gap-2 font-bold text-primary">
+                  <CheckCircle2 className="h-4 w-4" />
+                  <span>Đã chọn {selectedPermIds.length} Permission</span>
+                </div>
+                <Button
+                  onClick={handleBulkDeletePermissions}
+                  size="sm"
+                  variant="destructive"
+                  className="h-7 text-xs font-semibold gap-1.5 rounded-lg cursor-pointer shadow-xs"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Xóa hàng loạt ({selectedPermIds.length})
+                </Button>
+              </div>
+            )}
             {loading && (
               <div className="absolute inset-0 bg-background/60 backdrop-blur-xs flex items-center justify-center z-20">
                 <Loader2 className="h-8 w-8 text-primary animate-spin" />
@@ -763,9 +1055,18 @@ export const PermissionManagement: React.FC = () => {
                 ) : (
                   permissions.map((perm) => {
                     const isUsed = (perm.roleCount || 0) > 0;
+                    const isNewlyCreated = String(perm.id) === newlyCreatedId;
 
                     return (
-                      <TableRow key={perm.id} className="hover:bg-foreground/10 transition-colors border-border/30">
+                      <TableRow
+                        key={perm.id}
+                        className={cn(
+                          "transition-all duration-700 border-border/30",
+                          isNewlyCreated
+                            ? "bg-emerald-500/20 dark:bg-emerald-950/40 border-l-4 border-l-emerald-500 font-semibold shadow-xs"
+                            : "hover:bg-foreground/10"
+                        )}
+                      >
                         <TableCell>
                           <Checkbox checked={selectedPermIds.includes(String(perm.id))} onCheckedChange={() => handleSelectPerm(String(perm.id))} className="translate-y-0.5 border-border/30" />
                         </TableCell>
@@ -785,7 +1086,7 @@ export const PermissionManagement: React.FC = () => {
                         <TableCell>
                           <div>
                             <p onClick={() => handleOpenDetailModal(perm)} className="font-semibold text-foreground hover:text-primary cursor-pointer transition-colors text-sm">
-                              {perm.name || perm.code}
+                              {perm.name}
                             </p>
                             <p className="text-xs text-muted-foreground font-mono">{perm.code}</p>
                           </div>
@@ -798,23 +1099,22 @@ export const PermissionManagement: React.FC = () => {
                             </span>
                           ) : (
                             <span className="px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 border border-amber-500/20">
-                              0 (Mồ côi)
+                              0
                             </span>
                           )}
                         </TableCell>
 
                         <TableCell className="text-center font-mono font-medium text-xs text-muted-foreground">
-                          {perm.createdAt ? perm.createdAt.slice(0, 10) : "2026-01-01"}
+                          {perm.createdAt ? formatDateDisplay(perm.createdAt) : "—"}
                         </TableCell>
 
-                        {/* Actions theo dòng: Xem chi tiết (Modal 3.9.4) / Sửa / Xóa (chặn nếu đang được role tham chiếu) */}
                         <TableCell className="text-center">
                           <div className="flex items-center justify-center gap-1">
-                            <Button onClick={() => handleOpenDetailModal(perm)} variant="ghost" size="icon" className="h-8 w-8 text-primary hover:bg-primary/10" title="Xem chi tiết (Danh sách Role dùng)">
+                            <Button onClick={() => handleOpenDetailModal(perm)} variant="ghost" size="icon" className="h-8 w-8 text-primary hover:bg-primary/10 cursor-pointer" title="Xem chi tiết (Danh sách Role dùng)">
                               <Eye className="h-4 w-4" />
                             </Button>
 
-                            <Button onClick={() => handleOpenDetailModal(perm)} variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:bg-blue-500/10" title="Sửa Permission">
+                            <Button onClick={() => handleOpenEditModal(perm)} variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:bg-blue-500/10 cursor-pointer" title="Sửa Permission">
                               <Edit className="h-4 w-4" />
                             </Button>
 
@@ -823,7 +1123,7 @@ export const PermissionManagement: React.FC = () => {
                               disabled={isUsed}
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 text-red-600 hover:bg-red-500/10 disabled:opacity-30"
+                              className="h-8 w-8 text-red-600 hover:bg-red-500/10 disabled:opacity-30 cursor-pointer"
                               title={isUsed ? "Không thể xóa Permission đang được gán cho Role" : "Xóa Permission"}
                             >
                               <Trash2 className="h-4 w-4" />
@@ -908,7 +1208,92 @@ export const PermissionManagement: React.FC = () => {
         open={detailModalOpen}
         onClose={() => setDetailModalOpen(false)}
         permission={selectedPermForDetail}
+        onPermissionUpdated={() => { fetchPermissions(); fetchOverviewStats(); }}
       />
+
+      {/* CREATE / EDIT PERMISSION MODAL */}
+      <Dialog open={formModalOpen} onOpenChange={setFormModalOpen}>
+        <DialogContent className="max-w-md w-[90vw] p-6 rounded-2xl bg-card border border-border/40 shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-foreground">
+              {editingPerm ? "Sửa Permission" : "Thêm Permission Mới"}
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              {editingPerm ? "Cập nhật thông tin quyền hạn hệ thống." : "Nhập đầy đủ thông tin quyền hạn chi tiết cho thực thể và hành động."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSavePermission} className="space-y-4 py-2">
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold text-muted-foreground">Tên Quyền (Name) *</Label>
+              <Input
+                placeholder="VD: course:create, user:view"
+                value={formName}
+                onChange={(e) => setFormName(e.target.value)}
+                required
+                className="h-9 text-sm border-border/30"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold text-muted-foreground">Mã Code Duy Nhất (Code)</Label>
+              <Input
+                placeholder={editingPerm ? formCode : "Tự động sinh (VD: PERM-2607-A1B2C3)"}
+                value={editingPerm ? formCode : ""}
+                disabled={true}
+                className="h-9 text-sm font-mono uppercase border-border/30 bg-muted/40 text-muted-foreground cursor-not-allowed"
+              />
+              <p className="text-[11px] text-muted-foreground italic">
+                {editingPerm ? "Mã code cố định, không thể chỉnh sửa." : "Mã code sẽ được tự động sinh bằng CodeGenerator (định dạng PERM-yyMM-XXXXXX)."}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-muted-foreground">Thực thể (Entity)</Label>
+                <Input
+                  placeholder="VD: COURSE, USER, ROLE"
+                  value={formEntity}
+                  onChange={(e) => setFormEntity(e.target.value.toUpperCase())}
+                  required
+                  className="h-9 text-sm font-mono uppercase border-border/30"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-muted-foreground">Hành động (Action)</Label>
+                <Input
+                  placeholder="VD: CREATE, VIEW, EDIT, DELETE"
+                  value={formAction}
+                  onChange={(e) => setFormAction(e.target.value.toUpperCase())}
+                  required
+                  className="h-9 text-sm font-mono uppercase border-border/30"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold text-muted-foreground">Mô tả chức năng</Label>
+              <Input
+                placeholder="Mô tả scope và mục đích của quyền..."
+                value={formDescription}
+                onChange={(e) => setFormDescription(e.target.value)}
+                className="h-9 text-sm border-border/30"
+              />
+            </div>
+
+            <DialogFooter className="pt-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setFormModalOpen(false)}>
+                Hủy
+              </Button>
+              <Button type="submit" size="sm" disabled={formSubmitting} className="bg-primary text-primary-foreground font-semibold">
+                {formSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                {editingPerm ? "Lưu thay đổi" : "Tạo Permission"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );

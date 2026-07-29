@@ -10,12 +10,14 @@ import java.util.List;
 @Mapper(componentModel = "spring")
 public interface PermissionMapper {
 
+    @Mapping(target = "roleCount", ignore = true)
     PermissionResponse toPermissionResponse(PermissionEntity entity);
 
     List<PermissionResponse> toPermissionResponseList(List<PermissionEntity> entities);
 
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "code", ignore = true)
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
@@ -23,6 +25,7 @@ public interface PermissionMapper {
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     @Mapping(target = "id", ignore = true)
+    @Mapping(target = "code", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)

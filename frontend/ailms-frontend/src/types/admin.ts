@@ -37,6 +37,7 @@ export interface PermissionResponse {
   createdBy: string;
   updatedBy: string;
   updatedAt: string | null;
+  roleCount?: number;
 }
 
 export interface CourseResponse {

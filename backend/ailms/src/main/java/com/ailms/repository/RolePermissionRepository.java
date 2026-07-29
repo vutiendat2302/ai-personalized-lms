@@ -40,5 +40,10 @@ public interface RolePermissionRepository extends BaseRepository<RolePermissionE
     void deleteByRoleEntity_Id(Long roleId);
 
     List<RolePermissionEntity> findByPermissionEntity_Id(Long permissionId);
+
+    @Query("SELECT rp.permissionEntity.id, COUNT(rp) FROM RolePermissionEntity rp GROUP BY rp.permissionEntity.id")
+    List<Object[]> countRolesGroupByPermissionId();
+
+    boolean existsByRoleEntity_IdAndPermissionEntity_Id(Long roleId, Long permissionId);
 }
 
