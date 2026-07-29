@@ -21,9 +21,11 @@ export interface RoleResponse {
   description: string;
   isSystem: boolean;
   createdAt: string;
-  createdBy: number | null;
-  updatedBy: number | null;
-  updatedAt: string | null;
+  createdBy: string;
+  updatedBy: string | null;
+  updatedAt: string;
+  permissionCount?: number;
+  userCount?: number;
 }
 
 export interface PermissionResponse {
@@ -102,7 +104,7 @@ export interface InviteUserRequest {
 }
 
 export interface BulkDeleteRequest {
-  userIds: (string | number)[];
+  userIds: string[];
 }
 
 export interface BulkAssignRoleRequest {
@@ -111,7 +113,7 @@ export interface BulkAssignRoleRequest {
 }
 
 export interface AssignRolesRequest {
-  roleIds: (string | number)[];
+  roleIds: string[];
 }
 
 export interface RoleRequest {
@@ -121,6 +123,7 @@ export interface RoleRequest {
 
 export interface CloneRoleRequest {
   name: string;
+  description: string;
 }
 
 export interface AssignPermissionsRequest {
@@ -151,7 +154,7 @@ export interface UpdateCourseRequest {
 }
 
 export interface StudentProfileResponse {
-  userId: number;
+  userId: string;
   studentCode: string;
   educationLevel: string;
   description: string;
@@ -168,9 +171,9 @@ export interface StudentProfileResponse {
 }
 
 export interface EmployeeResponse {
-  userId: number;
+  userId: string;
   employeeCode: string;
-  departmentId: number;
+  departmentId: string;
   departmentName: string;
   position: string;
   employmentTypeEnum: string;
@@ -200,8 +203,8 @@ export interface UserDetailResponse {
   studentProfile?: StudentProfileResponse | null;
   guardians?: GuardianResponse[] | null;
   employeeProfile?: EmployeeResponse | null;
-  createdBy?: number | null;
-  updatedBy?: number | null;
+  createdBy?: string;
+  updatedBy?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -219,13 +222,13 @@ export interface SendBulkEmailRequest {
 
 export interface BulkCreateEmployeeRequest {
   emails: string[];
-  departmentId?: string | number;
-  roleId?: string | number;
+  departmentId?: string;
+  roleId?: string;
 }
 
 export interface BulkRemoveRoleRequest {
-  userIds: (string | number)[];
-  roleId: string | number;
+  userIds: string[];
+  roleId: string;
 }
 
 export interface CreateCategoryRequest {

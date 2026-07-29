@@ -19,6 +19,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("${api.prefix}/roles")
@@ -100,19 +101,30 @@ public class RoleController {
     }
 
     @GetMapping("/stats/overview")
-    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> getOverviewStats() {
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getOverviewStats() {
         return ResponseEntity.ok(ApiResponse.of("Role overview stats", roleService.getRoleOverviewStats()));
     }
 
     @GetMapping("/stats/permissions-distribution")
-    public ResponseEntity<ApiResponse<java.util.Map<String, Long>>> getPermissionsDistribution() {
+    public ResponseEntity<ApiResponse<Map<String, Long>>> getPermissionsDistribution() {
         return ResponseEntity.ok(ApiResponse.of("Permissions distribution", roleService.getRolePermissionsDistribution()));
+    }
+
+    @GetMapping("/stats/users-distribution")
+    public ResponseEntity<ApiResponse<Map<String, Long>>> getUsersDistribution() {
+        return ResponseEntity.ok(ApiResponse.of("Users distribution", roleService.getRoleUsersDistribution()));
     }
 
     @DeleteMapping("/{roleId}/users/{userId}")
     public ResponseEntity<ApiResponse<Void>> removeUserFromRole(@PathVariable Long roleId, @PathVariable Long userId) {
         roleService.removeUserFromRole(roleId, userId);
         return ResponseEntity.ok(ApiResponse.message("User removed from role successfully"));
+    }
+
+    @DeleteMapping("/{roleId}/users")
+    public ResponseEntity<ApiResponse<Void>> removeAllUsersFromRole(@PathVariable Long roleId) {
+        roleService.removeAllUsersFromRole(roleId);
+        return ResponseEntity.ok(ApiResponse.message("All users removed from role successfully"));
     }
 
     @PostMapping("/bulk-delete")

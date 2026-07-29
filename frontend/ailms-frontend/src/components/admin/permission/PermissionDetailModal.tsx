@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { permissionApi } from "@/api/permissions/permissionApi";
 import { roleApi } from "@/api/roles/roleApi";
+import { userApi } from "@/api/users/userApi";
 import { auditLogApi, type AuditLogResponse } from "@/api/audit/auditLogApi";
 import type { PermissionResponse, RoleResponse } from "@/types/admin";
 import { formatDateDisplay } from "@/components/ui/DatePickerInput";
@@ -45,6 +46,9 @@ export const PermissionDetailModal: React.FC<PermissionDetailModalProps> = ({
   const [roles, setRoles] = useState<RoleResponse[]>([]);
   const [loadingRoles, setLoadingRoles] = useState(false);
   const [removingRoleId, setRemovingRoleId] = useState<string | null>(null);
+
+  // User Map for resolving CreatedBy / UpdatedBy IDs to Email/Name
+  const [userMap, setUserMap] = useState<Record<string, { name: string; email: string }>>({});
 
   // Assign Role State
   const [allRoles, setAllRoles] = useState<RoleResponse[]>([]);
@@ -91,8 +95,36 @@ export const PermissionDetailModal: React.FC<PermissionDetailModalProps> = ({
         if (res?.data?.data) setAllRoles(res.data.data);
         else if (Array.isArray(res?.data)) setAllRoles(res.data as any);
       }).catch(err => console.error("Lỗi lấy danh sách tất cả role:", err));
+
+      // Resolve CreatedBy / UpdatedBy Users if ID
+      const idsToFetch = [permission.createdBy, permission.updatedBy].filter(Boolean) as string[];
+      idsToFetch.forEach(idStr => {
+        const id = String(idStr);
+        if (id && !id.includes("@") && !userMap[id]) {
+          userApi.getUserById(id).then(res => {
+            if (res?.data?.data) {
+              const u = res.data.data;
+              setUserMap(prev => ({
+                ...prev,
+                [id]: { name: u.fullName || u.username, email: u.email }
+              }));
+            }
+          }).catch(() => null);
+        }
+      });
     }
   }, [permission, open]);
+
+  const formatUserDisplay = (userVal?: string | null) => {
+    if (!userVal) return "System (Hệ thống)";
+    const str = String(userVal);
+    if (str.includes("@")) return str;
+    if (userMap[str]) {
+      const u = userMap[str];
+      return u.email ? `${u.name ? `${u.name} — ` : ""}${u.email}` : (u.name || str);
+    }
+    return str;
+  };
 
   const handleRemoveRole = async (roleId: string, roleName: string) => {
     if (!window.confirm(`Bạn có chắc chắn muốn xóa quyền "${permission.name}" khỏi Role "${roleName}"?`)) return;
@@ -192,7 +224,7 @@ export const PermissionDetailModal: React.FC<PermissionDetailModalProps> = ({
               </div>
               <div>
                 <span className="text-muted-foreground font-bold block">Người tạo:</span>
-                <span className="font-medium text-foreground">{permission.createdBy || "System (Hệ thống)"}</span>
+                <span className="font-semibold text-foreground">{formatUserDisplay(permission.createdBy)}</span>
               </div>
               <div>
                 <span className="text-muted-foreground font-bold block">Ngày tạo hệ thống:</span>
@@ -204,7 +236,7 @@ export const PermissionDetailModal: React.FC<PermissionDetailModalProps> = ({
               </div>
               <div>
                 <span className="text-muted-foreground font-bold block">Người cập nhật:</span>
-                <span className="font-medium text-foreground">{permission.updatedBy || "—"}</span>
+                <span className="font-semibold text-foreground">{formatUserDisplay(permission.updatedBy)}</span>
               </div>
               <div className="sm:col-span-3">
                 <span className="text-muted-foreground font-bold block">Mô tả chức năng:</span>

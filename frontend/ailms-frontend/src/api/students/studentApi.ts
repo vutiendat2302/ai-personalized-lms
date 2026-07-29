@@ -1,6 +1,7 @@
 import httpClient from "@/api/httpClient";
 
-import type { ApiResponse, PageResponse } from "@/types/admin";
+import type { ApiResponse } from "@/types/base";
+import type { PageResponse } from "@/types/admin";
 
 export interface StudentProfileSearchRequest {
   page?: number;

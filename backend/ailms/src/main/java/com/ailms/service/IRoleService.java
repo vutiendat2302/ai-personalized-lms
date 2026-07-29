@@ -107,22 +107,23 @@ public interface IRoleService {
      */
     PermissionResponse createAndAssignPermission(Long roleId, PermissionRequest request);
 
+    /** Lấy thống kê tổng quan vai trò. */
     Map<String, Object> getRoleOverviewStats();
+
+    /** Thống kê số permission theo từng role. */
     Map<String, Long> getRolePermissionsDistribution();
+
+    /** Thống kê số lượng user theo từng role. */
+    Map<String, Long> getRoleUsersDistribution();
+
+    /** Gỡ người dùng khỏi role. */
     void removeUserFromRole(Long roleId, Long userId);
+
+    /** Gỡ tất cả người dùng khỏi role. */
+    void removeAllUsersFromRole(Long roleId);
+
+    /** Xóa hàng loạt role tùy chỉnh. */
     void bulkDeleteCustomRoles(List<Long> roleIds);
 
-    /**
-     * Tổng số role
-     */
-
-
-    /**
-     * Số lượng role hệ thống và role custom
-     */
-
-    /**
-     *
-     */
 }
 

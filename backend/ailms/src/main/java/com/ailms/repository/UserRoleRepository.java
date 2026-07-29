@@ -41,6 +41,8 @@ public interface UserRoleRepository extends BaseRepository<UserRoleEntity, Long>
 
     List<UserRoleEntity> findByRoleEntity_Id(Long roleId);
 
+    void deleteByRoleEntity_Id(Long roleId);
+
 
     @EntityGraph(attributePaths = {"roleEntity.rolePermissions.permissionEntity"})
     @Query("""
@@ -56,7 +58,7 @@ public interface UserRoleRepository extends BaseRepository<UserRoleEntity, Long>
         SELECT r.code, COUNT(DISTINCT ur.userEntity.id)
         FROM UserRoleEntity ur
         JOIN ur.roleEntity r
-        WHERE (ur.expiredAt IS NULL OR ur.expiredAt > CURRENT_TIMESTAMP) and r.code <> "ADMIN"
+        WHERE (ur.expiredAt IS NULL OR ur.expiredAt > CURRENT_TIMESTAMP) and r.code <> "STUDENT"
         GROUP BY r.code
     """)
     List<Object[]> countUsersGroupByRole();

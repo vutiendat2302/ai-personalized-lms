@@ -1144,14 +1144,14 @@ export const EmployeeManagement: React.FC = () => {
       
       {/* Toast Banners */}
       {successBanner && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl bg-emerald-600 text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
+        <div className="fixed bottom-6 right-6 z-[9999] flex items-center gap-3 rounded-2xl bg-emerald-600 text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
           <CheckCircle2 className="h-5 w-5 shrink-0" />
           <span className="text-sm font-semibold">{successBanner}</span>
         </div>
       )}
 
       {errorBanner && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl bg-red-600 text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
+        <div className="fixed bottom-6 right-6 z-[9999] flex items-center gap-3 rounded-2xl bg-red-600 text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
           <AlertCircle className="h-5 w-5 shrink-0" />
           <span className="text-sm font-semibold">{errorBanner}</span>
         </div>

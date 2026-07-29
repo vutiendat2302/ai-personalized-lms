@@ -411,6 +411,30 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
           </div>
         </div>
 
+        {/* MODAL TOAST BANNERS (Hiển thị nổi bật TRÊN CÁC TAB DETAIL) */}
+        {modalSuccessBanner && (
+          <div className="mx-5 my-2.5 px-4 py-3 rounded-2xl bg-emerald-600 text-white text-xs font-bold flex items-center justify-between gap-3 shadow-lg animate-in slide-in-from-top-2 duration-300">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-100" />
+              <span>{modalSuccessBanner}</span>
+            </div>
+            <button onClick={() => setModalSuccessBanner("")} className="text-emerald-100 hover:text-white cursor-pointer">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+        {modalErrorBanner && (
+          <div className="mx-5 my-2.5 px-4 py-3 rounded-2xl bg-red-600 text-white text-xs font-bold flex items-center justify-between gap-3 shadow-lg animate-in slide-in-from-top-2 duration-300">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0 text-red-100" />
+              <span>{modalErrorBanner}</span>
+            </div>
+            <button onClick={() => setModalErrorBanner("")} className="text-red-100 hover:text-white cursor-pointer">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+
         {/* TAB NAVIGATION (9 Tabs) */}
         <div className="flex border-b border-border/40 bg-muted/20 px-4 overflow-x-auto shrink-0 scrollbar-none">
           <button

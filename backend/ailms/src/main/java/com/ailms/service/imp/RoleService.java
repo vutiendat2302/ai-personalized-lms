@@ -4,6 +4,7 @@ import com.ailms.event.AuditLogEvent;
 import com.ailms.service.IRoleService;
 
 
+import com.ailms.common.util.CodeGenerator;
 import com.ailms.entity.PermissionEntity;
 import com.ailms.entity.RoleEntity;
 import com.ailms.entity.RolePermissionEntity;
@@ -33,14 +34,15 @@ import lombok.extern.slf4j.Slf4j;
 import com.ailms.response.PageResponse;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -58,12 +60,78 @@ public class RoleService implements IRoleService {
     private final PermissionMapper permissionMapper;
     private final ApplicationEventPublisher applicationEventPublisher;
 
+    private RoleResponse toRoleResponseWithCounts(RoleEntity roleEntity) {
+        if (roleEntity == null) return null;
+        RoleResponse response = roleMapper.toRoleResponse(roleEntity);
+        if (roleEntity.getId() != null) {
+            long permCount = rolePermissionRepository.findByRoleEntity_Id(roleEntity.getId()).size();
+            long uCount = userRoleRepository.countByRoleEntity_Id(roleEntity.getId());
+            response.setPermissionCount(permCount);
+            response.setUserCount(uCount);
+        }
+        return response;
+    }
+
     @Transactional(readOnly = true)
     @Override
     public PageResponse<RoleResponse> getRoles(RoleSearchRequest request) {
         Specification<RoleEntity> spec = RoleSpecification.filterAndSearch(request);
-        Page<RoleEntity> page= roleRepository.findAll(spec, request.toPageable());
-        return PageResponse.from(page.map(roleMapper::toRoleResponse));
+
+        boolean isCustomCountSort = false;
+        boolean isPermissionCountSort = false;
+        boolean isAsc = true;
+
+        if (request.getSort() != null) {
+            for (String rawSort : request.getSort()) {
+                if (rawSort == null) continue;
+                for (String s : rawSort.split(",")) {
+                    String sortLower = s.trim().toLowerCase();
+                    if (sortLower.startsWith("permissioncount")) {
+                        isCustomCountSort = true;
+                        isPermissionCountSort = true;
+                        isAsc = sortLower.contains("asc");
+                        break;
+                    } else if (sortLower.startsWith("usercount")) {
+                        isCustomCountSort = true;
+                        isPermissionCountSort = false;
+                        isAsc = sortLower.contains("asc");
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (isCustomCountSort) {
+            List<RoleEntity> allEntities = roleRepository.findAll(spec);
+            List<RoleResponse> allResponses = new ArrayList<>(allEntities.stream().map(this::toRoleResponseWithCounts).toList());
+
+            final boolean finalIsAsc = isAsc;
+            final boolean finalIsPermSort = isPermissionCountSort;
+
+            allResponses.sort((a, b) -> {
+                long countA = finalIsPermSort ? (a.getPermissionCount() != null ? a.getPermissionCount() : 0L)
+                                              : (a.getUserCount() != null ? a.getUserCount() : 0L);
+                long countB = finalIsPermSort ? (b.getPermissionCount() != null ? b.getPermissionCount() : 0L)
+                                              : (b.getUserCount() != null ? b.getUserCount() : 0L);
+                return finalIsAsc ? Long.compare(countA, countB) : Long.compare(countB, countA);
+            });
+
+            int totalElements = allResponses.size();
+            int pageNumber = (request.getPage() == null || request.getPage() < 0) ? 0 : request.getPage();
+            int pageSize = (request.getSize() == null || request.getSize() <= 0) ? 10 : request.getSize();
+
+            int fromIndex = Math.min(pageNumber * pageSize, totalElements);
+            int toIndex = Math.min(fromIndex + pageSize, totalElements);
+            List<RoleResponse> pageContent = allResponses.subList(fromIndex, toIndex);
+
+            Pageable pageable = PageRequest.of(pageNumber, pageSize);
+            Page<RoleResponse> customPage = new PageImpl<>(pageContent, pageable, totalElements);
+
+            return PageResponse.from(customPage);
+        }
+
+        Page<RoleEntity> page = roleRepository.findAll(spec, request.toPageable());
+        return PageResponse.from(page.map(this::toRoleResponseWithCounts));
     }
 
     @Transactional(readOnly = true)
@@ -71,7 +139,7 @@ public class RoleService implements IRoleService {
     public RoleResponse getRoleById(Long id) {
         RoleEntity roleEntity = roleRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of("Role", id));
-        return roleMapper.toRoleResponse(roleEntity);
+        return toRoleResponseWithCounts(roleEntity);
     }
 
     @Transactional
@@ -80,19 +148,17 @@ public class RoleService implements IRoleService {
         if (roleRepository.existsByName(request.getName())) {
             throw DuplicateResourceException.of("Role", "name", request.getName());
         }
-        if (roleRepository.existsByCode(request.getCode())) {
-            throw DuplicateResourceException.of("Role", "code", request.getCode());
-        }
 
         RoleEntity roleEntity = roleMapper.toRoleEntity(request);
+        roleEntity.setCode(CodeGenerator.generate("ROLE", roleRepository::existsByCode));
         roleEntity = roleRepository.save(roleEntity);
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CREATE", "ROLE", roleEntity.getId(), null, roleEntity));
-        return roleMapper.toRoleResponse(roleEntity);
+        return toRoleResponseWithCounts(roleEntity);
     }
 
     @Override
     public List<RoleResponse> getAllRoles() {
-        return roleRepository.findAll().stream().map(roleMapper::toRoleResponse).toList();
+        return roleRepository.findAll().stream().map(this::toRoleResponseWithCounts).toList();
     }
 
     @Override
@@ -120,14 +186,11 @@ public class RoleService implements IRoleService {
         if (!roleEntity.getName().equalsIgnoreCase(request.getName()) && roleRepository.existsByName(request.getName())) {
             throw DuplicateResourceException.of("Role", "name", request.getName());
         }
-        if (!roleEntity.getCode().equalsIgnoreCase(request.getCode()) && roleRepository.existsByCode(request.getCode())) {
-            throw DuplicateResourceException.of("Role", "code", request.getCode());
-        }
 
         roleMapper.updateRoleFromRequest(request, roleEntity);
         roleEntity = roleRepository.save(roleEntity);
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "UPDATE", "ROLE", id, oldValue, roleEntity));
-        return roleMapper.toRoleResponse(roleEntity);
+        return toRoleResponseWithCounts(roleEntity);
     }
 
     /**
@@ -189,11 +252,25 @@ public class RoleService implements IRoleService {
         RoleEntity role = roleRepository.findById(roleId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Role", roleId));
 
+        // Lay danh sach permission IDs hien tai truoc khi thay doi
+        List<RolePermissionEntity> oldRolePermissions = rolePermissionRepository.findByRoleEntity_Id(roleId);
+        List<Long> oldPermissionIds = oldRolePermissions.stream()
+                .map(rp -> rp.getPermissionEntity().getId())
+                .toList();
+
         Set<Long> newPermissionIds = new HashSet<>(request.getPermissionIds());
 
         // neu newPr rong, xoa het permission khoi role
         if (newPermissionIds.isEmpty()) {
             rolePermissionRepository.deleteByRoleEntity_Id(roleId);
+            applicationEventPublisher.publishEvent(new AuditLogEvent(
+                    this,
+                    "UNASSIGN_ALL_PERMISSIONS",
+                    "ROLE",
+                    roleId,
+                    SimpleJsonWriter.toJson(oldPermissionIds),
+                    "[]"
+            ));
             return;
         }
 
@@ -225,7 +302,14 @@ public class RoleService implements IRoleService {
                         .toList();
 
         rolePermissionRepository.saveAll(newRolePermissions);
-        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "UPDATE", "ROLE_PERMISSION", roleId, null, null));
+        applicationEventPublisher.publishEvent(new AuditLogEvent(
+                this,
+                "UPDATE_PERMISSIONS",
+                "ROLE",
+                roleId,
+                SimpleJsonWriter.toJson(oldPermissionIds),
+                SimpleJsonWriter.toJson(request.getPermissionIds())
+        ));
     }
 
     private RolePermissionEntity buildRolePermission(RoleEntity role, PermissionEntity permission) {
@@ -256,13 +340,10 @@ public class RoleService implements IRoleService {
         if (roleRepository.existsByName(request.getName())) {
             throw DuplicateResourceException.of("Role", "name", request.getName());
         }
-        if (roleRepository.existsByCode(request.getCode())) {
-            throw DuplicateResourceException.of("Role", "code", request.getCode());
-        }
 
         RoleEntity newRole = RoleEntity.builder()
                 .name(request.getName())
-                .code(request.getCode())
+                .code(CodeGenerator.generate("ROLE", roleRepository::existsByCode))
                 .description(request.getDescription() != null ? request.getDescription() : original.getDescription())
                 .isSystem(false)
                 .build();
@@ -276,7 +357,7 @@ public class RoleService implements IRoleService {
             rolePermissionRepository.save(newRolePermission);
         }
 
-        return roleMapper.toRoleResponse(newRole);
+        return toRoleResponseWithCounts(newRole);
     }
 
     @Transactional
@@ -296,9 +377,9 @@ public class RoleService implements IRoleService {
     }
 
     @Override
-    public java.util.Map<String, Object> getRoleOverviewStats() {
+    public Map<String, Object> getRoleOverviewStats() {
         log.info("Getting role overview stats");
-        java.util.Map<String, Object> map = new java.util.HashMap<>();
+        Map<String, Object> map = new HashMap<>();
         map.put("totalRoles", roleRepository.count());
         map.put("systemRoles", roleRepository.countSystemRoles());
         map.put("customRoles", roleRepository.countCustomRoles());
@@ -308,14 +389,27 @@ public class RoleService implements IRoleService {
     }
 
     @Override
-    public java.util.Map<String, Long> getRolePermissionsDistribution() {
+    public Map<String, Long> getRolePermissionsDistribution() {
         log.info("Getting role permissions distribution");
-        java.util.Map<String, Long> map = new java.util.LinkedHashMap<>();
+        Map<String, Long> map = new LinkedHashMap<>();
         List<Object[]> rows = roleRepository.countPermissionsByRole();
         for (Object[] r : rows) {
-            String roleName = (String) r[0];
+            String roleCode = (String) r[0];
             Long count = (Long) r[1];
-            map.put(roleName, count);
+            map.put(roleCode, count);
+        }
+        return map;
+    }
+
+    @Override
+    public Map<String, Long> getRoleUsersDistribution() {
+        log.info("Getting role users distribution");
+        Map<String, Long> map = new LinkedHashMap<>();
+        List<Object[]> rows = userRoleRepository.countUsersGroupByRole();
+        for (Object[] r : rows) {
+            String roleCode = (String) r[0];
+            Long count = (Long) r[1];
+            map.put(roleCode, count);
         }
         return map;
     }
@@ -330,19 +424,45 @@ public class RoleService implements IRoleService {
                 userRoleRepository.delete(ur);
             }
         }
-        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "REMOVE_USER_ROLE", "USER_ROLE", roleId, null, userId));
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "REMOVE_USER_ROLE", "ROLE", roleId, null, userId));
+    }
+
+    @Transactional
+    @Override
+    public void removeAllUsersFromRole(Long roleId) {
+        log.info("Removing all users from role {}", roleId);
+        userRoleRepository.deleteByRoleEntity_Id(roleId);
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "REMOVE_ALL_USERS", "ROLE", roleId, null, null));
     }
 
     @Transactional
     @Override
     public void bulkDeleteCustomRoles(List<Long> roleIds) {
         log.info("Bulk deleting custom unused roles: {}", roleIds);
+        if (roleIds == null || roleIds.isEmpty()) return;
+
+        // 1. Kiểm tra tính hợp lệ của tất cả các role được chọn trước khi xóa
+        for (Long id : roleIds) {
+            RoleEntity role = roleRepository.findById(id)
+                    .orElseThrow(() -> ResourceNotFoundException.of("Role", id));
+
+            if (Boolean.TRUE.equals(role.getIsSystem())) {
+                throw new BusinessException("Không thể xóa Role hệ thống [" + role.getName() + "]");
+            }
+
+            if (userRoleRepository.existsByRoleEntity_Id(id)) {
+                long count = userRoleRepository.countByRoleEntity_Id(id);
+                throw new BusinessException("Không thể xóa Role [" + role.getName() + "] do đang được gán cho " + count + " người dùng. Vui lòng gỡ tất cả người dùng khỏi Role trước khi xóa!");
+            }
+        }
+
+        // 2. Thực hiện xóa tất cả các role hợp lệ và ghi audit log
         for (Long id : roleIds) {
             RoleEntity role = roleRepository.findById(id).orElse(null);
-            if (role != null && Boolean.FALSE.equals(role.getIsSystem())) {
-                if (!userRoleRepository.existsByRoleEntity_Id(id)) {
-                    roleRepository.delete(role);
-                }
+            if (role != null) {
+                String oldValue = SimpleJsonWriter.toJson(role);
+                roleRepository.delete(role);
+                applicationEventPublisher.publishEvent(new AuditLogEvent(this, "DELETE", "ROLE", id, oldValue, null));
             }
         }
     }

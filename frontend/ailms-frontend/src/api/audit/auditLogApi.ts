@@ -2,8 +2,8 @@ import httpClient from "@/api/httpClient";
 import type { ApiResponse } from "@/types/base";
 
 export interface AuditLogResponse {
-  id: number;
-  userId: number;
+  id: string;
+  userId: string;
   userEmail: string;
   userFullName: string;
   action: string;
@@ -22,7 +22,7 @@ export const auditLogApi = {
 
   getAuditLogs: (params?: {
     entityType?: string;
-    entityId?: number;
+    entityId?: string;
     action?: string;
     start?: string;
     end?: string;
@@ -35,9 +35,9 @@ export const auditLogApi = {
   getAllAuditLogs: () =>
     httpClient.get<ApiResponse<AuditLogResponse[]>>("/v1/audit-log/all"),
 
-  getAuditLogsByUserId: (userId: number) =>
+  getAuditLogsByUserId: (userId: string) =>
     httpClient.get<ApiResponse<AuditLogResponse[]>>(`/v1/audit-log/users/${userId}`),
 
-  getAuditLogsByEntity: (entityType: string, entityId: string | number, params?: { page?: number; size?: number; sort?: string }) =>
+  getAuditLogsByEntity: (entityType: string, entityId: string, params?: { page?: number; size?: number; sort?: string }) =>
     httpClient.get<ApiResponse<any>>(`/v1/audit-log/entity/${entityType}/${entityId}`, { params }).then(res => res.data.data),
 };

@@ -1,5 +1,16 @@
 import React, { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
 import { DatePickerInput, formatDateDisplay } from "@/components/ui/DatePickerInput";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -52,6 +63,7 @@ import {
   RefreshCw,
   Layers,
   PieChart as PieIcon,
+  X,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -182,30 +194,44 @@ export const PermissionManagement: React.FC = () => {
   // Create/Edit Modal State
   const [formModalOpen, setFormModalOpen] = useState(false);
   const [editingPerm, setEditingPerm] = useState<PermissionResponse | null>(null);
-  const [formName, setFormName] = useState("");
-  const [formCode, setFormCode] = useState("");
-  const [formEntity, setFormEntity] = useState("");
-  const [formAction, setFormAction] = useState("");
-  const [formDescription, setFormDescription] = useState("");
   const [formSubmitting, setFormSubmitting] = useState(false);
+
+  const permissionSchema = z.object({
+    name: z.string().min(1, "Tên quyền không được để trống").max(100, "Tối đa 100 ký tự"),
+    entity: z
+      .string()
+      .min(1, "Entity không được để trống")
+      .max(50)
+      .regex(/^[A-Z][A-Z0-9_]*$/, "Chỉ chấp nhận chữ HOA, số và dấu _ (VD: COURSE, USER)"),
+    action: z
+      .string()
+      .min(1, "Action không được để trống")
+      .max(50)
+      .regex(/^[A-Z][A-Z0-9_]*$/, "Chỉ chấp nhận chữ HOA, số và dấu _ (VD: CREATE, VIEW)"),
+    description: z.string().max(255, "Tối đa 255 ký tự").optional(),
+  });
+
+  type PermissionFormValues = z.infer<typeof permissionSchema>;
+
+  const permForm = useForm<PermissionFormValues>({
+    resolver: zodResolver(permissionSchema),
+    defaultValues: { name: "", entity: "USER", action: "VIEW", description: "" },
+  });
 
   const handleOpenCreateModal = () => {
     setEditingPerm(null);
-    setFormName("");
-    setFormCode("");
-    setFormEntity("USER");
-    setFormAction("VIEW");
-    setFormDescription("");
+    permForm.reset({ name: "", entity: "USER", action: "VIEW", description: "" });
     setFormModalOpen(true);
   };
 
   const handleOpenEditModal = (perm: PermissionResponse) => {
     setEditingPerm(perm);
-    setFormName(perm.name || "");
-    setFormCode(perm.code || "");
-    setFormEntity(perm.entity || "USER");
-    setFormAction(perm.action || "VIEW");
-    setFormDescription(perm.description || "");
+    permForm.reset({
+      name: perm.name || "",
+      entity: perm.entity || "USER",
+      action: perm.action || "VIEW",
+      description: perm.description || "",
+    });
     setFormModalOpen(true);
   };
 
@@ -241,22 +267,17 @@ export const PermissionManagement: React.FC = () => {
     return true;
   };
 
-  const handleSavePermission = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formName.trim()) {
-      showBanner("Vui lòng nhập Tên quyền", true);
-      return;
-    }
+  const handleSavePermission = async (values: PermissionFormValues) => {
     setFormSubmitting(true);
     try {
       const payload: any = {
-        name: formName.trim(),
-        entity: formEntity.trim(),
-        action: formAction.trim(),
-        description: formDescription.trim()
+        name: values.name.trim(),
+        entity: values.entity.trim(),
+        action: values.action.trim(),
+        description: (values.description ?? "").trim(),
       };
       if (editingPerm) {
-        payload.code = formCode;
+        payload.code = editingPerm.code;
         const res = await permissionApi.updatePermission(String(editingPerm.id), payload);
         showBanner("Cập nhật Permission thành công!");
         const updated = res?.data?.data || (res as any)?.data || res;
@@ -279,10 +300,7 @@ export const PermissionManagement: React.FC = () => {
             setPermissions(prev => [newPerm, ...prev.filter(p => String(p.id) !== String(newPerm.id))]);
             setTotalElements(prev => prev + 1);
             showBanner(`Tạo mới Permission ${newPerm.code} thành công!`);
-
-            setTimeout(() => {
-              setNewlyCreatedId(null);
-            }, 2500);
+            setTimeout(() => setNewlyCreatedId(null), 2500);
           } else {
             setActionBanner({
               message: `Đã tạo "${newPerm.name || newPerm.code}" thành công.`,
@@ -296,13 +314,12 @@ export const PermissionManagement: React.FC = () => {
                 setFilterEndDate("");
                 setSortRules(["id:desc"]);
                 setPage(0);
-
                 setNewlyCreatedId(String(newPerm.id));
                 setPermissions(prev => [newPerm, ...prev.filter(p => String(p.id) !== String(newPerm.id))]);
                 scrollToSection("management");
                 setActionBanner(null);
                 setTimeout(() => setNewlyCreatedId(null), 4000);
-              }
+              },
             });
             setTimeout(() => setActionBanner(null), 7000);
           }
@@ -426,8 +443,31 @@ export const PermissionManagement: React.FC = () => {
         if (filterStartDate) {
           content = content.filter(p => p.createdAt && p.createdAt.slice(0, 10) >= filterStartDate);
         }
-        if (filterEndDate) {
-          content = content.filter(p => p.createdAt && p.createdAt.slice(0, 10) <= filterEndDate);
+        // Apply client-side sorting
+        if (sortRules.length > 0) {
+          const [sortField, sortDir] = sortRules[0].split(":");
+          const isAsc = sortDir.toLowerCase() === "asc";
+          content.sort((a: any, b: any) => {
+            let valA = a[sortField];
+            let valB = b[sortField];
+
+            const numA = (valA !== null && valA !== undefined && valA !== "") ? Number(valA) : NaN;
+            const numB = (valB !== null && valB !== undefined && valB !== "") ? Number(valB) : NaN;
+
+            if (!isNaN(numA) && !isNaN(numB)) {
+              return isAsc ? numA - numB : numB - numA;
+            }
+
+            if (valA === undefined || valA === null) valA = "";
+            if (valB === undefined || valB === null) valB = "";
+
+            const strA = String(valA).toLowerCase();
+            const strB = String(valB).toLowerCase();
+
+            if (strA < strB) return isAsc ? -1 : 1;
+            if (strA > strB) return isAsc ? 1 : -1;
+            return 0;
+          });
         }
 
         setPermissions(content);
@@ -559,7 +599,7 @@ export const PermissionManagement: React.FC = () => {
       
       {/* Toast Banners */}
       {actionBanner && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl bg-emerald-600 text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
+        <div className="fixed bottom-6 right-6 z-[9999] flex items-center gap-3 rounded-2xl bg-emerald-600 text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
           <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-100" />
           <div className="flex items-center gap-3 flex-wrap text-sm font-semibold">
             <span>{actionBanner.message}</span>
@@ -575,14 +615,14 @@ export const PermissionManagement: React.FC = () => {
         </div>
       )}
       {successBanner && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl bg-emerald-600 text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
+        <div className="fixed bottom-6 right-6 z-[9999] flex items-center gap-3 rounded-2xl bg-emerald-600 text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
           <CheckCircle2 className="h-5 w-5 shrink-0" />
           <span className="text-sm font-semibold">{successBanner}</span>
         </div>
       )}
 
       {errorBanner && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl bg-red-600 text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
+        <div className="fixed bottom-6 right-6 z-[9999] flex items-center gap-3 rounded-2xl bg-red-600 text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
           <AlertCircle className="h-5 w-5 shrink-0" />
           <span className="text-sm font-semibold">{errorBanner}</span>
         </div>
@@ -964,14 +1004,26 @@ export const PermissionManagement: React.FC = () => {
                   <CheckCircle2 className="h-4 w-4" />
                   <span>Đã chọn {selectedPermIds.length} Permission</span>
                 </div>
-                <Button
-                  onClick={handleBulkDeletePermissions}
-                  size="sm"
-                  variant="destructive"
-                  className="h-7 text-xs font-semibold gap-1.5 rounded-lg cursor-pointer shadow-xs"
-                >
-                  <Trash2 className="h-3.5 w-3.5" /> Xóa hàng loạt ({selectedPermIds.length})
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    onClick={() => setSelectedPermIds([])}
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs font-semibold text-muted-foreground hover:text-foreground border-border/40 bg-background rounded-lg cursor-pointer gap-1"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                    <span>Bỏ chọn tất cả</span>
+                  </Button>
+                  <Button
+                    onClick={handleBulkDeletePermissions}
+                    size="sm"
+                    variant="destructive"
+                    className="h-7 text-xs font-semibold gap-1.5 rounded-lg cursor-pointer shadow-xs"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" /> Xóa hàng loạt ({selectedPermIds.length})
+                  </Button>
+                </div>
               </div>
             )}
             {loading && (
@@ -1223,75 +1275,101 @@ export const PermissionManagement: React.FC = () => {
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleSavePermission} className="space-y-4 py-2">
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold text-muted-foreground">Tên Quyền (Name) *</Label>
-              <Input
-                placeholder="VD: course:create, user:view"
-                value={formName}
-                onChange={(e) => setFormName(e.target.value)}
-                required
-                className="h-9 text-sm border-border/30"
-              />
-            </div>
+          <Form {...permForm}>
+            <form onSubmit={permForm.handleSubmit(handleSavePermission)} className="space-y-4 py-2">
 
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold text-muted-foreground">Mã Code Duy Nhất (Code)</Label>
-              <Input
-                placeholder={editingPerm ? formCode : "Tự động sinh (VD: PERM-2607-A1B2C3)"}
-                value={editingPerm ? formCode : ""}
-                disabled={true}
-                className="h-9 text-sm font-mono uppercase border-border/30 bg-muted/40 text-muted-foreground cursor-not-allowed"
+              <FormField
+                control={permForm.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs font-semibold text-muted-foreground">Tên Quyền (Name) *</FormLabel>
+                    <FormControl>
+                      <Input placeholder="VD: course:create, user:view" className="h-9 text-sm border-border/30" {...field} />
+                    </FormControl>
+                    <FormMessage className="text-xs" />
+                  </FormItem>
+                )}
               />
-              <p className="text-[11px] text-muted-foreground italic">
-                {editingPerm ? "Mã code cố định, không thể chỉnh sửa." : "Mã code sẽ được tự động sinh bằng CodeGenerator (định dạng PERM-yyMM-XXXXXX)."}
-              </p>
-            </div>
 
-            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label className="text-xs font-semibold text-muted-foreground">Thực thể (Entity)</Label>
+                <Label className="text-xs font-semibold text-muted-foreground">Mã Code Duy Nhất (Code)</Label>
                 <Input
-                  placeholder="VD: COURSE, USER, ROLE"
-                  value={formEntity}
-                  onChange={(e) => setFormEntity(e.target.value.toUpperCase())}
-                  required
-                  className="h-9 text-sm font-mono uppercase border-border/30"
+                  placeholder={editingPerm ? (editingPerm.code ?? "") : "Tự động sinh (VD: PERM-2607-A1B2C3)"}
+                  value={editingPerm ? (editingPerm.code ?? "") : ""}
+                  disabled
+                  className="h-9 text-sm font-mono uppercase border-border/30 bg-muted/40 text-muted-foreground cursor-not-allowed"
+                />
+                <p className="text-[11px] text-muted-foreground italic">
+                  {editingPerm ? "Mã code cố định, không thể chỉnh sửa." : "Mã code sẽ được tự động sinh bằng CodeGenerator (định dạng PERM-yyMM-XXXXXX)."}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <FormField
+                  control={permForm.control}
+                  name="entity"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs font-semibold text-muted-foreground">Thực thể (Entity)</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="VD: COURSE, USER, ROLE"
+                          className="h-9 text-sm font-mono uppercase border-border/30"
+                          {...field}
+                          onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                        />
+                      </FormControl>
+                      <FormMessage className="text-xs" />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={permForm.control}
+                  name="action"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs font-semibold text-muted-foreground">Hành động (Action)</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="VD: CREATE, VIEW, EDIT"
+                          className="h-9 text-sm font-mono uppercase border-border/30"
+                          {...field}
+                          onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                        />
+                      </FormControl>
+                      <FormMessage className="text-xs" />
+                    </FormItem>
+                  )}
                 />
               </div>
 
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold text-muted-foreground">Hành động (Action)</Label>
-                <Input
-                  placeholder="VD: CREATE, VIEW, EDIT, DELETE"
-                  value={formAction}
-                  onChange={(e) => setFormAction(e.target.value.toUpperCase())}
-                  required
-                  className="h-9 text-sm font-mono uppercase border-border/30"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold text-muted-foreground">Mô tả chức năng</Label>
-              <Input
-                placeholder="Mô tả scope và mục đích của quyền..."
-                value={formDescription}
-                onChange={(e) => setFormDescription(e.target.value)}
-                className="h-9 text-sm border-border/30"
+              <FormField
+                control={permForm.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs font-semibold text-muted-foreground">Mô tả chức năng</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Mô tả scope và mục đích của quyền..." className="h-9 text-sm border-border/30" {...field} />
+                    </FormControl>
+                    <FormMessage className="text-xs" />
+                  </FormItem>
+                )}
               />
-            </div>
 
-            <DialogFooter className="pt-2">
-              <Button type="button" variant="outline" size="sm" onClick={() => setFormModalOpen(false)}>
-                Hủy
-              </Button>
-              <Button type="submit" size="sm" disabled={formSubmitting} className="bg-primary text-primary-foreground font-semibold">
-                {formSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-                {editingPerm ? "Lưu thay đổi" : "Tạo Permission"}
-              </Button>
-            </DialogFooter>
-          </form>
+              <DialogFooter className="pt-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => setFormModalOpen(false)}>
+                  Hủy
+                </Button>
+                <Button type="submit" size="sm" disabled={formSubmitting} className="bg-primary text-primary-foreground font-semibold">
+                  {formSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                  {editingPerm ? "Lưu thay đổi" : "Tạo Permission"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
         </DialogContent>
       </Dialog>
 

@@ -26,7 +26,7 @@ import {
 export const ActivityLog: React.FC = () => {
   const { auth } = useAuth();
   const isAdmin = auth.user?.roles.includes(UserRole.ADMIN);
-  const currentUserId = auth.user ? parseInt(auth.user.id) : null;
+  const currentUserId = auth.user ? auth.user.id : null;
 
   // Banners
   const [errorBanner, setErrorBanner] = useState("");
@@ -50,7 +50,7 @@ export const ActivityLog: React.FC = () => {
   const [filterEnd, setFilterEnd] = useState("");
 
   // Modal / Detail state
-  const [expandedLogId, setExpandedLogId] = useState<number | null>(null);
+  const [expandedLogId, setExpandedLogId] = useState<string | null>(null);
 
   useEffect(() => {
     if (isAdmin) {
@@ -60,7 +60,7 @@ export const ActivityLog: React.FC = () => {
     }
   }, [isAdmin, currentUserId, page]);
 
-  const fetchUserLogs = async (userId: number) => {
+  const fetchUserLogs = async (userId: string) => {
     setLoading(true);
     try {
       const res = await auditLogApi.getAuditLogsByUserId(userId);
@@ -383,7 +383,7 @@ export const ActivityLog: React.FC = () => {
                                   </div>
 
                                   <div className="space-y-1">
-                                    <span className="font-bold text-muted-foreground block text-green-600">Giá trị Mới (New Value)</span>
+                                    <span className="font-bold block text-green-600">Giá trị Mới (New Value)</span>
                                     <pre className="p-3 bg-card border border-green-500/10 rounded-lg text-[10px] font-mono whitespace-pre-wrap max-h-48 overflow-y-auto">
                                       {tryFormatJSON(log.newValue)}
                                     </pre>
@@ -441,7 +441,7 @@ export const ActivityLog: React.FC = () => {
             </CardDescription>
           </CardHeader>
 
-          <CardContent className="p-6 relative min-h-[250px]">
+          <CardContent className="p-6 relative min-h-62.5">
             {loading && (
               <div className="absolute inset-0 bg-background/50 backdrop-blur-xs flex items-center justify-center z-10">
                 <Loader2 className="h-6 w-6 text-primary animate-spin" />
@@ -459,7 +459,7 @@ export const ActivityLog: React.FC = () => {
                   <div key={log.id} className="relative group animate-in fade-in duration-200">
                     
                     {/* Timeline Node Bullet */}
-                    <div className="absolute -left-[31px] top-0 h-4.5 w-4.5 rounded-full bg-card border-2 border-primary flex items-center justify-center shadow-xs">
+                    <div className="absolute -left-7.75 top-0 h-4.5 w-4.5 rounded-full bg-card border-2 border-primary flex items-center justify-center shadow-xs">
                       <div className="h-1.5 w-1.5 rounded-full bg-primary" />
                     </div>
 

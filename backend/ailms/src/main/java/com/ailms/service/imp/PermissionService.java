@@ -265,6 +265,7 @@ public class PermissionService implements IPermissionService{
         if (target != null) {
             rolePermissionRepository.delete(target);
             applicationEventPublisher.publishEvent(new AuditLogEvent(this, "REMOVE_ROLE", "PERMISSION", permissionId, target, null));
+            applicationEventPublisher.publishEvent(new AuditLogEvent(this, "UNASSIGN_PERMISSION", "ROLE", roleId, "Permission #" + permissionId, null));
         }
     }
 
@@ -285,6 +286,7 @@ public class PermissionService implements IPermissionService{
                     .build();
             rolePermissionRepository.save(rolePerm);
             applicationEventPublisher.publishEvent(new AuditLogEvent(this, "ASSIGN_ROLE", "PERMISSION", permissionId, null, rolePerm));
+            applicationEventPublisher.publishEvent(new AuditLogEvent(this, "ASSIGN_PERMISSION", "ROLE", roleId, null, "Permission #" + permissionId));
         }
     }
 

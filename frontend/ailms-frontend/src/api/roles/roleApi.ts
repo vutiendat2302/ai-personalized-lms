@@ -11,7 +11,7 @@ import type {
 } from "@/types/admin";
 
 export const roleApi = {
-  getRoles: (params?: { isSystem?: boolean; search?: string; page?: number; size?: number; sort?: string }) =>
+  getRoles: (params?: { isSystem?: boolean; keyword?: string; page?: number; size?: number; sort?: string }) =>
     httpClient.get<ApiResponse<any>>("/v1/roles/page", { params }),
 
   getAllRoles: () =>
@@ -52,10 +52,16 @@ export const roleApi = {
     httpClient.get<ApiResponse<Record<string, number>>>("/v1/roles/stats/permissions-distribution")
       .then(res => res.data.data),
 
+  getUsersDistribution: () =>
+    httpClient.get<ApiResponse<Record<string, number>>>("/v1/roles/stats/users-distribution")
+      .then(res => res.data.data),
+
   removeUserFromRole: (roleId: string, userId: string) =>
     httpClient.delete<ApiResponse<void>>(`/v1/roles/${roleId}/users/${userId}`),
 
-  bulkDeleteRoles: (roleIds: string[]) =>
+  removeAllUsersFromRole: (roleId: string) =>
+    httpClient.delete<ApiResponse<void>>(`/v1/roles/${roleId}/users`),
+
+  bulkDeleteRoles: (roleIds: (string | number)[]) =>
     httpClient.post<ApiResponse<void>>("/v1/roles/bulk-delete", roleIds),
 };
-

@@ -9,6 +9,10 @@ import { searchApi, type SearchHistoryResponse, type PopularSearchResponse, type
 import { StudentOnboardingModal } from "@/components/student/StudentOnboardingModal";
 import { studentApi } from "@/api/students/studentApi";
 import { useCartStore } from "@/store/useCartStore";
+import { WorkspaceSwitcher } from "@/components/WorkspaceSwitcher";
+import type { StudentProfileData } from "@/api/students/studentApi";
+import type { ApiResponse } from "@/types/base";
+
 
 export const Header: React.FC = () => {
   const { auth, logout } = useAuth();
@@ -49,8 +53,8 @@ export const Header: React.FC = () => {
     if (auth.accessToken && auth.user && isStudent) {
       const uId = auth.user.id;
 
-      studentApi.getProfileById(uId)
-        .then((res) => {
+      studentApi.getStudentById(uId)
+        .then((res: import("axios").AxiosResponse<ApiResponse<StudentProfileData>>) => {
           const profile = res.data?.data;
           if (profile && profile.hasGoal === true) {
             localStorage.setItem(`hasGoal_${uId}`, "true");
@@ -386,7 +390,7 @@ export const Header: React.FC = () => {
               </button>
             </form>
             {searchFocused && (
-              <div className="absolute left-1/2 -translate-x-1/2 mt-2 w-[600px] max-w-[90vw] bg-card rounded-2xl border border-border/40 shadow-2xl p-5 z-50 animate-in fade-in-50 slide-in-from-top-3 duration-200">
+              <div className="absolute left-1/2 -translate-x-1/2 mt-2 w-150 max-w-[90vw] bg-card rounded-2xl border border-border/40 shadow-2xl p-5 z-50 animate-in fade-in-50 slide-in-from-top-3 duration-200">
                 {/* 1. Real Autocomplete Suggestions from API */}
                 {searchQuery.trim() !== "" ? (
                   <div className="space-y-2">
@@ -440,7 +444,7 @@ export const Header: React.FC = () => {
                               onClick={() => handleSelectKeyword(item.keyword, item.courseId)}
                               className="group flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border/60 bg-muted/30 text-sm font-semibold text-foreground hover:bg-primary/5 hover:text-primary hover:border-primary/20 transition-all cursor-pointer"
                             >
-                              <span className="line-clamp-1 max-w-[200px]">{item.keyword}</span>
+                              <span className="line-clamp-1 max-w-50">{item.keyword}</span>
                               <button
                                 type="button"
                                 onClick={(e) => handleDeleteHistory(e, item.id)}
@@ -531,6 +535,9 @@ export const Header: React.FC = () => {
             // Authenticated Right Side Icons & Profile Dropdown
             <div className="flex items-center gap-3 relative" ref={dropdownRef}>
               
+              {/* Workspace Switcher dropdown for multi-role users */}
+              <WorkspaceSwitcher />
+
               {/* Goal Widget Button for Student */}
               {isStudent && (
                 <button
