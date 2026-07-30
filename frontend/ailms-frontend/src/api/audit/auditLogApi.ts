@@ -9,7 +9,7 @@ export interface AuditLogResponse {
   userAvatarUrl?: string;
   action: string;
   entityType: string;
-  entityId: number;
+  entityId: string;
   oldValue: string | null;
   newValue: string | null;
   ipAddress: string;
@@ -18,7 +18,7 @@ export interface AuditLogResponse {
 }
 
 export const auditLogApi = {
-  getByLogId: (id: number) =>
+  getByLogId: (id: string) =>
     httpClient.get<ApiResponse<AuditLogResponse>>(`/v1/audit-log/${id}`),
 
   getAuditLogs: (params?: {

@@ -9,7 +9,6 @@ import { UserRole } from "@/config/roles";
 import { auditLogApi, type AuditLogResponse } from "@/api/audit/auditLogApi";
 import { DatePickerInput } from "@/components/ui/DatePickerInput";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DetailAuditLogModal } from "@/components/admin/audit/DetailAuditLogModal";
 import {
@@ -35,20 +34,15 @@ import {
 import {
   Activity,
   ArrowLeft,
-  Filter,
   Info,
   Loader2,
   AlertCircle,
   Clock,
-  Laptop,
-  Globe,
-  RefreshCw,
   Search,
   RotateCcw,
   Eye,
   ChevronLeft,
   ChevronRight,
-  ArrowUpDown,
   ArrowUp,
   ArrowDown,
   Download,
@@ -144,13 +138,31 @@ export const ActivityLog: React.FC = () => {
 
   // Admin filter states
   const [searchKeyword, setSearchKeyword] = useState("");
+  const [debouncedKeyword, setDebouncedKeyword] = useState("");
   const [filterEntityType, setFilterEntityType] = useState("ALL");
-  const [filterEntityId, setFilterEntityId] = useState("");
   const [selectedActions, setSelectedActions] = useState<string[]>([]);
   const [filterUserQuery, setFilterUserQuery] = useState("");
+  const [debouncedUserQuery, setDebouncedUserQuery] = useState("");
   const [filterIpAddress, setFilterIpAddress] = useState("");
   const [filterStart, setFilterStart] = useState("");
   const [filterEnd, setFilterEnd] = useState("");
+
+  // Debounce search inputs
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedKeyword(searchKeyword);
+      setPage(0);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchKeyword]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedUserQuery(filterUserQuery);
+      setPage(0);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [filterUserQuery]);
 
   // Sorting (Same multi-column rule placeholder structure)
   const [sortRule, setSortRule] = useState<{ field: string; dir: "ASC" | "DESC" }>({
@@ -159,7 +171,13 @@ export const ActivityLog: React.FC = () => {
   });
 
   // Modal Detail state
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedLog, setSelectedLog] = useState<AuditLogResponse | null>(null);
+
+  const handleOpenDetailModal = (log: AuditLogResponse) => {
+    setSelectedLog(log);
+    setDetailModalOpen(true);
+  };
 
   // Synchronize jump page input state
   useEffect(() => {
@@ -173,7 +191,7 @@ export const ActivityLog: React.FC = () => {
     } else if (currentUserId) {
       fetchUserLogs(currentUserId);
     }
-  }, [isAdmin, currentUserId, page, pageSize, sortRule]);
+  }, [isAdmin, currentUserId, page, pageSize, sortRule, debouncedKeyword, debouncedUserQuery]);
 
   // Auto-refresh interval (Live monitoring)
   useEffect(() => {
@@ -187,11 +205,10 @@ export const ActivityLog: React.FC = () => {
     isAdmin,
     page,
     pageSize,
-    searchKeyword,
+    debouncedKeyword,
     filterEntityType,
-    filterEntityId,
     selectedActions,
-    filterUserQuery,
+    debouncedUserQuery,
     filterIpAddress,
     filterStart,
     filterEnd,
@@ -237,11 +254,10 @@ export const ActivityLog: React.FC = () => {
         size: pageSize,
         sort: `${sortRule.field}:${sortRule.dir.toLowerCase()}`
       };
-      if (searchKeyword.trim()) params.keyword = searchKeyword.trim();
+      if (debouncedKeyword.trim()) params.keyword = debouncedKeyword.trim();
       if (filterEntityType !== "ALL") params.entityType = filterEntityType;
-      if (filterEntityId.trim()) params.entityId = parseInt(filterEntityId.trim());
       if (selectedActions.length > 0) params.actions = selectedActions;
-      if (filterUserQuery.trim()) params.userQuery = filterUserQuery.trim();
+      if (debouncedUserQuery.trim()) params.userQuery = debouncedUserQuery.trim();
       if (filterIpAddress.trim()) params.ipAddress = filterIpAddress.trim();
       if (filterStart) params.occurredFrom = new Date(filterStart).toISOString();
       if (filterEnd) params.occurredTo = new Date(filterEnd).toISOString();
@@ -264,6 +280,8 @@ export const ActivityLog: React.FC = () => {
   const handleApplyFilters = (e: React.FormEvent) => {
     e.preventDefault();
     setPage(0);
+    setDebouncedKeyword(searchKeyword);
+    setDebouncedUserQuery(filterUserQuery);
     if (isAdmin) {
       fetchAdminLogs();
     }
@@ -271,10 +289,11 @@ export const ActivityLog: React.FC = () => {
 
   const handleResetFilters = () => {
     setSearchKeyword("");
+    setDebouncedKeyword("");
     setFilterEntityType("ALL");
-    setFilterEntityId("");
     setSelectedActions([]);
     setFilterUserQuery("");
+    setDebouncedUserQuery("");
     setFilterIpAddress("");
     setFilterStart("");
     setFilterEnd("");
@@ -301,11 +320,10 @@ export const ActivityLog: React.FC = () => {
       const params: any = {
         sort: `${sortRule.field}:${sortRule.dir.toLowerCase()}`
       };
-      if (searchKeyword.trim()) params.keyword = searchKeyword.trim();
+      if (debouncedKeyword.trim()) params.keyword = debouncedKeyword.trim();
       if (filterEntityType !== "ALL") params.entityType = filterEntityType;
-      if (filterEntityId.trim()) params.entityId = parseInt(filterEntityId.trim());
       if (selectedActions.length > 0) params.actions = selectedActions;
-      if (filterUserQuery.trim()) params.userQuery = filterUserQuery.trim();
+      if (debouncedUserQuery.trim()) params.userQuery = debouncedUserQuery.trim();
       if (filterIpAddress.trim()) params.ipAddress = filterIpAddress.trim();
       if (filterStart) params.occurredFrom = new Date(filterStart).toISOString();
       if (filterEnd) params.occurredTo = new Date(filterEnd).toISOString();
@@ -556,17 +574,7 @@ export const ActivityLog: React.FC = () => {
                 </Select>
               </div>
 
-              {/* Entity ID Input */}
-              <div className="flex flex-col gap-1 w-24 shrink-0">
-                <Label className="text-xs font-semibold text-muted-foreground whitespace-nowrap">ID Thực thể</Label>
-                <Input
-                  type="number"
-                  placeholder="Ví dụ: 1"
-                  value={filterEntityId}
-                  onChange={(e) => setFilterEntityId(e.target.value)}
-                  className="h-9 text-sm border border-border/30 bg-background rounded-lg font-mono"
-                />
-              </div>
+
 
               {/* Multi-Choice Actions Popover */}
               <div className="flex flex-col gap-1 w-44 shrink-0">
@@ -702,7 +710,7 @@ export const ActivityLog: React.FC = () => {
             )}
 
             {/* Audit Logs Table (CardContent style) */}
-            <CardContent className="p-0 relative min-h-[300px]">
+            <CardContent className="p-0 relative min-h-75">
               {loading && (
                 <div className="absolute inset-0 bg-background/55 backdrop-blur-xs flex items-center justify-center z-20">
                   <Loader2 className="h-8 w-8 text-primary animate-spin" />
@@ -760,12 +768,12 @@ export const ActivityLog: React.FC = () => {
                         </TableCell>
 
                         {/* Thời gian cell */}
-                        <td className="py-3 px-4 text-xs font-semibold text-muted-foreground font-mono pl-6">
+                        <TableCell className="py-3 px-4 text-xs font-semibold text-muted-foreground font-mono pl-6">
                           {formatDate(log.occurredAt)}
-                        </td>
+                        </TableCell>
 
                         {/* Tài khoản cell */}
-                        <td className="py-3 px-3">
+                        <TableCell className="py-3 px-3">
                           <div className="flex items-center gap-2.5">
                             <Avatar className="h-8 w-8 border border-border/40">
                               <AvatarImage src={log.userAvatarUrl} alt={log.userFullName} />
@@ -778,32 +786,32 @@ export const ActivityLog: React.FC = () => {
                               <p className="text-[10px] text-muted-foreground">{log.userEmail || `ID: ${log.userId}`}</p>
                             </div>
                           </div>
-                        </td>
+                        </TableCell>
 
                         {/* Hành động cell */}
-                        <td className="py-3 px-3">
+                        <TableCell className="py-3 px-3">
                           <span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase tracking-wider ${getActionColor(log.action)}`}>
                             {log.action}
                           </span>
-                        </td>
+                        </TableCell>
 
                         {/* Thực thể cell */}
-                        <td className="py-3 px-3">
+                        <TableCell className="py-3 px-3">
                           <div className="flex flex-col">
                             <span className="font-bold text-xs text-foreground uppercase font-mono">{log.entityType || "N/A"}</span>
                             <span className="text-[10px] text-muted-foreground">ID: #{log.entityId}</span>
                           </div>
-                        </td>
+                        </TableCell>
 
                         {/* IP cell */}
-                        <td className="py-3 px-3 text-xs text-muted-foreground font-mono">
+                        <TableCell className="py-3 px-3 text-xs text-muted-foreground font-mono">
                           {log.ipAddress || "—"}
-                        </td>
+                        </TableCell>
 
                         {/* View action cell */}
-                        <td className="py-3 px-4 text-center">
+                        <TableCell className="py-3 px-4 text-center">
                           <Button
-                            onClick={() => setSelectedLog(log)}
+                            onClick={() => handleOpenDetailModal(log)}
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 text-primary hover:bg-primary/10 cursor-pointer"
@@ -811,7 +819,7 @@ export const ActivityLog: React.FC = () => {
                           >
                             <Eye className="h-4.5 w-4.5" />
                           </Button>
-                        </td>
+                        </TableCell>
                       </TableRow>
                     ))
                   )}
@@ -920,7 +928,7 @@ export const ActivityLog: React.FC = () => {
                     <div key={log.id} className="relative group animate-in fade-in duration-200">
                       
                       {/* Timeline Node Bullet */}
-                      <div className="absolute -left-[31px] top-0 h-4.5 w-4.5 rounded-full bg-card border-2 border-primary flex items-center justify-center shadow-xs">
+                      <div className="absolute -left-7.75 top-0 h-4.5 w-4.5 rounded-full bg-card border-2 border-primary flex items-center justify-center shadow-xs">
                         <div className="h-1.5 w-1.5 rounded-full bg-primary" />
                       </div>
 
@@ -948,7 +956,7 @@ export const ActivityLog: React.FC = () => {
 
                         {/* Open modal details trigger */}
                         <button
-                          onClick={() => setSelectedLog(log)}
+                          onClick={() => handleOpenDetailModal(log)}
                           className="text-[10px] text-primary font-bold hover:underline flex items-center gap-0.5 cursor-pointer"
                         >
                           Xem chi tiết cấu hình thay đổi & thiết bị
@@ -980,13 +988,11 @@ export const ActivityLog: React.FC = () => {
       )}
 
       {/* DETAIL MODAL WITH JSON DIFF */}
-      {selectedLog && (
-        <DetailAuditLogModal
-          open={!!selectedLog}
-          onClose={() => setSelectedLog(null)}
-          log={selectedLog}
-        />
-      )}
+      <DetailAuditLogModal
+        open={detailModalOpen}
+        onClose={() => setDetailModalOpen(false)}
+        log={selectedLog}
+      />
 
     </div>
   );
