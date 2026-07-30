@@ -22,6 +22,7 @@ public interface DepartmentMapper {
     @Mapping(target = "updatedBy", ignore = true)
     @Mapping(target = "employees", ignore = true)
     @Mapping(target = "code", ignore = true)
+    @Mapping(target = "employeeCount", ignore = true)
     DepartmentEntity toDepartmentEntity(CreateDepartmentRequest request);
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
@@ -32,6 +33,7 @@ public interface DepartmentMapper {
     @Mapping(target = "updatedBy", ignore = true)
     @Mapping(target = "code", ignore = true)
     @Mapping(target = "employees", ignore = true)
+    @Mapping(target = "employeeCount", ignore = true)
     void updateDepartmentEntity(@MappingTarget DepartmentEntity entity, UpdateDepartmentRequest request);
 
     @AfterMapping

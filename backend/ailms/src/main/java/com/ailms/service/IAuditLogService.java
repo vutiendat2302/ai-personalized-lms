@@ -55,4 +55,6 @@ public interface IAuditLogService {
     PageResponse<AuditLogResponse> getAuditLogsByUserId(Long userId, AuditLogSearchRequest request);
 
     PageResponse<AuditLogResponse> getAuditLogsByEntity(String entityType, Long entityId, AuditLogSearchRequest request);
+
+    byte[] exportAuditLogs(AuditLogSearchRequest request);
 }

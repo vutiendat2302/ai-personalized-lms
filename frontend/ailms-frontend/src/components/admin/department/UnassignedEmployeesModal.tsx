@@ -366,7 +366,7 @@ export const UnassignedEmployeesModal: React.FC<UnassignedEmployeesModalProps> =
                         </td>
                         <td className="p-3 text-right">
                           <Popover>
-                            <PopoverTrigger>
+                            <PopoverTrigger
                               render={
                                 <Button
                                     size="sm"
@@ -376,7 +376,7 @@ export const UnassignedEmployeesModal: React.FC<UnassignedEmployeesModalProps> =
                                   <Building2 className="h-3.5 w-3.5" /> Gán phòng ban
                                 </Button>
                               }
-                            </PopoverTrigger>
+                            />
                             <PopoverContent className="w-64 p-3 space-y-3" align="end">
                               <div className="text-xs font-extrabold text-foreground">Chọn phòng ban cho NV:</div>
                               <Select

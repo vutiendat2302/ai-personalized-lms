@@ -62,7 +62,7 @@ export const AdminSidebar: React.FC = () => {
       items: [
         { label: "Quản lý vai trò", path: "/admin/roles", icon: Shield },
         { label: "Quản lý quyền hạn", path: "/admin/permissions", icon: Key },
-        { label: "Nhật ký hoạt động", path: "/activity-log", icon: Activity },
+        { label: "Nhật ký hoạt động", path: "/admin/activity-log", icon: Activity },
         { label: "Thùng rác hệ thống", path: "/admin/trash", icon: Trash2 },
       ],
     },

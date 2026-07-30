@@ -7,6 +7,8 @@ import com.ailms.response.AuditLogResponse;
 
 import com.ailms.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -59,5 +61,14 @@ public class AuditLogController {
             AuditLogSearchRequest request) {
         PageResponse<AuditLogResponse> response = auditLogService.getAuditLogsByEntity(entityType, entityId, request);
         return ResponseEntity.ok(ApiResponse.of("Entity audit logs retrieved successfully", response));
+    }
+
+    @GetMapping("/export")
+    public ResponseEntity<byte[]> exportAuditLogs(AuditLogSearchRequest request) {
+        byte[] csvBytes = auditLogService.exportAuditLogs(request);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=audit_logs_export.csv")
+                .contentType(MediaType.parseMediaType("text/csv"))
+                .body(csvBytes);
     }
 }

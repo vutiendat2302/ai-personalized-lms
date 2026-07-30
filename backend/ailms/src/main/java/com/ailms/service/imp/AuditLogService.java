@@ -24,9 +24,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.request.RequestContextHolder;
-
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.function.Function;
+import com.ailms.common.util.CsvBuilder;
 
 @Service
 @RequiredArgsConstructor
@@ -159,5 +160,38 @@ public class AuditLogService implements IAuditLogService{
         request.setEntityType(entityType);
         request.setEntityId(entityId);
         return getAuditLogs(request);
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public byte[] exportAuditLogs(AuditLogSearchRequest request) {
+        log.info("Xuất file danh sách audit log qua CsvBuilder");
+        if (request != null) {
+            request.setSize(100000); // Giới hạn tối đa 100k bản ghi khi xuất báo cáo
+        }
+        List<AuditLogResponse> logs = getAuditLogs(request).getContent();
+
+        List<String> headers = List.of(
+                "ID", "Thời gian", "Tài khoản tác động", "Email", "Hành động",
+                "Thực thể", "ID Thực thể", "Địa chỉ IP", "User Agent", "Giá trị cũ", "Giá trị mới"
+        );
+
+        List<Function<AuditLogResponse, Object>> extractors = List.of(
+                AuditLogResponse::getId,
+                l -> l.getOccurredAt() != null ? l.getOccurredAt().toString() : "",
+                l -> l.getUserFullName() != null ? l.getUserFullName() : "N/A",
+                l -> l.getUserEmail() != null ? l.getUserEmail() : "N/A",
+                AuditLogResponse::getAction,
+                AuditLogResponse::getEntityType,
+                AuditLogResponse::getEntityId,
+                AuditLogResponse::getIpAddress,
+                AuditLogResponse::getUserAgent,
+                l -> l.getOldValue() != null ? l.getOldValue() : "",
+                l -> l.getNewValue() != null ? l.getNewValue() : ""
+        );
+
+        return CsvBuilder.create()
+                .tableFromList(headers, logs, extractors, "Không có dữ liệu nhật ký")
+                .build();
     }
 }

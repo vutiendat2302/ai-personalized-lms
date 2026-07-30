@@ -149,6 +149,7 @@ function App() {
                 <Route path="/admin/employees" element={<EmployeeManagement />} />
                 <Route path="/admin/roles" element={<RoleManagement />} />
                 <Route path="/admin/permissions" element={<PermissionManagement />} />
+                <Route path="/admin/activity-log" element={<ActivityLog />} />
                 <Route path="/admin/courses" element={<CourseManagement />} />
                 <Route path="/admin/orders" element={<OrderManagement />} />
                 <Route path="/admin/coupons" element={<CouponManagement />} />
