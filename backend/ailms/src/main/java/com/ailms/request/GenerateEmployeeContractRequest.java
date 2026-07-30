@@ -9,19 +9,23 @@ import lombok.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Map;
 
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class CreateEmployeeContractRequest {
+public class GenerateEmployeeContractRequest {
 
     @NotNull(message = "Mã nhân viên (employeeId) không được để trống")
     private Long employeeId;
 
     @NotNull(message = "Loại hợp đồng (contractTypeEnum) không được để trống")
     private ContractTypeEnum contractTypeEnum;
+
+    @NotNull(message = "Mã mẫu hợp đồng (templateId) không được để trống")
+    private Long templateId;
 
     @NotNull(message = "Ngày bắt đầu (startDate) không được để trống")
     private LocalDate startDate;
@@ -37,5 +41,6 @@ public class CreateEmployeeContractRequest {
 
     private LocalDateTime signedAt;
 
-    // KHÔNG có fileKey và KHÔNG có status theo quy tắc nghiệp vụ Nhánh A (bước A1)
+    /** Map bổ sung chứa các dữ liệu placeholder tùy chỉnh từ FE nếu có. */
+    private Map<String, String> customPlaceholders;
 }

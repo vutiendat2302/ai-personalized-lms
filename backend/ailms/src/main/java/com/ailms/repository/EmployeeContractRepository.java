@@ -15,6 +15,7 @@ import java.util.List;
 public interface EmployeeContractRepository extends JpaRepository<EmployeeContractEntity, Long>, JpaSpecificationExecutor<EmployeeContractEntity> {
     List<EmployeeContractEntity> findByEmployee_UserId(Long userId);
     List<EmployeeContractEntity> findByStatusAndEndDate(BaseStatusEnum status, LocalDate endDate);
+    java.util.Optional<EmployeeContractEntity> findBySigningToken(String signingToken);
 
     @Query("SELECT c.status, COUNT(c) FROM EmployeeContractEntity c GROUP BY c.status")
     List<Object[]> countContractsGroupByStatus();
@@ -27,7 +28,7 @@ public interface EmployeeContractRepository extends JpaRepository<EmployeeContra
             @Param("startOfYearDate") LocalDate startOfYearDate,
             @Param("endOfYearDate") LocalDate endOfYearDate);
 
-    @Query("SELECT c FROM EmployeeContractEntity c WHERE c.contractTypeEnum = com.ailms.entity.enums.ContractTypeEnum.PROBATION AND c.endDate BETWEEN :startDate AND :endDate")
+    @Query("SELECT c FROM EmployeeContractEntity c WHERE c.contractTypeEnum = ContractTypeEnum.PROBATION AND c.endDate BETWEEN :startDate AND :endDate")
     List<EmployeeContractEntity> findExpiringProbationContracts(@Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
 }
 

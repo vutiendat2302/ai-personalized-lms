@@ -7,6 +7,7 @@ import { Dashboard } from "./pages/Dashboard";
 import { Profile } from "./pages/Profile";
 import { SelectWorkspace } from "./pages/SelectWorkspace";
 import { NoWorkspacePage } from "./pages/NoWorkspacePage";
+import ContractSigningPage from "./pages/public/ContractSigningPage";
 
 import { UserManagement } from "./pages/admin/UserManagement";
 import { StudentManagement } from "./pages/admin/StudentManagement";
@@ -122,6 +123,7 @@ function App() {
             <Route path="/courses/:id" element={<CourseDetail />} />
             <Route path="/categories/:id" element={<CategoryDetail />} />
             <Route path="/set-password" element={<SetPassword />} />
+            <Route path="/contracts/sign/:token" element={<ContractSigningPage />} />
 
             {/* Redirects from old auth paths */}
             <Route path="/login" element={<RedirectToHomeAndOpenModal modalType="login" />} />

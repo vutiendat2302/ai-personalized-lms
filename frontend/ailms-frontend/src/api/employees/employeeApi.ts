@@ -131,29 +131,145 @@ export const employeeApi = {
     return {};
   },
 
-  // 5.11.4 Employee Detail Sub-Tab APIs
-  getContractsByEmployeeId: async (employeeId: string): Promise<EmployeeContractItem[]> => {
+  // 5.11.4 Employee Detail Sub-Tab & Contract Management APIs
+  getContractsByEmployeeId: async (employeeId: string | number): Promise<EmployeeContractItem[]> => {
     try {
-      const res = await httpClient.get<ApiResponse<EmployeeContractItem[]>>(`/v1/employee-contracts/employee/${employeeId}`);
+      const res = await httpClient.get<ApiResponse<EmployeeContractItem[]>>(`/v1/contracts/employee/${employeeId}`);
       if (res.data?.success && Array.isArray(res.data.data)) {
         return res.data.data;
       }
     } catch (e) {
-      console.warn("Using fallback contract list", e);
+      console.warn("Fallback to employee-contracts endpoint if any", e);
+      try {
+        const res2 = await httpClient.get<ApiResponse<EmployeeContractItem[]>>(`/v1/employee-contracts/employee/${employeeId}`);
+        if (res2.data?.success && Array.isArray(res2.data.data)) {
+          return res2.data.data;
+        }
+      } catch (err) {
+        console.warn("Using fallback empty contract list", err);
+      }
     }
     return [];
   },
 
-  createContract: async (payload: Partial<EmployeeContractItem>) => {
-    return httpClient.post<ApiResponse<EmployeeContractItem>>("/v1/employee-contracts", payload);
+  checkActiveContract: async (employeeId: string | number) => {
+    const res = await httpClient.get<ApiResponse<{
+      hasActiveContract: boolean;
+      activeContractId?: number;
+      activeContractType?: string;
+      startDate?: string;
+    }>>(`/v1/contracts/employee/${employeeId}/active-check`);
+    return res.data;
+  },
+
+  createContract: async (payload: {
+    employeeId: number | string;
+    contractTypeEnum: string;
+    startDate: string;
+    endDate?: string;
+    baseSalary: number;
+    salaryTypeEnum: string;
+    signedAt?: string;
+  }) => {
+    return httpClient.post<ApiResponse<EmployeeContractItem>>("/v1/contracts", payload);
+  },
+
+  uploadContractFile: async (contractId: string | number, file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return httpClient.post<ApiResponse<EmployeeContractItem>>(`/v1/contracts/${contractId}/upload-file`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
+
+  terminateContract: async (contractId: string | number, reason?: string) => {
+    return httpClient.patch<ApiResponse<EmployeeContractItem>>(`/v1/contracts/${contractId}/terminate`, {
+      terminationReason: reason,
+    });
+  },
+
+  getContractTemplates: async (type?: string) => {
+    const res = await httpClient.get<ApiResponse<Array<{
+      templateId: number;
+      name: string;
+      contractTypeEnum: string;
+      templateContent: string;
+      placeholders: string[];
+      version: number;
+    }>>>("/v1/contract-templates", { params: { type } });
+    return res.data;
+  },
+
+  previewContractTemplate: async (templateId: string | number, placeholderData?: Record<string, string>) => {
+    const res = await httpClient.post<ApiResponse<{ previewHtml: string }>>(`/v1/contract-templates/${templateId}/preview`, placeholderData);
+    return res.data;
+  },
+
+  generateContract: async (payload: {
+    employeeId: number | string;
+    contractTypeEnum: string;
+    templateId: number | string;
+    startDate: string;
+    endDate?: string;
+    baseSalary: number;
+    salaryTypeEnum: string;
+    signedAt?: string;
+    customPlaceholders?: Record<string, string>;
+  }) => {
+    return httpClient.post<ApiResponse<EmployeeContractItem>>("/v1/contracts/generate", payload);
+  },
+
+  getContractDownloadUrl: async (contractId: string | number) => {
+    const res = await httpClient.get<ApiResponse<{ downloadUrl: string }>>(`/v1/contracts/${contractId}/download-url`);
+    return res.data;
   },
 
   updateContract: async (contractId: string | number, payload: Partial<EmployeeContractItem>) => {
-    return httpClient.put<ApiResponse<EmployeeContractItem>>(`/v1/employee-contracts/${contractId}`, payload);
+    return httpClient.put<ApiResponse<EmployeeContractItem>>(`/v1/contracts/${contractId}`, payload);
   },
 
-  terminateContract: async (contractId: string | number) => {
-    return httpClient.put<ApiResponse<EmployeeContractItem>>(`/v1/employee-contracts/${contractId}`, { status: "TERMINATED" });
+  // E-Signature Endpoints
+  signCompany: async (contractId: string | number, confirmPassword?: string) => {
+    return httpClient.post<ApiResponse<EmployeeContractItem>>(`/v1/contracts/${contractId}/sign-company`, { confirmPassword });
+  },
+
+  getPublicSigningInfo: async (signingToken: string) => {
+    const res = await httpClient.get<ApiResponse<{
+      employeeName: string;
+      employeeEmail: string;
+      employeePhone: string;
+      contractTypeEnum: string;
+      baseSalary: number;
+      startDate: string;
+      endDate?: string;
+      signingStatus: string;
+      companySignedFileUrl: string;
+      tokenExpiresAt: string;
+      otpSent: boolean;
+    }>>(`/v1/contracts/sign/${signingToken}`);
+    return res.data;
+  },
+
+  confirmEmployeeSigning: async (signingToken: string, payload: { otp: string; signatureImageBase64?: string }) => {
+    return httpClient.post<ApiResponse<EmployeeContractItem>>(`/v1/contracts/sign/${signingToken}/confirm`, payload);
+  },
+
+  getSigningHistory: async (contractId: string | number) => {
+    const res = await httpClient.get<ApiResponse<Array<{
+      id: number;
+      action: string;
+      signerFullName: string;
+      signerEmail: string;
+      ipAddress: string;
+      userAgent: string;
+      occurredAt: string;
+      detailsJson?: string;
+    }>>>(`/v1/contracts/${contractId}/signing-history`);
+    return res.data;
+  },
+
+  resendSigningLink: async (contractId: string | number) => {
+    return httpClient.post<ApiResponse<EmployeeContractItem>>(`/v1/contracts/${contractId}/resend-signing-link`);
   },
 
   getAttendancesByEmployeeId: async (employeeId: string, month?: string): Promise<AttendanceRecordItem[]> => {

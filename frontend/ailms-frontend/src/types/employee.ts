@@ -12,6 +12,7 @@ export interface EmployeeResponse {
   userId: string;
   userName: string;
   userEmail: string;
+  email?: string;
   fullName: string;
   employeeCode: string;
   avatarUrl?: string;
@@ -37,6 +38,7 @@ export interface EmployeeExtended {
   userId: string;
   userName: string;
   userEmail: string;
+  email?: string;
   employeeCode: string;
   fullName: string;
   avatarUrl?: string;

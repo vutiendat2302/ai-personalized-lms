@@ -327,6 +327,76 @@ public class EmailService implements IEmailService {
     }
 
     @Override
+    public void sendContractSigningLinkEmail(String toEmail, String employeeName, String signingLink, LocalDateTime expiresAt) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setTo(toEmail);
+            helper.setSubject("Mời ký điện tử Hợp đồng Lao động - AILMS");
+            String formattedExpiresAt = expiresAt != null ? expiresAt.format(DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy")) : "";
+            helper.setText("""
+            <html>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                    <h2 style="color: #2563eb; margin-top: 0;">Mời ký điện tử Hợp đồng Lao động</h2>
+                    <p>Kính chào anh/chị <strong>%s</strong>,</p>
+                    <p>Bộ phận HR Công ty Cổ phần Giáo dục AILMS đã hoàn tất ký và gửi đến anh/chị bản Hợp đồng Lao động điện tử.</p>
+                    <p>Vui lòng nhấn vào nút bên dưới để xem trước hợp đồng và tiến hành xác nhận ký điện tử:</p>
+                    <p style="margin: 28px 0; text-align: center;">
+                        <a href="%s"
+                           style="background-color: #2563eb; color: white; padding: 12px 28px; font-weight: bold; text-decoration: none; border-radius: 6px; display: inline-block;">
+                            Truy cập Link Ký Hợp Đồng
+                        </a>
+                    </p>
+                    <p>Hoặc sao chép đường dẫn sau vào trình duyệt:</p>
+                    <p style="word-break: break-all; color: #2563eb;"><a href="%s">%s</a></p>
+                    <p style="font-size: 13px; color: #64748b;"><strong>Lưu ý:</strong> Liên kết này có thời hạn sử dụng đến <strong>%s</strong>. Vui lòng hoàn tất thao tác ký trước thời hạn nêu trên.</p>
+                    <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;"/>
+                    <p style="font-size: 12px; color: #94a3b8;">Đây là email tự động từ Hệ thống Quản trị AILMS. Vui lòng không phản hồi lại email này.</p>
+                </div>
+            </body>
+            </html>
+            """.formatted(employeeName, signingLink, signingLink, signingLink, formattedExpiresAt), true);
+            mailSender.send(message);
+            log.info("Contract signing link email sent to {}", toEmail);
+        } catch (Exception e) {
+            log.error("Failed to send contract signing link email to {}", toEmail, e);
+        }
+    }
+
+    @Override
+    public void sendContractSigningOtpEmail(String toEmail, String employeeName, String otp) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+            helper.setTo(toEmail);
+            helper.setSubject("Mã OTP xác thực ký Hợp đồng Lao động - AILMS");
+            helper.setText("""
+            <html>
+            <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+                <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 8px;">
+                    <h2 style="color: #2563eb; margin-top: 0;">Mã OTP Xác Thực Ký Điện Tử</h2>
+                    <p>Kính chào anh/chị <strong>%s</strong>,</p>
+                    <p>Anh/chị đang thực hiện thao tác ký điện tử Hợp đồng Lao động trên Hệ thống AILMS.</p>
+                    <p>Mã OTP xác thực của anh/chị là:</p>
+                    <div style="text-align: center; margin: 24px 0;">
+                        <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #2563eb; background: #eff6ff; padding: 10px 24px; border-radius: 8px; border: 1px dashed #2563eb;">%s</span>
+                    </div>
+                    <p style="font-size: 13px; color: #64748b;">Mã OTP này có hiệu lực trong vòng <strong>5 phút</strong>. Tuyệt đối không chia sẻ mã này cho bất kỳ ai khác.</p>
+                    <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 20px 0;"/>
+                    <p style="font-size: 12px; color: #94a3b8;">Trân trọng,<br/>AILMS E-Sign Verification Service</p>
+                </div>
+            </body>
+            </html>
+            """.formatted(employeeName, otp), true);
+            mailSender.send(message);
+            log.info("Contract signing OTP sent to {}", toEmail);
+        } catch (Exception e) {
+            log.error("Failed to send contract signing OTP email to {}", toEmail, e);
+        }
+    }
+
+    @Override
     public void sendBulkEmail(java.util.List<String> toEmails, String subject, String content) {
         if (toEmails == null || toEmails.isEmpty()) {
             return;

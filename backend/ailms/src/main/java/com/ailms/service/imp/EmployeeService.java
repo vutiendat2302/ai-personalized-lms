@@ -3,11 +3,7 @@ package com.ailms.service.imp;
 import com.ailms.common.converter.SimpleJsonWriter;
 import com.ailms.common.util.CodeGenerator;
 import com.ailms.entity.*;
-import com.ailms.entity.enums.BaseStatusEnum;
-import com.ailms.entity.enums.ContractTypeEnum;
-import com.ailms.entity.enums.EmployeeStatusEnum;
-import com.ailms.entity.enums.EmploymentTypeEnum;
-import com.ailms.entity.enums.UserStatusEnum;
+import com.ailms.entity.enums.*;
 import com.ailms.event.AuditLogEvent;
 import com.ailms.exception.BusinessException;
 import com.ailms.exception.DuplicateResourceException;
@@ -180,8 +176,7 @@ public class EmployeeService implements IEmployeeService {
                     .startDate(request.getContractStartDate() != null ? request.getContractStartDate() : LocalDate.now())
                     .endDate(request.getContractEndDate())
                     .baseSalary(request.getBaseSalary())
-                    .fileKey(request.getContractFileKey())
-                    .status(BaseStatusEnum.ACTIVE)
+                    .salaryTypeEnum(request.getSalaryTypeEnum() != null ? request.getSalaryTypeEnum() : SalaryTypeEnum.DAILY)
                     .build();
             employeeContractService.create(contractReq);
         }
@@ -334,7 +329,6 @@ public class EmployeeService implements IEmployeeService {
             if (newContractRequest != null) {
                 newContractRequest.setEmployeeId(id);
                 newContractRequest.setContractTypeEnum(ContractTypeEnum.OFFICIAL);
-                newContractRequest.setStatus(BaseStatusEnum.ACTIVE);
                 employeeContractService.create(newContractRequest);
             }
         } else {

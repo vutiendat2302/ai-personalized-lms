@@ -78,6 +78,16 @@ public interface IEmailService {
     void sendContractExpirationAlertEmail(String toEmail, String employeeName, String contractCode, LocalDate endDate);
 
     /**
+     * Gửi email thông báo mời ký điện tử hợp đồng lao động kèm link công khai.
+     */
+    void sendContractSigningLinkEmail(String toEmail, String employeeName, String signingLink, LocalDateTime expiresAt);
+
+    /**
+     * Gửi email chứa mã OTP 6 chữ số phục vụ ký điện tử hợp đồng lao động.
+     */
+    void sendContractSigningOtpEmail(String toEmail, String employeeName, String otp);
+
+    /**
      * Gửi email tùy chỉnh đến nhiều tài khoản cùng lúc.
      *
      * @param toEmails Danh sách địa chỉ email người nhận

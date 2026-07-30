@@ -3,6 +3,7 @@ package com.ailms.request;
 import com.ailms.entity.enums.ContractTypeEnum;
 import com.ailms.entity.enums.EmployeeStatusEnum;
 import com.ailms.entity.enums.EmploymentTypeEnum;
+import com.ailms.entity.enums.SalaryTypeEnum;
 import jakarta.validation.constraints.Email;
 import lombok.*;
 
@@ -52,6 +53,8 @@ public class CreateEmployeeRequest {
     private LocalDate contractEndDate;
 
     private BigDecimal baseSalary;
+
+    private SalaryTypeEnum salaryTypeEnum;
 
     private String contractFileKey;
 }

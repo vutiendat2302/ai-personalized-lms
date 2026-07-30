@@ -70,9 +70,9 @@ export const AdminSidebar: React.FC = () => {
       title: "NHÂN SỰ & VẬN HÀNH",
       items: [
         { label: "Quản lý phòng ban", path: "/admin/department", icon: Building2 },
+        { label: "Quản lý hợp đồng", path: "/admin/contracts", icon: FileText },
         { label: "Quản lý nhân viên", path: "/admin/employees", icon: Briefcase },
         { label: "Quản lý học viên", path: "/admin/students", icon: GraduationCap },
-        { label: "Quản lý hợp đồng", path: "/admin/contracts", icon: FileText },
         { label: "Quản lý nhân sự (HR)", path: "/admin/hr", icon: UserCheck },
         { label: "Điểm danh NV Full-time", path: "/admin/fulltime-attendance", icon: Clock },
         { label: "Quản lý lịch làm việc", path: "/admin/work-schedule", icon: Briefcase },
@@ -97,6 +97,7 @@ export const AdminSidebar: React.FC = () => {
       title: "BÁO CÁO & GIÁM SÁT",
       items: [
         { label: "Thống kê & Analytics", path: "/analytics", icon: BarChart3 },
+        { label: "Quản lý File", path: "/file", icon: BarChart3}
       ],
     },
   ];

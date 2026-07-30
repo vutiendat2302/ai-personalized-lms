@@ -37,8 +37,8 @@ export interface CreateEmployeeRequest {
 }
 
 export interface EmployeeContractResponse {
-  id: string | number;
-  employeeId: string | number;
+  id: string;
+  employeeId: string;
   employeeCode?: string;
   fullName?: string;
   departmentName?: string;
@@ -55,12 +55,36 @@ export interface EmployeeContractResponse {
   validFrom?: string;
   validTo?: string;
   status: "ACTIVE" | "EXPIRED" | "TERMINATED" | "INACTIVE" | string;
+  signingStatus?: "PENDING_COMPANY_SIGN" | "PENDING_EMPLOYEE_SIGN" | "FULLY_SIGNED" | string;
+  signingToken?: string;
+  signingTokenExpiresAt?: string;
+  originalFileDownloadUrl?: string;
   baseSalary: number;
   salaryTypeEnum?: "HOURLY" | "DAILY" | "MONTHLY" | string;
-  createdBy?: string | number;
+  createdBy?: string;
   createdAt?: string;
-  updatedBy?: string | number;
+  updatedBy?: string;
   updatedAt?: string;
+  terminationReason?: string;
+  terminatedAt?: string;
+}
+
+export interface ContractDashboardStatsResponse {
+  totalContracts: number;
+  activeContracts: number;
+  expiringSoonContracts: number;
+  probationExpiringContracts: number;
+  signedThisMonthContracts: number;
+  terminatedThisMonthContracts: number;
+  missingFileContracts: number;
+  unsignedContracts: number;
+  pendingCompanySignCount: number;
+  pendingEmployeeSignCount: number;
+  fullySignedCount: number;
+  contractTypeDistribution?: Record<string, number>;
+  salaryTypeDistribution?: Record<string, number>;
+  departmentDistribution?: Record<string, number>;
+  expiryTimeline6Months?: Record<string, number>;
 }
 
 export interface AttendanceResponse {
@@ -110,16 +134,16 @@ export const hrApi = {
   createEmployee: (payload: CreateEmployeeRequest) =>
     httpClient.post<ApiResponse<EmployeeResponse>>("/v1/employees", payload),
 
-  softDeleteEmployee: (id: string | number) =>
+  softDeleteEmployee: (id: string) =>
     httpClient.delete<ApiResponse<void>>(`/v1/employees/${id}`),
 
   getTrashEmployees: () =>
     httpClient.get<ApiResponse<EmployeeResponse[]>>("/v1/employees/trash"),
 
-  hardDeleteEmployee: (id: string | number) =>
+  hardDeleteEmployee: (id: string) =>
     httpClient.delete<ApiResponse<void>>(`/v1/employees/trash/${id}`),
 
-  bulkHardDeleteEmployees: (ids: (string | number)[]) =>
+  bulkHardDeleteEmployees: (ids: (string)[]) =>
     httpClient.post<ApiResponse<any>>(
       "/v1/employees/trash/bulk-hard-delete",
       ids.map((id) => Number(id)).filter((n) => !isNaN(n))
@@ -132,11 +156,14 @@ export const hrApi = {
   createContract: (payload: any) =>
     httpClient.post<ApiResponse<EmployeeContractResponse>>("/v1/employee-contracts", payload),
 
-  bulkTerminateContracts: (ids: (string | number)[], reason?: string) =>
+  bulkTerminateContracts: (ids: string[], reason?: string) =>
     httpClient.post<ApiResponse<any>>("/v1/employee-contracts/bulk-terminate", { ids, reason }),
 
-  bulkRemindExpiration: (ids: (string | number)[]) =>
+  bulkRemindExpiration: (ids: string[]) =>
     httpClient.post<ApiResponse<any>>("/v1/employee-contracts/bulk-remind-expiration", { ids }),
+
+  getDashboardStats: () =>
+    httpClient.get<ApiResponse<ContractDashboardStatsResponse>>("/v1/contracts/dashboard-stats"),
 
   // Attendance
   getAttendances: (params?: any) =>

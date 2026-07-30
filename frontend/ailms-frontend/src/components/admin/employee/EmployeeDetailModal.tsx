@@ -43,6 +43,9 @@ import {
   AlertTriangle,
   Users,
   Layers,
+  PenTool,
+  Send,
+  Loader2,
   UserCheck,
   FileSpreadsheet,
 } from "lucide-react";
@@ -61,6 +64,7 @@ import { employeeApi } from "@/api/employees/employeeApi";
 import { DatePickerInput, formatDateDisplay } from "@/components/ui/DatePickerInput";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { departmentApi, type DepartmentResponse } from "@/api/departments/departmentApi";
+import { NewContractWizardModal } from "@/components/admin/contract/NewContractWizardModal";
 
 interface EmployeeDetailModalProps {
   open: boolean;
@@ -133,6 +137,73 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
   // Danh sách hợp đồng
   const [contracts, setContracts] = useState<EmployeeContractItem[]>([]);
 
+  // E-Signature States
+  const [signingHistoryOpen, setSigningHistoryOpen] = useState(false);
+  const [signingHistoryLogs, setSigningHistoryLogs] = useState<Array<{
+    id: number;
+    action: string;
+    signerFullName: string;
+    signerEmail: string;
+    ipAddress: string;
+    userAgent: string;
+    occurredAt: string;
+    detailsJson?: string;
+  }>>([]);
+  const [loadingSigningHistory, setLoadingSigningHistory] = useState(false);
+  const [signingActionId, setSigningActionId] = useState<number | null>(null);
+
+  const handleSignCompany = async (contractId: number) => {
+    setSigningActionId(contractId);
+    try {
+      const res = await employeeApi.signCompany(contractId);
+      if (res?.data?.success) {
+        showBanner("Ký xác nhận phía công ty thành công! Đã gửi Email kèm link ký cho nhân viên.");
+        loadContracts();
+      } else {
+        showBanner(res?.data?.message || "Ký phía công ty thất bại.", true);
+      }
+    } catch (err: any) {
+      showBanner(err?.response?.data?.message || "Lỗi xử lý ký công ty.", true);
+    } finally {
+      setSigningActionId(null);
+    }
+  };
+
+  const handleResendSigningLink = async (contractId: number) => {
+    setSigningActionId(contractId);
+    try {
+      const res = await employeeApi.resendSigningLink(contractId);
+      if (res?.data?.success) {
+        showBanner("Đã sinh lại link ký mới và gửi tới Email nhân viên.");
+        loadContracts();
+      } else {
+        showBanner(res?.data?.message || "Sinh lại link ký thất bại.", true);
+      }
+    } catch (err: any) {
+      showBanner(err?.response?.data?.message || "Lỗi sinh lại link ký.", true);
+    } finally {
+      setSigningActionId(null);
+    }
+  };
+
+  const handleOpenSigningHistory = async (contractId: number) => {
+    setSigningHistoryOpen(true);
+    setLoadingSigningHistory(true);
+    try {
+      const res = await employeeApi.getSigningHistory(contractId);
+      if (res?.success && res.data) {
+        setSigningHistoryLogs(res.data);
+      } else {
+        setSigningHistoryLogs([]);
+      }
+    } catch (err: any) {
+      console.warn("Failed to load signing history", err);
+      setSigningHistoryLogs([]);
+    } finally {
+      setLoadingSigningHistory(false);
+    }
+  };
+
   // Danh sách chấm công
   const [attendances, setAttendances] = useState<AttendanceRecordItem[]>([]);
 
@@ -154,13 +225,8 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
   const [auditLogs, setAuditLogs] = useState<EmployeeAuditLogItem[]>([]);
 
   // Trạng thái các cửa sổ (Modal)
-
-  // Modal tạo hợp đồng mới
-  const [newContractModalOpen, setNewContractModalOpen] = useState(false);
-
-  // Thông tin hợp đồng mới
-  const [newContractSalary, setNewContractSalary] = useState(25000000);
-  const [newContractType, setNewContractType] = useState<"PROBATION" | "OFFICIAL" | "PART_TIME">("OFFICIAL");
+  // Modal Wizard tạo hợp đồng mới (2 nhánh)
+  const [newContractWizardOpen, setNewContractWizardOpen] = useState(false);
 
   // Modal cập nhật mức lương theo lớp
   const [updateRateModalOpen, setUpdateRateModalOpen] = useState(false);
@@ -258,27 +324,7 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
     }
   };
 
-  const handleCreateNewContract = async () => {
-    try {
-      await employeeApi.createContract({
-        employeeId: employee.id,
-        employeeCode: employee.employeeCode,
-        contractType: newContractType,
-        baseSalary: newContractSalary,
-        signedAt: new Date().toISOString().slice(0, 10),
-        validFrom: new Date().toISOString().slice(0, 10),
-        status: "ACTIVE",
-      });
 
-      // Refresh contracts
-      const updatedContracts = await employeeApi.getContractsByEmployeeId(employee.id);
-      setContracts(updatedContracts);
-      setNewContractModalOpen(false);
-      showBanner("Tạo hợp đồng mới thành công! Hợp đồng cũ đã tự động chuyển sang EXPIRED (theo luồng 5.2).");
-    } catch (e: any) {
-      showBanner(e.message || "Lỗi tạo hợp đồng mới", true);
-    }
-  };
 
   const handleUpdateTeachingRate = async () => {
     if (!targetClassForRate) return;
@@ -396,7 +442,7 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
             <Button
               size="sm"
               variant="outline"
-              onClick={() => setNewContractModalOpen(true)}
+              onClick={() => setNewContractWizardOpen(true)}
               className="rounded-xl text-xs font-bold gap-1"
             >
               <Plus className="h-3.5 w-3.5" /> Tạo HĐ mới
@@ -861,7 +907,7 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                   <FileText className="h-4 w-4 text-primary" />
                   <span>Danh sách / Timeline hợp đồng</span>
                 </h3>
-                <Button size="sm" onClick={() => setNewContractModalOpen(true)} className="h-8 text-xs font-bold gap-1 rounded-xl bg-primary">
+                <Button size="sm" onClick={() => setNewContractWizardOpen(true)} className="h-8 text-xs font-bold gap-1 rounded-xl bg-primary cursor-pointer">
                   <Plus className="h-3.5 w-3.5" /> Tạo hợp đồng mới
                 </Button>
               </div>
@@ -908,6 +954,21 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                                 {ct.status}
                               </span>
 
+                              {/* Signing Status Badge */}
+                              {ct.signingStatus === "FULLY_SIGNED" ? (
+                                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-600 text-white flex items-center gap-1">
+                                  <ShieldCheck className="h-3 w-3" /> Đã ký điện tử 2 bên
+                                </span>
+                              ) : ct.signingStatus === "PENDING_EMPLOYEE_SIGN" ? (
+                                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-blue-500/15 text-blue-700 border border-blue-500/30 flex items-center gap-1">
+                                  <Clock className="h-3 w-3" /> Chờ nhân viên ký OTP
+                                </span>
+                              ) : (
+                                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-amber-500/15 text-amber-700 border border-amber-500/30 flex items-center gap-1">
+                                  <AlertCircle className="h-3 w-3" /> Công ty chưa ký
+                                </span>
+                              )}
+
                               {ct.employeeCode && (
                                 <span className="font-mono text-xs font-bold text-muted-foreground/80">
                                   ({ct.employeeCode})
@@ -916,15 +977,52 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                             </div>
 
                             {/* Action Buttons for this contract */}
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {/* Audit Signing History */}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleOpenSigningHistory(ct.id)}
+                                className="h-7 text-[11px] font-bold gap-1 rounded-lg border-border/60 cursor-pointer"
+                              >
+                                <History className="h-3 w-3 text-muted-foreground" /> Lịch sử ký
+                              </Button>
+
+                              {/* Company Sign Button */}
+                              {ct.signingStatus === "PENDING_COMPANY_SIGN" && !isTerminated && (
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleSignCompany(ct.id)}
+                                  disabled={signingActionId === ct.id}
+                                  className="h-7 text-[11px] font-bold gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
+                                >
+                                  {signingActionId === ct.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <PenTool className="h-3 w-3" />}
+                                  Ký HĐ (Công ty)
+                                </Button>
+                              )}
+
+                              {/* Resend Link Button */}
+                              {ct.signingStatus === "PENDING_EMPLOYEE_SIGN" && !isTerminated && (
+                                <Button
+                                  size="sm"
+                                  variant="secondary"
+                                  onClick={() => handleResendSigningLink(ct.id)}
+                                  disabled={signingActionId === ct.id}
+                                  className="h-7 text-[11px] font-bold gap-1 rounded-lg cursor-pointer"
+                                >
+                                  {signingActionId === ct.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
+                                  Sinh lại link ký
+                                </Button>
+                              )}
+
                               {isActive && (
                                 <Button
                                   size="sm"
                                   variant="destructive"
                                   onClick={() => handleTerminateSingleContract(ct.id)}
-                                  className="h-8 text-xs font-bold gap-1 rounded-xl px-3 cursor-pointer"
+                                  className="h-7 text-[11px] font-bold gap-1 rounded-lg px-2.5 cursor-pointer"
                                 >
-                                  Chấm dứt HĐ này
+                                  Chấm dứt HĐ
                                 </Button>
                               )}
                             </div>
@@ -1012,33 +1110,19 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                 )}
               </div>
 
-              {/* MODAL TẠO HỢP ĐỒNG MỚI */}
-              {newContractModalOpen && (
-                <div className="p-4 rounded-2xl bg-muted/40 border border-border space-y-4">
-                  <h4 className="text-xs font-extrabold text-foreground">Tạo hợp đồng mới (Luồng 5.2 - Auto EXPIRED hợp đồng cũ)</h4>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label className="text-xs font-bold text-muted-foreground">Loại hợp đồng</Label>
-                      <Select value={newContractType} onValueChange={(v: any) => setNewContractType(v)}>
-                        <SelectTrigger className="h-8 text-xs bg-background"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="OFFICIAL">Hợp đồng chính thức (OFFICIAL)</SelectItem>
-                          <SelectItem value="PROBATION">Hợp đồng thử việc (PROBATION)</SelectItem>
-                          <SelectItem value="PART_TIME">Hợp đồng part-time</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label className="text-xs font-bold text-muted-foreground">Lương cơ bản (đ)</Label>
-                      <Input type="number" value={newContractSalary} onChange={e => setNewContractSalary(Number(e.target.value))} className="h-8 text-xs bg-background" />
-                    </div>
-                  </div>
-                  <div className="flex justify-end gap-2">
-                    <Button size="sm" variant="ghost" onClick={() => setNewContractModalOpen(false)} className="h-8 text-xs font-bold">Hủy</Button>
-                    <Button size="sm" onClick={handleCreateNewContract} className="h-8 text-xs font-bold bg-primary">Xác nhận tạo & Lưu</Button>
-                  </div>
-                </div>
-              )}
+              {/* WIZARD MODAL TẠO HỢP ĐỒNG MỚI (2 NHÁNH) */}
+              <NewContractWizardModal
+                open={newContractWizardOpen}
+                onClose={() => setNewContractWizardOpen(false)}
+                employee={employee}
+                onSuccess={async (msg) => {
+                  showBanner(msg);
+                  // Refresh contract list
+                  const updatedContracts = await employeeApi.getContractsByEmployeeId(employee.id);
+                  setContracts(updatedContracts);
+                }}
+                onError={(msg) => showBanner(msg, true)}
+              />
             </div>
           )}
 
@@ -1398,6 +1482,58 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
         cancelText="Hủy bỏ"
         onConfirm={confirmTerminateContractAction}
       />
+
+      {/* SIGNING HISTORY AUDIT LOG DIALOG */}
+      {signingHistoryOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-[100] p-4">
+          <div className="bg-background border border-border/50 rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-border/40 pb-3">
+              <h3 className="text-sm font-extrabold text-foreground flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-emerald-600" /> Lịch sử Ký Điện Tử (Audit Log)
+              </h3>
+              <Button size="icon" variant="ghost" onClick={() => setSigningHistoryOpen(false)} className="h-7 w-7 rounded-lg">
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="max-h-[380px] overflow-y-auto space-y-3 pr-1">
+              {loadingSigningHistory ? (
+                <div className="text-center py-8 text-xs text-muted-foreground flex items-center justify-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" /> Đang tải lịch sử ký...
+                </div>
+              ) : signingHistoryLogs.length === 0 ? (
+                <div className="text-center py-8 text-xs text-muted-foreground">
+                  Chưa có lịch sử ký điện tử nào được ghi nhận cho hợp đồng này.
+                </div>
+              ) : (
+                signingHistoryLogs.map((logItem) => (
+                  <div key={logItem.id} className="p-3 rounded-xl bg-muted/30 border border-border/40 space-y-1.5 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-extrabold text-primary uppercase text-[10px]">
+                        {logItem.action === "CONTRACT_SIGNED_COMPANY" ? "Phía Công ty đã Ký" : "Phía Nhân viên đã Ký"}
+                      </span>
+                      <span className="text-[10px] font-mono text-muted-foreground">{logItem.occurredAt}</span>
+                    </div>
+                    <p className="font-bold text-foreground">
+                      Người ký: {logItem.signerFullName} {logItem.signerEmail ? `(${logItem.signerEmail})` : ""}
+                    </p>
+                    <div className="text-[10px] font-mono text-muted-foreground flex flex-wrap gap-x-3">
+                      <span>IP: {logItem.ipAddress || "N/A"}</span>
+                      <span className="truncate max-w-[260px]">UA: {logItem.userAgent || "N/A"}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <Button variant="secondary" onClick={() => setSigningHistoryOpen(false)} className="h-8 text-xs font-bold px-4">
+                Đóng
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
