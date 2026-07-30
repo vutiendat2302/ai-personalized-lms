@@ -20,6 +20,7 @@ import {
   Loader2,
   Trash2,
   Plus,
+  Eye,
 } from "lucide-react";
 import { permissionApi } from "@/api/permissions/permissionApi";
 import { roleApi } from "@/api/roles/roleApi";
@@ -28,6 +29,7 @@ import { auditLogApi, type AuditLogResponse } from "@/api/audit/auditLogApi";
 import type { PermissionResponse, RoleResponse } from "@/types/admin";
 import { formatDateDisplay } from "@/components/ui/DatePickerInput";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { DetailAuditLogModal } from "@/components/admin/audit/DetailAuditLogModal";
 
 interface PermissionDetailModalProps {
   open: boolean;
@@ -59,6 +61,13 @@ export const PermissionDetailModal: React.FC<PermissionDetailModalProps> = ({
   // Audit Logs State
   const [auditLogs, setAuditLogs] = useState<AuditLogResponse[]>([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
+  const [selectedAuditLog, setSelectedAuditLog] = useState<AuditLogResponse | null>(null);
+  const [auditDetailModalOpen, setAuditDetailModalOpen] = useState(false);
+
+  const handleOpenAuditLogDetail = (logItem: AuditLogResponse) => {
+    setSelectedAuditLog(logItem);
+    setAuditDetailModalOpen(true);
+  };
 
   const fetchRoles = () => {
     if (permission) {
@@ -173,7 +182,15 @@ export const PermissionDetailModal: React.FC<PermissionDetailModalProps> = ({
   const isOrphan = (permission.roleCount || roles.length) === 0;
 
   return (
-    <Dialog open={open} onOpenChange={(val) => { if (!val) onClose(); }}>
+    <Dialog open={open} onOpenChange={(val) => {
+      if (!val) {
+        if (auditDetailModalOpen) {
+          setAuditDetailModalOpen(false);
+          return;
+        }
+        onClose();
+      }
+    }}>
       <DialogContent className="max-w-4xl w-[92vw] max-h-[90vh] flex flex-col p-0 overflow-hidden rounded-2xl bg-card border border-border/40 shadow-2xl backdrop-blur-xs">
         
         {/* FIXED HEADER */}
@@ -386,15 +403,25 @@ export const PermissionDetailModal: React.FC<PermissionDetailModalProps> = ({
               ) : (
                 <div className="space-y-2.5">
                   {auditLogs.map((logItem) => (
-                    <div key={logItem.id} className="p-2.5 rounded-lg bg-muted/20 border border-border/30 flex flex-col gap-1">
-                      <div className="flex items-center justify-between font-semibold">
-                        <span className="text-primary uppercase font-mono">{logItem.action}</span>
-                        <span className="text-[11px] text-muted-foreground font-mono">{logItem.occurredAt ? formatDateDisplay(logItem.occurredAt) : "N/A"}</span>
+                    <div
+                      key={logItem.id}
+                      onClick={() => handleOpenAuditLogDetail(logItem)}
+                      className="p-3 rounded-xl bg-muted/20 border border-border/30 hover:border-primary/50 hover:bg-primary/5 transition-all cursor-pointer flex items-center justify-between gap-3 group"
+                    >
+                      <div className="space-y-1 min-w-0 flex-1">
+                        <div className="flex items-center justify-between font-semibold">
+                          <span className="text-primary uppercase font-mono text-xs">{logItem.action}</span>
+                          <span className="text-[11px] text-muted-foreground font-mono">{logItem.occurredAt ? formatDateDisplay(logItem.occurredAt) : "N/A"}</span>
+                        </div>
+                        <div className="text-muted-foreground text-[11px] flex items-center gap-2">
+                          <span>Thực hiện bởi: <strong className="text-foreground">{logItem.userFullName || logItem.userEmail || "System"}</strong></span>
+                          {logItem.ipAddress && <span>(IP: {logItem.ipAddress})</span>}
+                        </div>
                       </div>
-                      <div className="text-muted-foreground text-[11px] flex items-center gap-2">
-                        <span>Thực hiện bởi: <strong className="text-foreground">{logItem.userFullName || logItem.userEmail || "System"}</strong></span>
-                        {logItem.ipAddress && <span>(IP: {logItem.ipAddress})</span>}
-                      </div>
+
+                      <span className="text-primary font-bold text-xs opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0">
+                        <Eye className="h-3.5 w-3.5" /> Chi tiết
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -414,6 +441,18 @@ export const PermissionDetailModal: React.FC<PermissionDetailModalProps> = ({
         cancelText="Hủy bỏ"
         onConfirm={confirmRemoveRoleAction}
       />
+
+      <div
+        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
+      >
+        <DetailAuditLogModal
+          open={auditDetailModalOpen}
+          onClose={() => setAuditDetailModalOpen(false)}
+          log={selectedAuditLog}
+        />
+      </div>
     </Dialog>
   );
 };

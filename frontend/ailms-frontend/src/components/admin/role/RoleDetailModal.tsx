@@ -21,10 +21,12 @@ import {
   Clock,
   FileText,
   Info,
-  Search
+  Search,
+  Eye
 } from "lucide-react";
 import { formatDateDisplay } from "@/components/ui/DatePickerInput";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { DetailAuditLogModal } from "@/components/admin/audit/DetailAuditLogModal";
 
 import { roleApi } from "@/api/roles/roleApi";
 import { permissionApi } from "@/api/permissions/permissionApi";
@@ -80,6 +82,13 @@ export const RoleDetailModal: React.FC<RoleDetailModalProps> = ({
   // Tab 4 Audit Log
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [loadingAuditLogs, setLoadingAuditLogs] = useState(false);
+  const [selectedAuditLog, setSelectedAuditLog] = useState<any | null>(null);
+  const [auditDetailModalOpen, setAuditDetailModalOpen] = useState(false);
+
+  const handleOpenAuditLogDetail = (logItem: any) => {
+    setSelectedAuditLog(logItem);
+    setAuditDetailModalOpen(true);
+  };
 
   const [removeUserConfirm, setRemoveUserConfirm] = useState<UserResponse | null>(null);
   const [removeAllUsersConfirm, setRemoveAllUsersConfirm] = useState(false);
@@ -270,7 +279,15 @@ export const RoleDetailModal: React.FC<RoleDetailModalProps> = ({
   const canDeleteRole = !isSystemRole && !isUsedByUsers;
 
   return (
-    <Dialog open={open} onOpenChange={(val) => { if (!val) onClose(); }}>
+    <Dialog open={open} onOpenChange={(val) => {
+      if (!val) {
+        if (auditDetailModalOpen) {
+          setAuditDetailModalOpen(false);
+          return;
+        }
+        onClose();
+      }
+    }}>
       <DialogContent className="max-w-6xl w-[94vw] max-h-[94vh] flex flex-col p-0 overflow-hidden rounded-2xl bg-card border border-border/40 shadow-2xl backdrop-blur-xs">
         
         {/* FIXED HEADER (Name, Code, System/Custom Badge, Clone Role button, Delete button) */}
@@ -706,7 +723,11 @@ export const RoleDetailModal: React.FC<RoleDetailModalProps> = ({
               ) : (
                 <div className="space-y-3 max-h-112.5 overflow-y-auto pr-1">
                   {auditLogs.map((log: any) => (
-                    <div key={log.id || Math.random()} className="p-3.5 rounded-xl border border-border/40 bg-card flex items-start gap-3 text-xs shadow-xs hover:border-primary/30 transition-all">
+                    <div
+                      key={log.id || Math.random()}
+                      onClick={() => handleOpenAuditLogDetail(log)}
+                      className="p-3.5 rounded-xl border border-border/40 bg-card flex items-start gap-3 text-xs shadow-xs hover:border-primary/50 hover:bg-primary/5 transition-all cursor-pointer group"
+                    >
                       <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0 mt-0.5">
                         <Clock className="h-4 w-4" />
                       </div>
@@ -728,8 +749,11 @@ export const RoleDetailModal: React.FC<RoleDetailModalProps> = ({
                               {log.action} &bull; #{log.entityId || role.id}
                             </Badge>
                           </div>
-                          <div className="text-[11px] text-muted-foreground font-mono">
-                            {log.occurredAt ? formatDateDisplay(log.occurredAt) : "Mới đây"}
+                          <div className="text-[11px] text-muted-foreground font-mono flex items-center gap-2">
+                            <span>{log.occurredAt ? formatDateDisplay(log.occurredAt) : "Mới đây"}</span>
+                            <span className="text-primary font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                              <Eye className="h-3.5 w-3.5" /> Xem chi tiết
+                            </span>
                           </div>
                         </div>
 
@@ -774,6 +798,18 @@ export const RoleDetailModal: React.FC<RoleDetailModalProps> = ({
         cancelText="Hủy bỏ"
         onConfirm={confirmRemoveAllUsersFromRoleAction}
       />
+
+      <div
+        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
+      >
+        <DetailAuditLogModal
+          open={auditDetailModalOpen}
+          onClose={() => setAuditDetailModalOpen(false)}
+          log={selectedAuditLog}
+        />
+      </div>
     </Dialog>
   );
 };
