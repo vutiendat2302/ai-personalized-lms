@@ -108,6 +108,14 @@ UserEntity extends BaseEntity{
     private UserStatusEnum status = UserStatusEnum.ACTIVE;
 
     /**
+     * Trạng thái cũ trước khi bị xóa mềm (Soft Delete).
+     * Phục vụ cho việc khôi phục (Restore) về trạng thái chính xác ban đầu.
+     */
+    @Column(name = "status_before_delete")
+    @Enumerated(EnumType.STRING)
+    private UserStatusEnum statusBeforeDelete;
+
+    /**
      * Thời điểm người dùng đăng nhập gần nhất.
      * Được cập nhật sau mỗi lần đăng nhập thành công.
      */

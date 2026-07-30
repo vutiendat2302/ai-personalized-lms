@@ -71,4 +71,25 @@ public class AuditLogController {
                 .contentType(MediaType.parseMediaType("text/csv"))
                 .body(csvBytes);
     }
+
+    @GetMapping("/{id}/export-csv")
+    public ResponseEntity<byte[]> exportSingleAuditLogToCsv(@PathVariable Long id) {
+        byte[] csvBytes = auditLogService.exportSingleAuditLogToCsv(id);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=audit_log_" + id + ".csv")
+                .contentType(MediaType.parseMediaType("text/csv"))
+                .body(csvBytes);
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteAuditLog(@PathVariable Long id) {
+        auditLogService.deleteAuditLog(id);
+        return ResponseEntity.ok(ApiResponse.message("Audit log deleted successfully"));
+    }
+
+    @PostMapping("/bulk-delete")
+    public ResponseEntity<ApiResponse<Void>> bulkDeleteAuditLogs(@RequestBody List<Long> ids) {
+        auditLogService.bulkDeleteAuditLogs(ids);
+        return ResponseEntity.ok(ApiResponse.message("Audit logs bulk deleted successfully"));
+    }
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,7 +23,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { userApi } from "@/api/users/userApi";
+import { trashApi, type TrashItemDTO, type ChildRecordDetailDTO } from "@/api/trash/trashApi";
 import {
   Trash2,
   Search,
@@ -37,29 +37,18 @@ import {
   RotateCcw,
   ShieldAlert,
   Archive,
-  Layers,
   Clock,
-  Database,
-  FileSpreadsheet,
   ChevronLeft,
   ChevronRight,
-  ArrowUpDown,
   ArrowUp,
   ArrowDown,
-  Lock
+  BookOpen,
+  Building2,
+  Eye,
+  Info,
+  Calendar,
+  Database
 } from "lucide-react";
-
-export interface TrashItem {
-  id: string;
-  code: string;
-  name: string;
-  email?: string;
-  entityType: "EMPLOYEE" | "STUDENT" | "DEPARTMENT" | "ROLE" | "CONTRACT" | "COURSE";
-  deletedAt: string;
-  daysInTrash: number;
-  hasChildRecords: boolean;
-  childTables?: string[];
-}
 
 const getPageNumbers = (currentPage: number, total: number) => {
   const pages: (number | string)[] = [];
@@ -78,7 +67,9 @@ const getPageNumbers = (currentPage: number, total: number) => {
 };
 
 export const TrashManagement: React.FC = () => {
-  const [trashItems, setTrashItems] = useState<TrashItem[]>([]);
+  const tableRef = useRef<HTMLDivElement>(null);
+  const [trashItems, setTrashItems] = useState<TrashItemDTO[]>([]);
+  const [allFetchedItems, setAllFetchedItems] = useState<TrashItemDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   
@@ -98,61 +89,89 @@ export const TrashManagement: React.FC = () => {
 
   // Filter States
   const [searchKeyword, setSearchKeyword] = useState("");
-  const [filterEntityType, setFilterEntityType] = useState<string>("ALL");
-  const [filterOverdue, setFilterOverdue] = useState<string>("ALL");
-  const [sortOrder, setSortOrder] = useState<"DELETED_AT_DESC" | "DELETED_AT_ASC" | "DAYS_DESC">("DELETED_AT_DESC");
+  const [debouncedKeyword, setDebouncedKeyword] = useState("");
+  const [filterEntityType, setFilterEntityType] = useState("ALL");
+  const [filterOverdueOnly, setFilterOverdueOnly] = useState(false);
 
-  // Pagination
+  // Pagination & Sorting States
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(10);
-  const [jumpPageInput, setJumpPageInput] = useState<string>("1");
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
+  const [jumpPageInput, setJumpPageInput] = useState("1");
+  const [sortDir, setSortDir] = useState<"ASC" | "DESC">("DESC");
 
-  // Flow 5 Confirmation Modals
-  const [itemToHardDelete, setItemToHardDelete] = useState<TrashItem | null>(null);
-  const [isBulkDelete, setIsBulkDelete] = useState(false);
-  const [blockedChildModalOpen, setBlockedChildModalOpen] = useState(false);
-  const [blockedChildTables, setBlockedChildTables] = useState<string[]>([]);
+  // Modals States
+  const [activeModal, setActiveModal] = useState<
+    "NONE" | "SINGLE_RESTORE" | "BULK_RESTORE" | "SINGLE_HARD_DELETE" | "BULK_HARD_DELETE" | "DETAIL_MODAL"
+  >("NONE");
   
-  const [strongConfirmModalOpen, setStrongConfirmModalOpen] = useState(false);
-  const [confirmInputText, setConfirmInputText] = useState("");
-  const [understandCheckbox, setUnderstandCheckbox] = useState(false);
-  const [deletingHard, setDeletingHard] = useState(false);
+  const [targetItem, setTargetItem] = useState<TrashItemDTO | null>(null);
+  const [selectedDetailItem, setSelectedDetailItem] = useState<TrashItemDTO | null>(null);
+  const [fkDetails, setFkDetails] = useState<Record<string, number>>({});
+  
+  // Child Record Detail Modal States
+  const [childDetailModalOpen, setChildDetailModalOpen] = useState(false);
+  const [childDetailsList, setChildDetailsList] = useState<ChildRecordDetailDTO[]>([]);
+  const [childDetailLoading, setChildDetailLoading] = useState(false);
+  const [selectedChildItem, setSelectedChildItem] = useState<TrashItemDTO | null>(null);
 
+  // Strong Confirmation Inputs
+  const [confirmInput, setConfirmInput] = useState("");
+  const [disclaimerChecked, setDisclaimerChecked] = useState(false);
+
+  // Debounce search input
   useEffect(() => {
-    fetchTrashItems();
-  }, []);
+    const timer = setTimeout(() => {
+      setDebouncedKeyword(searchKeyword);
+      setPage(0);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchKeyword]);
 
   useEffect(() => {
     setJumpPageInput(String(page + 1));
   }, [page]);
 
-  const fetchTrashItems = async () => {
+  // Main Fetch Hook
+  useEffect(() => {
+    fetchTrashData();
+  }, [page, pageSize, debouncedKeyword, filterEntityType, sortDir, filterOverdueOnly]);
+
+  const fetchTrashData = async () => {
     setLoading(true);
     try {
-      const res = await userApi.getTrashUsers().catch(() => null);
-      if (res?.data?.success && Array.isArray(res.data.data)) {
-        const mapped = res.data.data.map((u: any) => ({
-          id: String(u.id),
-          code: u.username || u.email?.split("@")[0] || `USR-${u.id}`,
-          name: u.fullName || u.email || "Người dùng",
-          email: u.email,
-          entityType: (u.roles?.includes("EMPLOYEE") ? "EMPLOYEE" : u.roles?.includes("STUDENT") ? "STUDENT" : "EMPLOYEE") as any,
-          deletedAt: u.updatedAt || "2026-06-20",
-          daysInTrash: Math.floor((new Date().getTime() - new Date(u.updatedAt || "2026-06-20").getTime()) / (1000 * 3600 * 24)) || 35,
-          hasChildRecords: u.id % 2 === 0,
-          childTables: u.id % 2 === 0 ? ["contract_entity (2 bản ghi)", "salary_entity (1 bản ghi)"] : []
-        }));
-        setTrashItems(mapped);
-      } else {
-        // Fallback Mock Trash List
-        const mockList: TrashItem[] = [
-          { id: "101", code: "EMP005", name: "Nguyễn Văn Hùng (Cựu NV)", email: "hung.nguyen@example.com", entityType: "EMPLOYEE", deletedAt: "2026-05-10", daysInTrash: 78, hasChildRecords: true, childTables: ["contract_entity (2 hợp đồng)", "salary_entity (12 bảng lương)"] },
-          { id: "102", code: "STU088", name: "Trần Thị Mai (Học viên)", email: "mai.tran@example.com", entityType: "STUDENT", deletedAt: "2026-06-15", daysInTrash: 42, hasChildRecords: false, childTables: [] },
-          { id: "103", code: "DEPT_TEST", name: "Phòng Ban Rỗng Thử Nghiệm", entityType: "DEPARTMENT", deletedAt: "2026-06-01", daysInTrash: 56, hasChildRecords: false, childTables: [] },
-          { id: "104", code: "ROLE_OLD", name: "Role Cũ Không Dùng", entityType: "ROLE", deletedAt: "2026-07-01", daysInTrash: 26, hasChildRecords: false, childTables: [] },
-          { id: "105", code: "CTR_2025_09", name: "Hợp Đồng Thử Việc Hết Hạn", entityType: "CONTRACT", deletedAt: "2026-07-10", daysInTrash: 17, hasChildRecords: false, childTables: [] }
-        ];
-        setTrashItems(mockList);
+      const res = await trashApi.getTrashItems({
+        entityType: filterEntityType,
+        keyword: debouncedKeyword,
+        page,
+        size: pageSize
+      });
+
+      if (res.data.success) {
+        const pageData = res.data.data;
+        let items: TrashItemDTO[] = pageData.content || [];
+
+        setAllFetchedItems(items);
+
+        if (filterEntityType !== "ALL") {
+          items = items.filter(i => (i.entityType || "USER").toUpperCase() === filterEntityType.toUpperCase());
+        }
+
+        if (filterOverdueOnly) {
+          items = items.filter(i => (i.daysInTrash || 0) >= 30);
+        }
+
+        items.sort((a, b) => {
+          const dA = new Date(a.deletedAt || 0).getTime();
+          const dB = new Date(b.deletedAt || 0).getTime();
+          return sortDir === "DESC" ? dB - dA : dA - dB;
+        });
+
+        setTrashItems(items);
+        setTotalPages(pageData.totalPages || 1);
+        setTotalElements(pageData.totalElements || items.length);
+        setSelectedIds([]);
       }
     } catch (err: any) {
       showBanner(err.message || "Không thể tải danh sách thùng rác", true);
@@ -161,442 +180,572 @@ export const TrashManagement: React.FC = () => {
     }
   };
 
-  // KPI Calculations
-  const totalTrash = trashItems.length;
-  const overdueTrashCount = trashItems.filter(i => i.daysInTrash > 30).length;
-  const entityBreakdown = trashItems.reduce((acc, item) => {
-    acc[item.entityType] = (acc[item.entityType] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
+  // Card Click Event Handlers
+  const handleTotalCardClick = () => {
+    setFilterOverdueOnly(false);
+    setFilterEntityType("ALL");
+    setPage(0);
+    setTimeout(() => {
+      tableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
+  };
 
-  // Filter & Sorting Logic
-  let filtered = trashItems.filter(item => {
-    if (searchKeyword.trim()) {
-      const kw = searchKeyword.toLowerCase();
-      if (!item.name.toLowerCase().includes(kw) && !item.code.toLowerCase().includes(kw) && !(item.email || "").toLowerCase().includes(kw)) {
-        return false;
-      }
-    }
-    if (filterEntityType !== "ALL" && item.entityType !== filterEntityType) return false;
-    if (filterOverdue === "OVERDUE_30" && item.daysInTrash <= 30) return false;
-    return true;
-  });
+  const handleOverdueCardClick = () => {
+    setFilterOverdueOnly(true);
+    setPage(0);
+    setTimeout(() => {
+      tableRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
+  };
 
-  if (sortOrder === "DELETED_AT_DESC") {
-    filtered.sort((a, b) => new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime());
-  } else if (sortOrder === "DELETED_AT_ASC") {
-    filtered.sort((a, b) => new Date(a.deletedAt).getTime() - new Date(b.deletedAt).getTime());
-  } else if (sortOrder === "DAYS_DESC") {
-    filtered.sort((a, b) => b.daysInTrash - a.daysInTrash);
-  }
-
-  // Pagination Slice
-  const totalElements = filtered.length;
-  const totalPages = Math.ceil(totalElements / pageSize) || 1;
-  const paginatedItems = filtered.slice(page * pageSize, (page + 1) * pageSize);
-
+  // Checkbox Select Logic
   const handleSelectAll = (checked: boolean) => {
-    if (checked) setSelectedIds(filtered.map(i => i.id));
+    if (checked) setSelectedIds(trashItems.map((item) => String(item.id)));
     else setSelectedIds([]);
   };
 
   const handleSelectOne = (id: string) => {
-    if (selectedIds.includes(id)) setSelectedIds(selectedIds.filter(i => i !== id));
+    if (selectedIds.includes(id)) setSelectedIds(selectedIds.filter((i) => i !== id));
     else setSelectedIds([...selectedIds, id]);
   };
 
-  // Restore Action
-  const handleRestoreItem = async (item: TrashItem) => {
+  // View Detail Handler
+  const handleOpenDetailModal = async (item: TrashItemDTO) => {
+    setSelectedDetailItem(item);
+    setActiveModal("DETAIL_MODAL");
     try {
-      await userApi.restoreUser(item.id).catch(() => null);
-      showBanner(`Đã khôi phục thành công bản ghi ${item.name} (${item.code}) quay lại hệ thống!`);
-      setTrashItems(prev => prev.filter(i => i.id !== item.id));
-      setSelectedIds(prev => prev.filter(id => id !== item.id));
-    } catch (err: any) {
-      showBanner("Lỗi khôi phục bản ghi", true);
-    }
-  };
-
-  const handleBulkRestore = async () => {
-    if (selectedIds.length === 0) return;
-    try {
-      await userApi.bulkRestoreUsers(selectedIds).catch(() => null);
-      showBanner(`Đã khôi phục thành công ${selectedIds.length} bản ghi đã chọn!`);
-      setTrashItems(prev => prev.filter(i => !selectedIds.includes(i.id)));
-      setSelectedIds([]);
-    } catch (err: any) {
-      showBanner("Lỗi khôi phục hàng loạt", true);
-    }
-  };
-
-  // Flow 5 Hard Delete Trigger
-  const handleTriggerHardDelete = (item: TrashItem) => {
-    setIsBulkDelete(false);
-    setItemToHardDelete(item);
-
-    // Step 5: Check FK / Child records constraint
-    if (item.hasChildRecords && item.childTables && item.childTables.length > 0) {
-      setBlockedChildTables(item.childTables);
-      setBlockedChildModalOpen(true);
-    } else {
-      setConfirmInputText("");
-      setUnderstandCheckbox(false);
-      setStrongConfirmModalOpen(true);
-    }
-  };
-
-  const handleTriggerBulkHardDelete = () => {
-    if (selectedIds.length === 0) return;
-    setIsBulkDelete(true);
-    
-    // Check if any selected item has child records
-    const selectedItems = trashItems.filter(i => selectedIds.includes(i.id));
-    const blockedItems = selectedItems.filter(i => i.hasChildRecords);
-
-    if (blockedItems.length > 0) {
-      const allTables = blockedItems.flatMap(i => i.childTables || []);
-      setBlockedChildTables(allTables);
-      setBlockedChildModalOpen(true);
-    } else {
-      setConfirmInputText("");
-      setUnderstandCheckbox(false);
-      setStrongConfirmModalOpen(true);
-    }
-  };
-
-  // Execute Hard Delete Action (Submit BE DELETE thật)
-  const handleExecuteHardDeleteSubmit = async () => {
-    setDeletingHard(true);
-    try {
-      if (isBulkDelete) {
-        await userApi.bulkHardDeleteUsers(selectedIds).catch(() => null);
-        showBanner(`Đã XÓA VĨNH VIỄN ${selectedIds.length} bản ghi khỏi CSDL!`);
-        setTrashItems(prev => prev.filter(i => !selectedIds.includes(i.id)));
-        setSelectedIds([]);
-      } else if (itemToHardDelete) {
-        await userApi.hardDeleteUser(itemToHardDelete.id).catch(() => null);
-        showBanner(`Đã XÓA VĨNH VIỄN bản ghi ${itemToHardDelete.name} (${itemToHardDelete.code}) khỏi CSDL!`);
-        setTrashItems(prev => prev.filter(i => i.id !== itemToHardDelete.id));
-        setSelectedIds(prev => prev.filter(id => id !== itemToHardDelete.id));
+      const res = await trashApi.getTrashDetail(item.entityType || "USER", item.id);
+      if (res.data.success && res.data.data) {
+        setSelectedDetailItem(res.data.data);
       }
-      setStrongConfirmModalOpen(false);
+    } catch {
+      // Keep existing item
+    }
+  };
+
+  // Child Record Details Inspector Handler
+  const handleOpenChildRecordDetails = async (item: TrashItemDTO) => {
+    setSelectedChildItem(item);
+    setChildDetailModalOpen(true);
+    setChildDetailLoading(true);
+    try {
+      const res = await trashApi.getChildRecordDetails(item.entityType || "USER", item.id);
+      if (res.data.success) {
+        setChildDetailsList(res.data.data || []);
+      }
     } catch (err: any) {
-      showBanner("Lỗi xóa vĩnh viễn bản ghi khỏi CSDL", true);
+      showBanner(err.message || "Không thể tải chi tiết bản ghi con", true);
     } finally {
-      setDeletingHard(false);
+      setChildDetailLoading(false);
+    }
+  };
+
+  // Restore Handlers
+  const handleInitiateSingleRestore = (item: TrashItemDTO) => {
+    setTargetItem(item);
+    setActiveModal("SINGLE_RESTORE");
+  };
+
+  const handleConfirmSingleRestore = async () => {
+    if (!targetItem) return;
+    setLoading(true);
+    try {
+      const res = await trashApi.restore(targetItem.entityType || "USER", targetItem.id);
+      if (res.data.success) {
+        showBanner(`Khôi phục thành công "${targetItem.name}" về hệ thống!`);
+        fetchTrashData();
+      } else {
+        showBanner(res.data.message || "Lỗi khôi phục dữ liệu", true);
+      }
+    } catch (err: any) {
+      showBanner(err.message || "Không thể khôi phục bản ghi", true);
+    } finally {
+      setLoading(false);
+      setActiveModal("NONE");
+    }
+  };
+
+  const handleConfirmBulkRestore = async () => {
+    if (selectedIds.length === 0) return;
+    setLoading(true);
+    try {
+      const res = await trashApi.bulkRestore({
+        entityType: filterEntityType === "ALL" ? "USER" : filterEntityType,
+        ids: selectedIds
+      });
+      if (res.data.success) {
+        showBanner(`Đã khôi phục thành công ${selectedIds.length} bản ghi!`);
+        setSelectedIds([]);
+        fetchTrashData();
+      } else {
+        showBanner(res.data.message || "Khôi phục thất bại", true);
+      }
+    } catch (err: any) {
+      showBanner(err.message || "Lỗi khôi phục hàng loạt", true);
+    } finally {
+      setLoading(false);
+      setActiveModal("NONE");
+    }
+  };
+
+  // Hard Delete Handlers with Cascade Warning Notice
+  const handleInitiateSingleHardDelete = async (item: TrashItemDTO) => {
+    setTargetItem(item);
+    setConfirmInput("");
+    setDisclaimerChecked(false);
+    setFkDetails({});
+
+    try {
+      const res = await trashApi.checkChildRecords(item.entityType || "USER", item.id);
+      if (res.data.success && res.data.data) {
+        setFkDetails(res.data.data);
+      }
+    } catch {
+      if (item.childRecordCounts) {
+        setFkDetails(item.childRecordCounts);
+      }
+    }
+
+    setActiveModal("SINGLE_HARD_DELETE");
+  };
+
+  const handleConfirmSingleHardDelete = async () => {
+    if (!targetItem) return;
+    if (confirmInput.trim().toUpperCase() !== targetItem.code.toUpperCase() && confirmInput.trim().toUpperCase() !== "XOACUNG") {
+      showBanner("Mã xác nhận không chính xác!", true);
+      return;
+    }
+    if (!disclaimerChecked) {
+      showBanner("Bạn phải tích chọn xác nhận không thể hoàn tác!", true);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await trashApi.hardDelete(targetItem.entityType || "USER", targetItem.id);
+      if (res.data.success) {
+        showBanner(`Đã xóa vĩnh viễn đối tượng "${targetItem.name}" cùng tất cả bản ghi phụ thuộc!`);
+        fetchTrashData();
+      } else {
+        showBanner(res.data.message || "Xóa vĩnh viễn thất bại", true);
+      }
+    } catch (err: any) {
+      showBanner(err.message || "Không thể xóa cứng bản ghi", true);
+    } finally {
+      setLoading(false);
+      setActiveModal("NONE");
+    }
+  };
+
+  const handleConfirmBulkHardDelete = async () => {
+    if (confirmInput.trim().toUpperCase() !== "XOACUNG") {
+      showBanner("Mã xác nhận không chính xác!", true);
+      return;
+    }
+    if (!disclaimerChecked) {
+      showBanner("Bạn phải tích chọn cam kết miễn trừ trách nhiệm!", true);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await trashApi.bulkHardDelete({
+        entityType: filterEntityType === "ALL" ? "USER" : filterEntityType,
+        ids: selectedIds
+      });
+      if (res.data.success) {
+        showBanner(`Đã xóa cứng vĩnh viễn ${selectedIds.length} bản ghi khỏi CSDL!`);
+        setSelectedIds([]);
+        fetchTrashData();
+      } else {
+        showBanner(res.data.message || "Xóa hàng loạt thất bại", true);
+      }
+    } catch (err: any) {
+      showBanner(err.message || "Không thể thực hiện xóa hàng loạt", true);
+    } finally {
+      setLoading(false);
+      setActiveModal("NONE");
     }
   };
 
   const getEntityBadge = (type: string) => {
-    switch (type) {
-      case "EMPLOYEE": return <Badge className="bg-blue-600 text-white font-bold text-[10px]">EMPLOYEE</Badge>;
-      case "STUDENT": return <Badge className="bg-emerald-600 text-white font-bold text-[10px]">STUDENT</Badge>;
-      case "DEPARTMENT": return <Badge className="bg-purple-600 text-white font-bold text-[10px]">DEPARTMENT</Badge>;
-      case "ROLE": return <Badge className="bg-amber-600 text-white font-bold text-[10px]">ROLE</Badge>;
-      case "CONTRACT": return <Badge className="bg-pink-600 text-white font-bold text-[10px]">CONTRACT</Badge>;
-      case "COURSE": return <Badge className="bg-cyan-600 text-white font-bold text-[10px]">COURSE</Badge>;
-      default: return <Badge variant="outline">{type}</Badge>;
+    const uppercaseType = type ? type.toUpperCase() : "USER";
+    switch (uppercaseType) {
+      case "USER":
+      case "EMPLOYEE":
+        return <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/20 font-bold gap-1"><Users className="h-3 w-3" /> User</Badge>;
+      case "COURSE":
+        return <Badge variant="outline" className="bg-purple-500/10 text-purple-600 border-purple-500/20 font-bold gap-1"><BookOpen className="h-3 w-3" /> Khóa học</Badge>;
+      case "DEPARTMENT":
+        return <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/20 font-bold gap-1"><Building2 className="h-3 w-3" /> Phòng ban</Badge>;
+      default:
+        return <Badge variant="outline" className="bg-slate-500/10 text-slate-600 border-slate-500/20 font-bold">{type}</Badge>;
     }
   };
 
-  const canSubmitHardDelete = understandCheckbox || (itemToHardDelete && confirmInputText.trim() === itemToHardDelete.code) || (isBulkDelete && confirmInputText.trim().toUpperCase() === "DELETE");
+  const totalFkChildRecords = Object.values(fkDetails).reduce((acc, curr) => acc + curr, 0);
+
+  // Statistics
+  const overdueCount = trashItems.filter(i => (i.daysInTrash || 0) >= 30).length;
+  const safeCount = trashItems.filter(i => !i.hasChildRecords).length;
+
+  // Validation rules for Hard Delete buttons
+  const isSingleHardDeleteValid =
+    disclaimerChecked &&
+    targetItem &&
+    (confirmInput.trim().toUpperCase() === targetItem.code.toUpperCase() ||
+      confirmInput.trim().toUpperCase() === "XOACUNG");
+
+  const isBulkHardDeleteValid =
+    disclaimerChecked &&
+    confirmInput.trim().toUpperCase() === "XOACUNG";
 
   return (
-    <div className="mx-auto max-w-none w-full px-4 sm:px-6 lg:px-10 py-6 space-y-8 animate-in fade-in-50 duration-300">
+    <div className="mx-auto max-w-none w-full space-y-8 animate-in fade-in-50 duration-300">
       
-      {/* Toast Banners */}
-      {successBanner && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl bg-emerald-600 text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
-          <CheckCircle2 className="h-5 w-5 shrink-0" />
-          <span className="text-sm font-semibold">{successBanner}</span>
-        </div>
-      )}
-
+      {/* Toast Alert Banners */}
       {errorBanner && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl bg-red-600 text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
+        <div className="fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-xl bg-destructive text-white px-4 py-3 shadow-xl animate-in slide-in-from-bottom-5 duration-300">
           <AlertCircle className="h-5 w-5 shrink-0" />
           <span className="text-sm font-semibold">{errorBanner}</span>
         </div>
       )}
 
-      {/* Page Title Header (Exact UserManagement typography) */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-border/30 pb-4">
+      {successBanner && (
+        <div className="fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-xl bg-emerald-600 text-white px-4 py-3 shadow-xl animate-in slide-in-from-bottom-5 duration-300">
+          <CheckCircle2 className="h-5 w-5 shrink-0" />
+          <span className="text-sm font-semibold">{successBanner}</span>
+        </div>
+      )}
+
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 text-sm font-semibold text-primary mb-1">
+          <div className="flex items-center gap-2 text-xs font-bold text-primary mb-1">
             <Link to="/dashboard" className="flex items-center gap-1 hover:underline">
-              <ArrowLeft className="h-3.5 w-3.5" />
-              <span>Quay lại Tổng quan</span>
+              <ArrowLeft className="h-3 w-3" />
+              <span>Quay lại Dashboard</span>
             </Link>
           </div>
-          <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-foreground flex items-center gap-3 mt-2">
-            <div className="p-2.5 rounded-2xl bg-red-500/10 text-red-600 border border-red-500/20">
-              <Trash2 className="h-7 w-7" />
-            </div>
-            <span>Thùng rác Hệ thống (Recycle Bin — Hard Delete)</span>
+          <h1 className="text-2xl font-extrabold tracking-tight text-foreground flex items-center gap-2">
+            <Trash2 className="h-6 w-6 text-primary" />
+            <span>Thùng rác hệ thống (Unified Trash)</span>
           </h1>
-        </div>
-
-        <div className="flex items-center gap-2 flex-wrap">
-          <Button onClick={fetchTrashItems} variant="outline" size="sm" className="rounded-xl gap-1.5 font-semibold">
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Làm mới
-          </Button>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Quản lý tập trung các thực thể đã xóa mềm. Khôi phục lại trạng thái ban đầu hoặc dọn dẹp xóa cứng khỏi cơ sở dữ liệu.
+          </p>
         </div>
       </div>
 
-      {/* SECTION 1: OVERVIEW SECTION (KPI CARDS & WARNING CARDS) */}
-      <section className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          
-          {/* Card 1: Tổng số bản ghi xóa mềm & Breakdown Entity */}
-          <Card className="border-border shadow-xs bg-card overflow-hidden relative">
-            <div className="absolute top-0 right-0 p-4 opacity-10 text-primary">
-              <Archive className="h-24 w-24" />
-            </div>
-            <CardHeader className="pb-2">
-              <CardDescription className="text-xs font-semibold text-muted-foreground uppercase">
-                1. Tổng số Bản ghi Đã Xóa Mềm
-              </CardDescription>
-              <CardTitle className="text-3xl font-extrabold text-foreground flex items-center gap-2 mt-1">
-                <span className="text-primary">{totalTrash}</span>
-                <span className="text-xs font-semibold text-primary bg-primary/10 px-2.5 py-0.5 rounded-full">Bản ghi trong Thùng rác</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-2">
-              <div className="flex flex-wrap gap-1.5">
-                {Object.entries(entityBreakdown).map(([entity, count]) => (
-                  <span key={entity} className="text-[10px] font-bold px-2 py-0.5 rounded bg-muted text-muted-foreground border">
-                    {entity}: {count}
-                  </span>
-                ))}
+      {/* SUMMARY STATS CARDS */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        
+        {/* Card 1: Tổng số bản ghi */}
+        <Card
+          onClick={handleTotalCardClick}
+          className="border-border shadow-xs bg-card hover:border-primary/50 transition-all cursor-pointer group"
+        >
+          <CardContent className="p-4 flex items-center justify-between">
+            <div className="space-y-1">
+              <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Tổng số bản ghi trong rác</span>
+              <div className="text-2xl font-black text-foreground group-hover:text-primary transition-colors">
+                {totalElements} <span className="text-xs font-normal text-muted-foreground">bản ghi</span>
               </div>
-            </CardContent>
-          </Card>
-
-          {/* Card 2: KPI Warning Card (> 30 Ngày nằm trong thùng rác) */}
-          <Card
-            onClick={() => { setFilterOverdue("OVERDUE_30"); setPage(0); showBanner("Đã lọc các bản ghi nằm trong Thùng rác > 30 ngày!"); }}
-            className="border-2 border-amber-500/40 bg-gradient-to-br from-amber-500/10 via-card to-card shadow-xs cursor-pointer group flex flex-col justify-between"
-          >
-            <CardHeader className="pb-2">
-              <CardDescription className="text-xs font-extrabold text-amber-600 uppercase flex items-center justify-between">
-                <span className="flex items-center gap-1"><Clock className="h-4 w-4" /> 2. Bản ghi Nằm Quá Lâu (&gt; 30 Ngày)</span>
-                <span className="px-2 py-0.5 rounded-full bg-amber-600 text-white text-[10px] font-black">CẢNH BÁO</span>
-              </CardDescription>
-              <CardTitle className="text-3xl font-extrabold text-amber-600 flex items-center gap-2 mt-1">
-                <span>{overdueTrashCount}</span>
-                <span className="text-xs font-semibold text-amber-600 bg-amber-500/10 px-2 py-0.5 rounded-full">Gợi ý nên dọn</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0"><p className="text-xs text-muted-foreground">Click để filter và dọn dẹp giải phóng dung lượng CSDL &rarr;</p></CardContent>
-          </Card>
-
-          {/* Card 3: Storage & Safety Notice */}
-          <Card className="border-border shadow-xs bg-card overflow-hidden relative">
-            <div className="absolute top-0 right-0 p-4 opacity-10 text-emerald-600">
-              <Database className="h-24 w-24" />
+              <p className="text-[11px] text-muted-foreground">
+                Tất cả thực thể đang lưu trữ trong thùng rác
+              </p>
             </div>
-            <CardHeader className="pb-2">
-              <CardDescription className="text-xs font-semibold text-muted-foreground uppercase">
-                Khôi phục & Xóa cứng (Hard Delete)
-              </CardDescription>
-              <CardTitle className="text-2xl font-extrabold text-emerald-600 flex items-center gap-2 mt-1">
-                <span>Hard Delete = DELETE thật</span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0"><p className="text-xs text-muted-foreground">Có kiểm tra ràng buộc FK bảng con và Modal xác nhận mạnh trước khi xóa</p></CardContent>
-          </Card>
-        </div>
-      </section>
+            <div className="h-12 w-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+              <Archive className="h-6 w-6" />
+            </div>
+          </CardContent>
+        </Card>
 
-      {/* SECTION 2: MANAGEMENT TABLE & UNIFIED FILTER FORM */}
-      <section className="space-y-6">
+        {/* Card 2: Quá hạn > 30 ngày (Click to Filter & Scroll) */}
+        <Card
+          onClick={handleOverdueCardClick}
+          className={cn(
+            "border-border shadow-xs bg-card hover:border-red-500/50 transition-all cursor-pointer group",
+            filterOverdueOnly && "border-red-500 bg-red-500/5 dark:bg-red-500/10"
+          )}
+        >
+          <CardContent className="p-4 flex items-center justify-between">
+            <div className="space-y-1">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-bold text-red-600 dark:text-red-400 uppercase tracking-wider">Quá hạn &gt; 30 ngày</span>
+                {filterOverdueOnly && (
+                  <Badge variant="destructive" className="text-[9px] px-1.5 py-0">Đang lọc</Badge>
+                )}
+              </div>
+              <div className="text-2xl font-black text-red-600 dark:text-red-400 group-hover:scale-105 transition-transform origin-left">
+                {overdueCount} <span className="text-xs font-normal text-muted-foreground">bản ghi</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Click để xem &amp; lọc danh sách quá hạn &gt; 30 ngày
+              </p>
+            </div>
+            <div className="h-12 w-12 rounded-2xl bg-red-500/10 text-red-600 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+              <AlertTriangle className="h-6 w-6" />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Card 3: An toàn để dọn dẹp */}
+        <Card className="border-border shadow-xs bg-card">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div className="space-y-1">
+              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">An toàn để dọn dẹp</span>
+              <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
+                {safeCount} <span className="text-xs font-normal text-muted-foreground">bản ghi</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Bản ghi không chứa dữ liệu con ràng buộc
+              </p>
+            </div>
+            <div className="h-12 w-12 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0">
+              <CheckCircle2 className="h-6 w-6" />
+            </div>
+          </CardContent>
+        </Card>
+
+      </div>
+
+      {/* Main Content Area */}
+      <div ref={tableRef} className="space-y-6">
         <Card className="border-border shadow-sm bg-card overflow-hidden">
           
-          {/* Header */}
+          {/* Header & Main Actions */}
           <CardHeader className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 pb-4 border-b border-border/30 bg-card">
             <div>
               <CardTitle className="text-xl font-semibold tracking-tight font-heading flex items-center gap-2">
-                <span>Danh sách Bản ghi trong Thùng rác</span>
+                <span>Danh sách dữ liệu trong thùng rác</span>
               </CardTitle>
               <CardDescription className="text-sm text-muted-foreground mt-0.5">
-                Các bản ghi đã xóa mềm (Soft Delete). Bạn có thể Khôi phục (Restore) hoặc Xóa vĩnh viễn (Hard Delete khỏi CSDL).
+                Các bản ghi được lưu trữ an toàn trong 30-90 ngày trước khi bị hủy bỏ hoàn toàn.
               </CardDescription>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2.5">
+              <Button
+                onClick={() => fetchTrashData()}
+                variant="outline"
+                size="sm"
+                className="h-9 gap-1.5 font-semibold cursor-pointer border border-border/30 bg-background text-foreground hover:bg-muted"
+              >
+                <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+                <span>Làm mới</span>
+              </Button>
             </div>
           </CardHeader>
 
-          {/* UNIFIED FILTER & SEARCH TOOLBAR FORM */}
+          {/* Unified Filter Toolbar */}
           <div className="py-3 px-4 bg-muted/20 border-b border-border/30 flex flex-wrap items-end gap-3 w-full">
-            {/* Search Input */}
-            <div className="flex flex-col gap-1 flex-1 min-w-[200px]">
-              <Label className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Từ khóa tìm kiếm</Label>
+            {/* Search Keyword Input */}
+            <div className="flex flex-col gap-1 flex-1 min-w-50">
+              <Label className="text-xs font-semibold text-muted-foreground">Từ khóa tìm kiếm</Label>
               <div className="relative w-full">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
                 <Input
                   type="text"
-                  placeholder="Mã bản ghi, họ tên, email..."
+                  placeholder="Tìm theo tên, email, ID..."
                   value={searchKeyword}
-                  onChange={(e) => { setSearchKeyword(e.target.value); setPage(0); }}
-                  className="pl-8 h-9 text-sm border border-border/30 bg-background rounded-lg focus-visible:ring-2 focus-visible:ring-primary/20 placeholder:opacity-50"
+                  onChange={(e) => setSearchKeyword(e.target.value)}
+                  className="pl-8 h-9 text-sm border border-border/30 bg-background rounded-lg"
                 />
               </div>
             </div>
 
-            {/* Select Entity Type */}
-            <div className="flex flex-col gap-1 w-[160px] shrink-0">
-              <Label className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Loại đối tượng</Label>
-              <Select value={filterEntityType} onValueChange={(val) => { setFilterEntityType(val); setPage(0); }}>
-                <SelectTrigger className="h-9 text-sm border border-border/30 bg-background rounded-lg w-full"><SelectValue placeholder="Tất cả" /></SelectTrigger>
+            {/* Entity Type Filter Dropdown */}
+            <div className="flex flex-col gap-1 w-44 shrink-0">
+              <Label className="text-xs font-semibold text-muted-foreground">Loại đối tượng</Label>
+              <Select
+                value={filterEntityType}
+                onValueChange={(val) => {
+                  setFilterEntityType(val);
+                  setPage(0);
+                }}
+              >
+                <SelectTrigger className="h-9 text-sm border border-border/30 bg-background rounded-lg w-full">
+                  <SelectValue placeholder="Tất cả loại" />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">Tất cả đối tượng</SelectItem>
-                  <SelectItem value="EMPLOYEE">EMPLOYEE</SelectItem>
-                  <SelectItem value="STUDENT">STUDENT</SelectItem>
-                  <SelectItem value="DEPARTMENT">DEPARTMENT</SelectItem>
-                  <SelectItem value="ROLE">ROLE</SelectItem>
-                  <SelectItem value="CONTRACT">CONTRACT</SelectItem>
+                  <SelectItem value="USER">Tài khoản (User)</SelectItem>
+                  <SelectItem value="COURSE">Khóa học (Course)</SelectItem>
+                  <SelectItem value="DEPARTMENT">Phòng ban (Department)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            {/* Select Retention Alert */}
-            <div className="flex flex-col gap-1 w-[160px] shrink-0">
-              <Label className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Thời gian lưu thùng rác</Label>
-              <Select value={filterOverdue} onValueChange={(val) => { setFilterOverdue(val); setPage(0); }}>
-                <SelectTrigger className="h-9 text-sm border border-border/30 bg-background rounded-lg w-full"><SelectValue placeholder="Tất cả" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">Tất cả thời gian</SelectItem>
-                  <SelectItem value="OVERDUE_30">Nằm quá lâu (&gt; 30 Ngày)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Select Sort Order */}
-            <div className="flex flex-col gap-1 w-[170px] shrink-0">
-              <Label className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Sắp xếp theo thời gian xóa</Label>
-              <Select value={sortOrder} onValueChange={(val: any) => setSortOrder(val)}>
-                <SelectTrigger className="h-9 text-sm border border-border/30 bg-background rounded-lg w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="DELETED_AT_DESC">Mới xóa nhất</SelectItem>
-                  <SelectItem value="DELETED_AT_ASC">Cũ nhất trong thùng rác</SelectItem>
-                  <SelectItem value="DAYS_DESC">Số ngày nhiều nhất</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Reset Button */}
-            <div className="flex items-center gap-1.5 shrink-0 self-end">
-              <Button type="button" onClick={() => { setSearchKeyword(""); setFilterEntityType("ALL"); setFilterOverdue("ALL"); setSortOrder("DELETED_AT_DESC"); setPage(0); }} variant="outline" size="sm" className="h-9 text-xs text-muted-foreground hover:text-foreground rounded-lg px-2.5 border border-border/30 bg-background flex items-center gap-1">
-                <RotateCcw className="h-3.5 w-3.5 mr-1" /> Đặt lại
-              </Button>
+            {/* Overdue filter check */}
+            <div className="flex items-center gap-2 h-9 px-3 border border-border/30 rounded-lg bg-background self-end cursor-pointer select-none" onClick={() => setFilterOverdueOnly(!filterOverdueOnly)}>
+              <Checkbox checked={filterOverdueOnly} onCheckedChange={(c) => setFilterOverdueOnly(!!c)} className="h-4 w-4 rounded-md" />
+              <span className="text-xs font-bold text-muted-foreground">Chỉ xem quá hạn &gt; 30 ngày</span>
             </div>
           </div>
 
-          {/* BULK ACTION TOOLBAR (Khôi phục hàng loạt & Xóa vĩnh viễn hàng loạt) */}
+          {/* Bulk Action Bar */}
           {selectedIds.length > 0 && (
-            <div className="py-2.5 px-4 bg-primary/10 border-b border-primary/20 flex flex-wrap items-center justify-between gap-3 text-sm font-semibold animate-in fade-in-50">
-              <span className="text-primary flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4" /> Đã chọn {selectedIds.length} bản ghi</span>
+            <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-primary/10 border-b border-primary/20 text-xs animate-in fade-in-50 duration-200">
+              <div className="flex items-center gap-2 font-bold text-primary">
+                <CheckCircle2 className="h-4 w-4" />
+                <span>Đã chọn {selectedIds.length} bản ghi</span>
+              </div>
               <div className="flex items-center gap-2">
-                <Button size="sm" variant="outline" onClick={handleBulkRestore} className="h-8 text-sm gap-1.5 bg-primary text-primary-foreground font-semibold">
-                  <RotateCcw className="h-3.5 w-3.5" /> Khôi phục hàng loạt
+                <Button
+                  onClick={() => setActiveModal("BULK_RESTORE")}
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs font-bold gap-1.5 border-primary/30 text-primary hover:bg-primary/10 rounded-lg cursor-pointer"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" /> Khôi phục tất cả ({selectedIds.length})
                 </Button>
-
-                <Button size="sm" variant="destructive" onClick={handleTriggerBulkHardDelete} className="h-8 text-sm gap-1 font-semibold">
-                  <Trash2 className="h-3.5 w-3.5" /> Xóa vĩnh viễn hàng loạt
+                <Button
+                  onClick={() => {
+                    setConfirmInput("");
+                    setDisclaimerChecked(false);
+                    setActiveModal("BULK_HARD_DELETE");
+                  }}
+                  size="sm"
+                  variant="destructive"
+                  className="h-7 text-xs font-bold gap-1.5 rounded-lg cursor-pointer"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Xóa vĩnh viễn tất cả ({selectedIds.length})
                 </Button>
               </div>
             </div>
           )}
 
-          {/* TABLE CONTAINER */}
-          <CardContent className="p-0 relative min-h-[300px]">
+          {/* Table Container */}
+          <CardContent className="p-0 relative min-h-75">
             {loading && (
-              <div className="absolute inset-0 bg-background/60 backdrop-blur-xs flex items-center justify-center z-20">
+              <div className="absolute inset-0 bg-background/55 backdrop-blur-xs flex items-center justify-center z-20">
                 <Loader2 className="h-8 w-8 text-primary animate-spin" />
               </div>
             )}
 
-            <Table containerClassName="max-h-[calc(100vh-240px)] min-h-[240px] overflow-auto border-b border-border/20">
+            <Table containerClassName="max-h-[calc(100vh-280px)] min-h-[300px] overflow-auto border-b border-border/20">
               <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur-md shadow-2xs border-b border-border/40">
                 <TableRow className="border-b border-border/30 bg-muted/20 hover:bg-muted/20">
                   <TableHead className="w-8 pb-4">
-                    <Checkbox checked={filtered.length > 0 && selectedIds.length === filtered.length} onCheckedChange={(checked) => handleSelectAll(!!checked)} className="translate-y-0.5 border-border/30" />
+                    <Checkbox
+                      checked={trashItems.length > 0 && selectedIds.length === trashItems.length}
+                      onCheckedChange={(c) => handleSelectAll(!!c)}
+                      className="translate-y-0.5 border-border/30"
+                    />
                   </TableHead>
-
-                  <TableHead className="pb-4 text-center text-sm font-semibold uppercase tracking-wider">Loại đối tượng</TableHead>
-                  <TableHead className="pb-4 text-sm font-semibold uppercase tracking-wider">Mã / Tên bản ghi</TableHead>
-                  <TableHead className="pb-4 text-center text-sm font-semibold uppercase tracking-wider">Ngày xóa mềm</TableHead>
-                  <TableHead className="pb-4 text-center text-sm font-semibold uppercase tracking-wider">Thời gian trong thùng rác</TableHead>
-                  <TableHead className="pb-4 text-center text-sm font-semibold uppercase tracking-wider">Actions</TableHead>
+                  <TableHead className="py-3 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Loại đối tượng</TableHead>
+                  <TableHead className="py-3 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Thông tin thực thể</TableHead>
+                  <TableHead
+                    className="py-3 px-3 text-xs font-semibold uppercase tracking-wider text-primary cursor-pointer select-none"
+                    onClick={() => setSortDir(sortDir === "DESC" ? "ASC" : "DESC")}
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>Thời điểm xóa</span>
+                      {sortDir === "DESC" ? <ArrowDown className="h-3.5 w-3.5" /> : <ArrowUp className="h-3.5 w-3.5" />}
+                    </div>
+                  </TableHead>
+                  <TableHead className="py-3 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Thời gian lưu</TableHead>
+                  <TableHead className="py-3 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Dữ liệu phụ thuộc (FK)</TableHead>
+                  <TableHead className="py-3 px-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground text-center">Thao tác</TableHead>
                 </TableRow>
               </TableHeader>
 
-              <TableBody className="opacity-90">
-                {paginatedItems.length === 0 ? (
+              <TableBody>
+                {trashItems.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="py-12 text-center text-muted-foreground text-sm font-medium">
-                      Thùng rác trống hoặc không có bản ghi nào phù hợp.
+                    <TableCell colSpan={7} className="py-16 text-center text-muted-foreground text-sm">
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <Archive className="h-10 w-10 text-muted-foreground/60" />
+                        <span className="font-bold">Thùng rác trống</span>
+                        <span className="text-xs">Không có dữ liệu bị xóa mềm nào khớp với bộ lọc.</span>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ) : (
-                  paginatedItems.map((item) => {
-                    const isOverdue = item.daysInTrash > 30;
-
+                  trashItems.map((item) => {
+                    const isOverdue = (item.daysInTrash || 0) >= 30;
                     return (
-                      <TableRow key={item.id} className="hover:bg-foreground/10 transition-colors border-border/30">
+                      <TableRow key={`${item.entityType}-${item.id}`} className="hover:bg-muted/10 transition-colors border-border/30">
                         <TableCell>
-                          <Checkbox checked={selectedIds.includes(item.id)} onCheckedChange={() => handleSelectOne(item.id)} className="translate-y-0.5 border-border/30" />
+                          <Checkbox
+                            checked={selectedIds.includes(String(item.id))}
+                            onCheckedChange={() => handleSelectOne(String(item.id))}
+                            className="translate-y-0.5 border-border/30"
+                          />
                         </TableCell>
 
-                        <TableCell className="text-center">
+                        {/* Loại */}
+                        <TableCell className="py-3 px-3">
                           {getEntityBadge(item.entityType)}
                         </TableCell>
 
-                        <TableCell>
-                          <div>
-                            <p className="font-semibold text-foreground text-sm flex items-center gap-2">
-                              <span>{item.name}</span>
-                              <span className="font-mono text-xs text-primary font-bold px-2 py-0.5 bg-primary/10 rounded border border-primary/20">{item.code}</span>
-                            </p>
-                            {item.email && <p className="text-xs text-muted-foreground">{item.email}</p>}
+                        {/* Thông tin */}
+                        <TableCell className="py-3 px-3">
+                          <div className="flex flex-col">
+                            <span className="font-bold text-foreground text-xs">{item.name || "N/A"}</span>
+                            <span className="text-[10px] text-muted-foreground font-mono">{item.email || item.code || `ID: #${item.id}`}</span>
                           </div>
                         </TableCell>
 
-                        <TableCell className="text-center font-mono font-medium text-xs text-muted-foreground">
-                          {item.deletedAt}
+                        {/* Thời điểm xóa */}
+                        <TableCell className="py-3 px-3 text-xs font-mono text-muted-foreground">
+                          {item.deletedAt ? new Date(item.deletedAt).toLocaleString("vi-VN") : "—"}
                         </TableCell>
 
-                        <TableCell className="text-center">
-                          {isOverdue ? (
-                            <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-amber-500/10 text-amber-600 border border-amber-500/20 inline-flex items-center gap-1">
-                              <Clock className="h-3 w-3" /> {item.daysInTrash} ngày (Quá lâu)
-                            </span>
+                        {/* Thời gian lưu trong rác */}
+                        <TableCell className="py-3 px-3">
+                          <Badge variant="outline" className={cn("font-mono text-[10px] font-bold", isOverdue ? "bg-red-500/10 text-red-600 border-red-500/20" : "bg-muted/40 text-muted-foreground border-border/40")}>
+                            <Clock className="h-3 w-3 mr-1" />
+                            {item.daysInTrash || 0} ngày
+                          </Badge>
+                        </TableCell>
+
+                        {/* Ràng buộc FK */}
+                        <TableCell className="py-3 px-3">
+                          {item.hasChildRecords ? (
+                            <Badge
+                              onClick={() => handleOpenChildRecordDetails(item)}
+                              variant="outline"
+                              className="bg-amber-500/10 text-amber-600 border-amber-500/20 text-[10px] font-bold gap-1 cursor-pointer hover:bg-amber-500/20 transition-colors"
+                              title="Click để xem chi tiết danh sách bản ghi con phụ thuộc"
+                            >
+                              <ShieldAlert className="h-3 w-3" /> Có dữ liệu phụ thuộc (Xem chi tiết)
+                            </Badge>
                           ) : (
-                            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-muted text-muted-foreground border">
-                              {item.daysInTrash} ngày
+                            <span className="text-xs text-emerald-600 font-bold flex items-center gap-1">
+                              <CheckCircle2 className="h-3.5 w-3.5" /> An toàn để xóa
                             </span>
                           )}
                         </TableCell>
 
-                        {/* Actions theo dòng: Khôi phục / Xóa vĩnh viễn (nút đỏ riêng) */}
-                        <TableCell className="text-center">
-                          <div className="flex items-center justify-center gap-2">
+                        {/* Action buttons */}
+                        <TableCell className="py-3 px-4 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
                             <Button
-                              onClick={() => handleRestoreItem(item)}
+                              onClick={() => handleOpenDetailModal(item)}
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-primary hover:bg-primary/10 cursor-pointer"
+                              title="Xem chi tiết bản ghi"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              onClick={() => handleInitiateSingleRestore(item)}
                               variant="outline"
                               size="sm"
-                              className="h-8 text-xs font-bold gap-1 text-emerald-600 border-emerald-500/30 hover:bg-emerald-500/10"
-                              title="Khôi phục bản ghi quay lại hệ thống"
+                              className="h-8 text-xs font-bold gap-1 text-emerald-600 border-emerald-500/30 hover:bg-emerald-500/10 rounded-lg cursor-pointer"
                             >
                               <RotateCcw className="h-3.5 w-3.5" /> Khôi phục
                             </Button>
-
                             <Button
-                              onClick={() => handleTriggerHardDelete(item)}
-                              variant="destructive"
+                              onClick={() => handleInitiateSingleHardDelete(item)}
+                              variant="ghost"
                               size="sm"
-                              className="h-8 text-xs font-bold gap-1"
-                              title="Xóa vĩnh viễn khỏi CSDL (Không thể khôi phục)"
+                              className="h-8 text-xs font-bold text-destructive hover:bg-destructive/10 rounded-lg cursor-pointer"
                             >
-                              <Trash2 className="h-3.5 w-3.5" /> Xóa vĩnh viễn
+                              <Trash2 className="h-3.5 w-3.5" /> Xóa cứng
                             </Button>
                           </div>
                         </TableCell>
@@ -608,10 +757,10 @@ export const TrashManagement: React.FC = () => {
             </Table>
           </CardContent>
 
-          {/* Fixed Table Footer & Pagination Form */}
+          {/* Pagination Footer */}
           <div className="px-5 py-3 border-t border-border/40 bg-card flex flex-col md:flex-row items-center justify-between gap-4 text-sm font-medium">
             <div className="text-muted-foreground">
-              Hiển thị <span className="font-semibold text-foreground">{filtered.length === 0 ? 0 : page * pageSize + 1}</span> đến{" "}
+              Hiển thị <span className="font-semibold text-foreground">{trashItems.length === 0 ? 0 : page * pageSize + 1}</span> đến{" "}
               <span className="font-semibold text-foreground">{Math.min((page + 1) * pageSize, totalElements)}</span> trên{" "}
               <span className="font-semibold text-foreground">{totalElements}</span> bản ghi
             </div>
@@ -631,27 +780,8 @@ export const TrashManagement: React.FC = () => {
                 </Select>
               </div>
 
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  const pNum = parseInt(jumpPageInput, 10);
-                  if (!isNaN(pNum) && pNum >= 1 && pNum <= totalPages) setPage(pNum - 1);
-                }}
-                className="flex items-center gap-1.5"
-              >
-                <span className="text-muted-foreground">Tới trang:</span>
-                <Input
-                  type="number"
-                  min={1}
-                  max={totalPages || 1}
-                  value={jumpPageInput}
-                  onChange={(e) => setJumpPageInput(e.target.value)}
-                  className="h-8 w-14 text-center text-xs font-bold bg-background border border-border rounded-lg"
-                />
-              </form>
-
               <div className="flex items-center gap-1">
-                <Button disabled={page === 0} onClick={() => setPage(p => p - 1)} variant="outline" size="sm" className="h-8 text-xs font-semibold rounded-lg">
+                <Button disabled={page === 0} onClick={() => setPage(p => p - 1)} variant="outline" size="sm" className="h-8 text-xs font-semibold rounded-lg cursor-pointer">
                   <ChevronLeft className="h-3.5 w-3.5" /> Trước
                 </Button>
                 {getPageNumbers(page, totalPages).map((p, idx) => {
@@ -659,112 +789,365 @@ export const TrashManagement: React.FC = () => {
                   const pageNum = p as number;
                   const isCurrent = pageNum === page;
                   return (
-                    <Button key={pageNum} onClick={() => setPage(pageNum)} variant={isCurrent ? "default" : "outline"} size="sm" className="h-8 w-8 text-xs font-semibold rounded-lg">
+                    <Button key={pageNum} onClick={() => setPage(pageNum)} variant={isCurrent ? "default" : "outline"} size="sm" className="h-8 w-8 text-xs font-semibold rounded-lg cursor-pointer">
                       {pageNum + 1}
                     </Button>
                   );
                 })}
-                <Button disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)} variant="outline" size="sm" className="h-8 text-xs font-semibold rounded-lg">
+                <Button disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)} variant="outline" size="sm" className="h-8 text-xs font-semibold rounded-lg cursor-pointer">
                   Sau <ChevronRight className="h-3.5 w-3.5" />
                 </Button>
               </div>
             </div>
           </div>
         </Card>
-      </section>
+      </div>
 
-      {/* FLOW 5: MODAL 1 — CHẶN XÓA CỨNG KHI CÓ RÀNG BUỘC FK BẢNG CON */}
-      <Dialog open={blockedChildModalOpen} onOpenChange={setBlockedChildModalOpen}>
-        <DialogContent className="max-w-md w-full rounded-2xl border-2 border-red-500/50 bg-card p-6">
-          <DialogHeader>
-            <div className="flex items-center gap-3 text-red-600 mb-1">
-              <ShieldAlert className="h-8 w-8 shrink-0" />
-              <DialogTitle className="text-xl font-black">CHẶN XÓA CỨNG (FK CONSTRAINT)</DialogTitle>
+      {/* MODALS */}
+
+      {/* 1. Detail Modal */}
+      <Dialog open={activeModal === "DETAIL_MODAL"} onOpenChange={() => setActiveModal("NONE")}>
+        <DialogContent className="max-w-xl w-full rounded-2xl bg-card p-6 border-border">
+          <DialogHeader className="border-b border-border/40 pb-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Info className="h-6 w-6 text-primary shrink-0" />
+                <DialogTitle className="text-lg font-extrabold tracking-tight">Chi tiết bản ghi Thùng rác</DialogTitle>
+              </div>
+              {selectedDetailItem && getEntityBadge(selectedDetailItem.entityType)}
             </div>
-            <DialogDescription className="text-xs text-foreground font-semibold">
-              Không thể Xóa Vĩnh Viễn bản ghi này do dữ liệu con ở các bảng liên quan vẫn tồn tại trong CSDL.
+            <DialogDescription className="text-xs text-muted-foreground mt-1">
+              Xem thông tin chi tiết trước khi quyết định khôi phục hoặc xóa vĩnh viễn khỏi CSDL.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-3 py-2">
-            <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-xs font-bold text-red-600">
-              Các bảng dữ liệu con còn phụ thuộc:
+          {selectedDetailItem && (
+            <div className="space-y-4 my-2 text-xs">
+              <div className="grid grid-cols-2 gap-3 p-3 bg-muted/20 border border-border/30 rounded-xl">
+                <div>
+                  <span className="text-muted-foreground font-semibold block text-[11px]">Tên bản ghi / Thực thể:</span>
+                  <span className="font-bold text-foreground text-sm">{selectedDetailItem.name || "N/A"}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground font-semibold block text-[11px]">Mã định danh (Code / ID):</span>
+                  <span className="font-bold text-primary font-mono text-sm">{selectedDetailItem.code || `#${selectedDetailItem.id}`}</span>
+                </div>
+                {selectedDetailItem.email && (
+                  <div>
+                    <span className="text-muted-foreground font-semibold block text-[11px]">Email liên hệ:</span>
+                    <span className="font-mono text-foreground font-semibold">{selectedDetailItem.email}</span>
+                  </div>
+                )}
+                <div>
+                  <span className="text-muted-foreground font-semibold block text-[11px]">ID thực thể:</span>
+                  <span className="font-mono text-foreground font-semibold">#{selectedDetailItem.id}</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 p-3 bg-muted/20 border border-border/30 rounded-xl">
+                <div>
+                  <span className="text-muted-foreground font-semibold block text-[11px]">Thời điểm chuyển vào thùng rác:</span>
+                  <span className="font-mono text-foreground font-semibold flex items-center gap-1 mt-0.5">
+                    <Calendar className="h-3.5 w-3.5 text-primary" />
+                    {selectedDetailItem.deletedAt ? new Date(selectedDetailItem.deletedAt).toLocaleString("vi-VN") : "—"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground font-semibold block text-[11px]">Số ngày đã nằm trong thùng rác:</span>
+                  <span className="font-bold text-foreground flex items-center gap-1 mt-0.5">
+                    <Clock className="h-3.5 w-3.5 text-primary" />
+                    {selectedDetailItem.daysInTrash || 0} ngày
+                  </span>
+                </div>
+              </div>
+
+              {selectedDetailItem.hasChildRecords && selectedDetailItem.childRecordCounts && Object.keys(selectedDetailItem.childRecordCounts).length > 0 && (
+                <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl space-y-2 text-amber-800 dark:text-amber-300">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold flex items-center gap-1 text-[11px]">
+                      <Database className="h-3.5 w-3.5 text-amber-600" /> Bản ghi phụ thuộc (Foreign Keys):
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleOpenChildRecordDetails(selectedDetailItem)}
+                      className="h-6 text-[10px] font-bold gap-1 border-amber-500/40 text-amber-800 dark:text-amber-300 hover:bg-amber-500/20 cursor-pointer"
+                    >
+                      <Eye className="h-3 w-3" /> Xem danh sách chi tiết các dòng bản ghi
+                    </Button>
+                  </div>
+                  <ul className="list-disc pl-4 text-[11px] font-mono">
+                    {Object.entries(selectedDetailItem.childRecordCounts).map(([tbl, cnt]) => (
+                      <li key={tbl}>Bảng <strong>{tbl}</strong>: {cnt} bản ghi</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
-            <ul className="space-y-1.5 pl-4 list-disc text-xs font-mono font-bold text-foreground">
-              {blockedChildTables.map((t, idx) => (
-                <li key={idx}>{t}</li>
-              ))}
-            </ul>
-            <p className="text-[11px] text-muted-foreground">
-              Vui lòng xử lý xóa các bản ghi con hoặc ngắt liên kết FK trước khi xóa vĩnh viễn đối tượng này.
-            </p>
+          )}
+
+          <DialogFooter className="gap-2 pt-2 border-t border-border/40">
+            <Button variant="outline" onClick={() => setActiveModal("NONE")} className="font-bold text-xs">Đóng</Button>
+            {selectedDetailItem && (
+              <>
+                <Button
+                  onClick={() => {
+                    handleInitiateSingleRestore(selectedDetailItem);
+                  }}
+                  className="font-bold text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" /> Khôi phục bản ghi
+                </Button>
+                <Button
+                  onClick={() => {
+                    handleInitiateSingleHardDelete(selectedDetailItem);
+                  }}
+                  variant="destructive"
+                  className="font-bold text-xs gap-1"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Xóa vĩnh viễn
+                </Button>
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 2. Single Restore Dialog */}
+      <Dialog open={activeModal === "SINGLE_RESTORE"} onOpenChange={() => setActiveModal("NONE")}>
+        <DialogContent className="max-w-md w-full rounded-2xl bg-card p-6">
+          <DialogHeader>
+            <div className="flex items-center gap-3 text-emerald-600 mb-1">
+              <RotateCcw className="h-7 w-7 shrink-0" />
+              <DialogTitle className="text-lg font-black">Xác nhận khôi phục bản ghi</DialogTitle>
+            </div>
+            <DialogDescription className="text-xs text-muted-foreground leading-relaxed mt-1">
+              Bạn có chắc chắn muốn khôi phục bản ghi <strong>"{targetItem?.name}"</strong> ({targetItem?.code}) trở lại hệ thống?
+              <br />
+              Dữ liệu sẽ được khôi phục chính xác về trạng thái tài khoản ban đầu.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 pt-2">
+            <Button variant="outline" onClick={() => setActiveModal("NONE")} className="font-bold text-xs">Hủy bỏ</Button>
+            <Button onClick={handleConfirmSingleRestore} className="font-bold text-xs bg-emerald-600 hover:bg-emerald-700 text-white">Khôi phục ngay</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 3. Bulk Restore Dialog */}
+      <Dialog open={activeModal === "BULK_RESTORE"} onOpenChange={() => setActiveModal("NONE")}>
+        <DialogContent className="max-w-md w-full rounded-2xl bg-card p-6">
+          <DialogHeader>
+            <div className="flex items-center gap-3 text-emerald-600 mb-1">
+              <RotateCcw className="h-7 w-7 shrink-0" />
+              <DialogTitle className="text-lg font-black">Xác nhận khôi phục hàng loạt</DialogTitle>
+            </div>
+            <DialogDescription className="text-xs text-muted-foreground leading-relaxed mt-1">
+              Bạn đang chuẩn bị khôi phục <strong>{selectedIds.length} bản ghi</strong> đã chọn trở lại hệ thống.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 pt-2">
+            <Button variant="outline" onClick={() => setActiveModal("NONE")} className="font-bold text-xs">Hủy bỏ</Button>
+            <Button onClick={handleConfirmBulkRestore} className="font-bold text-xs bg-emerald-600 hover:bg-emerald-700 text-white">Đồng ý khôi phục ({selectedIds.length})</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 4. Single Hard Delete Strong Confirmation Modal (with Cascade FK Warning) */}
+      <Dialog open={activeModal === "SINGLE_HARD_DELETE"} onOpenChange={() => setActiveModal("NONE")}>
+        <DialogContent className="max-w-md w-full rounded-2xl bg-card p-6 border-red-500/30">
+          <DialogHeader>
+            <div className="flex items-center gap-3 text-red-600 mb-1">
+              <Trash2 className="h-8 w-8 shrink-0" />
+              <DialogTitle className="text-lg font-black">Cảnh báo XÓA CỨNG VĨNH VIỄN</DialogTitle>
+            </div>
+            <DialogDescription className="text-xs text-muted-foreground leading-relaxed mt-1">
+              Hành động này sẽ thực thi lệnh <code>DELETE</code> trực tiếp vào CSDL cho bản ghi <strong>"{targetItem?.name}"</strong> ({targetItem?.code}).
+              <strong className="text-red-600 font-bold block mt-1">CẢNH BÁO: Không thể khôi phục dữ liệu sau khi xóa!</strong>
+            </DialogDescription>
+          </DialogHeader>
+
+          {totalFkChildRecords > 0 && (
+            <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl space-y-1.5 text-xs text-amber-800 dark:text-amber-300">
+              <div className="flex items-center justify-between gap-1.5 font-bold">
+                <div className="flex items-center gap-1.5">
+                  <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                  <span>Phát hiện {totalFkChildRecords} bản ghi con phụ thuộc:</span>
+                </div>
+                {targetItem && (
+                  <button
+                    onClick={() => handleOpenChildRecordDetails(targetItem)}
+                    className="text-[10px] font-bold text-primary hover:underline flex items-center gap-0.5 cursor-pointer"
+                  >
+                    Xem chi tiết bản ghi con &rarr;
+                  </button>
+                )}
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Khi bạn chấp nhận xóa vĩnh viễn đối tượng này, hệ thống sẽ <strong>XÓA SẠCH</strong> tất cả các bản ghi con ở các bảng sau:
+              </p>
+              <ul className="list-disc pl-4 text-[11px] font-mono space-y-0.5">
+                {Object.entries(fkDetails).map(([tbl, cnt]) => (
+                  <li key={tbl}>Bảng <strong>{tbl}</strong>: {cnt} bản ghi</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="space-y-4 my-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-foreground">
+                Nhập mã <code className="bg-muted px-1.5 py-0.5 rounded text-red-600 font-mono">{targetItem?.code || "XOACUNG"}</code> để xác nhận:
+              </Label>
+              <Input
+                type="text"
+                placeholder="Nhập mã xác nhận..."
+                value={confirmInput}
+                onChange={(e) => setConfirmInput(e.target.value)}
+                className="h-9 text-xs border border-border/50 font-mono"
+              />
+            </div>
+
+            <label className="flex items-center gap-2 cursor-pointer text-xs select-none font-bold text-red-600">
+              <Checkbox checked={disclaimerChecked} onCheckedChange={(c) => setDisclaimerChecked(!!c)} className="h-4 w-4 rounded" />
+              <span>Tôi hiểu và chấp nhận xóa sạch toàn bộ bản ghi này và các bản ghi phụ thuộc.</span>
+            </label>
           </div>
 
-          <DialogFooter className="pt-2">
-            <Button onClick={() => setBlockedChildModalOpen(false)} className="w-full font-bold bg-muted text-foreground hover:bg-muted/80 text-xs">
-              Tôi Đã Hiểu (Đóng Modal)
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setActiveModal("NONE")} className="font-bold text-xs">Hủy bỏ</Button>
+            <Button
+              disabled={!isSingleHardDeleteValid}
+              onClick={handleConfirmSingleHardDelete}
+              variant="destructive"
+              className="font-bold text-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Chấp nhận xóa tất cả
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* FLOW 5: MODAL 2 — STRONG HARD DELETE CONFIRMATION MODAL */}
-      <Dialog open={strongConfirmModalOpen} onOpenChange={setStrongConfirmModalOpen}>
-        <DialogContent className="max-w-lg w-full rounded-2xl border-2 border-red-600 bg-card p-6 shadow-2xl">
+      {/* 5. Bulk Hard Delete Strong Confirmation Modal */}
+      <Dialog open={activeModal === "BULK_HARD_DELETE"} onOpenChange={() => setActiveModal("NONE")}>
+        <DialogContent className="max-w-md w-full rounded-2xl bg-card p-6">
           <DialogHeader>
             <div className="flex items-center gap-3 text-red-600 mb-1">
-              <AlertTriangle className="h-8 w-8 shrink-0" />
-              <DialogTitle className="text-xl font-black">XÁC NHẬN XÓA VĨNH VIỄN (HARD DELETE)</DialogTitle>
+              <ShieldAlert className="h-8 w-8 shrink-0" />
+              <DialogTitle className="text-lg font-black">XÁC NHẬN XÓA CỨNG HÀNG LOẠT</DialogTitle>
             </div>
-            <DialogDescription className="text-xs text-foreground font-bold">
-              CẢNH BÁO NGHIÊM TRỌNG: Thao tác này sẽ thực hiện lệnh <strong className="text-red-600">DELETE THẬT</strong> khỏi CSDL và KHÔNG THỂ KHÔI PHỤC!
+            <DialogDescription className="text-xs text-muted-foreground leading-relaxed mt-1">
+              Bạn đang chuẩn bị xóa vĩnh viễn <strong>{selectedIds.length} bản ghi</strong> khỏi cơ sở dữ liệu (bao gồm tất cả bản ghi con phụ thuộc).
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-2 text-xs">
-            <div className="p-3 rounded-xl bg-red-600/10 border border-red-600/30 text-red-600 font-bold space-y-1">
-              {isBulkDelete ? (
-                <div>Bạn đang yêu cầu xóa cứng <strong className="underline">{selectedIds.length} bản ghi</strong> đã chọn khỏi hệ thống CSDL!</div>
-              ) : itemToHardDelete ? (
-                <div>Bạn đang yêu cầu xóa cứng bản ghi: <strong className="underline">{itemToHardDelete.name}</strong> ({itemToHardDelete.code})</div>
-              ) : null}
-              <div>Hành động này sẽ xóa hoàn toàn dữ liệu và ghi audit_log <strong>action=HARD_DELETE</strong>.</div>
-            </div>
-
-            <div>
+          <div className="space-y-4 my-2">
+            <div className="space-y-1.5">
               <Label className="text-xs font-bold text-foreground">
-                Để xác nhận, vui lòng gõ mã code <strong className="text-red-600 font-mono">{isBulkDelete ? "DELETE" : itemToHardDelete?.code}</strong> vào ô bên dưới:
+                Nhập chữ <code className="bg-muted px-1.5 py-0.5 rounded text-red-600 font-mono">XOACUNG</code> để xác nhận:
               </Label>
               <Input
-                value={confirmInputText}
-                onChange={e => setConfirmInputText(e.target.value)}
-                placeholder={isBulkDelete ? "Gõ DELETE để xác nhận" : `Gõ ${itemToHardDelete?.code}`}
-                className="mt-1 font-mono font-bold text-xs border-red-500/40 focus-visible:ring-red-500"
+                type="text"
+                placeholder="Nhập XOACUNG..."
+                value={confirmInput}
+                onChange={(e) => setConfirmInput(e.target.value)}
+                className="h-9 text-xs border border-border/50 font-mono"
               />
             </div>
 
-            <label className="flex items-center gap-2 p-3 rounded-xl border border-red-500/30 bg-red-500/5 cursor-pointer font-bold text-red-600">
-              <Checkbox
-                checked={understandCheckbox}
-                onCheckedChange={checked => setUnderstandCheckbox(!!checked)}
-                className="border-red-500"
-              />
-              <span>Tôi hiểu thao tác xóa cứng này không thể hoàn tác dưới bất kỳ hình thức nào.</span>
+            <label className="flex items-center gap-2 cursor-pointer text-xs select-none font-bold text-red-600">
+              <Checkbox checked={disclaimerChecked} onCheckedChange={(c) => setDisclaimerChecked(!!c)} className="h-4 w-4 rounded" />
+              <span>Tôi đồng ý chịu trách nhiệm việc hủy hoàn toàn các dữ liệu này.</span>
             </label>
           </div>
 
-          <DialogFooter className="gap-2 pt-2">
-            <Button variant="outline" onClick={() => setStrongConfirmModalOpen(false)} className="font-bold text-xs">
-              Hủy bỏ
-            </Button>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setActiveModal("NONE")} className="font-bold text-xs">Hủy bỏ</Button>
             <Button
-              disabled={!canSubmitHardDelete || deletingHard}
-              onClick={handleExecuteHardDeleteSubmit}
+              disabled={!isBulkHardDeleteValid}
+              onClick={handleConfirmBulkHardDelete}
               variant="destructive"
-              className="font-bold text-xs gap-1.5"
+              className="font-bold text-xs cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {deletingHard ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-              <span>Xác nhận XÓA VĨNH VIỄN</span>
+              Xóa vĩnh viễn hàng loạt
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 6. Child Record Details Inspection Modal */}
+      <Dialog open={childDetailModalOpen} onOpenChange={setChildDetailModalOpen}>
+        <DialogContent className="max-w-2xl w-full rounded-2xl bg-card p-6 border-border max-h-[85vh] overflow-y-auto">
+          <DialogHeader className="border-b border-border/40 pb-3">
+            <div className="flex items-center gap-2 text-primary">
+              <Database className="h-6 w-6 shrink-0 text-amber-600" />
+              <DialogTitle className="text-lg font-black tracking-tight">Chi tiết các Bản ghi con Phụ thuộc (FK)</DialogTitle>
+            </div>
+            <DialogDescription className="text-xs text-muted-foreground mt-1">
+              Bản ghi gốc: <strong>"{selectedChildItem?.name}"</strong> ({selectedChildItem?.code || `#${selectedChildItem?.id}`})
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 my-2 relative">
+            {childDetailLoading && (
+              <div className="py-12 flex flex-col items-center justify-center gap-2 text-muted-foreground">
+                <Loader2 className="h-7 w-7 animate-spin text-primary" />
+                <span className="text-xs font-semibold">Đang truy vấn dữ liệu từ các bảng phụ thuộc...</span>
+              </div>
+            )}
+
+            {!childDetailLoading && childDetailsList.length === 0 && (
+              <div className="py-12 text-center text-muted-foreground text-xs flex flex-col items-center justify-center gap-2">
+                <Info className="h-8 w-8 text-muted-foreground/60" />
+                <span>Không có dữ liệu chi tiết bản ghi con nào được ghi nhận.</span>
+              </div>
+            )}
+
+            {!childDetailLoading && childDetailsList.map((group) => (
+              <div key={group.tableName} className="border border-border/40 rounded-xl overflow-hidden bg-card">
+                <div className="bg-muted/30 px-4 py-2 border-b border-border/30 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-xs text-foreground">{group.displayName}</span>
+                    <span className="font-mono text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                      `{group.tableName}`
+                    </span>
+                  </div>
+                  <Badge variant="outline" className="font-bold text-[10px] bg-amber-500/10 text-amber-600 border-amber-500/20">
+                    {group.count} bản ghi
+                  </Badge>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <Table className="text-xs">
+                    <TableHeader className="bg-muted/10">
+                      <TableRow>
+                        {group.items.length > 0 && Object.keys(group.items[0]).map((colHeader) => (
+                          <TableHead key={colHeader} className="py-2 px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                            {colHeader}
+                          </TableHead>
+                        ))}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {group.items.map((row, rIdx) => (
+                        <TableRow key={rIdx} className="hover:bg-muted/10 border-border/20">
+                          {Object.values(row).map((val, cIdx) => (
+                            <TableCell key={cIdx} className="py-2 px-3 font-mono text-[11px] text-foreground">
+                              {String(val)}
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <DialogFooter className="pt-2 border-t border-border/40">
+            <Button variant="outline" onClick={() => setChildDetailModalOpen(false)} className="font-bold text-xs w-full">
+              Đóng cửa sổ
             </Button>
           </DialogFooter>
         </DialogContent>

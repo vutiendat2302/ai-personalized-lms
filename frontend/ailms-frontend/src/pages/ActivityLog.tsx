@@ -48,8 +48,17 @@ import {
   Download,
   ChevronDown,
   CheckCircle2,
-  X
+  X,
+  Trash2
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter
+} from "@/components/ui/dialog";
 
 const ENTITY_TYPE_OPTIONS = [
   "USER",
@@ -174,9 +183,44 @@ export const ActivityLog: React.FC = () => {
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedLog, setSelectedLog] = useState<AuditLogResponse | null>(null);
 
+  // Deletion states
+  const [logToDelete, setLogToDelete] = useState<AuditLogResponse | null>(null);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+
   const handleOpenDetailModal = (log: AuditLogResponse) => {
     setSelectedLog(log);
     setDetailModalOpen(true);
+  };
+
+  const handleDeleteLog = async (logId: string) => {
+    try {
+      const res = await auditLogApi.deleteAuditLog(logId);
+      if (res.data.success) {
+        showBanner("Xóa bản ghi nhật ký kiểm toán thành công!");
+        fetchAdminLogs();
+      } else {
+        showBanner(res.data.message || "Lỗi xóa bản ghi nhật ký", true);
+      }
+    } catch (err: any) {
+      showBanner(err.message || "Lỗi xóa bản ghi nhật ký", true);
+    }
+  };
+
+  const handleBulkDeleteLogs = async () => {
+    if (selectedLogIds.length === 0) return;
+    try {
+      const res = await auditLogApi.bulkDeleteAuditLogs(selectedLogIds);
+      if (res.data.success) {
+        showBanner(`Xóa thành công ${selectedLogIds.length} bản ghi nhật ký kiểm toán!`);
+        setSelectedLogIds([]);
+        fetchAdminLogs();
+      } else {
+        showBanner(res.data.message || "Lỗi xóa hàng loạt nhật ký", true);
+      }
+    } catch (err: any) {
+      showBanner(err.message || "Lỗi xóa hàng loạt nhật ký", true);
+    }
   };
 
   // Synchronize jump page input state
@@ -701,10 +745,24 @@ export const ActivityLog: React.FC = () => {
                   <Button
                     onClick={handleExportSelectedCSV}
                     size="sm"
-                    className="h-7 text-xs font-semibold gap-1.5 bg-primary text-primary-foreground rounded-lg cursor-pointer shadow-xs"
+                    variant="outline"
+                    className="h-7 text-xs font-semibold gap-1.5 border-primary/30 text-primary hover:bg-primary/10 rounded-lg cursor-pointer shadow-xs"
                   >
                     <Download className="h-3.5 w-3.5" /> Xuất CSV đã chọn ({selectedLogIds.length})
                   </Button>
+                  {isAdmin && (
+                    <Button
+                      onClick={() => {
+                        setIsBulkDeleting(true);
+                        setDeleteConfirmOpen(true);
+                      }}
+                      size="sm"
+                      variant="destructive"
+                      className="h-7 text-xs font-semibold gap-1.5 rounded-lg cursor-pointer shadow-xs"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" /> Xóa vĩnh viễn ({selectedLogIds.length})
+                    </Button>
+                  )}
                 </div>
               </div>
             )}
@@ -810,15 +868,32 @@ export const ActivityLog: React.FC = () => {
 
                         {/* View action cell */}
                         <TableCell className="py-3 px-4 text-center">
-                          <Button
-                            onClick={() => handleOpenDetailModal(log)}
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-primary hover:bg-primary/10 cursor-pointer"
-                            title="Xem chi tiết thay đổi"
-                          >
-                            <Eye className="h-4.5 w-4.5" />
-                          </Button>
+                          <div className="flex items-center justify-center gap-1.5">
+                            <Button
+                              onClick={() => handleOpenDetailModal(log)}
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-primary hover:bg-primary/10 cursor-pointer"
+                              title="Xem chi tiết thay đổi"
+                            >
+                              <Eye className="h-4.5 w-4.5" />
+                            </Button>
+                            {isAdmin && (
+                              <Button
+                                onClick={() => {
+                                  setLogToDelete(log);
+                                  setIsBulkDeleting(false);
+                                  setDeleteConfirmOpen(true);
+                                }}
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-destructive hover:bg-destructive/10 cursor-pointer"
+                                title="Xóa bản ghi nhật ký"
+                              >
+                                <Trash2 className="h-4.5 w-4.5" />
+                              </Button>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))
@@ -993,6 +1068,48 @@ export const ActivityLog: React.FC = () => {
         onClose={() => setDetailModalOpen(false)}
         log={selectedLog}
       />
+
+      {/* Confirm Delete Dialog */}
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <DialogContent className="max-w-md w-full rounded-2xl bg-card p-6">
+          <DialogHeader>
+            <div className="flex items-center gap-3 text-red-600 mb-1">
+              <Trash2 className="h-7 w-7 shrink-0" />
+              <DialogTitle className="text-lg font-black">Xác nhận xóa Nhật ký Kiểm toán</DialogTitle>
+            </div>
+            <DialogDescription className="text-xs text-muted-foreground leading-relaxed mt-1">
+              {isBulkDeleting
+                ? `Bạn có chắc chắn muốn xóa vĩnh viễn ${selectedLogIds.length} bản ghi nhật ký đã chọn khỏi hệ thống?`
+                : `Bạn có chắc chắn muốn xóa vĩnh viễn bản ghi nhật ký #${logToDelete?.id} khỏi hệ thống?`}
+              <br />
+              <strong className="text-red-500 font-bold mt-1 block">CẢNH BÁO: Hành động này sẽ thực hiện DELETE cứng trong cơ sở dữ liệu và không thể khôi phục!</strong>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 pt-2">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteConfirmOpen(false)}
+              className="font-bold text-xs"
+            >
+              Hủy bỏ
+            </Button>
+            <Button
+              onClick={() => {
+                if (isBulkDeleting) {
+                  handleBulkDeleteLogs();
+                } else if (logToDelete) {
+                  handleDeleteLog(String(logToDelete.id));
+                }
+                setDeleteConfirmOpen(false);
+              }}
+              variant="destructive"
+              className="font-bold text-xs"
+            >
+              Đồng ý xóa
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );

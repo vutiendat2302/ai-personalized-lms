@@ -194,4 +194,55 @@ public class AuditLogService implements IAuditLogService{
                 .tableFromList(headers, logs, extractors, "Không có dữ liệu nhật ký")
                 .build();
     }
+
+    @Transactional(readOnly = true)
+    @Override
+    public byte[] exportSingleAuditLogToCsv(Long id) {
+        log.info("Xuất file CSV chi tiết cho audit log ID: {}", id);
+        AuditLogEntity entity = auditLogRepository.findById(id)
+                .orElseThrow(() -> ResourceNotFoundException.of("AuditLog", id));
+        AuditLogResponse logResponse = auditLogMapper.toResponse(entity);
+
+        List<String> headers = List.of(
+                "ID", "Thời gian", "Tài khoản tác động", "Email", "Hành động",
+                "Thực thể", "ID Thực thể", "Địa chỉ IP", "User Agent", "Giá trị cũ", "Giá trị mới"
+        );
+
+        List<java.util.function.Function<AuditLogResponse, Object>> extractors = List.of(
+                AuditLogResponse::getId,
+                l -> l.getOccurredAt() != null ? l.getOccurredAt().toString() : "",
+                l -> l.getUserFullName() != null ? l.getUserFullName() : "N/A",
+                l -> l.getUserEmail() != null ? l.getUserEmail() : "N/A",
+                AuditLogResponse::getAction,
+                AuditLogResponse::getEntityType,
+                AuditLogResponse::getEntityId,
+                AuditLogResponse::getIpAddress,
+                AuditLogResponse::getUserAgent,
+                l -> l.getOldValue() != null ? l.getOldValue() : "",
+                l -> l.getNewValue() != null ? l.getNewValue() : ""
+        );
+
+        return CsvBuilder.create()
+                .tableFromList(headers, List.of(logResponse), extractors, "Không có dữ liệu nhật ký")
+                .build();
+    }
+
+    @Transactional
+    @Override
+    public void deleteAuditLog(Long id) {
+        log.info("Deleting audit log ID: {}", id);
+        if (!auditLogRepository.existsById(id)) {
+            throw ResourceNotFoundException.of("AuditLog", id);
+        }
+        auditLogRepository.deleteById(id);
+    }
+
+    @Transactional
+    @Override
+    public void bulkDeleteAuditLogs(List<Long> ids) {
+        log.info("Bulk deleting audit logs: {}", ids);
+        if (ids != null) {
+            auditLogRepository.deleteAllById(ids);
+        }
+    }
 }

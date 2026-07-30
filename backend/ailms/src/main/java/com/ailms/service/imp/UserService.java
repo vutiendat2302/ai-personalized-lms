@@ -1,4 +1,5 @@
 package com.ailms.service.imp;
+import com.ailms.common.converter.SimpleJsonWriter;
 import com.ailms.common.util.CsvBuilder;
 import com.ailms.common.util.CsvExport;
 import com.ailms.event.AuditLogEvent;
@@ -166,12 +167,12 @@ public class UserService implements IUserService {
         UserEntity user = userRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of("User", id));
 
+        String oldState = SimpleJsonWriter.toJson(user);
         if (user.getStatus() == UserStatusEnum.DELETED) {
             return;
         }
 
-        UserEntity oldState = userMapper.cloneUser(user);
-
+        user.setStatusBeforeDelete(user.getStatus());
         user.setStatus(UserStatusEnum.DELETED);
         userRepository.save(user);
 
@@ -349,6 +350,7 @@ public class UserService implements IUserService {
 
             try {
                 UserEntity oldState = userMapper.cloneUser(user);
+                user.setStatusBeforeDelete(user.getStatus());
                 user.setStatus(UserStatusEnum.DELETED);
                 userRepository.save(user);
 

@@ -23,6 +23,7 @@ public interface UserMapper {
     @Mapping(target = "passwordHash", ignore = true)
     @Mapping(target = "attributes", ignore = true)
     @Mapping(target = "lastLoginAt", ignore = true)
+    @Mapping(target = "statusBeforeDelete", ignore = true)
     UserEntity toUserEntity(CreateUserRequest request);
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
@@ -36,6 +37,7 @@ public interface UserMapper {
     @Mapping(target = "passwordHash", ignore = true)
     @Mapping(target = "attributes", ignore = true)
     @Mapping(target = "lastLoginAt", ignore = true)
+    @Mapping(target = "statusBeforeDelete", ignore = true)
     void updateUserEntity(@MappingTarget UserEntity userEntity, UpdateUserRequest request);
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
@@ -50,6 +52,7 @@ public interface UserMapper {
     @Mapping(target = "attributes", ignore = true)
     @Mapping(target = "lastLoginAt", ignore = true)
     @Mapping(target = "status", ignore = true)
+    @Mapping(target = "statusBeforeDelete", ignore = true)
     void updateUserProfile(@MappingTarget UserEntity userEntity, UpdateProfileRequest request);
 
     UserEntity cloneUser(UserEntity oldUser);

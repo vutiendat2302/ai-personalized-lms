@@ -57,4 +57,10 @@ public interface IAuditLogService {
     PageResponse<AuditLogResponse> getAuditLogsByEntity(String entityType, Long entityId, AuditLogSearchRequest request);
 
     byte[] exportAuditLogs(AuditLogSearchRequest request);
+
+    byte[] exportSingleAuditLogToCsv(Long id);
+
+    void deleteAuditLog(Long id);
+
+    void bulkDeleteAuditLogs(List<Long> ids);
 }

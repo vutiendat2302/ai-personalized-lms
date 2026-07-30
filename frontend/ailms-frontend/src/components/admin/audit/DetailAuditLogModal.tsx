@@ -23,7 +23,8 @@ import {
   Loader2,
   AlertCircle,
   Copy,
-  Check
+  Check,
+  Download
 } from "lucide-react";
 import { auditLogApi, type AuditLogResponse } from "@/api/audit/auditLogApi";
 
@@ -242,6 +243,22 @@ export const DetailAuditLogModal: React.FC<DetailAuditLogModalProps> = ({
     }
   };
 
+  const handleDownloadLogDetail = async () => {
+    try {
+      const response = await auditLogApi.exportSingleAuditLogToCsv(currentLog.id);
+      const blob = new Blob([response.data], { type: "text/csv;charset=utf-8;" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `audit_log_${currentLog.id}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode?.removeChild(link);
+    } catch (err) {
+      console.error("Failed to download CSV detail", err);
+    }
+  };
+
   const renderAffectedObject = () => {
     const entityType = currentLog.entityType || "N/A";
     const entityId = currentLog.entityId || "—";
@@ -349,6 +366,15 @@ export const DetailAuditLogModal: React.FC<DetailAuditLogModalProps> = ({
                 <Button
                   size="sm"
                   variant="outline"
+                  onClick={handleDownloadLogDetail}
+                  className="font-bold text-xs gap-1.5 rounded-xl cursor-pointer border-primary/30 text-primary hover:bg-primary/10"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  <span>Tải chi tiết</span>
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
                   onClick={onClose}
                   className="font-bold text-xs gap-1.5 rounded-xl cursor-pointer"
                 >
@@ -403,6 +429,53 @@ export const DetailAuditLogModal: React.FC<DetailAuditLogModalProps> = ({
               </div>
             </div>
 
+            {/* SECTION 3: NETWORK & DEVICE ACCESS */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              {/* IP Address Card */}
+              <div className="p-5 rounded-2xl bg-muted/20 border border-border/30 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-extrabold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                    <Globe className="h-4 w-4 text-primary" />
+                    <span>Địa chỉ IP</span>
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => copyToClipboard(currentLog.ipAddress, "ip")}
+                    className="h-7 px-2 text-[10px] font-bold text-primary hover:bg-primary/10 gap-1 cursor-pointer"
+                  >
+                    {copiedIp ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                    <span>{copiedIp ? "Đã sao chép" : "Sao chép"}</span>
+                  </Button>
+                </div>
+                <div className="font-mono text-base font-extrabold text-foreground bg-background p-3 rounded-xl border border-border/20 select-all">
+                  {currentLog.ipAddress || "—"}
+                </div>
+              </div>
+
+              {/* User Agent Card */}
+              <div className="p-5 rounded-2xl bg-muted/20 border border-border/30 space-y-3 md:col-span-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-extrabold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                    <Laptop className="h-4 w-4 text-primary" />
+                    <span>Trình duyệt & Thiết bị (User Agent)</span>
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => copyToClipboard(currentLog.userAgent, "ua")}
+                    className="h-7 px-2 text-[10px] font-bold text-primary hover:bg-primary/10 gap-1 cursor-pointer"
+                  >
+                    {copiedUa ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                    <span>{copiedUa ? "Đã sao chép" : "Sao chép User Agent"}</span>
+                  </Button>
+                </div>
+                <div className="font-mono text-xs text-foreground bg-background p-3.5 rounded-xl border border-border/20 break-all select-all max-h-36 overflow-y-auto leading-relaxed">
+                  {currentLog.userAgent || "—"}
+                </div>
+              </div>
+            </div>
+
             {/* SECTION 2: JSON DIFF / VALUES COMPARISON */}
             <div className="space-y-4">
               <div className="p-4 rounded-xl bg-muted/20 border border-border/30 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -433,7 +506,7 @@ export const DetailAuditLogModal: React.FC<DetailAuditLogModalProps> = ({
               </div>
 
               {!hasChanges ? (
-                <div className="min-h-[120px] flex flex-col items-center justify-center text-center text-xs text-muted-foreground gap-2 py-6 bg-muted/10 rounded-2xl border border-dashed border-border/40">
+                <div className="min-h-30 flex flex-col items-center justify-center text-center text-xs text-muted-foreground gap-2 py-6 bg-muted/10 rounded-2xl border border-dashed border-border/40">
                   <Info className="h-6 w-6 text-muted-foreground/50 shrink-0" />
                   <div>
                     <p className="font-bold text-foreground text-xs">Không có dữ liệu thay đổi cấu hình</p>
@@ -504,53 +577,6 @@ export const DetailAuditLogModal: React.FC<DetailAuditLogModalProps> = ({
                   </div>
                 </div>
               )}
-            </div>
-
-            {/* SECTION 3: NETWORK & DEVICE ACCESS */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-              {/* IP Address Card */}
-              <div className="p-5 rounded-2xl bg-muted/20 border border-border/30 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                    <Globe className="h-4 w-4 text-primary" />
-                    <span>Địa chỉ IP</span>
-                  </span>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => copyToClipboard(currentLog.ipAddress, "ip")}
-                    className="h-7 px-2 text-[10px] font-bold text-primary hover:bg-primary/10 gap-1 cursor-pointer"
-                  >
-                    {copiedIp ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
-                    <span>{copiedIp ? "Đã sao chép" : "Sao chép"}</span>
-                  </Button>
-                </div>
-                <div className="font-mono text-base font-extrabold text-foreground bg-background p-3 rounded-xl border border-border/20 select-all">
-                  {currentLog.ipAddress || "—"}
-                </div>
-              </div>
-
-              {/* User Agent Card */}
-              <div className="p-5 rounded-2xl bg-muted/20 border border-border/30 space-y-3 md:col-span-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                    <Laptop className="h-4 w-4 text-primary" />
-                    <span>Trình duyệt & Thiết bị (User Agent)</span>
-                  </span>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => copyToClipboard(currentLog.userAgent, "ua")}
-                    className="h-7 px-2 text-[10px] font-bold text-primary hover:bg-primary/10 gap-1 cursor-pointer"
-                  >
-                    {copiedUa ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
-                    <span>{copiedUa ? "Đã sao chép" : "Sao chép User Agent"}</span>
-                  </Button>
-                </div>
-                <div className="font-mono text-xs text-foreground bg-background p-3.5 rounded-xl border border-border/20 break-all select-all max-h-36 overflow-y-auto leading-relaxed">
-                  {currentLog.userAgent || "—"}
-                </div>
-              </div>
             </div>
 
           </div>

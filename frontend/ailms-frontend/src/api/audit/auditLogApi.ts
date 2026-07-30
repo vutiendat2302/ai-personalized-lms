@@ -57,4 +57,13 @@ export const auditLogApi = {
     sort?: string;
   }) =>
     httpClient.get("/v1/audit-log/export", { params, responseType: "blob" }),
+
+  deleteAuditLog: (id: string | number) =>
+    httpClient.delete<ApiResponse<void>>(`/v1/audit-log/${id}`),
+
+  bulkDeleteAuditLogs: (ids: (string | number)[]) =>
+    httpClient.post<ApiResponse<void>>("/v1/audit-log/bulk-delete", ids.map(id => String(id))),
+
+  exportSingleAuditLogToCsv: (id: string | number) =>
+    httpClient.get(`/v1/audit-log/${id}/export-csv`, { responseType: "blob" }),
 };
