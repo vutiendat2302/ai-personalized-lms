@@ -1,8 +1,11 @@
 package com.ailms.security;
 
-import com.ailms.exception.InvalidTokenException;
 import com.ailms.exception.TokenExpiredException;
-import io.jsonwebtoken.*;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.MalformedJwtException;
+import io.jsonwebtoken.UnsupportedJwtException;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import jakarta.validation.constraints.NotBlank;
@@ -22,55 +25,36 @@ import java.util.stream.Collectors;
 public class JwtUtils {
 
     /**
-     * Đăng nhập
-     *     │
-     *     ▼
-     * Username + Password
-     *     │
-     *     ▼
-     * Spring Security xác thực
-     *     │
-     *     ▼
-     * Authentication
-     *     │
-     *     ▼
-     * JwtUtils.generateJwtToken()
-     *     │
-     *     ▼
-     * JWT
-     *     │
-     *     ▼
-     * Client lưu JWT
-     *     │
-     *     ▼
-     * Authorization: Bearer xxxxx
-     *     │
-     *     ▼
-     * JwtAuthFilter
-     *     │
-     *     ▼
-     * JwtUtils.validateJwtToken()
-     *     │
-     *     ▼
-     * JwtUtils.getUserNameFromJwtToken()
+     * Luồng đăng nhập cơ bản:
+     * 1. Client gửi username và password.
+     * 2. Spring Security xác thực và tạo Authentication.
+     * 3. JwtUtils sinh access token hoặc refresh token.
+     * 4. Client gửi token qua header Authorization: Bearer ...
+     * 5. JwtAuthFilter validate token và lấy username từ claims.
      */
 
-    @Value("${app.jwt.secret}") // HS256 token
+    @Value("${app.jwt.secret}")
     private String jwtSecret;
 
-    @Value("${app.jwt.expiration-ms}") // access token
+    @Value("${app.jwt.expiration-ms}")
     private int jwtExpirationMs;
 
-    private final static int EXPIRATION_PASSWORD_TOKEN = 86400000;
+    private static final int EXPIRATION_PASSWORD_TOKEN = 86400000;
 
-    @Value("${app.jwt.refresh-expiration-ms}") // refresh token
+    @Value("${app.jwt.refresh-expiration-ms}")
     private int refreshExpirationMs;
 
-    private SecretKey key() { // create secret key from jwtSecret (access token)
+    /**
+     * Tạo khóa ký HMAC từ secret dạng Base64 trong cấu hình.
+     */
+    private SecretKey key() {
         return Keys.hmacShaKeyFor(Decoders.BASE64.decode(jwtSecret));
     }
 
-    public String generateRefreshToken(String username) { // refresh token)
+    /**
+     * Sinh refresh token để cấp lại access token khi access token hết hạn.
+     */
+    public String generateRefreshToken(String username) {
         return Jwts.builder()
                 .subject(username)
                 .id(UUID.randomUUID().toString())
@@ -80,11 +64,12 @@ public class JwtUtils {
                 .compact();
     }
 
+    /**
+     * Sinh access token sau khi người dùng đăng nhập thành công.
+     */
     public String generateJwtToken(Authentication authentication) {
-
         CustomUserDetails userPrincipal = (CustomUserDetails) authentication.getPrincipal();
 
-        // Optional: Add roles/permissions directly to JWT claims if needed for frontend
         String authorities = userPrincipal.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
                 .collect(Collectors.joining(","));
@@ -93,13 +78,16 @@ public class JwtUtils {
                 .subject(userPrincipal.getUsername())
                 .id(UUID.randomUUID().toString())
                 .claim("id", userPrincipal.getUser().getId())
-                .claim("authorities", authorities) // roles and permissions
+                .claim("authorities", authorities)
                 .issuedAt(new Date())
                 .expiration(new Date((new Date()).getTime() + jwtExpirationMs))
-                .signWith(key(), Jwts.SIG.HS256) // login with key or jwt 256 (access token)
+                .signWith(key(), Jwts.SIG.HS256)
                 .compact();
     }
 
+    /**
+     * Sinh token dùng một lần cho luồng thiết lập mật khẩu tài khoản được mời.
+     */
     public String generateSetPasswordToken(Long userId) {
         return Jwts.builder()
                 .subject(userId.toString())
@@ -107,32 +95,41 @@ public class JwtUtils {
                 .claim("type", "invite")
                 .issuedAt(new Date())
                 .expiration(new Date((new Date()).getTime() + EXPIRATION_PASSWORD_TOKEN))
-                .signWith(key(), Jwts.SIG.HS256) // login with key or jwt 256 (access token)
+                .signWith(key(), Jwts.SIG.HS256)
                 .compact();
     }
 
+    /**
+     * Lấy username từ subject của JWT.
+     */
     public String getUserNameFromJwtToken(String token) {
         return Jwts.parser().verifyWith(key()).build()
                 .parseSignedClaims(token).getPayload().getSubject();
     }
 
+    /**
+     * Lấy thời điểm token được phát hành.
+     */
     public Date getIssuedAtFromJwtToken(String token) {
         return Jwts.parser().verifyWith(key()).build()
                 .parseSignedClaims(token).getPayload().getIssuedAt();
     }
 
-    public boolean validateJwtToken(String authToken) { // check token
+    /**
+     * Kiểm tra token có hợp lệ, còn hạn và đúng chữ ký hay không.
+     */
+    public boolean validateJwtToken(String authToken) {
         try {
             Jwts.parser().verifyWith(key()).build().parseSignedClaims(authToken);
             return true;
-        } catch (MalformedJwtException e) { // ko dung jwt (token)
+        } catch (MalformedJwtException e) {
             log.error("Invalid JWT token: {}", e.getMessage());
-        } catch (ExpiredJwtException e) { // token het han (JJWT exception)
+        } catch (ExpiredJwtException e) {
             log.error("JWT token is expired: {}", e.getMessage());
             throw TokenExpiredException.of("Token", e.getMessage());
-        } catch (UnsupportedJwtException e) { // token khong ho tro
+        } catch (UnsupportedJwtException e) {
             log.error("JWT token is unsupported: {}", e.getMessage());
-        } catch (IllegalArgumentException e) { // token rong / claims rong
+        } catch (IllegalArgumentException e) {
             log.error("JWT claims string is empty: {}", e.getMessage());
         } catch (Exception e) {
             log.error("Cannot validate JWT token: {}", e.getMessage());
@@ -141,16 +138,17 @@ public class JwtUtils {
         return false;
     }
 
+    /**
+     * Lấy user id từ claim "id" của access token.
+     */
     public Long getUserIdFromJwtToken(String token) {
-        Claims claims = Jwts.parser()
-                .verifyWith(key())
-                .build()
-                .parseSignedClaims(token)
-                .getPayload();
-
+        Claims claims = getClaimsFromToken(token);
         return claims.get("id", Long.class);
     }
 
+    /**
+     * Parse và trả về toàn bộ claims của token.
+     */
     public Claims getClaimsFromToken(@NotBlank String token) {
         return Jwts.parser()
                 .verifyWith(key())
@@ -159,123 +157,25 @@ public class JwtUtils {
                 .getPayload();
     }
 
+    /**
+     * Parse subject của token sang Long, dùng cho token có subject là user id.
+     */
     public Long getSubjectAsLong(String token) {
-        return Long.parseLong(
-                getClaimsFromToken(token).getSubject()
-        );
+        return Long.parseLong(getClaimsFromToken(token).getSubject());
     }
 
-//    /** Lấy jti (JWT ID) từ token - dùng để tra/đánh dấu trong Redis denylist. */
-//    public String getJtiFromToken(String token) {
-//        return getClaimsFromToken(token).getId();
-//    }
-//
-//    /** Lấy thời gian còn lại (ms) tới khi token hết hạn - dùng làm TTL khi lưu vào Redis. */
-//    public long getRemainingValidityMs(String token) {
-//        Date expiration = getClaimsFromToken(token).getExpiration();
-//        return Math.max(0, expiration.getTime() - System.currentTimeMillis());
-//    }
-//
-//    private static final String USED_TOKEN_KEY_PREFIX = "auth:token:used:";
+    /**
+     * Lấy jti (JWT ID) để AuthService đánh dấu token đã dùng trong Redis.
+     */
+    public String getJtiFromToken(String token) {
+        return getClaimsFromToken(token).getId();
+    }
 
     /**
-     * Đánh dấu 1 token cụ thể (theo jti) đã được sử dụng - không cho dùng lại.
-     * TTL đặt bằng đúng thời gian còn lại của token, để entry tự hết hạn cùng lúc
-     * token hết hạn tự nhiên, tránh Redis phình to vô hạn theo thời gian.
+     * Lấy thời gian còn lại của token tính bằng milliseconds.
      */
-//    public void markTokenAsUsed(String jti, long ttlMillis) {
-//        if (jti == null || ttlMillis <= 0) {
-//            return;
-//        }
-//        redisTemplate.opsForValue().set(
-//                USED_TOKEN_KEY_PREFIX + jti,
-//                "1",
-//                Duration.ofMillis(ttlMillis));
-//    }
-//
-//    /** Kiểm tra 1 token (theo jti) đã từng được dùng/revoke hay chưa. */
-//    public boolean isTokenUsed(String jti) {
-//        if (jti == null) {
-//            return false;
-//        }
-//        return Boolean.TRUE.equals(redisTemplate.hasKey(USED_TOKEN_KEY_PREFIX + jti));
-//    }
-//
-//
-//// ============================================================================
-//// 3. AuthService.setPassword - check + đánh dấu single-use cho set-password token
-//// ============================================================================
-//
-//    @Transactional
-//    public void setPassword(SetPasswordRequest request) {
-//        if (!request.getPassword().equals(request.getConfirmPassword())) {
-//            throw new BadRequestException("Mật khẩu xác nhận không khớp.");
-//        }
-//
-//        if (!jwtUtils.validateJwtToken(request.getToken())) {
-//            throw new InvalidTokenException("Liên kết thiết lập mật khẩu không hợp lệ hoặc đã hết hạn.");
-//        }
-//
-//        String jti = jwtUtils.getJtiFromToken(request.getToken());
-//        if (tokenService.isTokenUsed(jti)) {
-//            throw new InvalidTokenException("Liên kết này đã được sử dụng, vui lòng yêu cầu liên kết mới.");
-//        }
-//
-//        Long userId = jwtUtils.getUserIdFromJwtToken(request.getToken());
-//        UserEntity user = userRepository.findById(userId)
-//                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng."));
-//
-//        user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
-//        user.setStatus(UserStatusEntity.ACTIVE);
-//        userRepository.save(user);
-//
-//        // Đánh dấu token này đã dùng - không cho set lại password bằng link cũ nữa
-//        long remainingTtl = jwtUtils.getRemainingValidityMs(request.getToken());
-//        tokenService.markTokenAsUsed(jti, remainingTtl);
-//
-//        auditLogService.log("set_password", "user", user.getId(), null, user);
-//    }
-//
-//
-//// ============================================================================
-//// 4. AuthService.refreshToken - rotation: mỗi lần refresh, revoke token cũ,
-////    cấp token mới. Nếu ai đó dùng lại refresh token cũ (đã bị revoke) -> phát
-////    hiện được là có dấu hiệu token bị đánh cắp/dùng lại.
-//// ============================================================================
-//
-//    @Transactional
-//    public JwtAuthenticationResponse refreshToken(String refreshToken) {
-//        if (!jwtUtils.validateJwtToken(refreshToken)) {
-//            throw new InvalidTokenException("Refresh token không hợp lệ hoặc đã hết hạn.");
-//        }
-//
-//        String jti = jwtUtils.getJtiFromToken(refreshToken);
-//        if (tokenService.isTokenUsed(jti)) {
-//            // Refresh token cũ bị dùng lại - dấu hiệu bị đánh cắp.
-//            // Revoke toàn bộ session của user này để an toàn.
-//            String username = jwtUtils.getUserNameFromJwtToken(refreshToken);
-//            UserEntity user = userRepository.findByUsername(username)
-//                    .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy người dùng."));
-//            tokenService.invalidateAllSessions(user.getId());
-//            throw new InvalidTokenException("Phát hiện refresh token bị sử dụng lại. Vui lòng đăng nhập lại.");
-//        }
-//
-//        // Revoke refresh token cũ ngay sau khi xác nhận hợp lệ (rotation)
-//        long remainingTtl = jwtUtils.getRemainingValidityMs(refreshToken);
-//        tokenService.markTokenAsUsed(jti, remainingTtl);
-//
-//        String username = jwtUtils.getUserNameFromJwtToken(refreshToken);
-//        CustomUserDetails userDetails = (CustomUserDetails) userDetailsService.loadUserByUsername(username);
-//
-//        String newAccessToken = jwtUtils.generateJwtToken(
-//                new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities()));
-//        String newRefreshToken = jwtUtils.generateRefreshToken(username);
-//
-//        return JwtAuthenticationResponse.builder()
-//                .accessToken(newAccessToken)
-//                .refreshToken(newRefreshToken)
-//                .id(userDetails.getUser().getId())
-//                .username(userDetails.getUsername())
-//                .build();
-//    }
+    public long getRemainingValidityMs(String token) {
+        Date expiration = getClaimsFromToken(token).getExpiration();
+        return Math.max(0, expiration.getTime() - System.currentTimeMillis());
+    }
 }

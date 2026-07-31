@@ -78,6 +78,7 @@ public class AuthService implements IAuthService { // login - register
     private static final Duration FORGOT_PASSWORD_OTP_TTL = Duration.ofMinutes(3);
 
     private static final String INVALIDATE_TOKEN_PREFIX = "invalidate:token:user:";
+    private static final String USED_TOKEN_KEY_PREFIX = "auth:token:used:";
     private final ApplicationEventPublisher eventPublisher;
     private final ApplicationEventPublisher applicationEventPublisher;
 
@@ -208,6 +209,15 @@ public class AuthService implements IAuthService { // login - register
             throw new InvalidTokenException("Invalid refresh token"); // chua bat loi global
         }
 
+        String jti = jwtUtils.getJtiFromToken(refreshToken);
+        if (isTokenUsed(jti)) {
+            String username = jwtUtils.getUserNameFromJwtToken(refreshToken);
+            CustomUserDetails userDetails = (CustomUserDetails) customUserDetailsService.loadUserByUsername(username);
+            invalidateAllTokens(userDetails.getUser().getId());
+            throw new InvalidTokenException("Refresh token đã được sử dụng. Vui lòng đăng nhập lại.");
+        }
+        markTokenAsUsed(jti, jwtUtils.getRemainingValidityMs(refreshToken));
+
         // Lấy username từ Refresh Token
         String username = jwtUtils.getUserNameFromJwtToken(refreshToken);
 
@@ -300,7 +310,7 @@ public class AuthService implements IAuthService { // login - register
         userRepository.save(userEntity);
 
         eventPublisher.publishEvent(new AuditLogEvent(this, "Change Password", "User", userId, null, null));
-        invalidateAllTokens(userEntity.getEmail());
+        invalidateAllTokens(userEntity.getId());
 
         // Gửi email thông báo đổi mật khẩu thành công
         emailService.sendPasswordChangedNotification(userEntity.getEmail(), LocalDateTime.now());
@@ -365,14 +375,28 @@ public class AuthService implements IAuthService { // login - register
         // Ghi nhận lịch sử thao tác
         eventPublisher.publishEvent(new AuditLogEvent(this, "Reset Password", "User", user.getId(), null, null));
 
-        invalidateAllTokens(user.getEmail());
+        invalidateAllTokens(user.getId());
 
         emailService.sendPasswordChangedNotification(user.getEmail(), LocalDateTime.now());
     }
 
-    private void invalidateAllTokens(String email) {
-        String invalidateKey = INVALIDATE_TOKEN_PREFIX + email;
+    private void invalidateAllTokens(Long userId) {
+        String invalidateKey = INVALIDATE_TOKEN_PREFIX + userId;
         redisTemplate.opsForValue().set(invalidateKey, String.valueOf(System.currentTimeMillis()));
+    }
+
+    private void markTokenAsUsed(String jti, long ttlMillis) {
+        if (jti == null || ttlMillis <= 0) {
+            return;
+        }
+        redisTemplate.opsForValue().set(USED_TOKEN_KEY_PREFIX + jti, "1", Duration.ofMillis(ttlMillis));
+    }
+
+    private boolean isTokenUsed(String jti) {
+        if (jti == null) {
+            return false;
+        }
+        return Boolean.TRUE.equals(redisTemplate.hasKey(USED_TOKEN_KEY_PREFIX + jti));
     }
 
     @Override
@@ -401,10 +425,15 @@ public class AuthService implements IAuthService { // login - register
         }
         Claims claims =jwtUtils.getClaimsFromToken(request.getToken());
         String tokenType = claims.get("type", String.class);
+        String jti = claims.getId();
         if (!"invite".equals(tokenType)) {
             throw new InvalidTokenException(
                     "Token không hợp lệ."
             );
+        }
+
+        if (isTokenUsed(jti)) {
+            throw new InvalidTokenException("Liên kết này đã được sử dụng, vui lòng yêu cầu liên kết mới.");
         }
 
         Long userId = Long.parseLong(claims.getSubject());
@@ -416,6 +445,7 @@ public class AuthService implements IAuthService { // login - register
         user.setStatus(UserStatusEnum.ACTIVE);
         userRepository.save(user);
 
+        markTokenAsUsed(jti, jwtUtils.getRemainingValidityMs(request.getToken()));
 
         eventPublisher.publishEvent(new AuditLogEvent(this, "Set Password", "User", user.getId(), null, null));
     }
