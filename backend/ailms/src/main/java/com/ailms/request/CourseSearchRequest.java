@@ -13,4 +13,5 @@ import lombok.*;
 public class CourseSearchRequest extends CommonSearchRequest<CourseStatusEnum> {
     private Long categoryId;
     private CourseLevelEnum level;
+    private Long createdBy;
 }

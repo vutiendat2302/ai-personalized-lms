@@ -5,6 +5,11 @@ import com.ailms.entity.enums.EmployeeStatusEnum;
 import com.ailms.entity.enums.EmploymentTypeEnum;
 import com.ailms.entity.enums.SalaryTypeEnum;
 import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Past;
+import jakarta.validation.constraints.Size;
 import lombok.*;
 
 import java.math.BigDecimal;
@@ -25,7 +30,19 @@ public class CreateEmployeeRequest {
     @Email(message = "Email format is invalid")
     private String email;
 
+    @Pattern(regexp = "^[a-zA-Z0-9._-]{4,50}$", message = "Username must contain 4-50 valid characters")
+    private String username;
+
+    @Size(min = 2, max = 100)
     private String fullName;
+
+    @Pattern(regexp = "^(\\+84|0)(3|5|7|8|9)[0-9]{8}$", message = "Invalid Vietnamese phone number")
+    private String phone;
+
+    private Integer gender;
+
+    @Past(message = "Date of birth must be in the past")
+    private LocalDate dateOfBirth;
 
     private String password;
 
@@ -33,12 +50,16 @@ public class CreateEmployeeRequest {
 
     private String employeeCode;
 
+    @NotNull(message = "Department is required")
     private Long departmentId;
 
     private String address;
 
+    @NotBlank(message = "Position is required")
+    @Size(min = 2, max = 100)
     private String position;
 
+    @NotNull(message = "Employment type is required")
     private EmploymentTypeEnum employmentTypeEnum;
 
     private LocalDateTime startDate;
@@ -57,4 +78,11 @@ public class CreateEmployeeRequest {
     private SalaryTypeEnum salaryTypeEnum;
 
     private String contractFileKey;
+
+    /** UPLOAD: create then attach contractFile; WEB_GENERATE: generate PDF from template. */
+    private String contractCreationMode;
+
+    private Long contractTemplateId;
+
+    private LocalDateTime contractSignedAt;
 }

@@ -12,7 +12,9 @@ import java.util.List;
 public interface ClassMapper {
 
     @Mapping(target = "courseId", source = "courseEntity.id")
+    @Mapping(target = "courseName", source = "courseEntity.name")
     @Mapping(target = "categoryId", source = "categoryEntity.id")
+    @Mapping(target = "categoryName", source = "categoryEntity.name")
     ClassResponse toResponse(ClassEntity entity);
 
     List<ClassResponse> toResponseList(List<ClassEntity> list);

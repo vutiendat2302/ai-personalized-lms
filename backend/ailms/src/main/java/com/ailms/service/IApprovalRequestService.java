@@ -60,4 +60,8 @@ public interface IApprovalRequestService {
      * @return danh sách các đối tượng phù hợp
      */
     List<ApprovalRequestEntity> getPendingRequestsForApprover(Long approverId);
+
+    List<ApprovalRequestEntity> getRequestedByUser(Long userId);
+
+    List<ApprovalRequestEntity> getAssignedToUser(Long userId);
 }

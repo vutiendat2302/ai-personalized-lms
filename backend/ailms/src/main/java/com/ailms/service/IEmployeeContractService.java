@@ -1,16 +1,11 @@
 package com.ailms.service;
 
-import com.ailms.request.CreateEmployeeContractRequest;
-import com.ailms.request.GenerateEmployeeContractRequest;
-import com.ailms.request.TerminateContractRequest;
-import com.ailms.request.UpdateEmployeeContractRequest;
-import com.ailms.request.EmployeeContractSearchRequest;
-import com.ailms.response.ActiveContractCheckResponse;
-import com.ailms.response.EmployeeContractResponse;
-import com.ailms.response.PageResponse;
+import com.ailms.request.*;
+import com.ailms.response.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Interface định nghĩa các dịch vụ quản lý hợp đồng lao động nhân viên.
@@ -82,36 +77,49 @@ public interface IEmployeeContractService {
      */
     void delete(Long id);
 
+    /** Xóa vĩnh viễn toàn bộ hợp đồng và file MinIO của một nhân viên. */
+    void deleteAllByEmployeeId(Long employeeId);
+
+    Map<String, Object> sendBulkExpirationReminder(BulkContractReminderRequest request);
+
+    byte[] downloadContractsZip(List<Long> ids);
+
+    List<Map<String, Object>> getReminderRecipients();
+
+    List<EmployeeContractResponse> getExpiringProbationContracts();
+
     /**
      * [Ký điện tử - Bước 1] Đại diện HR/Admin ký xác nhận phía công ty.
      * Chuyển signingStatus -> PENDING_EMPLOYEE_SIGN, sinh signingToken 7 ngày, gửi Email cho nhân viên.
      */
-    EmployeeContractResponse signCompany(Long id, com.ailms.request.SignCompanyRequest request);
+    EmployeeContractResponse signCompany(Long id, SignCompanyRequest request);
 
     /**
      * [Ký điện tử - Bước 2] Lấy thông tin hợp đồng cho link công khai của nhân viên.
      * Trả về tóm tắt thông tin, presigned URL xem trước PDF công ty đã ký và tự động gửi mã OTP xác thực.
      */
-    com.ailms.response.ContractSigningLinkResponse getPublicSigningInfo(String signingToken);
+    ContractSigningLinkResponse getPublicSigningInfo(String signingToken);
 
     /**
      * [Ký điện tử - Bước 3] Nhân viên xác nhận ký hợp đồng qua mã OTP và chữ ký vẽ tay (canvas).
      * Verify OTP, render chèn khung chứng nhận ký điện tử vào PDF cuối, chuyển signingStatus -> FULLY_SIGNED, khóa hợp đồng.
      */
-    EmployeeContractResponse confirmEmployeeSigning(String signingToken, com.ailms.request.SignEmployeeConfirmRequest request, String ipAddress, String userAgent);
+    EmployeeContractResponse confirmEmployeeSigning(String signingToken, SignEmployeeConfirmRequest request, String ipAddress, String userAgent);
 
     /**
      * Lấy danh sách lịch sử nhật ký kiểm toán (Audit Log) ký điện tử của 1 hợp đồng.
      */
-    List<com.ailms.response.SigningHistoryResponse> getSigningHistory(Long id);
+    List<SigningHistoryResponse> getSigningHistory(Long id);
 
     /**
      * Sinh lại token ký mới cho nhân viên khi token cũ bị hết hạn.
      */
     EmployeeContractResponse resendSigningLink(Long id);
 
+    void resendSigningOtp(String signingToken);
+
     /**
      * Lấy các chỉ số thống kê tổng hợp hợp đồng cho Dashboard Admin/HR.
      */
-    com.ailms.response.ContractDashboardStatsResponse getDashboardStats();
+    ContractDashboardStatsResponse getDashboardStats();
 }

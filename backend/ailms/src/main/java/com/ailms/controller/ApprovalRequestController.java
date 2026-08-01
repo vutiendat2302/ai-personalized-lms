@@ -15,6 +15,8 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import java.util.List;
+import java.util.Map;
+import java.util.LinkedHashMap;
 
 @RestController
 @RequestMapping("${api.prefix}/approvals")
@@ -67,6 +69,30 @@ public class ApprovalRequestController {
             return ResponseEntity.ok(ApiResponse.of(pending));
         }
         return ResponseEntity.status(401).build();
+    }
+
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<ApiResponse<Map<String, List<Map<String, Object>>>>> getByUser(
+            @PathVariable Long userId) {
+        Map<String, List<Map<String, Object>>> result = Map.of(
+                "requested", approvalRequestService.getRequestedByUser(userId).stream().map(this::toUserResponse).toList(),
+                "toApprove", approvalRequestService.getAssignedToUser(userId).stream().map(this::toUserResponse).toList()
+        );
+        return ResponseEntity.ok(ApiResponse.of("User approval requests retrieved successfully", result));
+    }
+
+    private Map<String, Object> toUserResponse(ApprovalRequestEntity request) {
+        Map<String, Object> item = new LinkedHashMap<>();
+        item.put("id", request.getId());
+        item.put("targetType", request.getTargetType());
+        item.put("targetId", request.getTargetId());
+        item.put("approverId", request.getApproverId());
+        item.put("status", request.getStatus());
+        item.put("comment", request.getComment());
+        item.put("createdBy", request.getCreatedBy());
+        item.put("createdAt", request.getCreatedAt());
+        item.put("decidedAt", request.getDecidedAt());
+        return item;
     }
 
     @Data

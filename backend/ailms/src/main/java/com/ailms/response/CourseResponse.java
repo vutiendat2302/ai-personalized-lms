@@ -48,6 +48,8 @@ public class CourseResponse {
     private CertificateConditionTypeEnum certificateConditionType;
 
     private Integer certificatePassThreshold;
+
+    private Long createdBy;
     
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime createdAt;

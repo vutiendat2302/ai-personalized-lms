@@ -1,6 +1,6 @@
 import React from "react";
 import { Outlet, Link, useLocation } from "react-router-dom";
-import { BookOpen, Users, Calendar, GraduationCap, FileCheck, ClipboardList, Clock } from "lucide-react";
+import { BookOpen, Users, Calendar, GraduationCap, FileCheck, ClipboardList, Clock, Sparkles } from "lucide-react";
 
 export const TeacherLayout: React.FC = () => {
   const location = useLocation();
@@ -10,6 +10,7 @@ export const TeacherLayout: React.FC = () => {
     { label: "Lớp học đảm nhận", path: "/teacher/classes", icon: Users },
     { label: "Lịch dạy Online", path: "/teacher/schedule", icon: Calendar },
     { label: "Quản lý Khóa học", path: "/teacher/courses", icon: BookOpen },
+    { label: "Lớp gợi ý", path: "/teacher/suggested-classes", icon: Sparkles },
     { label: "Chấm bài tập", path: "/teacher/assignments", icon: ClipboardList },
     { label: "Bài thi & Quiz", path: "/teacher/quizzes", icon: FileCheck },
     { label: "Điểm danh", path: "/teacher/attendance", icon: Clock },

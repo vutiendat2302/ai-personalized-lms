@@ -5,12 +5,15 @@ import com.ailms.entity.CategoryEntity;
 import com.ailms.entity.EmployeeEntity;
 import com.ailms.entity.TeacherCategoryEntity;
 import com.ailms.entity.enums.BaseStatusEnum;
+import com.ailms.entity.enums.ClassMemberRole;
+import com.ailms.entity.enums.ClassMemberStatusEnum;
 import com.ailms.event.AuditLogEvent;
 import com.ailms.exception.BusinessException;
 import com.ailms.exception.DuplicateResourceException;
 import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.mapper.TeacherCategoryMapper;
 import com.ailms.repository.CategoryRepository;
+import com.ailms.repository.ClassMemberRepository;
 import com.ailms.repository.CourseRepository;
 import com.ailms.repository.EmployeeRepository;
 import com.ailms.repository.TeacherCategoryRepository;
@@ -38,6 +41,7 @@ public class TeacherCategoryService implements ITeacherCategoryService {
     private final EmployeeRepository employeeRepository;
     private final CategoryRepository categoryRepository;
     private final CourseRepository courseRepository;
+    private final ClassMemberRepository classMemberRepository;
     private final TeacherCategoryMapper teacherCategoryMapper;
     private final IEmailService emailService;
     private final ApplicationEventPublisher applicationEventPublisher;
@@ -121,12 +125,22 @@ public class TeacherCategoryService implements ITeacherCategoryService {
             return;
         }
 
-        // Check if teacher has active courses/classes in this category
+        // Only block when this teacher (not merely another teacher in the same
+        // category) still owns an active course or teaches an active class.
         boolean hasActiveCourses = courseRepository.findAll().stream()
                 .anyMatch(c -> c.getCategoryEntity() != null && categoryId.equals(c.getCategoryEntity().getId())
-                        && (c.getStatus() != null && c.getStatus().name().equals("ACTIVE")));
+                        && employeeId.equals(c.getCreatedBy())
+                        && c.getStatus() != null && c.getStatus().name().equals("ACTIVE"));
 
-        if (hasActiveCourses) {
+        boolean hasActiveClasses = classMemberRepository.findById_UserId(employeeId).stream()
+                .anyMatch(member -> member.getStatus() == ClassMemberStatusEnum.ACTIVE
+                        && (member.getRoleInClass() == ClassMemberRole.TEACHER || member.getRoleInClass() == ClassMemberRole.TA)
+                        && member.getClassEntity() != null
+                        && member.getClassEntity().getCategoryEntity() != null
+                        && categoryId.equals(member.getClassEntity().getCategoryEntity().getId())
+                        && member.getClassEntity().getStatus() == BaseStatusEnum.ACTIVE);
+
+        if (hasActiveCourses || hasActiveClasses) {
             throw new BusinessException("Cannot unassign teacher " + employeeId + " from category " + categoryId + " because active courses/classes exist. Reassign or resolve courses first.");
         }
 

@@ -12,6 +12,7 @@ import com.ailms.repository.EnrollmentRepository;
 import com.ailms.repository.UserRepository;
 import com.ailms.event.AuditLogEvent;
 import com.ailms.service.IClassMemberService;
+import com.ailms.response.ClassMemberResponse;
 import com.ailms.service.lock.CapacityLockStrategy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,6 +39,36 @@ public class ClassMemberService implements IClassMemberService {
 
     @Qualifier("pessimisticLockStrategy")
     private final CapacityLockStrategy capacityLockStrategy;
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ClassMemberResponse> getByUserId(Long userId) {
+        return classMemberRepository.findById_UserId(userId).stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ClassMemberResponse> getByClassId(Long classId) {
+        return classMemberRepository.findById_ClassId(classId).stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    private ClassMemberResponse toResponse(ClassMemberEntity entity) {
+        return ClassMemberResponse.builder()
+                .classId(entity.getClassEntity().getId())
+                .className(entity.getClassEntity().getName())
+                .userId(entity.getUserEntity().getId())
+                .username(entity.getUserEntity().getUsername())
+                .roleInClass(entity.getRoleInClass())
+                .status(entity.getStatus())
+                .joinedAt(entity.getJoinedAt())
+                .waitlistedAt(entity.getWaitlistedAt())
+                .leftAt(entity.getLeftAt())
+                .build();
+    }
 
     @Override
     @Transactional

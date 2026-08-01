@@ -1,8 +1,10 @@
 package com.ailms.mapper;
 
+import com.ailms.entity.SalaryDetailEntity;
 import com.ailms.entity.SalaryEntity;
 import com.ailms.request.CreateSalaryRequest;
 import com.ailms.request.UpdateSalaryRequest;
+import com.ailms.response.SalaryDetailResponse;
 import com.ailms.response.SalaryResponse;
 import org.mapstruct.*;
 
@@ -12,7 +14,16 @@ import java.util.List;
 public interface SalaryMapper {
 
     @Mapping(target = "employeeId", source = "employee.userId")
+    @Mapping(target = "employeeName", source = "employee.userEntity.fullName")
+    @Mapping(target = "employeeCode", source = "employee.employeeCode")
+    @Mapping(target = "departmentName", source = "employee.department.name")
+    @Mapping(target = "avatarUrl", source = "employee.userEntity.avatarUrl")
+    @Mapping(target = "details", source = "details")
     SalaryResponse toResponse(SalaryEntity entity);
+
+    SalaryDetailResponse toDetailResponse(SalaryDetailEntity entity);
+
+    List<SalaryDetailResponse> toDetailResponseList(List<SalaryDetailEntity> list);
 
     List<SalaryResponse> toResponseList(List<SalaryEntity> list);
 

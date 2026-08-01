@@ -5,6 +5,7 @@ import com.ailms.request.UpdateClassRequest;
 import com.ailms.response.PageResponse;
 import com.ailms.request.ClassSearchRequest;
 import com.ailms.response.ClassResponse;
+import com.ailms.response.ClassScheduleResponse;
 
 
 import java.util.List;
@@ -43,6 +44,8 @@ public interface IClassService {
      * @return danh sách các đối tượng phù hợp
      */
     List<ClassResponse> getByCourseId(Long courseId);
+
+    List<ClassScheduleResponse> getSchedules(Long classId);
 
     /**
      * Tạo mới bản ghi từ dữ liệu yêu cầu.

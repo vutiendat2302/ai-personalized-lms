@@ -4,9 +4,13 @@ import {
   type EmployeeContractResponse,
 } from "@/api/hr/hrApi";
 import { employeeApi } from "@/api/employees/employeeApi";
+import { userApi } from "@/api/users/userApi";
+import { auditLogApi, type AuditLogResponse } from "@/api/audit/auditLogApi";
+import { DetailAuditLogModal } from "@/components/admin/audit/DetailAuditLogModal";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import {
@@ -28,7 +32,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ContractDetailModal } from "@/components/admin/contract/ContractDetailModal";
 import { NewContractWizardModal } from "@/components/admin/contract/NewContractWizardModal";
 import type { EmployeeExtended } from "@/types/employee";
-import { formatDateDisplay } from "@/components/ui/DatePickerInput";
+import { DatePickerInput, formatDateDisplay } from "@/components/ui/DatePickerInput";
 import { cn } from "@/lib/utils";
 import {
   FileText,
@@ -65,10 +69,10 @@ import {
   History,
   Clock,
   Copy,
-  Link,
   Check,
   Users,
   UserX,
+  Trash2,
 } from "lucide-react";
 
 const getPageNumbers = (currentPage: number, total: number) => {
@@ -94,27 +98,42 @@ export const ContractManagement: React.FC = () => {
   // Main Tab Navigation: "all" (Tất cả hợp đồng) | "pending_sign" (Chưa ký) | "no_contract" (NV chưa có HĐ)
   const [mainTab, setMainTab] = useState<"all" | "pending_sign" | "no_contract">("all");
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
+  const [documentLoading, setDocumentLoading] = useState<{ id: string; action: "view" | "download" } | null>(null);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
 
   // All Employees State for Tab 3
   const [allEmployees, setAllEmployees] = useState<EmployeeExtended[]>([]);
   const [loadingAllEmployees, setLoadingAllEmployees] = useState(false);
   const [noContractSearchTerm, setNoContractSearchTerm] = useState("");
+  const [noContractPage, setNoContractPage] = useState(0);
+  const [noContractPageSize, setNoContractPageSize] = useState(10);
+  const [noContractJumpPage, setNoContractJumpPage] = useState("1");
 
   // Filters
   const [ctSearchTerm, setCtSearchTerm] = useState("");
-  const [ctStatusFilter, setCtStatusFilter] = useState<string>("ALL");
+  const [ctStatusFilter, setCtStatusFilter] = useState<string>("NON_TERMINATED");
   const [ctSigningStatusFilter, setCtSigningStatusFilter] = useState<string>("ALL");
   const [ctTypeFilter, setCtTypeFilter] = useState<string>("ALL");
   const [ctDeptFilter, setCtDeptFilter] = useState<string>("ALL");
   const [ctExpiryFilter, setCtExpiryFilter] = useState<string>("ALL");
   const [ctFileFilter, setCtFileFilter] = useState<string>("ALL");
+  const [ctSignedFrom, setCtSignedFrom] = useState("");
+  const [ctSignedTo, setCtSignedTo] = useState("");
+  const [ctQuickFilter, setCtQuickFilter] = useState<string>("ALL");
   const [selectedContractIds, setSelectedContractIds] = useState<(string)[]>([]);
+
+  // Tab 2 - ký điện tử: tìm kiếm/lọc/phân trang độc lập với Tab 1.
+  const [signingSearchTerm, setSigningSearchTerm] = useState("");
+  const [signingStatusFilter, setSigningStatusFilter] = useState("PENDING_ALL");
+  const [signingPage, setSigningPage] = useState(0);
+  const [signingPageSize, setSigningPageSize] = useState(10);
+  const [signingJumpPage, setSigningJumpPage] = useState("1");
 
   // E-Signature & New Contract Wizard States
   const [signingActionId, setSigningActionId] = useState<string | null>(null);
   const [signingHistoryOpen, setSigningHistoryOpen] = useState(false);
   const [signingHistoryLogs, setSigningHistoryLogs] = useState<any[]>([]);
+  const [selectedAuditLog, setSelectedAuditLog] = useState<AuditLogResponse | null>(null);
   const [loadingSigningHistory, setLoadingSigningHistory] = useState(false);
 
   // New Contract Wizard Select Employee State
@@ -122,12 +141,16 @@ export const ContractManagement: React.FC = () => {
   const [employeeSearchTerm, setEmployeeSearchTerm] = useState("");
   const [employeeList, setEmployeeList] = useState<EmployeeExtended[]>([]);
   const [loadingEmployeeList, setLoadingEmployeeList] = useState(false);
+  const [employeePickerPage, setEmployeePickerPage] = useState(0);
+  const [employeePickerTotalPages, setEmployeePickerTotalPages] = useState(0);
+  const [employeePickerTotal, setEmployeePickerTotal] = useState(0);
   const [selectedEmployeeForWizard, setSelectedEmployeeForWizard] = useState<EmployeeExtended | null>(null);
   const [newContractWizardOpen, setNewContractWizardOpen] = useState(false);
 
   // Sorting State (styled like UserManagement.tsx)
   const [sortRules, setSortRules] = useState<Array<{ field: string; dir: "ASC" | "DESC" }>>([
-    { field: "id", dir: "DESC" }
+    { field: "status", dir: "ASC" },
+    { field: "createdAt", dir: "DESC" },
   ]);
 
   // Pagination State
@@ -139,6 +162,14 @@ export const ContractManagement: React.FC = () => {
   const [bulkTerminateModalOpen, setBulkTerminateModalOpen] = useState(false);
   const [bulkTerminateReason, setBulkTerminateReason] = useState("");
   const [bulkTerminating, setBulkTerminating] = useState(false);
+  const [reminderModalOpen, setReminderModalOpen] = useState(false);
+  const [hrRecipients, setHrRecipients] = useState<Array<{ id: string; fullName: string; email: string }>>([]);
+  const [selectedHrIds, setSelectedHrIds] = useState<string[]>([]);
+  const [reminderSubject, setReminderSubject] = useState("Nhắc nhở xử lý hợp đồng lao động");
+  const [reminderContent, setReminderContent] = useState("");
+  const [loadingHrRecipients, setLoadingHrRecipients] = useState(false);
+  const [sendingReminder, setSendingReminder] = useState(false);
+  const [bulkDownloading, setBulkDownloading] = useState(false);
 
   // Detail Modal State
   const [selectedContractForDetail, setSelectedContractForDetail] = useState<EmployeeContractResponse | null>(null);
@@ -147,6 +178,12 @@ export const ContractManagement: React.FC = () => {
   // Banner Notification
   const [actionMessage, setActionMessage] = useState<{ text: string; isError?: boolean } | null>(null);
   const [terminateConfirmContract, setTerminateConfirmContract] = useState<{ id: string ; name: string } | null>(null);
+  const [terminateReason, setTerminateReason] = useState("");
+  const [terminatingContract, setTerminatingContract] = useState(false);
+  const [deleteEmployeeContracts, setDeleteEmployeeContracts] = useState<{ employeeId: string; name: string } | null>(null);
+  const [deletingContracts, setDeletingContracts] = useState(false);
+  const [creatorNames, setCreatorNames] = useState<Record<string, string>>({});
+  const [highlightedContractId, setHighlightedContractId] = useState<string | null>(null);
 
   const showBanner = (text: string, isError = false) => {
     setActionMessage({ text, isError });
@@ -166,12 +203,15 @@ export const ContractManagement: React.FC = () => {
     }
   };
 
-  const fetchContracts = async () => {
+  const fetchContracts = async (preferredContract?: EmployeeContractResponse) => {
     setLoading(true);
     try {
       const res = await hrApi.getContracts();
       if (res.data?.success && Array.isArray(res.data.data)) {
-        setContracts(res.data.data);
+        const fetchedContracts = res.data.data;
+        setContracts(preferredContract?.id
+          ? [preferredContract, ...fetchedContracts.filter(contract => String(contract.id) !== String(preferredContract.id))]
+          : fetchedContracts);
       } else {
         setContracts([]);
       }
@@ -208,17 +248,30 @@ export const ContractManagement: React.FC = () => {
     fetchDashboardStats();
   }, []);
 
+  useEffect(() => {
+    const missingIds = Array.from(new Set(contracts.map(contract => contract.createdBy).filter((id): id is string => Boolean(id && !creatorNames[id]))));
+    if (missingIds.length === 0) return;
+    Promise.all(missingIds.map(async id => {
+      try {
+        const response = await userApi.getUserById(id);
+        return [id, response.data?.data?.fullName || response.data?.data?.email || `User #${id}`] as const;
+      } catch {
+        return [id, `User #${id}`] as const;
+      }
+    })).then(entries => setCreatorNames(previous => ({ ...previous, ...Object.fromEntries(entries) })));
+  }, [contracts]);
+
   // Compute Employees without Contract (Tab 3)
   const employeesWithoutContract = allEmployees.filter((emp) => {
     const empIdStr = String(emp.id);
     const empCodeStr = emp.employeeCode || "";
-    const hasContract = contracts.some((ct) => {
+    const hasActiveContract = contracts.some((ct) => {
       return (
-        String(ct.employeeId) === empIdStr ||
-        (empCodeStr && ct.employeeCode === empCodeStr)
+        ct.status === "ACTIVE" && (String(ct.employeeId) === empIdStr ||
+        (empCodeStr && ct.employeeCode === empCodeStr))
       );
     });
-    return !hasContract;
+    return !hasActiveContract;
   });
 
   const filteredEmployeesWithoutContract = employeesWithoutContract.filter((emp) => {
@@ -233,12 +286,54 @@ export const ContractManagement: React.FC = () => {
       (emp.position && emp.position.toLowerCase().includes(term))
     );
   });
+  const noContractTotalPages = Math.ceil(filteredEmployeesWithoutContract.length / noContractPageSize);
+  const paginatedEmployeesWithoutContract = filteredEmployeesWithoutContract.slice(
+    noContractPage * noContractPageSize,
+    (noContractPage + 1) * noContractPageSize
+  );
 
-  const confirmTerminateContractAction = () => {
+  useEffect(() => {
+    setNoContractPage(0);
+  }, [noContractSearchTerm, noContractPageSize]);
+
+  useEffect(() => {
+    if (noContractTotalPages > 0 && noContractPage >= noContractTotalPages) {
+      setNoContractPage(noContractTotalPages - 1);
+    }
+    setNoContractJumpPage(String(noContractTotalPages === 0 ? 0 : noContractPage + 1));
+  }, [noContractPage, noContractTotalPages]);
+
+  const confirmTerminateContractAction = async () => {
     if (!terminateConfirmContract) return;
-    setContracts((prev) => prev.map((item) => (item.id === terminateConfirmContract.id ? { ...item, status: "TERMINATED" } : item)));
-    showBanner("Đã chấm dứt hợp đồng thành công!");
-    setTerminateConfirmContract(null);
+    setTerminatingContract(true);
+    try {
+      await employeeApi.terminateContract(terminateConfirmContract.id, terminateReason.trim() || undefined);
+      await Promise.all([fetchContracts(), fetchDashboardStats(), fetchAllEmployees()]);
+      showBanner("Đã chấm dứt hợp đồng thành công!");
+      setTerminateConfirmContract(null);
+      setTerminateReason("");
+    } catch (error: any) {
+      showBanner(error?.response?.data?.message || "Không thể chấm dứt hợp đồng.", true);
+    } finally {
+      setTerminatingContract(false);
+    }
+  };
+
+  const confirmDeleteEmployeeContracts = async () => {
+    if (!deleteEmployeeContracts) return;
+    setDeletingContracts(true);
+    try {
+      await hrApi.deleteAllEmployeeContracts(deleteEmployeeContracts.employeeId);
+      setDetailModalOpen(false);
+      setSelectedContractForDetail(null);
+      setDeleteEmployeeContracts(null);
+      await Promise.all([fetchContracts(), fetchDashboardStats(), fetchAllEmployees()]);
+      showBanner("Đã xóa vĩnh viễn toàn bộ hợp đồng và file của nhân viên.");
+    } catch (error: any) {
+      showBanner(error?.response?.data?.message || "Không thể xóa toàn bộ hợp đồng của nhân viên.", true);
+    } finally {
+      setDeletingContracts(false);
+    }
   };
 
   // Handlers for Quick E-Signature
@@ -253,7 +348,7 @@ export const ContractManagement: React.FC = () => {
         showBanner(res?.data?.message || "Ký phía công ty thất bại.", true);
       }
     } catch (err: any) {
-      showBanner(err?.response?.data?.message || "Lỗi xử lý ký công ty.", true);
+      showBanner(err?.message || "Lỗi xử lý ký công ty.", true);
     } finally {
       setSigningActionId(null);
     }
@@ -270,7 +365,7 @@ export const ContractManagement: React.FC = () => {
         showBanner(res?.data?.message || "Sinh lại link ký thất bại.", true);
       }
     } catch (err: any) {
-      showBanner(err?.response?.data?.message || "Lỗi sinh lại link ký.", true);
+      showBanner(err?.message || "Lỗi sinh lại link ký.", true);
     } finally {
       setSigningActionId(null);
     }
@@ -280,17 +375,46 @@ export const ContractManagement: React.FC = () => {
     setSigningHistoryOpen(true);
     setLoadingSigningHistory(true);
     try {
-      const res = await employeeApi.getSigningHistory(contractId);
-      if (res?.success && res.data) {
-        setSigningHistoryLogs(res.data);
-      } else {
-        setSigningHistoryLogs([]);
-      }
+      const [camelCaseLogs, upperCaseLogs] = await Promise.all([
+        auditLogApi.getAuditLogsByEntity("EmployeeContract", contractId, { size: 100, sort: "occurredAt:desc" }).catch(() => []),
+        auditLogApi.getAuditLogsByEntity("EMPLOYEE_CONTRACT", contractId, { size: 100, sort: "occurredAt:desc" }).catch(() => []),
+      ]);
+      const normalize = (value: any) => value?.content || (Array.isArray(value) ? value : []);
+      const uniqueLogs = new Map<string, AuditLogResponse>();
+      [...normalize(camelCaseLogs), ...normalize(upperCaseLogs)].forEach(log => uniqueLogs.set(String(log.id), log));
+      setSigningHistoryLogs(Array.from(uniqueLogs.values()).sort((a, b) => String(b.occurredAt).localeCompare(String(a.occurredAt))));
     } catch (err: any) {
       console.warn("Failed to load signing history", err);
       setSigningHistoryLogs([]);
     } finally {
       setLoadingSigningHistory(false);
+    }
+  };
+
+  const openContractFile = async (contractId: string, download = false) => {
+    const action = download ? "download" : "view";
+    setDocumentLoading({ id: String(contractId), action });
+    try {
+      const cachedContract = contracts.find(contract => String(contract.id) === String(contractId));
+      let url = cachedContract?.downloadUrl || cachedContract?.fileUrl;
+      if (!url) {
+        const response = await employeeApi.getContractDownloadUrl(contractId);
+        url = response?.data?.downloadUrl;
+      }
+      if (!url) throw new Error("Missing download URL");
+      if (download) {
+        const link = document.createElement("a");
+        link.href = url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.click();
+      } else {
+        setPdfPreviewUrl(url);
+      }
+    } catch (error: any) {
+      showBanner(error?.response?.data?.message || "Không thể lấy đường dẫn file hợp đồng.", true);
+    } finally {
+      setDocumentLoading(null);
     }
   };
 
@@ -307,25 +431,38 @@ export const ContractManagement: React.FC = () => {
   };
 
   // Handler for Fetching Employees to Create Contract
-  const handleOpenSelectEmployeeModal = async () => {
+  const handleOpenSelectEmployeeModal = () => {
+    setEmployeePickerPage(0);
+    setEmployeeSearchTerm("");
     setSelectEmployeeModalOpen(true);
-    setLoadingEmployeeList(true);
-    try {
-      const res = await employeeApi.getEmployeesSearch({ size: 100 });
-      if (res?.data?.data?.content) {
-        setEmployeeList(res.data.data.content as any);
-      } else {
-        const hrRes = await hrApi.getEmployees();
-        if (hrRes?.data?.data) {
-          setEmployeeList(hrRes.data.data as any);
-        }
-      }
-    } catch (err: any) {
-      console.warn("Failed to load employees for wizard", err);
-    } finally {
-      setLoadingEmployeeList(false);
-    }
   };
+
+  useEffect(() => {
+    if (!selectEmployeeModalOpen) return;
+    const timer = window.setTimeout(async () => {
+      setLoadingEmployeeList(true);
+      try {
+        const response = await employeeApi.getEmployeesSearch({
+          page: employeePickerPage,
+          size: 10,
+          keyword: employeeSearchTerm.trim() || undefined,
+          status: "TERMINATED",
+          sort: "fullName:asc",
+        });
+        const pageData = response.data?.data;
+        const activeEmployeeIds = new Set(contracts.filter(contract => contract.status === "ACTIVE").map(contract => String(contract.employeeId)));
+        setEmployeeList((pageData?.content || []).filter(employee => !activeEmployeeIds.has(String(employee.userId || employee.id))) as any);
+        setEmployeePickerTotalPages(pageData?.totalPages || 0);
+        setEmployeePickerTotal(pageData?.totalElements || 0);
+      } catch (error) {
+        console.warn("Failed to load paginated employees for contract wizard", error);
+        setEmployeeList([]);
+      } finally {
+        setLoadingEmployeeList(false);
+      }
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [selectEmployeeModalOpen, employeePickerPage, employeeSearchTerm, contracts]);
 
   useEffect(() => {
     setCtJumpPageInput(String(ctPage + 1));
@@ -336,13 +473,15 @@ export const ContractManagement: React.FC = () => {
     setSortRules((prev) => {
       const existingIdx = prev.findIndex((rule) => rule.field === field);
       if (existingIdx === -1) {
-        return [{ field, dir: "ASC" }];
+        const withoutDefault = prev.length === 1 && prev[0].field === "id" ? [] : prev;
+        return [...withoutDefault, { field, dir: "ASC" }];
       } else if (prev[existingIdx].dir === "ASC") {
-        return [{ field, dir: "DESC" }];
+        return prev.map((rule, index) => index === existingIdx ? { ...rule, dir: "DESC" } : rule);
       } else {
-        return [];
+        return prev.filter((_, index) => index !== existingIdx);
       }
     });
+    setCtPage(0);
   };
 
   const getSortRuleInfo = (field: string) => {
@@ -356,33 +495,45 @@ export const ContractManagement: React.FC = () => {
     if (!info) {
       return <ArrowUpDown className="h-3 w-3 text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity" />;
     }
-    return info.dir === "ASC" ? (
-      <ArrowUp className="h-3.5 w-3.5 text-primary font-bold" />
-    ) : (
-      <ArrowDown className="h-3.5 w-3.5 text-primary font-bold" />
+    return (
+      <span className="inline-flex items-center gap-0.5 text-primary">
+        {info.dir === "ASC" ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />}
+        <span className="text-[9px] font-black">{info.order}</span>
+      </span>
     );
   };
 
   const isFilteredOrSorted = Boolean(
     ctSearchTerm ||
-    ctStatusFilter !== "ALL" ||
+    ctStatusFilter !== "NON_TERMINATED" ||
     ctSigningStatusFilter !== "ALL" ||
     ctTypeFilter !== "ALL" ||
     ctDeptFilter !== "ALL" ||
     ctExpiryFilter !== "ALL" ||
     ctFileFilter !== "ALL" ||
-    (sortRules.length > 0 && sortRules[0].field !== "id")
+    Boolean(ctSignedFrom) ||
+    Boolean(ctSignedTo) ||
+    ctQuickFilter !== "ALL" ||
+    !(sortRules.length === 2
+      && sortRules[0].field === "status" && sortRules[0].dir === "ASC"
+      && sortRules[1].field === "createdAt" && sortRules[1].dir === "DESC")
   );
 
   const handleResetFiltersAndSort = () => {
     setCtSearchTerm("");
-    setCtStatusFilter("ALL");
+    setCtStatusFilter("NON_TERMINATED");
     setCtSigningStatusFilter("ALL");
     setCtTypeFilter("ALL");
     setCtDeptFilter("ALL");
     setCtExpiryFilter("ALL");
     setCtFileFilter("ALL");
-    setSortRules([{ field: "id", dir: "DESC" }]);
+    setCtSignedFrom("");
+    setCtSignedTo("");
+    setCtQuickFilter("ALL");
+    setSortRules([
+      { field: "status", dir: "ASC" },
+      { field: "createdAt", dir: "DESC" },
+    ]);
     setCtPage(0);
   };
 
@@ -424,37 +575,90 @@ export const ContractManagement: React.FC = () => {
   };
 
   // Bulk Reminders
-  const handleBulkSendReminders = async () => {
+  const handleOpenReminderModal = async () => {
     if (selectedContractIds.length === 0) return;
+    setReminderModalOpen(true);
+    setLoadingHrRecipients(true);
     try {
-      await hrApi.bulkRemindExpiration(selectedContractIds);
-      showBanner(`Đã gửi email nhắc nhở hết hạn tới ${selectedContractIds.length} hợp đồng!`);
-    } catch (e: any) {
-      showBanner(`Đã phát thông báo nhắc nhở cho ${selectedContractIds.length} hợp đồng!`);
+      const response = await hrApi.getContractReminderRecipients();
+      const recipients = (response.data?.data || []).map((user) => ({
+        id: String(user.id),
+        fullName: user.fullName || "Nhân sự HR",
+        email: user.email,
+      }));
+      setHrRecipients(recipients);
+      setSelectedHrIds(recipients.map((user: any) => user.id));
+    } catch {
+      setHrRecipients([]);
+      showBanner("Không tải được danh sách nhân sự HR.", true);
+    } finally {
+      setLoadingHrRecipients(false);
+    }
+  };
+
+  const handleBulkSendReminders = async () => {
+    if (selectedHrIds.length === 0) return showBanner("Vui lòng chọn ít nhất một nhân sự HR.", true);
+    if (!reminderContent.trim()) return showBanner("Vui lòng nhập nội dung nhắc nhở.", true);
+    setSendingReminder(true);
+    try {
+      await hrApi.bulkRemindExpiration({
+        ids: selectedContractIds,
+        recipientUserIds: selectedHrIds,
+        subject: reminderSubject.trim() || undefined,
+        content: reminderContent.trim(),
+      });
+      setReminderModalOpen(false);
+      showBanner(`Đã gửi nhắc nhở ${selectedContractIds.length} hợp đồng tới ${selectedHrIds.length} nhân sự HR.`);
+    } catch (error: any) {
+      showBanner(error?.message || "Không thể gửi lời nhắc.", true);
+    } finally {
+      setSendingReminder(false);
+    }
+  };
+
+  const handleBulkDownloadZip = async () => {
+    setBulkDownloading(true);
+    try {
+      const response = await hrApi.bulkDownloadContractsZip(selectedContractIds);
+      const url = URL.createObjectURL(response.data);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `hop_dong_da_chon_${new Date().toISOString().slice(0, 10)}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      showBanner("Đã tạo và tải file ZIP hợp đồng thành công.");
+    } catch (error: any) {
+      showBanner(error?.message || "Không thể tải ZIP hợp đồng.", true);
+    } finally {
+      setBulkDownloading(false);
     }
   };
 
   // Bulk Terminate Confirm
   const handleConfirmBulkTerminate = async () => {
     if (selectedContractIds.length === 0) return;
+    if (!bulkTerminateReason.trim()) {
+      showBanner("Vui lòng nhập lý do chấm dứt hàng loạt.", true);
+      return;
+    }
     if (selectedContractIds.length > 50) {
       showBanner("Cảnh báo: Chỉ được phép chọn tối đa 50 hợp đồng cho mỗi lần chấm dứt hàng loạt!", true);
       return;
     }
     setBulkTerminating(true);
     try {
-      await hrApi.bulkTerminateContracts(selectedContractIds, bulkTerminateReason);
-      setContracts(prev => prev.map(c => selectedContractIds.includes(c.id) ? { ...c, status: "TERMINATED" } : c));
+      const results = await Promise.allSettled(selectedContractIds.map(id => employeeApi.terminateContract(id, bulkTerminateReason.trim() || undefined)));
+      const successCount = results.filter(result => result.status === "fulfilled").length;
+      const failedCount = results.length - successCount;
+      await Promise.all([fetchContracts(), fetchDashboardStats(), fetchAllEmployees()]);
       setSelectedContractIds([]);
       setBulkTerminateModalOpen(false);
       setBulkTerminateReason("");
-      showBanner(`Đã chấm dứt hàng loạt ${selectedContractIds.length} hợp đồng thành công! (Ghi nhận Audit Trail)`);
-    } catch (e: any) {
-      setContracts(prev => prev.map(c => selectedContractIds.includes(c.id) ? { ...c, status: "TERMINATED" } : c));
-      setSelectedContractIds([]);
-      setBulkTerminateModalOpen(false);
-      setBulkTerminateReason("");
-      showBanner(`Đã cập nhật trạng thái TERMINATED cho ${selectedContractIds.length} hợp đồng!`);
+      showBanner(failedCount === 0
+        ? `Đã chấm dứt ${successCount} hợp đồng và cập nhật trạng thái nhân viên.`
+        : `Chấm dứt thành công ${successCount}/${results.length} hợp đồng; ${failedCount} hợp đồng thất bại.`, failedCount > 0);
     } finally {
       setBulkTerminating(false);
     }
@@ -471,6 +675,8 @@ export const ContractManagement: React.FC = () => {
       employeeCode: ct.employeeCode || emp?.employeeCode || (ct.employeeId ? `NV-${ct.employeeId}` : "—"),
       departmentName: ct.departmentName || emp?.departmentName || "Chưa phân bổ",
       position: ct.position || emp?.position || "Chưa xếp vị trí",
+      employeeEmail: emp?.email || emp?.userEmail || "",
+      createdByName: ct.createdBy ? creatorNames[String(ct.createdBy)] : "Hệ thống",
     };
   });
 
@@ -500,13 +706,12 @@ export const ContractManagement: React.FC = () => {
 
   const currentMonthStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}`;
   const signedThisMonthContracts = enrichedContracts.filter(c => {
-    const sDate = c.signedAt || c.startDate || c.createdAt;
-    return sDate && sDate.startsWith(currentMonthStr);
+    return Boolean(c.signedAt?.startsWith(currentMonthStr));
   });
 
   const terminatedThisMonthContracts = enrichedContracts.filter(c => {
     if (c.status !== "TERMINATED") return false;
-    const uDate = c.updatedAt || c.createdAt;
+    const uDate = c.terminatedAt || c.updatedAt;
     return uDate && uDate.startsWith(currentMonthStr);
   });
 
@@ -514,11 +719,56 @@ export const ContractManagement: React.FC = () => {
     return c.status === "ACTIVE" && !c.fileKey && !c.fileUrl;
   });
 
+  const applyCardFilter = (quickFilter: string, filters?: { status?: string; type?: string; expiry?: string; file?: string }) => {
+    setMainTab("all");
+    setCtSearchTerm("");
+    setCtStatusFilter(filters?.status || "NON_TERMINATED");
+    setCtSigningStatusFilter("ALL");
+    setCtTypeFilter(filters?.type || "ALL");
+    setCtDeptFilter("ALL");
+    setCtExpiryFilter(filters?.expiry || "ALL");
+    setCtFileFilter(filters?.file || "ALL");
+    setCtSignedFrom("");
+    setCtSignedTo("");
+    setCtQuickFilter(quickFilter);
+    setCtPage(0);
+  };
+
   // Tab 2 E-Signature Calculations
   const unsignedContracts = enrichedContracts.filter(c => c.status !== "TERMINATED" && c.signingStatus !== "FULLY_SIGNED");
   const pendingCompanySignCount = enrichedContracts.filter(c => c.status !== "TERMINATED" && (!c.signingStatus || c.signingStatus === "PENDING_COMPANY_SIGN")).length;
   const pendingEmployeeSignCount = enrichedContracts.filter(c => c.status !== "TERMINATED" && c.signingStatus === "PENDING_EMPLOYEE_SIGN").length;
   const fullySignedCount = enrichedContracts.filter(c => c.signingStatus === "FULLY_SIGNED").length;
+
+  const signingFilteredContracts = enrichedContracts
+    .filter(contract => contract.status !== "TERMINATED")
+    .filter(contract => {
+      const signingStatus = contract.signingStatus || "PENDING_COMPANY_SIGN";
+      if (signingStatusFilter === "PENDING_ALL" && signingStatus === "FULLY_SIGNED") return false;
+      if (signingStatusFilter !== "ALL" && signingStatusFilter !== "PENDING_ALL" && signingStatus !== signingStatusFilter) return false;
+      const keyword = signingSearchTerm.trim().toLocaleLowerCase("vi");
+      if (!keyword) return true;
+      return [
+        contract.id,
+        contract.fullName,
+        contract.employeeCode,
+        contract.employeeEmail,
+        contract.departmentName,
+        contract.contractTypeEnum || contract.contractType,
+      ].some(value => String(value || "").toLocaleLowerCase("vi").includes(keyword));
+    })
+    .sort((first, second) => {
+      const firstTime = new Date(first.updatedAt || first.createdAt || 0).getTime();
+      const secondTime = new Date(second.updatedAt || second.createdAt || 0).getTime();
+      if (firstTime !== secondTime) return secondTime - firstTime;
+      return String(second.id).localeCompare(String(first.id), "vi", { numeric: true });
+    });
+  const signingTotalElements = signingFilteredContracts.length;
+  const signingTotalPages = Math.ceil(signingTotalElements / signingPageSize);
+  const signingPaginatedContracts = signingFilteredContracts.slice(
+    signingPage * signingPageSize,
+    (signingPage + 1) * signingPageSize,
+  );
 
   // Filtered List
   const filteredContracts = enrichedContracts.filter(c => {
@@ -527,10 +777,14 @@ export const ContractManagement: React.FC = () => {
       const nameMatch = (c.fullName || "").toLowerCase().includes(kw);
       const codeMatch = (c.employeeCode || "").toLowerCase().includes(kw);
       const idMatch = String(c.id).toLowerCase().includes(kw);
-      if (!nameMatch && !codeMatch && !idMatch) return false;
+      const emailMatch = (c.employeeEmail || "").toLowerCase().includes(kw);
+      const departmentMatch = (c.departmentName || "").toLowerCase().includes(kw);
+      const positionMatch = (c.position || "").toLowerCase().includes(kw);
+      if (!nameMatch && !codeMatch && !idMatch && !emailMatch && !departmentMatch && !positionMatch) return false;
     }
 
-    if (ctStatusFilter !== "ALL" && c.status !== ctStatusFilter) return false;
+    if (ctStatusFilter === "NON_TERMINATED" && c.status === "TERMINATED") return false;
+    if (ctStatusFilter !== "ALL" && ctStatusFilter !== "NON_TERMINATED" && c.status !== ctStatusFilter) return false;
 
     if (ctSigningStatusFilter !== "ALL") {
       const sStatus = c.signingStatus || "PENDING_COMPANY_SIGN";
@@ -539,7 +793,7 @@ export const ContractManagement: React.FC = () => {
 
     if (ctTypeFilter !== "ALL") {
       const type = (c.contractTypeEnum || c.contractType || "").toUpperCase();
-      if (!type.includes(ctTypeFilter.toUpperCase())) return false;
+      if (type !== ctTypeFilter.toUpperCase()) return false;
     }
 
     if (ctDeptFilter !== "ALL" && (c.departmentName || "") !== ctDeptFilter) return false;
@@ -561,21 +815,61 @@ export const ContractManagement: React.FC = () => {
     if (ctFileFilter === "WITH_FILE" && !c.fileKey && !c.fileUrl) return false;
     if (ctFileFilter === "MISSING_FILE" && (c.fileKey || c.fileUrl)) return false;
 
+    if (ctSignedFrom || ctSignedTo) {
+      if (!c.signedAt) return false;
+      const signedDate = c.signedAt.slice(0, 10);
+      if (ctSignedFrom && signedDate < ctSignedFrom) return false;
+      if (ctSignedTo && signedDate > ctSignedTo) return false;
+    }
+
+    const endDateStr = c.endDate || c.validTo;
+    const endDate = endDateStr ? new Date(`${endDateStr}T00:00:00`) : null;
+    const daysUntilEnd = endDate ? Math.ceil((endDate.getTime() - today.getTime()) / 86400000) : null;
+    const contractType = (c.contractTypeEnum || c.contractType || "").toUpperCase();
+    if (ctQuickFilter === "EXPIRING_30" && !(c.status === "ACTIVE" && daysUntilEnd !== null && daysUntilEnd >= 0 && daysUntilEnd <= 30)) return false;
+    if (ctQuickFilter === "PROBATION_EXPIRING_30" && !(c.status === "ACTIVE" && contractType === "PROBATION" && daysUntilEnd !== null && daysUntilEnd >= 0 && daysUntilEnd <= 30)) return false;
+    if (ctQuickFilter === "SIGNED_THIS_MONTH" && !(c.signedAt && c.signedAt.startsWith(currentMonthStr))) return false;
+    if (ctQuickFilter === "TERMINATED_THIS_MONTH" && !(c.status === "TERMINATED" && (c.terminatedAt || c.updatedAt || "").startsWith(currentMonthStr))) return false;
+
     return true;
   });
 
   // Apply Sorting
-  if (sortRules.length > 0) {
-    const { field, dir } = sortRules[0];
-    filteredContracts.sort((a: any, b: any) => {
-      let valA = a[field] ?? "";
-      let valB = b[field] ?? "";
-      if (typeof valA === "string") valA = valA.toLowerCase();
-      if (typeof valB === "string") valB = valB.toLowerCase();
-      if (valA < valB) return dir === "ASC" ? -1 : 1;
-      if (valA > valB) return dir === "ASC" ? 1 : -1;
-      return 0;
-    });
+  filteredContracts.sort((a: any, b: any) => {
+    for (const { field, dir } of sortRules) {
+      let valA = a[field];
+      let valB = b[field];
+      if (field === "status") {
+        const statusPriority: Record<string, number> = {
+          ACTIVE: 0,
+          PENDING: 1,
+          EXPIRED: 2,
+          TERMINATED: 3,
+          INACTIVE: 4,
+        };
+        valA = statusPriority[String(valA ?? "").toUpperCase()] ?? 99;
+        valB = statusPriority[String(valB ?? "").toUpperCase()] ?? 99;
+      } else if (field === "baseSalary") {
+        valA = Number(valA ?? 0);
+        valB = Number(valB ?? 0);
+      } else {
+        valA = String(valA ?? "").toLocaleLowerCase("vi");
+        valB = String(valB ?? "").toLocaleLowerCase("vi");
+      }
+      const comparison = typeof valA === "number"
+        ? valA - valB
+        : valA.localeCompare(valB, "vi", { numeric: true, sensitivity: "base" });
+      if (comparison !== 0) return dir === "ASC" ? comparison : -comparison;
+    }
+    return 0;
+  });
+
+  // Trong thời gian highlight, ghim hợp đồng vừa tạo lên vị trí đầu tiên.
+  if (highlightedContractId) {
+    const highlightedIndex = filteredContracts.findIndex(contract => String(contract.id) === highlightedContractId);
+    if (highlightedIndex > 0) {
+      filteredContracts.unshift(filteredContracts.splice(highlightedIndex, 1)[0]);
+    }
   }
 
   const totalElements = filteredContracts.length;
@@ -608,7 +902,26 @@ export const ContractManagement: React.FC = () => {
     }
   };
 
-  const departmentList = Array.from(new Set(contracts.map(c => c.departmentName).filter((d): d is string => Boolean(d))));
+  const departmentList = Array.from(new Set(enrichedContracts.map(c => c.departmentName).filter((d): d is string => Boolean(d)))).sort((a, b) => a.localeCompare(b, "vi"));
+  const contractTypeOptions = [
+    { value: "PROBATION", label: "Thử việc", color: "bg-amber-500" },
+    { value: "OFFICIAL", label: "Chính thức", color: "bg-blue-500" },
+    { value: "FIXED_TERM", label: "Xác định thời hạn", color: "bg-indigo-500" },
+    { value: "INDEFINITE", label: "Vô thời hạn", color: "bg-emerald-500" },
+    { value: "SEASONAL", label: "Thời vụ / ngắn hạn", color: "bg-purple-500" },
+  ];
+  const expiryTimeline = Array.from({ length: 6 }, (_, monthOffset) => {
+    const date = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1);
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+    const count = activeContracts.filter(c => {
+      const endDateValue = c.endDate || c.validTo;
+      if (!endDateValue?.startsWith(key)) return false;
+      const endDate = new Date(`${endDateValue}T23:59:59`);
+      return endDate >= today;
+    }).length;
+    return { key, label: `Thg ${date.getMonth() + 1}`, count };
+  });
+  const maxExpiryCount = Math.max(1, ...expiryTimeline.map(item => item.count));
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200 pb-16">
@@ -638,7 +951,7 @@ export const ContractManagement: React.FC = () => {
           <Button
             size="sm"
             variant="outline"
-            onClick={fetchContracts}
+            onClick={() => fetchContracts()}
             className="h-9 text-xs font-bold gap-1 rounded-xl border-border hover:bg-muted cursor-pointer"
           >
             {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileCheck className="h-3.5 w-3.5" />}
@@ -711,7 +1024,7 @@ export const ContractManagement: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         {/* Card 1: Active */}
         <Card
-          onClick={() => { setCtStatusFilter("ACTIVE"); setCtTypeFilter("ALL"); setCtExpiryFilter("ALL"); setCtFileFilter("ALL"); }}
+          onClick={() => applyCardFilter("ALL", { status: "ACTIVE" })}
           className="border border-emerald-500/30 bg-emerald-500/5 dark:bg-emerald-500/10 shadow-xs hover:shadow-md hover:ring-2 hover:ring-emerald-500/50 cursor-pointer transition-all"
         >
           <CardContent className="p-4 flex flex-col justify-between h-full">
@@ -730,7 +1043,7 @@ export const ContractManagement: React.FC = () => {
 
         {/* Card 2: Sắp hết hạn (<= 30 ngày) */}
         <Card
-          onClick={() => { setCtStatusFilter("ALL"); setCtTypeFilter("ALL"); setCtExpiryFilter("EXPIRING_SOON"); setCtFileFilter("ALL"); }}
+          onClick={() => applyCardFilter("EXPIRING_30")}
           className="border border-amber-500/40 bg-amber-500/5 dark:bg-amber-500/10 shadow-xs hover:shadow-md hover:ring-2 hover:ring-amber-500/50 cursor-pointer transition-all"
         >
           <CardContent className="p-4 flex flex-col justify-between h-full">
@@ -749,7 +1062,7 @@ export const ContractManagement: React.FC = () => {
 
         {/* Card 3: Thử việc sắp hết hạn */}
         <Card
-          onClick={() => { setCtStatusFilter("ALL"); setCtTypeFilter("PROBATION"); setCtExpiryFilter("ALL"); setCtFileFilter("ALL"); }}
+          onClick={() => applyCardFilter("PROBATION_EXPIRING_30")}
           className="border border-indigo-500/30 bg-indigo-500/5 dark:bg-indigo-500/10 shadow-xs hover:shadow-md hover:ring-2 hover:ring-indigo-500/50 cursor-pointer transition-all"
         >
           <CardContent className="p-4 flex flex-col justify-between h-full">
@@ -768,7 +1081,7 @@ export const ContractManagement: React.FC = () => {
 
         {/* Card 4: Mới ký tháng này */}
         <Card
-          onClick={() => { setCtStatusFilter("ACTIVE"); setCtTypeFilter("ALL"); setCtExpiryFilter("ALL"); setCtFileFilter("ALL"); }}
+          onClick={() => applyCardFilter("SIGNED_THIS_MONTH")}
           className="border border-blue-500/30 bg-blue-500/5 dark:bg-blue-500/10 shadow-xs hover:shadow-md hover:ring-2 hover:ring-blue-500/50 cursor-pointer transition-all"
         >
           <CardContent className="p-4 flex flex-col justify-between h-full">
@@ -787,7 +1100,7 @@ export const ContractManagement: React.FC = () => {
 
         {/* Card 5: Chấm dứt tháng này */}
         <Card
-          onClick={() => { setCtStatusFilter("TERMINATED"); setCtTypeFilter("ALL"); setCtExpiryFilter("ALL"); setCtFileFilter("ALL"); }}
+          onClick={() => applyCardFilter("TERMINATED_THIS_MONTH")}
           className="border border-rose-500/30 bg-rose-500/5 dark:bg-rose-500/10 shadow-xs hover:shadow-md hover:ring-2 hover:ring-rose-500/50 cursor-pointer transition-all"
         >
           <CardContent className="p-4 flex flex-col justify-between h-full">
@@ -806,7 +1119,7 @@ export const ContractManagement: React.FC = () => {
 
         {/* Card 6: Thiếu file đính kèm */}
         <Card
-          onClick={() => { setCtFileFilter("MISSING"); setCtStatusFilter("ALL"); setCtTypeFilter("ALL"); setCtExpiryFilter("ALL"); }}
+          onClick={() => applyCardFilter("ALL", { status: "ACTIVE", file: "MISSING_FILE" })}
           className="border border-purple-500/40 bg-purple-500/5 dark:bg-purple-500/10 shadow-xs hover:shadow-md hover:ring-2 hover:ring-purple-500/50 cursor-pointer transition-all"
         >
           <CardContent className="p-4 flex flex-col justify-between h-full">
@@ -835,11 +1148,11 @@ export const ContractManagement: React.FC = () => {
               </span>
             </div>
             <div className="space-y-2 pt-1 text-xs">
-              {["PROBATION", "FIXED_TERM", "INDEFINITE", "PART_TIME"].map((type) => {
-                const count = contracts.filter(c => (c.contractTypeEnum || c.contractType || "").includes(type)).length;
-                const pct = contracts.length > 0 ? Math.round((count / contracts.length) * 100) : 0;
-                const label = type === "PROBATION" ? "Thử việc" : type === "FIXED_TERM" ? "Xác định thời hạn" : type === "INDEFINITE" ? "Vô thời hạn" : "Bán thời gian";
-                const color = type === "PROBATION" ? "bg-amber-500" : type === "FIXED_TERM" ? "bg-indigo-500" : type === "INDEFINITE" ? "bg-emerald-500" : "bg-purple-500";
+              {contractTypeOptions.map(({ value: type, label, color }) => {
+                const count = beStats?.contractTypeDistribution?.[type]
+                  ?? contracts.filter(c => (c.contractTypeEnum || c.contractType || "").toUpperCase() === type).length;
+                const distributionTotal = Object.values(beStats?.contractTypeDistribution || {}).reduce((sum, value) => sum + value, 0) || contracts.length;
+                const pct = distributionTotal > 0 ? Math.round((count / distributionTotal) * 100) : 0;
                 return (
                   <div key={type} className="space-y-1">
                     <div className="flex items-center justify-between text-[11px] font-semibold">
@@ -868,19 +1181,10 @@ export const ContractManagement: React.FC = () => {
               </span>
             </div>
             <div className="flex items-end justify-between gap-2 h-28 pt-2 px-1">
-              {[0, 1, 2, 3, 4, 5].map((monthOffset) => {
-                const d = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1);
-                const monthLabel = `Thg ${d.getMonth() + 1}`;
-                const count = contracts.filter(c => {
-                  const endDateStr = c.endDate || c.validTo;
-                  if (!endDateStr) return false;
-                  const end = new Date(endDateStr);
-                  return end.getMonth() === d.getMonth() && end.getFullYear() === d.getFullYear();
-                }).length;
-                const maxCount = Math.max(1, ...contracts.map(() => 5));
-                const heightPct = Math.min(100, Math.max(15, (count / maxCount) * 100));
+              {expiryTimeline.map(({ key, label: monthLabel, count }) => {
+                const heightPct = count === 0 ? 0 : Math.max(8, (count / maxExpiryCount) * 100);
                 return (
-                  <div key={monthOffset} className="flex-1 flex flex-col items-center gap-1 h-full justify-end group">
+                  <div key={key} className="flex-1 flex flex-col items-center gap-1 h-full justify-end group">
                     <span className="text-[10px] font-black text-amber-600 dark:text-amber-400 group-hover:scale-110 transition-transform">{count}</span>
                     <div className="w-full bg-amber-500/20 rounded-t-lg overflow-hidden flex items-end h-20">
                       <div className="w-full bg-amber-500 rounded-t-lg transition-all duration-500 group-hover:bg-amber-600" style={{ height: `${heightPct}%` }} />
@@ -901,10 +1205,11 @@ export const ContractManagement: React.FC = () => {
                 <Building2 className="h-4 w-4 text-blue-500" /> Hợp đồng theo Phòng ban
               </span>
             </div>
-            <div className="space-y-2 pt-1 text-xs">
-              {departmentList.slice(0, 4).map((deptName) => {
-                const count = activeContracts.filter(c => c.departmentName === deptName).length;
-                const maxDeptCount = Math.max(1, activeContracts.length);
+            <div className="space-y-2 pt-1 text-xs max-h-32 overflow-y-auto pr-1">
+              {departmentList.map((deptName) => {
+                const count = beStats?.departmentDistribution?.[deptName]
+                  ?? contracts.filter(c => c.departmentName === deptName).length;
+                const maxDeptCount = Math.max(1, ...departmentList.map(dept => beStats?.departmentDistribution?.[dept] ?? contracts.filter(c => c.departmentName === dept).length));
                 const pct = Math.round((count / maxDeptCount) * 100);
                 return (
                   <div key={deptName} className="space-y-1">
@@ -975,7 +1280,7 @@ export const ContractManagement: React.FC = () => {
         {/* Toolbar: Search, Filters & Action Buttons (Merged Form inside Card like UserManagement.tsx) */}
         <form
           onSubmit={(e) => { e.preventDefault(); setCtPage(0); }}
-          className="-mt-1 py-3 px-4 bg-muted/20 border-b border-border/30 flex flex-wrap xl:flex-nowrap items-end gap-2.5 w-full"
+          className="-mt-1 py-3 px-4 bg-muted/20 border-b border-border/30 flex flex-wrap items-end gap-2.5 w-full"
         >
           {/* Keyword Search */}
           <div className="flex flex-col gap-1 flex-1 min-w-[200px]">
@@ -1009,10 +1314,12 @@ export const ContractManagement: React.FC = () => {
                 <SelectValue placeholder="Tất cả" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="NON_TERMINATED">Mặc định — Chưa chấm dứt</SelectItem>
                 <SelectItem value="ALL">Tất cả Trạng thái</SelectItem>
                 <SelectItem value="ACTIVE">ACTIVE — Đang dùng</SelectItem>
                 <SelectItem value="EXPIRED">EXPIRED — Hết hạn</SelectItem>
                 <SelectItem value="TERMINATED">TERMINATED — Đã hủy</SelectItem>
+                <SelectItem value="INACTIVE">INACTIVE — Ngừng dùng</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -1043,9 +1350,10 @@ export const ContractManagement: React.FC = () => {
               <SelectContent>
                 <SelectItem value="ALL">Tất cả Loại HĐ</SelectItem>
                 <SelectItem value="PROBATION">Thử việc (Probation)</SelectItem>
+                <SelectItem value="OFFICIAL">Chính thức</SelectItem>
                 <SelectItem value="FIXED_TERM">Xác định thời hạn</SelectItem>
                 <SelectItem value="INDEFINITE">Vô thời hạn</SelectItem>
-                <SelectItem value="PART_TIME">Bán thời gian</SelectItem>
+                <SelectItem value="SEASONAL">Thời vụ / ngắn hạn</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -1079,6 +1387,7 @@ export const ContractManagement: React.FC = () => {
                 <SelectItem value="30_DAYS">Hết hạn trong 30 ngày</SelectItem>
                 <SelectItem value="60_DAYS">Hết hạn trong 60 ngày</SelectItem>
                 <SelectItem value="EXPIRED">Đã hết hạn</SelectItem>
+                <SelectItem value="INDEFINITE">Không xác định thời hạn</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -1097,6 +1406,33 @@ export const ContractManagement: React.FC = () => {
               </SelectContent>
             </Select>
           </div>
+
+          {/* Signing date range — DatePickerInput hiển thị dd/mm/yyyy và trả về YYYY-MM-DD */}
+          <div className="w-[150px] shrink-0">
+            <DatePickerInput
+              label="Ký từ ngày"
+              value={ctSignedFrom}
+              onChange={(value) => { setCtSignedFrom(value); setCtPage(0); }}
+              placeholder="dd/mm/yyyy"
+              clearable
+            />
+          </div>
+
+          <div className="w-[150px] shrink-0">
+            <DatePickerInput
+              label="Ký đến ngày"
+              value={ctSignedTo}
+              onChange={(value) => { setCtSignedTo(value); setCtPage(0); }}
+              placeholder="dd/mm/yyyy"
+              clearable
+            />
+          </div>
+
+          {ctSignedFrom && ctSignedTo && ctSignedFrom > ctSignedTo && (
+            <span className="self-end h-9 inline-flex items-center text-[11px] font-semibold text-destructive">
+              Ngày bắt đầu phải trước ngày kết thúc
+            </span>
+          )}
 
           {/* Action Buttons */}
           <div className="flex items-center gap-1.5 shrink-0 self-end">
@@ -1172,6 +1508,34 @@ export const ContractManagement: React.FC = () => {
                   <X className="h-3 w-3 cursor-pointer hover:text-destructive" onClick={() => setCtFileFilter("ALL")} />
                 </span>
               )}
+              {(ctSignedFrom || ctSignedTo) && (
+                <span className="px-2 py-0.5 rounded-md bg-background border border-border/40 text-foreground flex items-center gap-1">
+                  Ngày ký:
+                  <strong className="text-primary">
+                    {ctSignedFrom ? formatDateDisplay(ctSignedFrom) : "Bắt đầu"} → {ctSignedTo ? formatDateDisplay(ctSignedTo) : "Hiện tại"}
+                  </strong>
+                  <X
+                    className="h-3 w-3 cursor-pointer hover:text-destructive"
+                    onClick={() => { setCtSignedFrom(""); setCtSignedTo(""); setCtPage(0); }}
+                  />
+                </span>
+              )}
+              {ctQuickFilter !== "ALL" && (
+                <span className="px-2 py-0.5 rounded-md bg-background border border-border/40 text-foreground flex items-center gap-1">
+                  Nhiệm vụ: <strong className="text-primary">{{
+                    EXPIRING_30: "Sắp hết hạn trong 30 ngày",
+                    PROBATION_EXPIRING_30: "Thử việc sắp hết hạn",
+                    SIGNED_THIS_MONTH: "Đã ký tháng này",
+                    TERMINATED_THIS_MONTH: "Chấm dứt tháng này",
+                  }[ctQuickFilter]}</strong>
+                  <X className="h-3 w-3 cursor-pointer hover:text-destructive" onClick={() => { setCtQuickFilter("ALL"); setCtPage(0); }} />
+                </span>
+              )}
+              {sortRules.map((rule, index) => (
+                <span key={`${rule.field}-${index}`} className="px-2 py-0.5 rounded-md bg-background border border-border/40 text-foreground flex items-center gap-1">
+                  Sort {index + 1}: <strong className="text-primary">{rule.field} {rule.dir}</strong>
+                </span>
+              ))}
             </div>
 
             <Button
@@ -1342,7 +1706,8 @@ export const ContractManagement: React.FC = () => {
                   return (
                     <TableRow
                       key={ct.id || index}
-                      className={`hover:bg-foreground/10 transition-colors border-border/30 ${
+                      data-contract-id={String(ct.id)}
+                      className={`hover:bg-foreground/10 transition-colors border-border/30 ${String(ct.id) === highlightedContractId ? "bg-emerald-500/20 ring-2 ring-inset ring-emerald-500 animate-pulse" : ""} ${
                         isSelected ? "bg-primary/5 hover:bg-primary/10" :
                         isExpiringSoon ? "bg-amber-500/5 hover:bg-amber-500/10" :
                         isExpired ? "bg-rose-500/5 hover:bg-rose-500/10" : ""
@@ -1419,17 +1784,15 @@ export const ContractManagement: React.FC = () => {
 
                       {/* File MinIO Status */}
                       <TableCell className="text-center">
-                        {ct.fileUrl || ct.fileKey ? (
-                          <a
-                            href={ct.fileUrl || ct.fileKey}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline bg-primary/10 px-2.5 py-1 rounded-full border border-primary/20"
-                            title={ct.fileName || "Tải file PDF hợp đồng"}
-                          >
-                            <FileCheck className="h-3.5 w-3.5 text-primary" />
-                            <span className="max-w-[90px] truncate">{ct.fileName ? "File PDF" : "Đã đính kèm"}</span>
-                          </a>
+                        {ct.downloadUrl || ct.fileUrl || ct.fileKey ? (
+                          <div className="inline-flex items-center gap-1">
+                            <Button type="button" variant="ghost" size="sm" disabled={documentLoading?.id === String(ct.id)} onClick={() => openContractFile(ct.id)} className="h-7 px-2 text-xs font-bold text-primary" title="Xem file hợp đồng">
+                              {documentLoading?.id === String(ct.id) && documentLoading.action === "view" ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Eye className="h-3.5 w-3.5 mr-1" />} Xem
+                            </Button>
+                            <Button type="button" variant="ghost" size="sm" disabled={documentLoading?.id === String(ct.id)} onClick={() => openContractFile(ct.id, true)} className="h-7 px-2 text-xs font-bold text-emerald-600" title="Tải file hợp đồng">
+                              {documentLoading?.id === String(ct.id) && documentLoading.action === "download" ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <DownloadCloud className="h-3.5 w-3.5 mr-1" />} Tải
+                            </Button>
+                          </div>
                         ) : (
                           <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 rounded-full">
                             <AlertCircle className="h-3 w-3" /> Chưa có file
@@ -1541,11 +1904,22 @@ export const ContractManagement: React.FC = () => {
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => setTerminateConfirmContract({ id: ct.id, name: ct.fullName || ct.employeeCode || "Nhân viên" })}
+                              onClick={() => { setTerminateReason(""); setTerminateConfirmContract({ id: ct.id, name: ct.fullName || ct.employeeCode || "Nhân viên" }); }}
                               className="h-7 w-7 text-rose-600 hover:bg-rose-500/10 cursor-pointer"
                               title="Chấm dứt hợp đồng này"
                             >
                               <FileX className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                          {ct.status === "TERMINATED" && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setDeleteEmployeeContracts({ employeeId: String(ct.employeeId), name: ct.fullName || ct.employeeCode || "Nhân viên" })}
+                              className="h-7 w-7 text-destructive hover:bg-destructive/10 cursor-pointer"
+                              title="Xóa vĩnh viễn toàn bộ hợp đồng và file của nhân viên"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
                             </Button>
                           )}
                         </div>
@@ -1689,7 +2063,7 @@ export const ContractManagement: React.FC = () => {
 
           {/* TAB 2 UNSIGNED CONTRACTS TABLE */}
           <Card className="border border-border/70 rounded-2xl bg-card shadow-xs overflow-hidden">
-            <CardHeader className="p-4 border-b border-border/40 bg-muted/20 flex flex-row items-center justify-between">
+            <CardHeader className="p-4 border-b border-border/40 bg-muted/20 space-y-4">
               <div>
                 <CardTitle className="text-sm font-extrabold uppercase text-foreground flex items-center gap-2">
                   <PenTool className="h-4 w-4 text-amber-600" /> Danh sách Hợp đồng Cần Ký Điện Tử
@@ -1697,6 +2071,32 @@ export const ContractManagement: React.FC = () => {
                 <CardDescription className="text-xs text-muted-foreground">
                   Thực hiện ký xác nhận phía Công ty, sao chép link ký hoặc gửi lại OTP cho nhân viên
                 </CardDescription>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-[minmax(260px,1fr)_260px] gap-3">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    value={signingSearchTerm}
+                    onChange={(event) => { setSigningSearchTerm(event.target.value); setSigningPage(0); setSigningJumpPage("1"); }}
+                    placeholder="Tìm tên, mã NV, email, phòng ban, loại HĐ..."
+                    className="h-9 pl-9 pr-9 text-xs"
+                  />
+                  {signingSearchTerm && (
+                    <button type="button" onClick={() => { setSigningSearchTerm(""); setSigningPage(0); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+                <Select value={signingStatusFilter} onValueChange={(value) => { setSigningStatusFilter(value); setSigningPage(0); setSigningJumpPage("1"); }}>
+                  <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="PENDING_ALL">Tất cả đang chờ ký</SelectItem>
+                    <SelectItem value="PENDING_COMPANY_SIGN">Chờ công ty ký</SelectItem>
+                    <SelectItem value="PENDING_EMPLOYEE_SIGN">Chờ nhân viên ký OTP</SelectItem>
+                    <SelectItem value="FULLY_SIGNED">Đã ký đủ hai bên</SelectItem>
+                    <SelectItem value="ALL">Tất cả trạng thái ký</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </CardHeader>
 
@@ -1712,10 +2112,11 @@ export const ContractManagement: React.FC = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {unsignedContracts.length > 0 ? (
-                    unsignedContracts.map((ct) => {
+                  {signingPaginatedContracts.length > 0 ? (
+                    signingPaginatedContracts.map((ct) => {
                       const isPendingCompany = !ct.signingStatus || ct.signingStatus === "PENDING_COMPANY_SIGN";
                       const isPendingEmployee = ct.signingStatus === "PENDING_EMPLOYEE_SIGN";
+                      const isFullySigned = ct.signingStatus === "FULLY_SIGNED";
 
                       return (
                         <TableRow key={ct.id} className="hover:bg-muted/20">
@@ -1739,7 +2140,11 @@ export const ContractManagement: React.FC = () => {
 
                           {/* Signing Status Badge */}
                           <TableCell className="text-center">
-                            {isPendingEmployee ? (
+                            {isFullySigned ? (
+                              <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-emerald-500/15 text-emerald-700 border border-emerald-500/30 inline-flex items-center gap-1">
+                                <ShieldCheck className="h-3 w-3" /> Đã ký đủ hai bên
+                              </span>
+                            ) : isPendingEmployee ? (
                               <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-blue-500/15 text-blue-700 border border-blue-500/30 inline-flex items-center gap-1">
                                 <Clock className="h-3 w-3" /> Chờ NV ký OTP
                               </span>
@@ -1799,11 +2204,12 @@ export const ContractManagement: React.FC = () => {
                                 <Button
                                   size="sm"
                                   variant="ghost"
-                                  onClick={() => setPdfPreviewUrl(ct.originalFileDownloadUrl || ct.fileUrl || (ct.fileKey ? `/api/v1/files/download?fileKey=${ct.fileKey}` : null))}
+                                  disabled={documentLoading?.id === String(ct.id)}
+                                  onClick={() => openContractFile(ct.id)}
                                   className="h-7 text-xs font-bold gap-1 rounded-lg text-slate-600 hover:bg-slate-100 cursor-pointer"
                                   title="Xem trước file PDF Hợp đồng"
                                 >
-                                  <Eye className="h-3 w-3" /> Xem PDF
+                                  {documentLoading?.id === String(ct.id) ? <Loader2 className="h-3 w-3 animate-spin" /> : <Eye className="h-3 w-3" />} Xem PDF
                                 </Button>
                               )}
 
@@ -1825,13 +2231,58 @@ export const ContractManagement: React.FC = () => {
                   ) : (
                     <TableRow>
                       <TableCell colSpan={5} className="py-12 text-center text-xs text-muted-foreground">
-                        Không có hợp đồng nào đang chờ ký. Tất cả hợp đồng đã được hoàn tất ký điện tử!
+                        Không tìm thấy hợp đồng phù hợp với điều kiện tìm kiếm và trạng thái ký.
                       </TableCell>
                     </TableRow>
                   )}
                 </TableBody>
               </Table>
             </CardContent>
+            <div className="px-4 py-3 border-t border-border/40 bg-muted/10 flex flex-col xl:flex-row xl:items-center justify-between gap-3 text-xs">
+              <div className="text-muted-foreground font-medium">
+                Hiển thị <strong className="text-foreground">{signingTotalElements === 0 ? 0 : signingPage * signingPageSize + 1}</strong>
+                {" – "}<strong className="text-foreground">{Math.min((signingPage + 1) * signingPageSize, signingTotalElements)}</strong>
+                {" / "}<strong className="text-foreground">{signingTotalElements}</strong> hợp đồng
+                <span className="ml-2">• Mới cập nhật nhất trước</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground">Số dòng:</span>
+                  <Select value={String(signingPageSize)} onValueChange={(value) => { setSigningPageSize(Number(value)); setSigningPage(0); setSigningJumpPage("1"); }}>
+                    <SelectTrigger className="h-8 w-16 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="20">20</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <form className="flex items-center gap-1.5" onSubmit={(event) => {
+                  event.preventDefault();
+                  const page = Number(signingJumpPage);
+                  if (page >= 1 && page <= signingTotalPages) setSigningPage(page - 1);
+                  else setSigningJumpPage(String(signingPage + 1));
+                }}>
+                  <span className="text-muted-foreground">Đến trang:</span>
+                  <Input value={signingJumpPage} onChange={(event) => setSigningJumpPage(event.target.value.replace(/\D/g, ""))} className="h-8 w-14 text-center text-xs" />
+                </form>
+                <div className="flex items-center gap-1">
+                  <Button variant="outline" size="sm" className="h-8 px-2" disabled={signingPage === 0} onClick={() => { setSigningPage(page => page - 1); setSigningJumpPage(String(signingPage)); }}>
+                    <ChevronLeft className="h-3.5 w-3.5" /> Trước
+                  </Button>
+                  {getPageNumbers(signingPage, signingTotalPages).map((page, index) => page === "..." ? (
+                    <span key={`signing-dots-${index}`} className="px-1 text-muted-foreground">…</span>
+                  ) : (
+                    <Button key={page} variant={signingPage === page ? "default" : "outline"} size="sm" className="h-8 min-w-8 px-2" onClick={() => { setSigningPage(Number(page)); setSigningJumpPage(String(Number(page) + 1)); }}>
+                      {Number(page) + 1}
+                    </Button>
+                  ))}
+                  <Button variant="outline" size="sm" className="h-8 px-2" disabled={signingTotalPages === 0 || signingPage >= signingTotalPages - 1} onClick={() => { setSigningPage(page => page + 1); setSigningJumpPage(String(signingPage + 2)); }}>
+                    Sau <ChevronRight className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+            </div>
           </Card>
         </div>
       )}
@@ -1892,9 +2343,10 @@ export const ContractManagement: React.FC = () => {
           </div>
 
           {/* TOOLBAR SEARCH TAB 3 */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 bg-card rounded-2xl border border-border/70 shadow-2xs">
-            <div className="relative w-full sm:w-80">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-3 p-4 bg-card rounded-2xl border border-border/70 shadow-2xs">
+            <div className="relative w-full lg:max-w-md">
+              <Label className="block text-xs font-bold text-muted-foreground mb-1">Tìm kiếm nhân viên</Label>
+              <Search className="absolute left-3 bottom-2.5 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Tìm theo tên, mã NV, phòng ban..."
                 value={noContractSearchTerm}
@@ -1904,21 +2356,39 @@ export const ContractManagement: React.FC = () => {
               {noContractSearchTerm && (
                 <button
                   onClick={() => setNoContractSearchTerm("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+                    className="absolute right-3 bottom-2.5 text-muted-foreground hover:text-foreground cursor-pointer"
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>
               )}
             </div>
-            <div className="text-xs font-semibold text-muted-foreground">
-              Hiển thị <span className="text-foreground font-bold">{filteredEmployeesWithoutContract.length}</span> nhân viên chưa có hợp đồng
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="space-y-1 w-32">
+                <Label className="text-xs font-bold text-muted-foreground">Số dòng/trang</Label>
+                <Select value={String(noContractPageSize)} onValueChange={(value) => setNoContractPageSize(Number(value))}>
+                  <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="5">5 dòng</SelectItem>
+                    <SelectItem value="10">10 dòng</SelectItem>
+                    <SelectItem value="20">20 dòng</SelectItem>
+                    <SelectItem value="50">50 dòng</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button type="button" variant="outline" size="sm" onClick={fetchAllEmployees} disabled={loadingAllEmployees} className="h-9 gap-1.5 text-xs font-bold">
+                {loadingAllEmployees ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+                Làm mới
+              </Button>
+              <div className="h-9 inline-flex items-center px-3 rounded-lg bg-muted/50 border text-xs font-semibold text-muted-foreground">
+                <span className="text-foreground font-black mr-1">{filteredEmployeesWithoutContract.length}</span> nhân viên
+              </div>
             </div>
           </div>
 
           {/* TABLE TAB 3 */}
           <div className="rounded-2xl border border-border/70 overflow-hidden bg-card shadow-xs">
-            <Table>
-              <TableHeader className="bg-muted/40">
+            <Table containerClassName="max-h-[calc(100vh-300px)] min-h-[320px] overflow-auto">
+              <TableHeader className="sticky top-0 z-10 bg-card shadow-xs">
                 <TableRow>
                   <TableHead className="w-12 text-center text-xs font-bold">#</TableHead>
                   <TableHead className="text-xs font-bold">Mã NV</TableHead>
@@ -1950,9 +2420,9 @@ export const ContractManagement: React.FC = () => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredEmployeesWithoutContract.map((emp, idx) => (
+                  paginatedEmployeesWithoutContract.map((emp, idx) => (
                     <TableRow key={emp.id} className="hover:bg-muted/30 transition-colors">
-                      <TableCell className="text-center text-xs text-muted-foreground font-mono">{idx + 1}</TableCell>
+                      <TableCell className="text-center text-xs text-muted-foreground font-mono">{noContractPage * noContractPageSize + idx + 1}</TableCell>
                       <TableCell className="font-mono text-xs font-bold text-primary">{emp.employeeCode || emp.id}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2.5">
@@ -1989,6 +2459,45 @@ export const ContractManagement: React.FC = () => {
                 )}
               </TableBody>
             </Table>
+            <div className="px-4 py-3 border-t border-border/40 bg-muted/20 flex flex-col md:flex-row items-center justify-between gap-3 text-xs">
+              <div className="text-muted-foreground font-medium">
+                Hiển thị <strong className="text-foreground">{filteredEmployeesWithoutContract.length === 0 ? 0 : noContractPage * noContractPageSize + 1}</strong>
+                {" – "}<strong className="text-foreground">{Math.min((noContractPage + 1) * noContractPageSize, filteredEmployeesWithoutContract.length)}</strong>
+                {" / "}<strong className="text-foreground">{filteredEmployeesWithoutContract.length}</strong> nhân viên
+              </div>
+              <div className="flex flex-wrap items-center justify-center gap-1">
+                <Button variant="outline" size="icon" className="h-8 w-8" disabled={noContractPage === 0 || noContractTotalPages === 0} onClick={() => setNoContractPage(0)} title="Trang đầu">
+                  <ChevronLeft className="h-3.5 w-3.5" /><ChevronLeft className="h-3.5 w-3.5 -ml-2" />
+                </Button>
+                <Button variant="outline" size="icon" className="h-8 w-8" disabled={noContractPage === 0 || noContractTotalPages === 0} onClick={() => setNoContractPage(page => page - 1)} title="Trang trước">
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                {getPageNumbers(noContractPage, noContractTotalPages).map((page, index) => page === "..." ? (
+                  <span key={`ellipsis-${index}`} className="px-1 text-muted-foreground">…</span>
+                ) : (
+                  <Button key={page} variant={noContractPage === page ? "default" : "outline"} size="sm" className="h-8 min-w-8 px-2 text-xs" onClick={() => setNoContractPage(Number(page))}>{Number(page) + 1}</Button>
+                ))}
+                <Button variant="outline" size="icon" className="h-8 w-8" disabled={noContractTotalPages === 0 || noContractPage >= noContractTotalPages - 1} onClick={() => setNoContractPage(page => page + 1)} title="Trang sau">
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Button variant="outline" size="icon" className="h-8 w-8" disabled={noContractTotalPages === 0 || noContractPage >= noContractTotalPages - 1} onClick={() => setNoContractPage(noContractTotalPages - 1)} title="Trang cuối">
+                  <ChevronRight className="h-3.5 w-3.5" /><ChevronRight className="h-3.5 w-3.5 -ml-2" />
+                </Button>
+                <div className="flex items-center gap-1 ml-2">
+                  <span className="text-muted-foreground">Đến trang</span>
+                  <Input
+                    value={noContractJumpPage}
+                    onChange={(event) => setNoContractJumpPage(event.target.value.replace(/\D/g, ""))}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter") return;
+                      const targetPage = Number(noContractJumpPage);
+                      if (targetPage >= 1 && targetPage <= noContractTotalPages) setNoContractPage(targetPage - 1);
+                    }}
+                    className="h-8 w-14 text-center text-xs"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -2017,7 +2526,7 @@ export const ContractManagement: React.FC = () => {
             <Button
               size="sm"
               variant="outline"
-              onClick={handleBulkSendReminders}
+              onClick={handleOpenReminderModal}
               className="h-8 text-xs font-bold gap-1.5 rounded-xl border-border hover:bg-muted cursor-pointer"
             >
               <Send className="h-3.5 w-3.5 text-blue-600" />
@@ -2027,21 +2536,12 @@ export const ContractManagement: React.FC = () => {
             <Button
               size="sm"
               variant="outline"
-              onClick={() => {
-                const files = contracts.filter(c => selectedContractIds.includes(c.id) && (c.fileUrl || c.fileKey));
-                if (files.length === 0) {
-                  showBanner("Các hợp đồng đã chọn không có file đính kèm!", true);
-                  return;
-                }
-                files.forEach(f => {
-                  window.open(f.fileUrl || f.fileKey, "_blank");
-                });
-                showBanner(`Đã tải xuống ${files.length} file hợp đồng!`);
-              }}
+              onClick={handleBulkDownloadZip}
+              disabled={bulkDownloading}
               className="h-8 text-xs font-bold gap-1.5 rounded-xl border-border hover:bg-muted cursor-pointer"
             >
-              <DownloadCloud className="h-3.5 w-3.5 text-purple-600" />
-              <span>Tải Zip/File PDF</span>
+              {bulkDownloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <DownloadCloud className="h-3.5 w-3.5 text-purple-600" />}
+              <span>{bulkDownloading ? "Đang tạo ZIP..." : "Tải ZIP/PDF"}</span>
             </Button>
 
             <Button
@@ -2060,6 +2560,64 @@ export const ContractManagement: React.FC = () => {
             >
               <X className="h-4 w-4" />
             </button>
+          </div>
+        </div>
+      )}
+
+      {reminderModalOpen && (
+        <div className="fixed inset-0 z-[120] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4" onMouseDown={() => !sendingReminder && setReminderModalOpen(false)}>
+          <div className="bg-background border border-border/60 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 shadow-2xl space-y-5" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-black">Gửi lời nhắc xử lý hợp đồng</h3>
+                <p className="text-xs text-muted-foreground mt-1">Chọn nhân sự HR nhận email cho {selectedContractIds.length} hợp đồng đã chọn.</p>
+              </div>
+              <Button variant="ghost" size="icon" disabled={sendingReminder} onClick={() => setReminderModalOpen(false)}><X className="h-4 w-4" /></Button>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold">Người nhận HR *</Label>
+                {hrRecipients.length > 0 && (
+                  <button type="button" className="text-xs font-semibold text-primary" onClick={() => setSelectedHrIds(selectedHrIds.length === hrRecipients.length ? [] : hrRecipients.map(hr => hr.id))}>
+                    {selectedHrIds.length === hrRecipients.length ? "Bỏ chọn tất cả" : "Chọn tất cả"}
+                  </button>
+                )}
+              </div>
+              <div className="rounded-xl border border-border/60 max-h-52 overflow-y-auto divide-y divide-border/40">
+                {loadingHrRecipients ? (
+                  <div className="p-6 flex items-center justify-center gap-2 text-xs text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Đang tải danh sách HR...</div>
+                ) : hrRecipients.length === 0 ? (
+                  <div className="p-6 text-center text-xs text-destructive">Không tìm thấy tài khoản HR đang hoạt động.</div>
+                ) : hrRecipients.map(hr => (
+                  <label key={hr.id} className="flex items-center gap-3 p-3 hover:bg-muted/40 cursor-pointer">
+                    <Checkbox checked={selectedHrIds.includes(hr.id)} onCheckedChange={() => setSelectedHrIds(previous => previous.includes(hr.id) ? previous.filter(id => id !== hr.id) : [...previous, hr.id])} />
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold truncate">{hr.fullName}</p>
+                      <p className="text-xs text-muted-foreground truncate">{hr.email}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold">Tiêu đề</Label>
+              <Input value={reminderSubject} onChange={(event) => setReminderSubject(event.target.value)} maxLength={200} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold">Nội dung lời nhắc *</Label>
+              <Textarea value={reminderContent} onChange={(event) => setReminderContent(event.target.value)} rows={6} maxLength={3000} placeholder="Nhập nội dung cần gửi đến bộ phận HR..." />
+              <p className="text-[11px] text-muted-foreground">Hệ thống tự đính kèm danh sách nhân viên, mã hợp đồng và ngày hết hạn vào cuối email.</p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-border/40">
+              <Button variant="outline" disabled={sendingReminder} onClick={() => setReminderModalOpen(false)}>Hủy</Button>
+              <Button disabled={sendingReminder || loadingHrRecipients || selectedHrIds.length === 0 || !reminderContent.trim()} onClick={handleBulkSendReminders} className="gap-2">
+                {sendingReminder ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                {sendingReminder ? "Đang gửi..." : `Gửi đến ${selectedHrIds.length} HR`}
+              </Button>
+            </div>
           </div>
         </div>
       )}
@@ -2104,7 +2662,7 @@ export const ContractManagement: React.FC = () => {
               <Button
                 variant="destructive"
                 size="sm"
-                disabled={bulkTerminating}
+                disabled={bulkTerminating || !bulkTerminateReason.trim()}
                 onClick={handleConfirmBulkTerminate}
                 className="rounded-xl text-xs font-bold gap-1"
               >
@@ -2121,9 +2679,12 @@ export const ContractManagement: React.FC = () => {
         isOpen={detailModalOpen}
         onClose={() => setDetailModalOpen(false)}
         contract={selectedContractForDetail}
-        onOpenPdfPreview={(url) => setPdfPreviewUrl(url)}
+        onOpenPdfPreview={(contractId) => openContractFile(contractId)}
+        onDownloadFile={(contractId) => openContractFile(contractId, true)}
         onSignCompany={(ctId) => handleSignCompanyQuick(ctId)}
         onOpenSigningHistory={(ctId) => handleOpenSigningHistoryQuick(ctId)}
+        onDeleteAllContracts={(employeeId, name) => setDeleteEmployeeContracts({ employeeId, name })}
+        documentLoading={documentLoading?.id === String(selectedContractForDetail?.id) ? documentLoading.action : null}
       />
 
       {/* TOAST BANNER NOTIFICATIONS */}
@@ -2147,7 +2708,30 @@ export const ContractManagement: React.FC = () => {
         description={`Bạn có chắc chắn muốn chấm dứt hợp đồng của ${terminateConfirmContract?.name}?`}
         confirmText="Chấm dứt HĐ"
         cancelText="Hủy bỏ"
+        loading={terminatingContract}
         onConfirm={confirmTerminateContractAction}
+      >
+        <div className="w-full text-left space-y-1.5 mt-2">
+          <Label className="text-xs font-bold">Lý do chấm dứt</Label>
+          <Input
+            value={terminateReason}
+            onChange={(event) => setTerminateReason(event.target.value)}
+            placeholder="Ví dụ: Hết hạn dự án, thỏa thuận hai bên..."
+            className="h-9 text-xs"
+            maxLength={500}
+          />
+        </div>
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={Boolean(deleteEmployeeContracts)}
+        onOpenChange={(open) => { if (!open) setDeleteEmployeeContracts(null); }}
+        title="Xóa vĩnh viễn toàn bộ hợp đồng"
+        description={`Thao tác này sẽ xóa tất cả hợp đồng của ${deleteEmployeeContracts?.name || "nhân viên"}, toàn bộ metadata file và file vật lý trên MinIO. Không thể hoàn tác.`}
+        confirmText="Xóa vĩnh viễn"
+        cancelText="Hủy bỏ"
+        loading={deletingContracts}
+        onConfirm={confirmDeleteEmployeeContracts}
       />
 
       {/* SELECT EMPLOYEE MODAL (BƯỚC 1 CỦA NÚT "+ TẠO HỢP ĐỒNG MỚI") */}
@@ -2170,7 +2754,7 @@ export const ContractManagement: React.FC = () => {
                   type="text"
                   placeholder="Tìm tên hoặc mã nhân viên..."
                   value={employeeSearchTerm}
-                  onChange={(e) => setEmployeeSearchTerm(e.target.value)}
+                  onChange={(e) => { setEmployeeSearchTerm(e.target.value); setEmployeePickerPage(0); }}
                   className="pl-8 h-9 text-xs bg-background border-border/40 rounded-xl"
                 />
               </div>
@@ -2183,13 +2767,7 @@ export const ContractManagement: React.FC = () => {
                 ) : employeeList.length === 0 ? (
                   <div className="py-8 text-center text-muted-foreground">Không tìm thấy nhân viên nào.</div>
                 ) : (
-                  employeeList
-                    .filter((emp) => {
-                      if (!employeeSearchTerm.trim()) return true;
-                      const kw = employeeSearchTerm.toLowerCase();
-                      return (emp.fullName || "").toLowerCase().includes(kw) || (emp.employeeCode || "").toLowerCase().includes(kw);
-                    })
-                    .map((emp) => (
+                  employeeList.map((emp) => (
                       <div
                         key={emp.id || emp.userId}
                         onClick={() => {
@@ -2215,6 +2793,17 @@ export const ContractManagement: React.FC = () => {
                     ))
                 )}
               </div>
+              <div className="flex items-center justify-between border-t border-border/40 pt-3">
+                <span className="text-[11px] text-muted-foreground">Trang {employeePickerTotalPages ? employeePickerPage + 1 : 0}/{employeePickerTotalPages} · {employeePickerTotal} nhân viên đã chấm dứt</span>
+                <div className="flex gap-1">
+                  <Button type="button" variant="outline" size="sm" className="h-7 px-2" disabled={loadingEmployeeList || employeePickerPage === 0} onClick={() => setEmployeePickerPage(page => page - 1)}>
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" className="h-7 px-2" disabled={loadingEmployeeList || employeePickerPage + 1 >= employeePickerTotalPages} onClick={() => setEmployeePickerPage(page => page + 1)}>
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -2229,11 +2818,49 @@ export const ContractManagement: React.FC = () => {
             setSelectedEmployeeForWizard(null);
           }}
           employee={selectedEmployeeForWizard}
-          onSuccess={(msg) => {
+          onSuccess={async (msg, createdContract) => {
             showBanner(msg);
-            fetchContracts();
+            const createdId = createdContract?.id ? String(createdContract.id) : null;
+
+            // Luôn đưa hợp đồng vừa tạo về đầu danh sách, bất kể bộ lọc/trang hiện tại.
+            setCtSearchTerm("");
+            setCtStatusFilter("NON_TERMINATED");
+            setCtSigningStatusFilter("ALL");
+            setCtTypeFilter("ALL");
+            setCtDeptFilter("ALL");
+            setCtExpiryFilter("ALL");
+            setCtFileFilter("ALL");
+            setCtSignedFrom("");
+            setCtSignedTo("");
+            setCtQuickFilter("ALL");
+            setMainTab("all");
+            setCtPage(0);
+            setCtJumpPageInput("1");
+            setSortRules([
+              { field: "status", dir: "ASC" },
+              { field: "createdAt", dir: "DESC" },
+            ]);
+
+            if (createdContract?.id) {
+              setContracts((previous) => [
+                createdContract as EmployeeContractResponse,
+                ...previous.filter((contract) => String(contract.id) !== createdId),
+              ]);
+            }
+            setHighlightedContractId(createdId);
             setNewContractWizardOpen(false);
             setSelectedEmployeeForWizard(null);
+
+            await fetchContracts(createdContract?.id ? createdContract as EmployeeContractResponse : undefined);
+            if (createdId) {
+              window.setTimeout(() => {
+                document.querySelector(`[data-contract-id="${createdId}"]`)?.scrollIntoView({
+                  behavior: "smooth",
+                  block: "center",
+                });
+              }, 100);
+              window.setTimeout(() => setHighlightedContractId(null), 2500);
+            }
           }}
           onError={(msg) => showBanner(msg, true)}
         />
@@ -2241,11 +2868,11 @@ export const ContractManagement: React.FC = () => {
 
       {/* SIGNING HISTORY AUDIT DIALOG (MỞ KHI CLICK NÚT LỊCH SỬ KÝ TRÊN ROW) */}
       {signingHistoryOpen && (
-        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div onClick={(e) => e.stopPropagation()} className="bg-background border border-border/50 rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4" onMouseDown={() => setSigningHistoryOpen(false)}>
+          <div onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()} className="bg-background border border-border/50 rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between border-b border-border/40 pb-3">
               <h3 className="text-sm font-extrabold text-foreground flex items-center gap-2">
-                <ShieldCheck className="h-4 w-4 text-emerald-600" /> Lịch sử Ký Điện Tử (Audit Log)
+                <ShieldCheck className="h-4 w-4 text-emerald-600" /> Lịch sử ký và thay đổi hợp đồng
               </h3>
               <Button size="icon" variant="ghost" onClick={() => setSigningHistoryOpen(false)} className="h-7 w-7 rounded-lg">
                 <X className="h-4 w-4" />
@@ -2263,21 +2890,22 @@ export const ContractManagement: React.FC = () => {
                 </div>
               ) : (
                 signingHistoryLogs.map((logItem) => (
-                  <div key={logItem.id} className="p-3 rounded-xl bg-muted/30 border border-border/40 space-y-1.5 text-xs">
+                  <button type="button" key={logItem.id} onClick={() => setSelectedAuditLog(logItem)} className="w-full text-left p-3 rounded-xl bg-muted/30 border border-border/40 space-y-1.5 text-xs hover:border-primary/50 hover:bg-primary/5 transition-colors">
                     <div className="flex items-center justify-between">
                       <span className="font-extrabold text-primary uppercase text-[10px]">
-                        {logItem.action === "CONTRACT_SIGNED_COMPANY" ? "Phía Công ty đã Ký" : "Phía Nhân viên đã Ký"}
+                        {logItem.action === "CONTRACT_SIGNED_COMPANY" ? "Phía Công ty đã ký" : logItem.action === "CONTRACT_SIGNED_EMPLOYEE" ? "Phía Nhân viên đã ký" : logItem.action}
                       </span>
                       <span className="text-[10px] font-mono text-muted-foreground">{logItem.occurredAt}</span>
                     </div>
                     <p className="font-bold text-foreground">
-                      Người ký: {logItem.signerFullName} {logItem.signerEmail ? `(${logItem.signerEmail})` : ""}
+                      Người thực hiện: {logItem.userFullName || logItem.signerFullName || "Hệ thống"} {(logItem.userEmail || logItem.signerEmail) ? `(${logItem.userEmail || logItem.signerEmail})` : ""}
                     </p>
                     <div className="text-[10px] font-mono text-muted-foreground flex flex-wrap gap-x-3">
                       <span>IP: {logItem.ipAddress || "N/A"}</span>
                       <span className="truncate max-w-[260px]">UA: {logItem.userAgent || "N/A"}</span>
                     </div>
-                  </div>
+                    <span className="block text-[10px] font-bold text-primary pt-1">Nhấn để xem metadata và nội dung thay đổi</span>
+                  </button>
                 ))
               )}
             </div>
@@ -2291,10 +2919,16 @@ export const ContractManagement: React.FC = () => {
         </div>
       )}
 
+      <DetailAuditLogModal
+        open={Boolean(selectedAuditLog)}
+        onClose={() => setSelectedAuditLog(null)}
+        log={selectedAuditLog}
+      />
+
       {/* PDF PREVIEW MODAL */}
       {pdfPreviewUrl && (
-        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div onClick={(e) => e.stopPropagation()} className="bg-background border border-border/50 rounded-2xl max-w-4xl w-full h-[85vh] p-5 space-y-3 shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col">
+        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-xs flex items-center justify-center p-4" onMouseDown={() => setPdfPreviewUrl(null)}>
+          <div onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()} className="bg-background border border-border/50 rounded-2xl max-w-5xl w-full h-[90vh] p-5 space-y-3 shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col">
             <div className="flex items-center justify-between border-b border-border/40 pb-2.5">
               <h3 className="text-sm font-extrabold text-foreground flex items-center gap-2">
                 <FileText className="h-4 w-4 text-primary" /> Xem Trước File Hợp Đồng PDF

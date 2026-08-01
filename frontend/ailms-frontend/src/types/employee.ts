@@ -62,8 +62,8 @@ export interface EmployeeExtended {
 }
 
 export interface EmployeeContractItem {
-  id: string | number;
-  employeeId: string | number;
+  id: string;
+  employeeId: string;
   employeeCode?: string;
   contractType?: ContractType | string;
   contractTypeEnum?: string;
@@ -79,9 +79,14 @@ export interface EmployeeContractItem {
   fileUrl?: string;
   fileName?: string;
   fileSize?: number;
-  createdBy?: string | number;
+  downloadUrl?: string;
+  originalFileDownloadUrl?: string;
+  signingStatus?: "PENDING_COMPANY_SIGN" | "PENDING_EMPLOYEE_SIGN" | "FULLY_SIGNED" | string;
+  signingToken?: string;
+  signingTokenExpiresAt?: string;
+  createdBy?: string;
   createdAt?: string;
-  updatedBy?: string | number;
+  updatedBy?: string;
   updatedAt?: string;
 }
 
@@ -149,7 +154,7 @@ export interface LeaveRequestItem {
 
 export interface ApprovalRequestItem {
   id: string;
-  objectType: "LEAVE_REQUEST" | "CLASS_TRANSFER_REQUEST" | "TEACHER_CHANGE_REQUEST" | "CONTRACT_EXPIRY";
+  objectType: string;
   objectId: string;
   requesterId: string;
   requesterName: string;

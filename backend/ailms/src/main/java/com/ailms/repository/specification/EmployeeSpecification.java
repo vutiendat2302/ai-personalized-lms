@@ -1,12 +1,15 @@
 package com.ailms.repository.specification;
 
 import com.ailms.entity.EmployeeEntity;
+import com.ailms.entity.EmployeeContractEntity;
 import com.ailms.entity.UserRoleEntity;
+import com.ailms.entity.enums.ContractTypeEnum;
 import com.ailms.entity.enums.UserStatusEnum;
 import com.ailms.request.EmployeeSearchRequest;
 import com.ailms.common.util.SpecificationBuilder;
 import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
+import java.time.LocalDate;
 import org.springframework.data.jpa.domain.Specification;
 
 public final class EmployeeSpecification {
@@ -37,6 +40,21 @@ public final class EmployeeSpecification {
         builder.equalIfPresent("status", request.getStatus());
         builder.equalIfPresent("userEntity.status", request.getUserStatus());
         builder.inIfPresent("userId", request.getUserIds());
+
+        if (Boolean.TRUE.equals(request.getExpiringProbationWithin7Days())) {
+            builder.custom((root, query, cb) -> {
+                LocalDate today = LocalDate.now();
+                Subquery<Long> subquery = query.subquery(Long.class);
+                Root<EmployeeContractEntity> contract = subquery.from(EmployeeContractEntity.class);
+                subquery.select(contract.get("employee").get("id"))
+                        .where(
+                                cb.equal(contract.get("employee").get("id"), root.get("id")),
+                                cb.equal(contract.get("contractTypeEnum"), ContractTypeEnum.PROBATION),
+                                cb.between(contract.get("endDate"), today, today.plusDays(7))
+                        );
+                return cb.exists(subquery);
+            });
+        }
 
         if (request.getRoleIds() != null && !request.getRoleIds().isEmpty()) {
             builder.custom((root, query, cb) -> {

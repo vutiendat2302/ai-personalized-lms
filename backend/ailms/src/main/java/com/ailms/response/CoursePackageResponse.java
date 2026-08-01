@@ -16,6 +16,8 @@ public class CoursePackageResponse {
     private Long id;
     private Long courseId;
     private String courseName;
+    private Long classId;
+    private String className;
     private String name;
     private DeliveryModeEnum deliveryMode;
     private BigDecimal price;

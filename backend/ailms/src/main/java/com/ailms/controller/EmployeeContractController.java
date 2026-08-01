@@ -14,6 +14,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
+import org.springframework.http.HttpHeaders;
 
 /**
  * Controller tiếp nhận các yêu cầu HTTP quản lý hợp đồng lao động nhân viên.
@@ -142,6 +143,41 @@ public class EmployeeContractController {
         return ResponseEntity.ok(ApiResponse.message("Employee contract deleted successfully"));
     }
 
+    @DeleteMapping("/employee/{employeeId}")
+    public ResponseEntity<ApiResponse<Void>> deleteAllByEmployeeId(@PathVariable Long employeeId) {
+        employeeContractService.deleteAllByEmployeeId(employeeId);
+        return ResponseEntity.ok(ApiResponse.message("All employee contracts and files deleted permanently"));
+    }
+
+    @PostMapping("/bulk-remind-expiration")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> bulkRemindExpiration(
+            @Valid @RequestBody BulkContractReminderRequest request) {
+        return ResponseEntity.ok(ApiResponse.of("Contract reminders sent successfully",
+                employeeContractService.sendBulkExpirationReminder(request)));
+    }
+
+    @GetMapping("/reminder-recipients")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getReminderRecipients() {
+        return ResponseEntity.ok(ApiResponse.of("HR reminder recipients retrieved successfully",
+                employeeContractService.getReminderRecipients()));
+    }
+
+    @GetMapping("/expiring-probation")
+    public ResponseEntity<ApiResponse<List<EmployeeContractResponse>>> getExpiringProbationContracts() {
+        return ResponseEntity.ok(ApiResponse.of("Expiring probation contracts retrieved successfully",
+                employeeContractService.getExpiringProbationContracts()));
+    }
+
+    @PostMapping(value = "/bulk-download-zip", produces = "application/zip")
+    public ResponseEntity<byte[]> bulkDownloadZip(@RequestBody Map<String, List<Long>> body) {
+        List<Long> ids = body.getOrDefault("ids", List.of());
+        byte[] zip = employeeContractService.downloadContractsZip(ids);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=hop_dong_da_chon.zip")
+                .contentType(MediaType.parseMediaType("application/zip"))
+                .body(zip);
+    }
+
     /**
      * GET /contracts/search
      * Tìm kiếm phân trang hợp đồng theo tiêu chí lọc.
@@ -191,6 +227,12 @@ public class EmployeeContractController {
 
         EmployeeContractResponse response = employeeContractService.confirmEmployeeSigning(signingToken, request, ipAddress, userAgent);
         return ResponseEntity.ok(ApiResponse.of("Employee contract signed successfully. Contract is now FULLY_SIGNED.", response));
+    }
+
+    @PostMapping("/sign/{signingToken}/resend-otp")
+    public ResponseEntity<ApiResponse<Void>> resendSigningOtp(@PathVariable String signingToken) {
+        employeeContractService.resendSigningOtp(signingToken);
+        return ResponseEntity.ok(ApiResponse.message("A new signing OTP has been sent."));
     }
 
     /**

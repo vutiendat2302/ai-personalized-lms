@@ -2,6 +2,9 @@ package com.ailms.service;
 
 import com.ailms.entity.ClassMemberEntity;
 import com.ailms.entity.enums.ClassMemberRole;
+import com.ailms.response.ClassMemberResponse;
+
+import java.util.List;
 
 /**
  * Service quản lý thành viên trong các lớp học (tham gia, rời lớp, chuyển lớp, danh sách chờ).
@@ -52,4 +55,8 @@ public interface IClassMemberService {
      * @return đối tượng chứa thông tin chi tiết kết quả
      */
     ClassMemberEntity rejoin(Long classId, Long userId);
+
+    List<ClassMemberResponse> getByUserId(Long userId);
+
+    List<ClassMemberResponse> getByClassId(Long classId);
 }

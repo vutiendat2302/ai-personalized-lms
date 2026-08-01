@@ -239,7 +239,7 @@ export const DatePickerInput: React.FC<DatePickerInputProps> = ({
             </div>
           }
         />
-        <PopoverContent className="w-auto p-2 z-50 bg-popover border border-border/30 shadow-xl rounded-xl" align="start">
+        <PopoverContent className="w-auto p-2 z-[200] bg-popover border border-border/30 shadow-xl rounded-xl" align="start">
           {/* Header chọn nhanh Tháng và Năm */}
           <div className="flex items-center justify-between gap-2 p-1 mb-2 border-b border-border/40 pb-2">
             {/* Select Tháng */}

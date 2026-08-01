@@ -18,15 +18,19 @@ import {
   AlertCircle,
   History,
   FileCheck,
+  Loader2,
 } from "lucide-react";
 
 interface ContractDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   contract: EmployeeContractResponse | null;
-  onOpenPdfPreview?: (url: string) => void;
+  onOpenPdfPreview?: (contractId: string) => void;
+  onDownloadFile?: (contractId: string) => void;
   onSignCompany?: (contractId: string) => void;
   onOpenSigningHistory?: (contractId: string) => void;
+  onDeleteAllContracts?: (employeeId: string, employeeName: string) => void;
+  documentLoading?: "view" | "download" | null;
 }
 
 export const ContractDetailModal: React.FC<ContractDetailModalProps> = ({
@@ -34,15 +38,21 @@ export const ContractDetailModal: React.FC<ContractDetailModalProps> = ({
   onClose,
   contract,
   onOpenPdfPreview,
+  onDownloadFile,
   onSignCompany,
   onOpenSigningHistory,
+  onDeleteAllContracts,
+  documentLoading,
 }) => {
   if (!isOpen || !contract) return null;
 
   const pdfUrl =
-    contract.originalFileDownloadUrl ||
+    contract.downloadUrl ||
     contract.fileUrl ||
+    contract.originalFileDownloadUrl ||
     (contract.fileKey ? `/api/v1/files/download?fileKey=${contract.fileKey}` : null);
+  const effectiveStartDate = contract.startDate || contract.validFrom;
+  const effectiveEndDate = contract.endDate || contract.validTo;
 
   const getContractTypeName = (type?: string) => {
     switch (type) {
@@ -116,8 +126,8 @@ export const ContractDetailModal: React.FC<ContractDetailModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
-      <div className="bg-background w-full max-w-2xl rounded-2xl shadow-2xl border border-border/60 overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200" onMouseDown={onClose}>
+      <div className="bg-background w-full max-w-2xl rounded-2xl shadow-2xl border border-border/60 overflow-hidden flex flex-col max-h-[90vh]" onMouseDown={(event) => event.stopPropagation()}>
         {/* MODAL HEADER */}
         <div className="flex items-center justify-between px-6 py-4 bg-muted/40 border-b border-border/40">
           <div className="flex items-center gap-3">
@@ -201,16 +211,16 @@ export const ContractDetailModal: React.FC<ContractDetailModalProps> = ({
               <div>
                 <span className="text-xs text-muted-foreground block">Ngày bắt đầu hiệu lực</span>
                 <span className="text-sm font-semibold text-foreground">
-                  {contract.startDate || contract.validFrom
-                    ? formatDateDisplay(contract.startDate || contract.validFrom)
+                  {effectiveStartDate
+                    ? formatDateDisplay(effectiveStartDate)
                     : "Chưa ghi nhận"}
                 </span>
               </div>
               <div>
                 <span className="text-xs text-muted-foreground block">Ngày kết thúc</span>
                 <span className="text-sm font-semibold text-foreground">
-                  {contract.endDate || contract.validTo
-                    ? formatDateDisplay(contract.endDate || contract.validTo)
+                  {effectiveEndDate
+                    ? formatDateDisplay(effectiveEndDate)
                     : "Không xác định thời hạn"}
                 </span>
               </div>
@@ -260,7 +270,7 @@ export const ContractDetailModal: React.FC<ContractDetailModalProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 text-xs">
               <div>
                 <span className="text-muted-foreground block">Người khởi tạo:</span>
-                <span className="font-semibold text-foreground">{contract.createdBy || "Chưa có dữ liệu"}</span>
+                <span className="font-semibold text-foreground">{contract.createdByName || contract.createdBy || "Hệ thống"}</span>
               </div>
               <div>
                 <span className="text-muted-foreground block">Thời gian tạo bản ghi:</span>
@@ -296,28 +306,33 @@ export const ContractDetailModal: React.FC<ContractDetailModalProps> = ({
         {/* MODAL FOOTER */}
         <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 bg-muted/40 border-t border-border/40">
           <div className="flex items-center gap-2">
+            {onDeleteAllContracts && contract.employeeId && contract.status === "TERMINATED" && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => onDeleteAllContracts(contract.employeeId, contract.fullName || contract.employeeCode || "nhân viên")}
+                className="h-9 text-xs font-bold rounded-xl"
+              >
+                Xóa toàn bộ hợp đồng
+              </Button>
+            )}
             {pdfUrl && onOpenPdfPreview && (
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => onOpenPdfPreview(pdfUrl)}
+                disabled={Boolean(documentLoading)}
+                onClick={() => onOpenPdfPreview(contract.id)}
                 className="h-9 text-xs font-bold gap-1.5 rounded-xl border-blue-200 text-blue-700 hover:bg-blue-50 cursor-pointer"
               >
-                <FileCheck className="h-4 w-4" />
+                {documentLoading === "view" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileCheck className="h-4 w-4" />}
                 <span>Xem Tệp PDF Hợp Đồng</span>
               </Button>
             )}
-            {pdfUrl && (
-              <a
-                href={pdfUrl}
-                target="_blank"
-                rel="noreferrer"
-                download
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-800 hover:bg-slate-200 border border-slate-300 transition-colors"
-              >
-                <FileDown className="h-4 w-4 text-slate-600" />
+            {pdfUrl && onDownloadFile && (
+              <Button variant="outline" size="sm" disabled={Boolean(documentLoading)} onClick={() => onDownloadFile(contract.id)} className="h-9 text-xs font-bold gap-1.5 rounded-xl">
+                {documentLoading === "download" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileDown className="h-4 w-4 text-slate-600" />}
                 <span>Tải File</span>
-              </a>
+              </Button>
             )}
           </div>
 

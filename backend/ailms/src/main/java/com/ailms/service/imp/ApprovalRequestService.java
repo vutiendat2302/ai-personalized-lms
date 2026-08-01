@@ -15,7 +15,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
@@ -183,7 +185,7 @@ public class ApprovalRequestService implements IApprovalRequestService {
         if (request.getCreatedBy() != null) {
             userRepository.findById(request.getCreatedBy()).ifPresent(creator -> {
                 try {
-                    emailService.sendContractExpirationAlertEmail(creator.getEmail(), creator.getFullName(), "REJECTED_" + request.getTargetType() + ": " + comment, java.time.LocalDate.now());
+                    emailService.sendContractExpirationAlertEmail(creator.getEmail(), creator.getFullName(), "REJECTED_" + request.getTargetType() + ": " + comment, LocalDate.now());
                 } catch (Exception e) {
                     log.error("Failed to send rejection email notification", e);
                 }
@@ -231,6 +233,28 @@ public class ApprovalRequestService implements IApprovalRequestService {
                 .toList();
     }
 
+    @Override
+    public List<ApprovalRequestEntity> getRequestedByUser(Long userId) {
+        return approvalRequestRepository.findAll().stream()
+                .filter(request -> userId.equals(request.getCreatedBy()))
+                .sorted(Comparator.comparing(
+                        ApprovalRequestEntity::getCreatedAt,
+                        Comparator.nullsLast(Comparator.reverseOrder())
+                ))
+                .toList();
+    }
+
+    @Override
+    public List<ApprovalRequestEntity> getAssignedToUser(Long userId) {
+        return approvalRequestRepository.findAll().stream()
+                .filter(request -> userId.equals(request.getApproverId()))
+                .sorted(Comparator.comparing(
+                        ApprovalRequestEntity::getCreatedAt,
+                        Comparator.nullsLast(Comparator.reverseOrder())
+                ))
+                .toList();
+    }
+
     private Long resolveNextApprover(String targetType, int nextLevel) {
         if ("SALARY".equalsIgnoreCase(targetType) && nextLevel == 2) {
             Optional<RoleEntity> payrollRole = roleRepository.findByCode("PAYROLL");
@@ -240,7 +264,7 @@ public class ApprovalRequestService implements IApprovalRequestService {
             if (payrollRole.isPresent()) {
                 List<UserRoleEntity> userRoles = userRoleRepository.findByRoleEntity_Id(payrollRole.get().getId());
                 if (!userRoles.isEmpty()) {
-                    return userRoles.get(0).getUserEntity().getId();
+                    return userRoles.getFirst().getUserEntity().getId();
                 }
             }
         }

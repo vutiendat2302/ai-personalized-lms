@@ -18,6 +18,8 @@ public class CoursePackageRequest {
     @NotNull(message = "Course ID is required")
     private Long courseId;
 
+    private Long classId;
+
     @NotBlank(message = "Package name is required")
     private String name;
 

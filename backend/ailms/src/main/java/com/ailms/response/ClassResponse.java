@@ -19,7 +19,11 @@ public class ClassResponse {
 
     private Long courseId;
 
+    private String courseName;
+
     private Long categoryId;
+
+    private String categoryName;
 
     private String name;
 
@@ -28,6 +32,8 @@ public class ClassResponse {
     private DeliveryModeEnum packageType;
 
     private Integer maxMembers;
+
+    private Integer currentMemberCount;
 
     private BaseStatusEnum status;
 

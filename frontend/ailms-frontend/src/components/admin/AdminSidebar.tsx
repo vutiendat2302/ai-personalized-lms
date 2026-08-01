@@ -24,6 +24,8 @@ import {
   ChevronRight,
   Trash2,
   FileText,
+  Files,
+  MessageSquareWarning,
 } from "lucide-react";
 
 interface SidebarGroup {
@@ -64,6 +66,7 @@ export const AdminSidebar: React.FC = () => {
         { label: "Quản lý quyền hạn", path: "/admin/permissions", icon: Key },
         { label: "Nhật ký hoạt động", path: "/admin/activity-log", icon: Activity },
         { label: "Thùng rác hệ thống", path: "/admin/trash", icon: Trash2 },
+        { label: "Quản lý File", path: "/admin/files", icon: Files },
       ],
     },
     {
@@ -73,10 +76,10 @@ export const AdminSidebar: React.FC = () => {
         { label: "Quản lý hợp đồng", path: "/admin/contracts", icon: FileText },
         { label: "Quản lý nhân viên", path: "/admin/employees", icon: Briefcase },
         { label: "Quản lý học viên", path: "/admin/students", icon: GraduationCap },
-        { label: "Quản lý nhân sự (HR)", path: "/admin/hr", icon: UserCheck },
-        { label: "Điểm danh NV Full-time", path: "/admin/fulltime-attendance", icon: Clock },
+        { label: "Điểm danh", path: "/admin/fulltime-attendance", icon: Clock },
+        { label: "Quản lý bảng lương", path: "/admin/salaries", icon: DollarSign },
         { label: "Quản lý lịch làm việc", path: "/admin/work-schedule", icon: Briefcase },
-        { label: "Trung tâm phê duyệt", path: "/admin/approval-center", icon: CheckSquare },
+        { label: "Phê duyệt", path: "/admin/approval-center", icon: CheckSquare },
         { label: "Phân công giảng viên", path: "/admin/category-teachers", icon: GraduationCap },
       ],
     },
@@ -84,7 +87,10 @@ export const AdminSidebar: React.FC = () => {
       title: "ĐÀO TẠO & KINH DOANH",
       items: [
         { label: "Quản lý khóa học", path: "/admin/courses", icon: BookOpen },
-        { label: "Quản lý lớp học online", path: "/admin/classrooms", icon: Video },
+        { label: "Duyệt khóa học", path: "/admin/courses/approvals", icon: CheckSquare },
+        { label: "Kiểm duyệt đánh giá", path: "/admin/reviews/moderation", icon: MessageSquareWarning },
+        { label: "Quản lý lớp học", path: "/admin/classrooms", icon: Video },
+        { label: "Yêu cầu chờ xử lý", path: "/admin/pending-requests", icon: CheckSquare, badge: "6" },
         { label: "Thời khóa biểu online", path: "/admin/online-schedule", icon: Calendar },
         { label: "Quản lý Quizz", path: "/admin/quizzes", icon: HelpCircle },
         { label: "Quản lý Assignment", path: "/admin/assignments", icon: FileCode2 },
@@ -96,8 +102,7 @@ export const AdminSidebar: React.FC = () => {
     {
       title: "BÁO CÁO & GIÁM SÁT",
       items: [
-        { label: "Thống kê & Analytics", path: "/analytics", icon: BarChart3 },
-        { label: "Quản lý File", path: "/file", icon: BarChart3}
+        { label: "Thống kê & Analytics", path: "/analytics", icon: BarChart3 }, 
       ],
     },
   ];

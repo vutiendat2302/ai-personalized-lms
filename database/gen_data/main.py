@@ -41,6 +41,8 @@ import review
 import degree
 import lesson_resource
 import search_history
+import course_class
+import teaching_compensation
 
 
 def main():
@@ -73,6 +75,8 @@ def main():
             review.seed(cursor)
             degree.seed(cursor)
             lesson_resource.seed(cursor)
+            course_class.seed(cursor)
+            teaching_compensation.seed(cursor)
             search_history.seed(cursor)
             
             

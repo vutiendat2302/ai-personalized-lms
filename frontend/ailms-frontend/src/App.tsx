@@ -30,6 +30,20 @@ import { ClassroomManagement } from "./pages/admin/ClassroomManagement";
 import { OnlineScheduleManagement } from "./pages/admin/OnlineScheduleManagement";
 import { WorkScheduleManagement } from "./pages/admin/WorkScheduleManagement";
 import { FulltimeAttendanceManagement } from "./pages/admin/FulltimeAttendanceManagement";
+import { AttendanceManagement } from "./pages/admin/AttendanceManagement";
+import { SalaryManagement } from "./pages/admin/SalaryManagement";
+import { FileManagement } from "./pages/admin/FileManagement";
+import { ReviewModerationPage } from "./pages/admin/ReviewModerationPage";
+import { CourseApprovalPage } from "./pages/admin/CourseApprovalPage";
+import { CourseCatalogPage } from "./pages/admin/courses/CourseCatalogPage";
+import { CourseAdminDetailPage } from "./pages/admin/courses/CourseAdminDetailPage";
+import { ClassManagementPage } from "./pages/admin/classes/ClassManagementPage";
+import { CreateGroupClassPage } from "./pages/admin/classes/CreateGroupClassPage";
+import { ClassDetailPage } from "./pages/admin/classes/ClassDetailPage";
+import { PendingRequestsQueuePage } from "./pages/admin/requests/PendingRequestsQueuePage";
+import { TeacherMatchingRequestPage } from "./pages/admin/requests/TeacherMatchingRequestPage";
+import { SuggestedClassesPage } from "./pages/teacher/SuggestedClassesPage";
+import { MyCoursesPage } from "./pages/teacher/MyCoursesPage";
 
 import { LearningAnalytics } from "./pages/LearningAnalytics";
 import { CertificateVerifyPage } from "./pages/CertificateVerifyPage";
@@ -152,7 +166,14 @@ function App() {
                 <Route path="/admin/roles" element={<RoleManagement />} />
                 <Route path="/admin/permissions" element={<PermissionManagement />} />
                 <Route path="/admin/activity-log" element={<ActivityLog />} />
-                <Route path="/admin/courses" element={<CourseManagement />} />
+                <Route path="/admin/courses" element={<CourseCatalogPage />} />
+                <Route path="/admin/courses/:id" element={<CourseAdminDetailPage />} />
+                <Route path="/admin/classrooms" element={<ClassManagementPage />} />
+                <Route path="/admin/classes" element={<ClassManagementPage />} />
+                <Route path="/admin/classes/create" element={<CreateGroupClassPage />} />
+                <Route path="/admin/classes/:id" element={<ClassDetailPage />} />
+                <Route path="/admin/pending-requests" element={<PendingRequestsQueuePage />} />
+                <Route path="/admin/pending-requests/matching/:id" element={<TeacherMatchingRequestPage />} />
                 <Route path="/admin/orders" element={<OrderManagement />} />
                 <Route path="/admin/coupons" element={<CouponManagement />} />
                 <Route path="/admin/hr" element={<HRManagement />} />
@@ -164,10 +185,15 @@ function App() {
                 <Route path="/admin/revenue" element={<RevenueManagement />} />
                 <Route path="/admin/quizzes" element={<QuizManagement />} />
                 <Route path="/admin/assignments" element={<AssignmentManagement />} />
-                <Route path="/admin/classrooms" element={<ClassroomManagement />} />
                 <Route path="/admin/online-schedule" element={<OnlineScheduleManagement />} />
                 <Route path="/admin/work-schedule" element={<WorkScheduleManagement />} />
-                <Route path="/admin/fulltime-attendance" element={<FulltimeAttendanceManagement />} />
+                <Route path="/admin/fulltime-attendance" element={<AttendanceManagement />} />
+                <Route path="/admin/attendance" element={<AttendanceManagement />} />
+                <Route path="/admin/salaries" element={<SalaryManagement />} />
+                <Route path="/admin/salary-payroll" element={<SalaryManagement />} />
+                <Route path="/admin/files" element={<FileManagement />} />
+                <Route path="/admin/reviews/moderation" element={<ReviewModerationPage />} />
+                <Route path="/admin/courses/approvals" element={<CourseApprovalPage />} />
                 <Route path="/analytics" element={<LearningAnalytics />} />
               </Route>
             </Route>
@@ -178,7 +204,8 @@ function App() {
                 <Route path="/teacher" element={<Dashboard />} />
                 <Route path="/teacher/classes" element={<ClassroomManagement />} />
                 <Route path="/teacher/schedule" element={<OnlineScheduleManagement />} />
-                <Route path="/teacher/courses" element={<CourseManagement />} />
+                <Route path="/teacher/courses" element={<MyCoursesPage />} />
+                <Route path="/teacher/suggested-classes" element={<SuggestedClassesPage />} />
                 <Route path="/teacher/assignments" element={<AssignmentManagement />} />
                 <Route path="/teacher/quizzes" element={<QuizManagement />} />
                 <Route path="/teacher/attendance" element={<FulltimeAttendanceManagement />} />

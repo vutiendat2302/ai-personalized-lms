@@ -11,14 +11,16 @@ import com.ailms.mapper.SalaryMapper;
 import com.ailms.repository.*;
 import com.ailms.repository.specification.SalarySpecification;
 import com.ailms.request.CreateSalaryRequest;
+import com.ailms.request.GenerateSalaryPeriodRequest;
 import com.ailms.request.SalarySearchRequest;
 import com.ailms.request.UpdateSalaryRequest;
 import com.ailms.response.PageResponse;
 import com.ailms.response.SalaryResponse;
+import com.ailms.response.SalarySummaryResponse;
+import com.ailms.response.SalaryTrendPoint;
 import com.ailms.security.CustomUserDetails;
 import com.ailms.service.IApprovalRequestService;
 import com.ailms.service.ISalaryService;
-import com.ailms.common.util.SortFieldResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -33,10 +35,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
-import java.util.ArrayList;
-import java.util.List;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -242,8 +246,10 @@ public class SalaryService implements ISalaryService {
         BigDecimal halfDayDeduct = BigDecimal.ZERO;
         BigDecimal lateDeduct = BigDecimal.ZERO;
 
-        LocalDateTime start = period.atDay(1).atStartOfDay();
-        LocalDateTime end = period.atEndOfMonth().atTime(23, 59, 59);
+        LocalDate start = period.atDay(1);
+        LocalDate end = period.atEndOfMonth();
+        LocalDateTime startDateTime = start.atStartOfDay();
+        LocalDateTime endDateTime = end.atTime(23, 59, 59);
 
         if (isFullTime) {
             List<AttendanceEntity> attendances = attendanceRepository.findByEmployeeAndDateRange(employee.getUserId(), start, end);
@@ -269,8 +275,8 @@ public class SalaryService implements ISalaryService {
             List<TeachingSessionPaymentEntity> payments = teachingSessionPaymentRepository.findByEmployeeAndStatusAndPeriod(
                 employee.getUserId(),
                 SessionPaymentStatusEnum.CONFIRMED,
-                start,
-                end
+                startDateTime,
+                endDateTime
             );
             baseSalary = payments.stream()
                 .map(TeachingSessionPaymentEntity::getAmount)
@@ -521,6 +527,209 @@ public class SalaryService implements ISalaryService {
 
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "PAY", "SALARY", id, saved, null));
         return salaryMapper.toResponse(saved);
+    }
+
+    /** Tổng hợp quỹ lương, trạng thái xử lý và xu hướng theo kỳ. */
+    @Override
+    public SalarySummaryResponse getSummary(YearMonth period) {
+        YearMonth targetPeriod = period != null ? period : YearMonth.now();
+
+        List<SalaryEntity> slips = salaryRepository.findByPeriod(targetPeriod);
+
+        long totalSlips = slips.size();
+        long draftCount = slips.stream().filter(s -> s.getStatus() == SalaryStatusEnum.DRAFT).count();
+        long pendingCount = slips.stream().filter(s -> s.getStatus() == SalaryStatusEnum.PENDING).count();
+        long confirmedCount = slips.stream().filter(s -> s.getStatus() == SalaryStatusEnum.CONFIRMED).count();
+        long paidCount = slips.stream().filter(s -> s.getStatus() == SalaryStatusEnum.PAID).count();
+
+        BigDecimal totalSalaryPaid = slips.stream()
+                .filter(s -> s.getTotalSalary() != null)
+                .map(SalaryEntity::getTotalSalary)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        Map<String, Long> statusDistribution = new LinkedHashMap<>();
+        statusDistribution.put("DRAFT", draftCount);
+        statusDistribution.put("PENDING", pendingCount);
+        statusDistribution.put("CONFIRMED", confirmedCount);
+        statusDistribution.put("PAID", paidCount);
+
+        Map<String, BigDecimal> salaryByDept = slips.stream()
+                .collect(Collectors.groupingBy(
+                        s -> (s.getEmployee() != null && s.getEmployee().getDepartment() != null && s.getEmployee().getDepartment().getName() != null)
+                             ? s.getEmployee().getDepartment().getName() : "Khác",
+                        Collectors.reducing(BigDecimal.ZERO, s -> s.getTotalSalary() != null ? s.getTotalSalary() : BigDecimal.ZERO, BigDecimal::add)
+                ));
+
+        List<SalaryTrendPoint> trend = new ArrayList<>();
+        YearMonth startMonth = targetPeriod.minusMonths(5);
+        List<SalaryEntity> historicalSlips = salaryRepository.findByPeriodBetween(startMonth, targetPeriod);
+
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("MM/yyyy");
+        YearMonth curr = startMonth;
+        while (!curr.isAfter(targetPeriod)) {
+            YearMonth m = curr;
+            BigDecimal sum = historicalSlips.stream()
+                    .filter(s -> m.equals(s.getPeriod()))
+                    .map(s -> s.getTotalSalary() != null ? s.getTotalSalary() : BigDecimal.ZERO)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            trend.add(SalaryTrendPoint.builder()
+                    .period(m.toString())
+                    .periodLabel(m.format(fmt))
+                    .totalSalary(sum)
+                    .build());
+            curr = curr.plusMonths(1);
+        }
+
+        return SalarySummaryResponse.builder()
+                .period(targetPeriod.toString())
+                .totalSalaryPaid(totalSalaryPaid)
+                .totalSlips(totalSlips)
+                .draftCount(draftCount)
+                .pendingCount(pendingCount)
+                .confirmedCount(confirmedCount)
+                .paidCount(paidCount)
+                .statusDistribution(statusDistribution)
+                .salaryByDepartment(salaryByDept)
+                .historicalTrend(trend)
+                .build();
+    }
+
+    /** Tạo bảng lương cho các nhân viên đủ điều kiện trong kỳ yêu cầu. */
+    @Transactional
+    @Override
+    public int generatePeriod(GenerateSalaryPeriodRequest request) {
+        YearMonth period = request.getPeriod() != null ? request.getPeriod() : YearMonth.now();
+        log.info("Generating batch salary slips for period: {}", period);
+
+        List<EmployeeEntity> activeEmployees = employeeRepository.findAll().stream()
+                .filter(e -> e.getStatus() == null || e.getStatus() == EmployeeStatusEnum.ACTIVE)
+                .toList();
+
+        int generatedCount = 0;
+
+        for (EmployeeEntity emp : activeEmployees) {
+            Optional<SalaryEntity> existingOpt = salaryRepository.findByEmployee_UserIdAndPeriod(emp.getUserId(), period);
+
+            if (existingOpt.isPresent()) {
+                SalaryEntity existing = existingOpt.get();
+                if (!request.isOverwriteExisting() || existing.getStatus() == SalaryStatusEnum.PAID) {
+                    continue;
+                }
+            }
+
+            List<EmployeeContractEntity> activeContracts = employeeContractRepository.findByEmployee_UserId(emp.getUserId()).stream()
+                    .filter(c -> c.getStatus() == BaseStatusEnum.ACTIVE)
+                    .filter(c -> !c.getStartDate().isAfter(period.atEndOfMonth()))
+                    .filter(c -> c.getEndDate() == null || !c.getEndDate().isBefore(period.atDay(1)))
+                    .toList();
+
+            if (activeContracts.isEmpty()) {
+                continue;
+            }
+
+            EmployeeContractEntity contract = activeContracts.stream()
+                    .max(java.util.Comparator.comparing(EmployeeContractEntity::getStartDate))
+                    .get();
+
+            SalaryEntity entity = existingOpt.orElseGet(() -> SalaryEntity.builder()
+                    .employee(emp)
+                    .period(period)
+                    .status(SalaryStatusEnum.DRAFT)
+                    .build());
+
+            entity.setSalaryTypeEnum(contract.getSalaryTypeEnum());
+
+            calculateSalaryForEmployee(entity,
+                    emp,
+                    contract,
+                    period,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    null,
+                    0,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO
+            );
+
+            salaryRepository.save(entity);
+            generatedCount++;
+        }
+
+        return generatedCount;
+    }
+
+    @Transactional
+    @Override
+    public void bulkApprove(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) return;
+        for (Long id : ids) {
+            try {
+                approve(id);
+            } catch (Exception e) {
+                log.warn("Failed to approve salary slip {}: {}", id, e.getMessage());
+            }
+        }
+    }
+
+    @Transactional
+    @Override
+    public SalaryResponse markPaid(Long id) {
+        return pay(id);
+    }
+
+    @Transactional
+    @Override
+    public void bulkMarkPaid(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) return;
+        for (Long id : ids) {
+            try {
+                pay(id);
+            } catch (Exception e) {
+                log.warn("Failed to mark paid salary slip {}: {}", id, e.getMessage());
+            }
+        }
+    }
+
+    /** Xuất bảng lương theo kỳ, phòng ban và trạng thái. */
+    @Override
+    public byte[] exportCsv(YearMonth period, Long departmentId, SalaryStatusEnum status) {
+        YearMonth targetPeriod = period != null ? period : YearMonth.now();
+        List<SalaryEntity> list = salaryRepository.findByPeriod(targetPeriod);
+
+        if (departmentId != null) {
+            list = list.stream()
+                    .filter(s -> s.getEmployee() != null && s.getEmployee().getDepartment() != null && departmentId.equals(s.getEmployee().getDepartment().getId()))
+                    .toList();
+        }
+        if (status != null) {
+            list = list.stream()
+                    .filter(s -> status.equals(s.getStatus()))
+                    .toList();
+        }
+
+        StringBuilder csv = new StringBuilder();
+        csv.append("\uFEFF");
+        csv.append("Mã phiếu,Mã NV,Tên NV,Phòng ban,Kỳ lương,Lương cơ bản,Thưởng,Khấu trừ,Thực nhận,Trạng thái,Ngày thanh toán\n");
+
+        for (SalaryEntity s : list) {
+            csv.append(s.getId()).append(",")
+               .append(s.getEmployee() != null ? s.getEmployee().getEmployeeCode() : "").append(",")
+               .append(s.getEmployee() != null && s.getEmployee().getUserEntity() != null ? s.getEmployee().getUserEntity().getFullName() : "").append(",")
+               .append(s.getEmployee() != null && s.getEmployee().getDepartment() != null ? s.getEmployee().getDepartment().getName() : "").append(",")
+               .append(s.getPeriod()).append(",")
+               .append(s.getBaseSalary() != null ? s.getBaseSalary() : 0).append(",")
+               .append(s.getBonus() != null ? s.getBonus() : 0).append(",")
+               .append(s.getDeduction() != null ? s.getDeduction() : 0).append(",")
+               .append(s.getTotalSalary() != null ? s.getTotalSalary() : 0).append(",")
+               .append(s.getStatus()).append(",")
+               .append(s.getPaidAt() != null ? s.getPaidAt() : "").append("\n");
+        }
+
+        return csv.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
     }
 
     @Override

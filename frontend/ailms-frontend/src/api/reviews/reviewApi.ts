@@ -14,5 +14,9 @@ export const reviewApi = {
 
   getAverageRating: () =>
     httpClient.get<ApiResponse<number>>("/v1/reviews/average-rating"),
-};
 
+  moderate: (id: string, approve: boolean, rejectionReason?: string) =>
+    httpClient.post<ApiResponse<any>>(`/v1/reviews/reviews/${id}/approve`, null, {
+      params: { approve, rejectionReason },
+    }),
+};

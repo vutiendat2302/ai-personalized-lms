@@ -12,12 +12,8 @@ import {
   ShieldCheck,
   Download,
   RotateCcw,
-  Sparkles,
   Loader2,
-  Building2,
   User,
-  DollarSign,
-  Calendar,
   Lock,
 } from "lucide-react";
 import { employeeApi } from "@/api/employees/employeeApi";
@@ -43,12 +39,16 @@ export const ContractSigningPage: React.FC = () => {
   } | null>(null);
 
   const [otp, setOtp] = useState("");
+  const [signerFullName, setSignerFullName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [finalDownloadUrl, setFinalDownloadUrl] = useState("");
+  const [activeTab, setActiveTab] = useState<"REVIEW" | "SIGN">("REVIEW");
 
   // Countdown timer for OTP resend
   const [resendTimer, setResendTimer] = useState(60);
   const [canResend, setCanResend] = useState(false);
+  const [resendingOtp, setResendingOtp] = useState(false);
+  const [otpRequested, setOtpRequested] = useState(false);
 
   // Canvas Signature Pad State
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -64,8 +64,8 @@ export const ContractSigningPage: React.FC = () => {
       const res = await employeeApi.getPublicSigningInfo(token);
       if (res?.success && res.data) {
         setSigningData(res.data);
-        setResendTimer(60);
-        setCanResend(false);
+        setResendTimer(0);
+        setCanResend(true);
       } else {
         setErrorMsg(res?.message || "Không thể nạp thông tin hợp đồng.");
       }
@@ -140,6 +140,43 @@ export const ContractSigningPage: React.FC = () => {
     setHasSignature(false);
   };
 
+  // Cấp OTP mới sau khi thời gian chờ gửi lại kết thúc.
+  const handleResendOtp = async () => {
+    if (!token || !canResend) return;
+    setResendingOtp(true);
+    setErrorMsg("");
+    try {
+      await employeeApi.resendSigningOtp(token);
+      setOtp("");
+      setResendTimer(60);
+      setCanResend(false);
+      setSuccessMsg("");
+    } catch (err: any) {
+      setErrorMsg(err?.message || "Không thể gửi lại OTP.");
+    } finally {
+      setResendingOtp(false);
+    }
+  };
+
+  // Chuyển sang bước ký và chỉ tự động gửi OTP một lần.
+  const handleStartSigning = async () => {
+    setActiveTab("SIGN");
+    if (!token || otpRequested || resendingOtp) return;
+    setResendingOtp(true);
+    setErrorMsg("");
+    try {
+      await employeeApi.resendSigningOtp(token);
+      setOtpRequested(true);
+      setOtp("");
+      setResendTimer(60);
+      setCanResend(false);
+    } catch (err: any) {
+      setErrorMsg(err?.response?.data?.message || err?.message || "Không thể gửi OTP ký hợp đồng.");
+    } finally {
+      setResendingOtp(false);
+    }
+  };
+
   // Confirm Signature Submission
   const handleConfirmSignature = async () => {
     if (!token) return;
@@ -147,18 +184,24 @@ export const ContractSigningPage: React.FC = () => {
       setErrorMsg("Vui lòng nhập đầy đủ mã OTP 6 chữ số.");
       return;
     }
+    if (!hasSignature || !canvasRef.current) {
+      setErrorMsg("Vui lòng vẽ chữ ký trước khi xác nhận.");
+      return;
+    }
+    if (!signerFullName.trim()) {
+      setErrorMsg("Vui lòng nhập họ và tên người ký.");
+      return;
+    }
 
     setSubmitting(true);
     setErrorMsg("");
 
-    let sigBase64: string | undefined = undefined;
-    if (hasSignature && canvasRef.current) {
-      sigBase64 = canvasRef.current.toDataURL("image/png");
-    }
+    const sigBase64 = canvasRef.current.toDataURL("image/png");
 
     try {
       const res = await employeeApi.confirmEmployeeSigning(token, {
         otp: otp.trim(),
+        signerFullName: signerFullName.trim(),
         signatureImageBase64: sigBase64,
       });
 
@@ -169,7 +212,7 @@ export const ContractSigningPage: React.FC = () => {
         setErrorMsg(res?.data?.message || "Xác nhận ký hợp đồng thất bại.");
       }
     } catch (err: any) {
-      setErrorMsg(err?.response?.data?.message || err?.message || "Xác thực OTP thất bại.");
+      setErrorMsg(err?.message || "Xác thực OTP thất bại.");
     } finally {
       setSubmitting(false);
     }
@@ -263,12 +306,29 @@ export const ContractSigningPage: React.FC = () => {
           </Badge>
         </div>
 
+        <div className="grid grid-cols-2 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
+          <button
+            type="button"
+            onClick={() => setActiveTab("REVIEW")}
+            className={`rounded-lg px-4 py-2.5 text-xs font-bold transition-colors ${activeTab === "REVIEW" ? "bg-primary text-white shadow" : "text-slate-500 hover:bg-slate-50"}`}
+          >
+            1. Xem và kiểm tra hợp đồng
+          </button>
+          <button
+            type="button"
+            onClick={handleStartSigning}
+            className={`rounded-lg px-4 py-2.5 text-xs font-bold transition-colors ${activeTab === "SIGN" ? "bg-primary text-white shadow" : "text-slate-500 hover:bg-slate-50"}`}
+          >
+            2. Ký và xác thực OTP
+          </button>
+        </div>
+
         {/* SUMMARY + PDF VIEW GRID */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* LEFT: SUMMARY INFO & SIGNING FORM (5 COLS) */}
-          <div className="lg:col-span-5 space-y-6">
+          <div className={`${activeTab === "SIGN" ? "lg:col-span-12 max-w-xl w-full mx-auto" : "lg:col-span-5"} space-y-6`}>
             {/* CONTRACT SUMMARY CARD */}
-            <Card className="border-slate-200 shadow-sm">
+            <Card className={`${activeTab === "SIGN" ? "hidden" : ""} border-slate-200 shadow-sm`}>
               <CardHeader className="pb-3 border-b border-slate-100">
                 <CardTitle className="text-sm font-bold flex items-center gap-2">
                   <User className="h-4 w-4 text-primary" /> Thông tin Người lao động
@@ -298,21 +358,40 @@ export const ContractSigningPage: React.FC = () => {
               </CardContent>
             </Card>
 
+            {activeTab === "REVIEW" && (
+              <Button onClick={handleStartSigning} disabled={resendingOtp} className="w-full h-10 text-xs font-bold">
+                {resendingOtp ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Hợp đồng chính xác — Gửi OTP và tiếp tục ký
+              </Button>
+            )}
+
             {/* E-SIGNATURE FORM CARD */}
-            <Card className="border-primary/30 shadow-md bg-white">
+            <Card className={`${activeTab === "REVIEW" ? "hidden" : ""} border-primary/30 shadow-md bg-white`}>
               <CardHeader className="pb-3 border-b border-slate-100 bg-primary/5 rounded-t-xl">
                 <CardTitle className="text-sm font-bold text-primary flex items-center gap-2">
                   <ShieldCheck className="h-4 w-4" /> Xác thực &amp; Ký điện tử
                 </CardTitle>
                 <CardDescription className="text-[11px] text-slate-600">
-                  Mã OTP 6 chữ số đã được gửi tự động về Email <strong>{signingData?.employeeEmail}</strong>
+                  Mã OTP vừa được gửi riêng tới <strong>{signingData?.employeeEmail}</strong> khi anh/chị bắt đầu bước ký.
                 </CardDescription>
               </CardHeader>
               <CardContent className="pt-4 space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700">Họ và tên người ký *</label>
+                  <Input
+                    type="text"
+                    maxLength={100}
+                    placeholder="Nhập đầy đủ họ và tên"
+                    value={signerFullName}
+                    onChange={(e) => setSignerFullName(e.target.value)}
+                    className="h-10 border-slate-300 focus:border-primary"
+                  />
+                  <p className="text-[10px] text-slate-400 italic">Họ tên này sẽ được ghi bên dưới chữ ký trong hợp đồng.</p>
+                </div>
                 {/* DRAW SIGNATURE CANVAS */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-slate-700">Vẽ chữ ký (Tùy chọn)</label>
+                    <label className="text-xs font-bold text-slate-700">Vẽ chữ ký *</label>
                     {hasSignature && (
                       <Button variant="ghost" size="sm" onClick={clearSignature} className="h-6 text-[10px] text-red-500 hover:text-red-700 gap-1">
                         <RotateCcw className="h-3 w-3" /> Xóa vẽ lại
@@ -343,11 +422,11 @@ export const ContractSigningPage: React.FC = () => {
                     <label className="text-xs font-bold text-slate-700">Mã OTP xác thực (6 chữ số)</label>
                     <button
                       type="button"
-                      disabled={!canResend}
-                      onClick={fetchSigningInfo}
+                      disabled={!canResend || resendingOtp}
+                      onClick={handleResendOtp}
                       className="text-[11px] font-bold text-primary disabled:text-slate-400 hover:underline"
                     >
-                      {canResend ? "Gửi lại OTP" : `Gửi lại sau (${resendTimer}s)`}
+                      {resendingOtp ? "Đang gửi..." : canResend ? "Gửi lại OTP" : `Gửi lại sau (${resendTimer}s)`}
                     </button>
                   </div>
                   <Input
@@ -370,7 +449,7 @@ export const ContractSigningPage: React.FC = () => {
                 {/* SUBMIT BUTTON */}
                 <Button
                   onClick={handleConfirmSignature}
-                  disabled={submitting || otp.length !== 6}
+                  disabled={submitting || otp.length !== 6 || !hasSignature || !signerFullName.trim()}
                   className="w-full h-10 text-xs font-bold gap-2 bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20"
                 >
                   {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
@@ -381,7 +460,7 @@ export const ContractSigningPage: React.FC = () => {
           </div>
 
           {/* RIGHT: PDF PREVIEW (7 COLS) */}
-          <div className="lg:col-span-7 space-y-3">
+          <div className={`${activeTab === "SIGN" ? "hidden" : "lg:col-span-7"} space-y-3`}>
             <div className="flex items-center justify-between bg-white px-4 py-2.5 rounded-lg border border-slate-200">
               <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                 <FileText className="h-4 w-4 text-primary" /> Hợp đồng Đại diện Công ty đã ký (Xem trước)

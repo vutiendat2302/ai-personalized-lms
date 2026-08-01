@@ -18,6 +18,7 @@ public class CourseSpecification {
         builder.equalIfPresent("status", request.getStatus());
         builder.equalIfPresent("categoryEntity.id", request.getCategoryId());
         builder.equalIfPresent("level", request.getLevel());
+        builder.equalIfPresent("createdBy", request.getCreatedBy());
         builder.greaterOrEqualIfPresent("createdAt", request.getCreatedFrom());
         builder.lessOrEqualIfPresent("createdAt", request.getCreatedTo());
 

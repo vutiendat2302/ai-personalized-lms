@@ -7,6 +7,7 @@ Seed dữ liệu cho bảng `attendance` (Chấm công nhân viên).
 - Chỉ chấm công ngày làm việc (Thứ 2 đến Thứ 6).
 - Tỉ lệ: 90% PRESENT, 5% LATE, 2% ABSENT, 2% ON_LEAVE, 1% HALF_DAY.
 - Cố định seed 100% (random.seed(42)).
+- Tự động tính toán work_date, work_shift_id, worked_minutes, late_minutes, early_leave_minutes, overtime_minutes, source, approved_by, approved_at.
 """
 
 import random
@@ -19,7 +20,7 @@ random.seed(42)
 
 
 def get_admin_id(cursor):
-    """Lấy ID của Admin để gán vào created_by."""
+    """Lấy ID của Admin để gán vào created_by và approved_by."""
     query = """
         SELECT u.id 
         FROM user u
@@ -31,6 +32,16 @@ def get_admin_id(cursor):
     cursor.execute(query)
     row = cursor.fetchone()
     return row["id"] if row else None
+
+
+def get_default_shift_id(cursor):
+    """Lấy ID ca làm việc mặc định (nếu có bảng work_shift)."""
+    try:
+        cursor.execute("SELECT id FROM work_shift LIMIT 1")
+        row = cursor.fetchone()
+        return row["id"] if row else None
+    except Exception:
+        return None
 
 
 def get_target_employees(cursor):
@@ -56,12 +67,21 @@ def check_attendance_exists(cursor, employee_id: int, target_date: date):
     
     query = """
         SELECT id FROM attendance 
-        WHERE employee_id = %s AND created_at BETWEEN %s AND %s
+        WHERE employee_id = %s AND (work_date = %s OR created_at BETWEEN %s AND %s)
         LIMIT 1
     """
-    cursor.execute(query, (employee_id, start_of_day, end_of_day))
+    try:
+        cursor.execute(query, (employee_id, target_date, start_of_day, end_of_day))
+    except Exception:
+        query_fallback = """
+            SELECT id FROM attendance 
+            WHERE employee_id = %s AND created_at BETWEEN %s AND %s
+            LIMIT 1
+        """
+        cursor.execute(query_fallback, (employee_id, start_of_day, end_of_day))
     row = cursor.fetchone()
     return row["id"] if row else None
+
 
 def check_employee_has_attendance(cursor, employee_id: int):
     """
@@ -81,11 +101,13 @@ def check_employee_has_attendance(cursor, employee_id: int):
 def seed(cursor):
     print("→ Seeding attendances (5 tháng cho TEACHER & HR)...")
 
-    # 1. Lấy ID Admin
+    # 1. Lấy ID Admin & Shift ID
     admin_id = get_admin_id(cursor)
     if not admin_id:
-        print("   [warning] Không tìm thấy user ADMIN! Tạm để NULL cho created_by.")
+        print("   [warning] Không tìm thấy user ADMIN! Tạm để NULL cho created_by / approved_by.")
         admin_id = None
+
+    shift_id = get_default_shift_id(cursor)
 
     # 2. Lấy danh sách nhân viên hợp lệ (TEACHER, HR)
     employees = get_target_employees(cursor)
@@ -176,6 +198,35 @@ def seed(cursor):
             elif status == "ABSENT":
                 note = "Nghỉ không phép / Không thấy điểm danh"
 
+            # Tính toán các chỉ số phút làm việc (minutes)
+            worked_minutes = 0
+            late_minutes = 0
+            early_leave_minutes = 0
+            overtime_minutes = 0
+
+            shift_start = datetime.combine(w_date, time(8, 0))
+            shift_end = datetime.combine(w_date, time(17, 0))
+
+            if check_in_time and check_out_time:
+                total_span_minutes = int((check_out_time - check_in_time).total_seconds() // 60)
+                # Trừ 60 phút nghỉ trưa nếu ca trải qua khung 12:00 - 13:00
+                if check_in_time < datetime.combine(w_date, time(12, 0)) and check_out_time > datetime.combine(w_date, time(13, 0)):
+                    worked_minutes = max(0, total_span_minutes - 60)
+                else:
+                    worked_minutes = max(0, total_span_minutes)
+
+                # Số phút đi muộn (sau 08:00)
+                if check_in_time > shift_start:
+                    late_minutes = int((check_in_time - shift_start).total_seconds() // 60)
+
+                # Số phút về sớm (trước 17:00)
+                if check_out_time < shift_end:
+                    early_leave_minutes = int((shift_end - check_out_time).total_seconds() // 60)
+
+                # Số phút làm thêm (sau 17:00)
+                if check_out_time > shift_end:
+                    overtime_minutes = int((check_out_time - shift_end).total_seconds() // 60)
+
             # Thời điểm tạo bản ghi (lúc 8h sáng ngày hôm đó)
             record_time = datetime.combine(w_date, time(8, 0))
             new_id = snowflake.next_id()
@@ -183,22 +234,34 @@ def seed(cursor):
             cursor.execute(
                 """
                 INSERT INTO attendance (
-                    id, employee_id, check_in_time, check_out_time, 
-                    status, note, created_by, updated_by, created_at, updated_at
+                    id, employee_id, work_date, work_shift_id, 
+                    check_in_time, check_out_time, worked_minutes, 
+                    late_minutes, early_leave_minutes, overtime_minutes, 
+                    status, source, approved_by, approved_at, 
+                    note, created_by, updated_by, created_at, updated_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     new_id,
                     emp_id,
+                    w_date,
+                    shift_id,
                     check_in_time,
                     check_out_time,
+                    worked_minutes,
+                    late_minutes,
+                    early_leave_minutes,
+                    overtime_minutes,
                     status,
+                    "DEVICE",      # source (mặc định DEVICE)
+                    admin_id,      # approved_by
+                    record_time,   # approved_at
                     note,
-                    admin_id,    # created_by
-                    None,        # updated_by
-                    record_time, # created_at
-                    record_time, # updated_at
+                    admin_id,      # created_by
+                    None,          # updated_by
+                    record_time,   # created_at
+                    record_time,   # updated_at
                 ),
             )
             total_inserted += 1

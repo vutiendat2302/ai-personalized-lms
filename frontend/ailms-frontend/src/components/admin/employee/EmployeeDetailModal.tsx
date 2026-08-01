@@ -38,7 +38,6 @@ import {
   Save,
   ShieldCheck,
   History,
-  Check,
   XCircle,
   AlertTriangle,
   Users,
@@ -48,6 +47,7 @@ import {
   Loader2,
   UserCheck,
   FileSpreadsheet,
+  Eye,
 } from "lucide-react";
 import type {
   EmployeeExtended,
@@ -65,6 +65,7 @@ import { DatePickerInput, formatDateDisplay } from "@/components/ui/DatePickerIn
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { departmentApi, type DepartmentResponse } from "@/api/departments/departmentApi";
 import { NewContractWizardModal } from "@/components/admin/contract/NewContractWizardModal";
+import { DetailAuditLogModal } from "@/components/admin/audit/DetailAuditLogModal";
 
 interface EmployeeDetailModalProps {
   open: boolean;
@@ -74,15 +75,21 @@ interface EmployeeDetailModalProps {
   onShowBanner: (msg: string, isError?: boolean) => void;
 }
 
-export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
-  open,
+type EmployeeDetailContentProps = Omit<EmployeeDetailModalProps, "employee" | "open"> & {
+  employee: EmployeeExtended;
+};
+
+export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = (props) => {
+  if (!props.open || !props.employee) return null;
+  return <EmployeeDetailModalContent {...props} employee={props.employee} />;
+};
+
+const EmployeeDetailModalContent: React.FC<EmployeeDetailContentProps> = ({
   onClose,
   employee,
   onUpdateEmployee,
   onShowBanner,
 }) => {
-  if (!open || !employee) return null;
-
   const isFullTime = employee.employmentType === "FULL_TIME";
   const isPartTime = employee.employmentType === "PART_TIME";
   const isTeacherOrTA = (employee.roles || []).some(r =>
@@ -121,6 +128,7 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
   // Thông báo tại chỗ trong modal khi lưu thành công / lỗi
   const [modalSuccessBanner, setModalSuccessBanner] = useState("");
   const [modalErrorBanner, setModalErrorBanner] = useState("");
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
 
   const showBanner = (msg: string, isError = false) => {
     if (isError) {
@@ -136,11 +144,17 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
   // Tab Data States
   // Danh sách hợp đồng
   const [contracts, setContracts] = useState<EmployeeContractItem[]>([]);
+  const [contractFileActionId, setContractFileActionId] = useState<string | null>(null);
+
+  const loadContracts = async () => {
+    const rows = await employeeApi.getContractsByEmployeeId(employee.id);
+    setContracts(rows);
+  };
 
   // E-Signature States
   const [signingHistoryOpen, setSigningHistoryOpen] = useState(false);
   const [signingHistoryLogs, setSigningHistoryLogs] = useState<Array<{
-    id: number;
+    id: string;
     action: string;
     signerFullName: string;
     signerEmail: string;
@@ -150,9 +164,9 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
     detailsJson?: string;
   }>>([]);
   const [loadingSigningHistory, setLoadingSigningHistory] = useState(false);
-  const [signingActionId, setSigningActionId] = useState<number | null>(null);
+  const [signingActionId, setSigningActionId] = useState<string | null>(null);
 
-  const handleSignCompany = async (contractId: number) => {
+  const handleSignCompany = async (contractId: string) => {
     setSigningActionId(contractId);
     try {
       const res = await employeeApi.signCompany(contractId);
@@ -169,7 +183,7 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
     }
   };
 
-  const handleResendSigningLink = async (contractId: number) => {
+  const handleResendSigningLink = async (contractId: string) => {
     setSigningActionId(contractId);
     try {
       const res = await employeeApi.resendSigningLink(contractId);
@@ -186,7 +200,7 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
     }
   };
 
-  const handleOpenSigningHistory = async (contractId: number) => {
+  const handleOpenSigningHistory = async (contractId: string) => {
     setSigningHistoryOpen(true);
     setLoadingSigningHistory(true);
     try {
@@ -201,6 +215,27 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
       setSigningHistoryLogs([]);
     } finally {
       setLoadingSigningHistory(false);
+    }
+  };
+
+  const openContractFile = async (contract: EmployeeContractItem, download = false) => {
+    setContractFileActionId(contract.id);
+    try {
+      const response = await employeeApi.getContractDownloadUrl(contract.id);
+      const url = response.data?.downloadUrl || contract.downloadUrl || contract.originalFileDownloadUrl || contract.fileUrl;
+      if (!url) throw new Error("Hợp đồng chưa có tệp đính kèm");
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.target = download ? "_self" : "_blank";
+      anchor.rel = "noreferrer";
+      if (download) anchor.download = contract.fileName || `hop-dong-${contract.id}.pdf`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+    } catch (error: any) {
+      showBanner(error?.response?.data?.message || error.message || "Không thể mở tệp hợp đồng", true);
+    } finally {
+      setContractFileActionId(null);
     }
   };
 
@@ -223,6 +258,29 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
   // Danh sách yêu cầu phê duyệt  
   const [approvals, setApprovals] = useState<{ requested: ApprovalRequestItem[]; toApprove: ApprovalRequestItem[] }>({ requested: [], toApprove: [] });
   const [auditLogs, setAuditLogs] = useState<EmployeeAuditLogItem[]>([]);
+  const [selectedAuditLog, setSelectedAuditLog] = useState<any | null>(null);
+  const [auditDetailModalOpen, setAuditDetailModalOpen] = useState(false);
+
+  const handleOpenAuditLogDetail = (logItem: any) => {
+    const formattedLog = {
+      id: logItem.id || Math.random(),
+      action: logItem.action || "UPDATE",
+      entityType: logItem.entityType || "EMPLOYEE",
+      entityId: logItem.entityId || String(employee.id),
+      userId: logItem.actorId || "System",
+      userFullName: logItem.actorName || logItem.userFullName || "Quản trị viên",
+      userEmail: logItem.actorEmail || logItem.userEmail || "admin@ailms.edu.vn",
+      userAvatar: logItem.actorAvatar || "",
+      ipAddress: logItem.ipAddress || "127.0.0.1",
+      userAgent: logItem.userAgent || "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+      occurredAt: logItem.timestamp || logItem.occurredAt || new Date().toISOString(),
+      oldValue: logItem.oldValue || "",
+      newValue: logItem.newValue || "",
+      diffJson: logItem.diffJson || (logItem.oldValue || logItem.newValue ? JSON.stringify({ oldValue: logItem.oldValue, newValue: logItem.newValue }, null, 2) : undefined),
+    };
+    setSelectedAuditLog(formattedLog);
+    setAuditDetailModalOpen(true);
+  };
 
   // Trạng thái các cửa sổ (Modal)
   // Modal Wizard tạo hợp đồng mới (2 nhánh)
@@ -259,39 +317,73 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
       setEditGender(String(employee.gender ?? ""));
       setEditEmployeeStatus(employee.status || "");
       setEditEmploymentType(employee.employmentType || "");
+      setValidationErrors({});
 
       // Load sub-tab data
-      employeeApi.getContractsByEmployeeId(employee.id).then(setContracts);
+      void loadContracts().catch((error) => showBanner(error?.response?.data?.message || "Không thể tải hợp đồng", true));
       if (isFullTime) employeeApi.getAttendancesByEmployeeId(employee.id).then(setAttendances);
       if (isTeacherOrTA) employeeApi.getTeachingRatesByTeacherId(employee.id).then(setTeachingRates);
       if (isPartTime) employeeApi.getTeachingSessionsByTeacherId(employee.id).then(setTeachingSessions);
       employeeApi.getSalariesByEmployeeId(employee.id).then(setSalaries);
       employeeApi.getLeaveRequestsByEmployeeId(employee.id).then(setLeaveRequests);
       employeeApi.getApprovalRequestsByUserId(employee.userId).then(setApprovals);
-      employeeApi.getAuditLogsByUserId(employee.userId).then(setAuditLogs);
+      employeeApi.getEmployeeAuditLogs(employee.id).then(setAuditLogs);
     }
   }, [employee]);
 
   const handleSaveInline = async () => {
+    const errors: Record<string, string> = {};
+    const fullName = editFullName.trim().replace(/\s+/g, " ");
+    const phone = editPhone.trim();
+    const position = editPosition.trim();
+    const address = editAddress.trim();
+    if (fullName.length < 2) errors.fullName = "Họ tên phải có ít nhất 2 ký tự.";
+    else if (fullName.length > 100) errors.fullName = "Họ tên không được vượt quá 100 ký tự.";
+    if (phone && !/^(\+84|0)(3|5|7|8|9)\d{8}$/.test(phone.replace(/[\s.-]/g, ""))) errors.phone = "Số điện thoại Việt Nam không hợp lệ.";
+    if (editGender === "") errors.gender = "Vui lòng chọn giới tính.";
+    if (editDob) {
+      const dob = new Date(`${editDob}T00:00:00`);
+      const today = new Date();
+      if (Number.isNaN(dob.getTime()) || dob >= today) errors.dateOfBirth = "Ngày sinh phải là một ngày trong quá khứ.";
+      else {
+        let age = today.getFullYear() - dob.getFullYear();
+        if (today < new Date(today.getFullYear(), dob.getMonth(), dob.getDate())) age--;
+        if (age < 18) errors.dateOfBirth = "Nhân viên phải đủ 18 tuổi.";
+        if (age > 75) errors.dateOfBirth = "Tuổi nhân viên không hợp lệ.";
+      }
+    }
+    if (!editDepartmentId) errors.departmentId = "Vui lòng chọn phòng ban.";
+    if (position.length < 2) errors.position = "Chức danh phải có ít nhất 2 ký tự.";
+    else if (position.length > 100) errors.position = "Chức danh không được vượt quá 100 ký tự.";
+    if (address.length > 255) errors.address = "Địa chỉ không được vượt quá 255 ký tự.";
+    if (!editStartDate) errors.startDate = "Ngày bắt đầu làm việc là bắt buộc.";
+    if (editStartDate && editEndDate && new Date(editEndDate) < new Date(editStartDate)) errors.endDate = "Ngày kết thúc phải sau hoặc bằng ngày bắt đầu.";
+    setValidationErrors(errors);
+    if (Object.keys(errors).length) {
+      showBanner("Vui lòng kiểm tra lại các trường được đánh dấu.", true);
+      return;
+    }
     setSavingInline(true);
     try {
       const selectedDept = departments.find(d => String(d.id) === editDepartmentId);
       await onUpdateEmployee({
-        fullName: editFullName,
+        fullName,
         userEmail: editEmail,
-        phone: editPhone,
+        phone,
         dateOfBirth: editDob,
         startDate: editStartDate,
         endDate: editEndDate,
-        address: editAddress,
+        address,
         departmentId: (editDepartmentId && editDepartmentId !== "0") ? editDepartmentId : undefined,
         departmentName: selectedDept ? selectedDept.name : employee.departmentName,
-        position: editPosition,
+        position,
         gender: editGender !== "" ? Number(editGender) : undefined,
         status: editEmployeeStatus as any,
         employmentType: editEmploymentType as any,
       });
       setIsEditingInline(false);
+      setValidationErrors({});
+      setAuditLogs(await employeeApi.getEmployeeAuditLogs(employee.id));
       showBanner("Đã lưu thông tin chung thành công!");
     } catch (e: any) {
       showBanner(e.message || "Lỗi lưu thông tin nhân viên", true);
@@ -339,9 +431,19 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
     }
   };
 
-  const [confirmTerminateContractId, setConfirmTerminateContractId] = useState<string | number | null>(null);
+  const handleApproveLeave = async (leaveId: string, status: "APPROVED" | "REJECTED") => {
+    try {
+      await employeeApi.approveLeaveRequest(leaveId, status, status === "REJECTED" ? "Từ chối bởi quản trị viên" : undefined);
+      setLeaveRequests(await employeeApi.getLeaveRequestsByEmployeeId(employee.id));
+      showBanner(status === "APPROVED" ? "Đã duyệt đơn nghỉ phép." : "Đã từ chối đơn nghỉ phép.");
+    } catch (error: any) {
+      showBanner(error?.response?.data?.message || "Không thể cập nhật đơn nghỉ phép", true);
+    }
+  };
 
-  const handleTerminateSingleContract = (contractId: string | number) => {
+  const [confirmTerminateContractId, setConfirmTerminateContractId] = useState<string | null>(null);
+
+  const handleTerminateSingleContract = (contractId: string) => {
     setConfirmTerminateContractId(contractId);
   };
 
@@ -366,6 +468,14 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
   };
+
+  const metricCard = (label: string, value: string | number, hint: string, tone: string) => (
+    <Card className="border-border/50 shadow-none"><CardContent className="p-3.5"><p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{label}</p><p className={`mt-1 text-xl font-black ${tone}`}>{value}</p><p className="mt-0.5 text-[10px] text-muted-foreground">{hint}</p></CardContent></Card>
+  );
+
+  const emptyTableRow = (columns: number, message: string) => (
+    <TableRow><TableCell colSpan={columns} className="h-28 text-center"><div className="mx-auto flex max-w-sm flex-col items-center gap-2 text-muted-foreground"><Layers className="h-5 w-5 opacity-50" /><span className="text-xs">{message}</span></div></TableCell></TableRow>
+  );
 
   return (
     <div
@@ -601,7 +711,7 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                 </h3>
                 {isEditingInline ? (
                   <div className="flex items-center gap-2">
-                    <Button size="sm" variant="ghost" onClick={() => setIsEditingInline(false)} className="h-8 text-xs font-bold text-muted-foreground">
+                    <Button size="sm" variant="ghost" onClick={() => { setIsEditingInline(false); setValidationErrors({}); }} className="h-8 text-xs font-bold text-muted-foreground">
                       <XCircle className="h-3.5 w-3.5 mr-1" /> Hủy
                     </Button>
                     <Button size="sm" onClick={handleSaveInline} disabled={savingInline} className="h-8 text-xs font-bold gap-1 bg-primary shadow-md shadow-primary/30">
@@ -657,8 +767,9 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                         value={editFullName}
                         readOnly={!isEditingInline}
                         onChange={e => setEditFullName(e.target.value)}
-                        className={`text-xs transition-all duration-200 ${isEditingInline ? "bg-background border-primary/50 ring-1 ring-primary/20 shadow-sm" : "bg-background/0 border-transparent hover:border-border cursor-text select-text"}`}
+                        className={`text-xs transition-all duration-200 ${validationErrors.fullName ? "border-red-500 ring-1 ring-red-200" : isEditingInline ? "bg-background border-primary/50 ring-1 ring-primary/20 shadow-sm" : "bg-background/0 border-transparent hover:border-border cursor-text select-text"}`}
                       />
+                      {isEditingInline && validationErrors.fullName && <p className="text-[10px] font-semibold text-red-600">{validationErrors.fullName}</p>}
                     </div>
 
                     <div className="space-y-1">
@@ -669,8 +780,9 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                         value={editPhone}
                         readOnly={!isEditingInline}
                         onChange={e => setEditPhone(e.target.value)}
-                        className={`text-xs transition-all duration-200 ${isEditingInline ? "bg-background border-primary/50 ring-1 ring-primary/20 shadow-sm" : "bg-background/0 border-transparent hover:border-border cursor-text select-text"}`}
+                        className={`text-xs transition-all duration-200 ${validationErrors.phone ? "border-red-500 ring-1 ring-red-200" : isEditingInline ? "bg-background border-primary/50 ring-1 ring-primary/20 shadow-sm" : "bg-background/0 border-transparent hover:border-border cursor-text select-text"}`}
                       />
+                      {isEditingInline && validationErrors.phone && <p className="text-[10px] font-semibold text-red-600">{validationErrors.phone}</p>}
                     </div>
 
                     <div className="space-y-1">
@@ -695,6 +807,7 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                           className="bg-background/0 border-transparent hover:border-border cursor-text select-text text-xs"
                         />
                       )}
+                      {isEditingInline && validationErrors.gender && <p className="text-[10px] font-semibold text-red-600">{validationErrors.gender}</p>}
                     </div>
 
                     <div className="space-y-1">
@@ -716,6 +829,7 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                           className="bg-background/0 border-transparent hover:border-border cursor-text select-text text-xs font-medium"
                         />
                       )}
+                      {isEditingInline && validationErrors.dateOfBirth && <p className="text-[10px] font-semibold text-red-600">{validationErrors.dateOfBirth}</p>}
                     </div>
 
                     <div className="space-y-1 md:col-span-2">
@@ -728,6 +842,7 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                         onChange={e => setEditAddress(e.target.value)}
                         className={`text-xs transition-all duration-200 ${isEditingInline ? "bg-background border-primary/50 ring-1 ring-primary/20 shadow-sm" : "bg-background/0 border-transparent hover:border-border cursor-text select-text"}`}
                       />
+                      {isEditingInline && validationErrors.address && <p className="text-[10px] font-semibold text-red-600">{validationErrors.address}</p>}
                     </div>
                   </div>
                 </div>
@@ -762,6 +877,7 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                           className="bg-background/0 border-transparent hover:border-border cursor-text select-text text-xs font-bold"
                         />
                       )}
+                      {isEditingInline && validationErrors.departmentId && <p className="text-[10px] font-semibold text-red-600">{validationErrors.departmentId}</p>}
                     </div>
 
                     <div className="space-y-1">
@@ -774,6 +890,7 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                         onChange={e => setEditPosition(e.target.value)}
                         className={`text-xs transition-all duration-200 ${isEditingInline ? "bg-background border-primary/50 ring-1 ring-primary/20 shadow-sm" : "bg-background/0 border-transparent hover:border-border cursor-text select-text"}`}
                       />
+                      {isEditingInline && validationErrors.position && <p className="text-[10px] font-semibold text-red-600">{validationErrors.position}</p>}
                     </div>
 
                     {/* Email — luôn readonly */}
@@ -814,6 +931,7 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                           className="bg-background/0 border-transparent hover:border-border cursor-text select-text text-xs font-medium"
                         />
                       )}
+                      {isEditingInline && validationErrors.startDate && <p className="text-[10px] font-semibold text-red-600">{validationErrors.startDate}</p>}
                     </div>
 
                     {/* Ngày kết thúc làm việc — có thể sửa */}
@@ -837,6 +955,7 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                           className="bg-background/0 border-transparent hover:border-border cursor-text select-text text-xs font-medium"
                         />
                       )}
+                      {isEditingInline && validationErrors.endDate && <p className="text-[10px] font-semibold text-red-600">{validationErrors.endDate}</p>}
                     </div>
                   </div>
                 </div>
@@ -978,6 +1097,12 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
 
                             {/* Action Buttons for this contract */}
                             <div className="flex items-center gap-2 flex-wrap">
+                              <Button size="sm" variant="outline" onClick={() => void openContractFile(ct)} disabled={contractFileActionId === ct.id} className="h-7 text-[11px] font-bold gap-1 rounded-lg cursor-pointer">
+                                {contractFileActionId === ct.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileText className="h-3 w-3 text-blue-600" />} Xem
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => void openContractFile(ct, true)} disabled={contractFileActionId === ct.id} className="h-7 text-[11px] font-bold gap-1 rounded-lg cursor-pointer">
+                                <Download className="h-3 w-3 text-emerald-600" /> Tải hợp đồng
+                              </Button>
                               {/* Audit Signing History */}
                               <Button
                                 size="sm"
@@ -1082,11 +1207,9 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                                   </p>
                                 </div>
                               </div>
-                              <a href={ct.fileUrl || ct.fileKey} target="_blank" rel="noreferrer" className="shrink-0">
-                                <Button size="sm" variant="outline" className="h-8 text-xs font-bold gap-1 rounded-xl border-primary/30 text-primary hover:bg-primary/10 cursor-pointer">
-                                  <Download className="h-3.5 w-3.5" /> Tải về
-                                </Button>
-                              </a>
+                              <Button onClick={() => void openContractFile(ct, true)} disabled={contractFileActionId === ct.id} size="sm" variant="outline" className="h-8 text-xs font-bold gap-1 rounded-xl border-primary/30 text-primary hover:bg-primary/10 cursor-pointer shrink-0">
+                                <Download className="h-3.5 w-3.5" /> Tải về
+                              </Button>
                             </div>
                           )}
 
@@ -1136,6 +1259,13 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                 </h3>
               </div>
 
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                {metricCard("Ngày công", attendances.length, "Bản ghi trong kỳ", "text-blue-600")}
+                {metricCard("Đúng giờ", attendances.filter(item => item.status === "PRESENT").length, "Ngày PRESENT", "text-emerald-600")}
+                {metricCard("Đi muộn", attendances.filter(item => item.status === "LATE").length, "Cần lưu ý", "text-amber-600")}
+                {metricCard("Khấu trừ", `${attendances.reduce((sum, item) => sum + Number(item.penaltyAmount || 0), 0).toLocaleString("vi-VN")}đ`, "Tổng tiền phạt", "text-red-600")}
+              </div>
+
               <Table className="border border-border/50 rounded-xl overflow-hidden text-xs">
                 <TableHeader className="bg-muted/40">
                   <TableRow>
@@ -1147,6 +1277,7 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
+                  {attendances.length === 0 && emptyTableRow(5, "Chưa có dữ liệu chấm công từ hệ thống.")}
                   {attendances.map(att => (
                     <TableRow key={att.id}>
                       <TableCell className="font-bold">{att.workDate}</TableCell>
@@ -1184,6 +1315,12 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                 </Button>
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {metricCard("Đơn giá hiện hành", teachingRates.filter(item => item.status === "ACTIVE").length, "Lớp đang áp dụng", "text-purple-600")}
+                {metricCard("Mức trung bình", `${Math.round(teachingRates.reduce((sum, item) => sum + item.rate, 0) / Math.max(teachingRates.length, 1)).toLocaleString("vi-VN")}đ`, "Theo giờ giảng", "text-blue-600")}
+                {metricCard("Lịch sử rate", teachingRates.length, "Bao gồm inactive", "text-slate-700")}
+              </div>
+
               <Table className="border border-border/50 rounded-xl overflow-hidden text-xs">
                 <TableHeader className="bg-muted/40">
                   <TableRow>
@@ -1195,6 +1332,7 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
+                  {teachingRates.length === 0 && emptyTableRow(5, "Giảng viên chưa được thiết lập đơn giá theo lớp.")}
                   {teachingRates.map(tr => (
                     <TableRow key={tr.id}>
                       <TableCell className="font-bold">{tr.className}</TableCell>
@@ -1246,6 +1384,12 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                 </h3>
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {metricCard("Buổi đã ghi nhận", teachingSessions.length, "Teaching session payment", "text-amber-600")}
+                {metricCard("Tổng giờ dạy", `${(teachingSessions.reduce((sum, item) => sum + item.actualDurationMin, 0) / 60).toFixed(1)}h`, "Thời lượng thực tế", "text-blue-600")}
+                {metricCard("Tổng thù lao", `${teachingSessions.reduce((sum, item) => sum + item.amount, 0).toLocaleString("vi-VN")}đ`, "Tất cả trạng thái", "text-emerald-600")}
+              </div>
+
               <Table className="border border-border/50 rounded-xl overflow-hidden text-xs">
                 <TableHeader className="bg-muted/40">
                   <TableRow>
@@ -1258,6 +1402,7 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
+                  {teachingSessions.length === 0 && emptyTableRow(6, "Chưa có khoản thù lao buổi dạy nào.")}
                   {teachingSessions.map(tsp => (
                     <TableRow key={tsp.id}>
                       <TableCell className="font-bold">{tsp.className}</TableCell>
@@ -1298,6 +1443,12 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                 </h3>
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {metricCard("Kỳ lương", salaries.length, "Tổng số phiếu lương", "text-blue-600")}
+                {metricCard("Đã thanh toán", salaries.filter(item => item.status === "PAID").length, "Kỳ đã hoàn tất", "text-emerald-600")}
+                {metricCard("Thực lãnh gần nhất", salaries.length ? `${salaries[0].netSalary.toLocaleString("vi-VN")}đ` : "—", "Theo dữ liệu mới nhất", "text-violet-600")}
+              </div>
+
               <Table className="border border-border/50 rounded-xl overflow-hidden text-xs">
                 <TableHeader className="bg-muted/40">
                   <TableRow>
@@ -1311,6 +1462,7 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
+                  {salaries.length === 0 && emptyTableRow(7, "Chưa phát sinh phiếu lương cho nhân sự này.")}
                   {salaries.map(sal => (
                     <TableRow key={sal.id} className="cursor-pointer hover:bg-muted/30" onClick={() => setSelectedSalaryPeriod(sal)}>
                       <TableCell className="font-mono font-bold text-primary">{sal.period}</TableCell>
@@ -1354,9 +1506,7 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                   <Calendar className="h-4 w-4 text-primary" />
                   <span>Quản lý nghỉ phép (Leave Requests)</span>
                 </h3>
-                <div className="text-xs font-bold text-emerald-600 bg-emerald-500/10 px-3 py-1 rounded-xl">
-                  Số ngày phép còn lại: 10/12 ngày
-                </div>
+                <div className="text-xs font-bold text-amber-600 bg-amber-500/10 px-3 py-1 rounded-xl">{leaveRequests.filter(item => item.status === "PENDING").length} đơn đang chờ</div>
               </div>
 
               <Table className="border border-border/50 rounded-xl overflow-hidden text-xs">
@@ -1370,6 +1520,7 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                   </TableRow>
                 </TableHeader>
                 <TableBody>
+                  {leaveRequests.length === 0 && emptyTableRow(5, "Nhân sự chưa gửi đơn nghỉ phép nào.")}
                   {leaveRequests.map(lv => (
                     <TableRow key={lv.id}>
                       <TableCell className="font-bold">{lv.startDate} &rarr; {lv.endDate}</TableCell>
@@ -1407,8 +1558,13 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
             <div className="space-y-6 animate-in fade-in duration-200">
               <h3 className="text-sm font-extrabold text-foreground flex items-center gap-2 border-b border-border/30 pb-3">
                 <ShieldCheck className="h-4 w-4 text-primary" />
-                <span>Yêu cầu phê duyệt liên quan (2 sub-lists)</span>
+                <span>Yêu cầu phê duyệt liên quan</span>
               </h3>
+
+              <div className="grid grid-cols-2 gap-3">
+                {metricCard("Đã gửi", approvals.requested.length, "Nhân sự là requester", "text-blue-600")}
+                {metricCard("Cần xử lý", approvals.toApprove.length, "Nhân sự là approver", "text-amber-600")}
+              </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Card className="border border-border p-4 space-y-3">
@@ -1416,6 +1572,7 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                     <span>1. Đã yêu cầu (Requester)</span>
                     <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full">{approvals.requested.length}</span>
                   </h4>
+                  {approvals.requested.length === 0 && <div className="rounded-xl border border-dashed p-7 text-center text-xs text-muted-foreground">Chưa có yêu cầu nào do nhân sự này gửi.</div>}
                   {approvals.requested.map(item => (
                     <div key={item.id} className="p-2.5 rounded-xl bg-muted/30 border border-border/40 text-xs space-y-1">
                       <div className="font-bold">{item.objectType}</div>
@@ -1430,6 +1587,7 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                     <span>2. Cần duyệt (Approver)</span>
                     <span className="text-[10px] bg-emerald-500/10 text-emerald-600 px-2 py-0.5 rounded-full">{approvals.toApprove.length}</span>
                   </h4>
+                  {approvals.toApprove.length === 0 && <div className="rounded-xl border border-dashed p-7 text-center text-xs text-muted-foreground">Không có yêu cầu nào đang chờ nhân sự này duyệt.</div>}
                   {approvals.toApprove.map(item => (
                     <div key={item.id} className="p-2.5 rounded-xl bg-muted/30 border border-border/40 text-xs space-y-1">
                       <div className="font-bold">{item.objectType}</div>
@@ -1444,28 +1602,73 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
 
           {/* TAB 9: AUDIT LOG */}
           {activeTab === "audit" && (
-            <div className="space-y-6 animate-in fade-in duration-200">
-              <h3 className="text-sm font-extrabold text-foreground flex items-center gap-2 border-b border-border/30 pb-3">
-                <History className="h-4 w-4 text-primary" />
-                <span>Audit log lịch sử thay đổi hồ sơ nhân viên (Theo mục 5.9)</span>
-              </h3>
-
-              <div className="relative border-l-2 border-primary/20 pl-4 space-y-4">
-                {auditLogs.map(log => (
-                  <div key={log.id} className="relative space-y-1">
-                    <div className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-primary" />
-                    <div className="text-xs font-bold text-foreground">{log.action} - {log.entityType}</div>
-                    <div className="text-[11px] text-muted-foreground">
-                      Thực hiện bởi: <strong>{log.actorName}</strong> &bull; Lúc {log.timestamp}
-                    </div>
-                    {log.fieldName && (
-                      <div className="text-[11px] font-mono bg-muted/50 p-2 rounded-lg border border-border/40">
-                        Field `{log.fieldName}`: <span className="line-through text-red-400">{log.oldValue}</span> &rarr; <span className="text-emerald-500 font-bold">{log.newValue}</span>
-                      </div>
-                    )}
-                  </div>
-                ))}
+            <div className="space-y-4 animate-in fade-in duration-200">
+              <div className="flex items-center justify-between border-b border-border/30 pb-3">
+                <h4 className="text-sm font-extrabold text-foreground flex items-center gap-2">
+                  <History className="h-4 w-4 text-primary" />
+                  <span>Audit log lịch sử thay đổi hồ sơ nhân viên</span>
+                </h4>
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-primary/10 text-primary border border-primary/20">
+                  {auditLogs.length} Bản ghi
+                </span>
               </div>
+
+              {auditLogs.length === 0 ? (
+                <Card className="border-border shadow-xs p-8 text-center text-muted-foreground text-xs space-y-2">
+                  <Clock className="h-10 w-10 mx-auto text-muted-foreground/40" />
+                  <p className="font-bold">Chưa có nhật ký Audit Log nào ghi nhận cho nhân viên này.</p>
+                </Card>
+              ) : (
+                <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
+                  {auditLogs.map((log: any) => (
+                    <div
+                      key={log.id || Math.random()}
+                      onClick={() => handleOpenAuditLogDetail(log)}
+                      className="p-3.5 rounded-xl border border-border/40 bg-card flex items-start gap-3 text-xs shadow-xs hover:border-primary/50 hover:bg-primary/5 transition-all cursor-pointer group"
+                    >
+                      <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0 mt-0.5">
+                        <Clock className="h-4 w-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <div className="font-extrabold text-foreground flex items-center gap-2">
+                            <span>Thao tác: <strong className="text-primary">{
+                              log.action === "CREATE" ? "Khởi tạo Hồ sơ Nhân viên" :
+                              log.action === "UPDATE" ? "Cập nhật Thông tin Hồ sơ" :
+                              log.action === "UPDATE_SALARY" ? "Điều chỉnh Lương cơ bản" :
+                              log.action === "CHANGE_DEPARTMENT" ? "Điều chuyển Phòng ban" :
+                              log.action === "TERMINATE" ? "Chấm dứt Hợp đồng" :
+                              log.action === "PROMOTED" ? "Thăng chức / Cập nhật Chức danh" :
+                              (log.action || "THAY ĐỔI")
+                            }</strong></span>
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-mono bg-muted text-muted-foreground border border-border/30">
+                              {log.action} &bull; #{log.entityId || employee.id}
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-muted-foreground font-mono flex items-center gap-2">
+                            <span>{log.timestamp || log.occurredAt ? formatDateDisplay(log.timestamp || log.occurredAt) : "Mới đây"}</span>
+                            <span className="text-primary font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                              <Eye className="h-3.5 w-3.5" /> Xem chi tiết
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="text-[11px] text-muted-foreground mt-1 flex items-center gap-3 flex-wrap">
+                          <span>Người thực hiện: <strong className="text-foreground">{log.actorName || log.userFullName || log.userEmail || `User #${log.actorId || "System"}`}</strong></span>
+                          {log.ipAddress && <span>IP: <code className="font-mono text-[10px]">{log.ipAddress}</code></span>}
+                        </div>
+
+                        {(log.oldValue || log.newValue) && (
+                          <div className="mt-2 p-2 rounded-lg bg-muted/30 border border-border/20 text-[11px] font-mono space-y-1 overflow-x-auto">
+                            {log.oldValue && <div className="text-red-500/90 truncate">Old: {log.oldValue}</div>}
+                            {log.newValue && <div className="text-emerald-600 font-bold truncate">New: {log.newValue}</div>}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -1485,7 +1688,7 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
 
       {/* SIGNING HISTORY AUDIT LOG DIALOG */}
       {signingHistoryOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-[100] p-4">
+        <div onClick={(event) => event.stopPropagation()} className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-[100] p-4">
           <div className="bg-background border border-border/50 rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between border-b border-border/40 pb-3">
               <h3 className="text-sm font-extrabold text-foreground flex items-center gap-2">
@@ -1534,6 +1737,12 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
           </div>
         </div>
       )}
+      {/* DETAIL AUDIT LOG MODAL */}
+      <DetailAuditLogModal
+        open={auditDetailModalOpen}
+        onClose={() => setAuditDetailModalOpen(false)}
+        log={selectedAuditLog}
+      />
     </div>
   );
 };

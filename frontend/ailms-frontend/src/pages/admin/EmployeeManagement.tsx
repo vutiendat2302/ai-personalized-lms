@@ -90,10 +90,28 @@ import { roleApi } from "@/api/roles/roleApi";
 import { departmentApi, type DepartmentResponse } from "@/api/departments/departmentApi";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { employeeApi } from "@/api/employees/employeeApi";
+import { hrApi, type EmployeeContractResponse } from "@/api/hr/hrApi";
 import type { UserResponse, RoleResponse } from "@/types/admin";
 import type { EmployeeExtended } from "@/types/employee";
 
 import { EmployeeDetailModal } from "@/components/admin/employee/EmployeeDetailModal";
+import { CreateSingleEmployeeModal } from "@/components/admin/employee/CreateSingleEmployeeModal";
+
+interface EmployeeUser extends UserResponse {
+  userId: string;
+  employeeCode: string;
+  departmentId: string;
+  departmentName: string;
+  departmentCode: string;
+  position: string;
+  address: string;
+  startDate: string | null;
+  endDate: string | null;
+  userStatus: string;
+  employeeStatus: string;
+  contractStatus: string;
+  employmentType: string;
+}
 
 const ROLE_COLORS = ["#7b2525", "#ba6a4c", "#ff97d0", "#fe7f2d", "#2b5748", "#4e220f"];
 const GENDER_COLORS = ["#7b2525", "#ba6a4c", "#ff97d0", "#fe7f2d"];
@@ -126,7 +144,7 @@ export const EmployeeManagement: React.FC = () => {
   const location = useLocation();
 
   // Data States
-  const [users, setUsers] = useState<UserResponse[]>([]);
+  const [users, setUsers] = useState<EmployeeUser[]>([]);
   const [roles, setRoles] = useState<RoleResponse[]>([]);
   const [departments, setDepartments] = useState<DepartmentResponse[]>([]);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
@@ -181,6 +199,7 @@ export const EmployeeManagement: React.FC = () => {
   const [filterDepartmentId, setFilterDepartmentId] = useState("");
   const [employmentType, setEmploymentType] = useState<string>("");
   const [contractStatus, setContractStatus] = useState<string>("");
+  const [expiringProbationOnly, setExpiringProbationOnly] = useState(false);
   const [userStatus, setUserStatus] = useState<string>("");
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
@@ -196,7 +215,7 @@ export const EmployeeManagement: React.FC = () => {
 
   // Multi-column sorting state
   const [sortRules, setSortRules] = useState<Array<{ field: string; dir: "ASC" | "DESC" }>>([
-    { field: "id", dir: "DESC" }
+    { field: "createdAt", dir: "DESC" }
   ]);
 
   // Pagination
@@ -224,6 +243,12 @@ export const EmployeeManagement: React.FC = () => {
   // Banners
   const [successBanner, setSuccessBanner] = useState("");
   const [errorBanner, setErrorBanner] = useState("");
+  const [newlyCreatedIds, setNewlyCreatedIds] = useState<string[]>([]);
+  const [actionBanner, setActionBanner] = useState<{
+    message: string;
+    actionText: string;
+    onAction: () => void;
+  } | null>(null);
 
   const showBanner = (msg: string, isError = false) => {
     if (isError) {
@@ -233,6 +258,27 @@ export const EmployeeManagement: React.FC = () => {
       setSuccessBanner(msg);
       setTimeout(() => setSuccessBanner(""), 3500);
     }
+  };
+
+  // Kiểm tra bản ghi mới có nguy cơ bị ẩn bởi bộ lọc hiện tại.
+  const hasActiveEmployeeFilters = () => Boolean(
+    searchKeyword.trim() || filterRole || filterStatus || filterGender || filterDepartmentId
+    || employmentType || contractStatus || userStatus || startDate || endDate || expiringProbationOnly
+    || selectedTeacherCategories.length > 0
+  );
+
+  // Tải lại danh sách và ưu tiên các nhân viên vừa tạo lên đầu bảng.
+  const showNewEmployeesAtTop = async (ids: string[] = []) => {
+    setSearchKeyword(""); setFilterRole(""); setFilterStatus(""); setFilterGender("");
+    setFilterDepartmentId(""); setEmploymentType(""); setContractStatus(""); setUserStatus(""); setExpiringProbationOnly(false);
+    setStartDate(""); setEndDate(""); setSelectedTeacherCategories([]);
+    setSortRules([{ field: "createdAt", dir: "DESC" }]);
+    setPage(0);
+    setNewlyCreatedIds(ids);
+    setActionBanner(null);
+    scrollToSection("management");
+    await fetchUsers({ firstPage: true, defaultSort: true, ignoreFilters: true });
+    window.setTimeout(() => setNewlyCreatedIds([]), 5000);
   };
 
   // Sticky sub-navbar tab state
@@ -258,6 +304,7 @@ export const EmployeeManagement: React.FC = () => {
   };
 
   // Modals state
+  const [createSingleModalOpen, setCreateSingleModalOpen] = useState(false);
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRoleId, setInviteRoleId] = useState("");
@@ -273,6 +320,15 @@ export const EmployeeManagement: React.FC = () => {
   const [bulkEmailModalOpen, setBulkEmailModalOpen] = useState(false);
   const [bulkEmailSubject, setBulkEmailSubject] = useState("");
   const [bulkEmailContent, setBulkEmailContent] = useState("");
+
+  const [hrNotifyModalOpen, setHrNotifyModalOpen] = useState(false);
+  const [hrRecipients, setHrRecipients] = useState<Array<{ id: string; fullName: string; email: string }>>([]);
+  const [selectedHrIds, setSelectedHrIds] = useState<string[]>([]);
+  const [hrRecipientPage, setHrRecipientPage] = useState(0);
+  const [hrRecipientSearch, setHrRecipientSearch] = useState("");
+  const [hrNotifySubject, setHrNotifySubject] = useState("Cảnh báo hợp đồng thử việc sắp hết hạn");
+  const [hrNotifyContent, setHrNotifyContent] = useState("Hệ thống phát hiện các hợp đồng thử việc sẽ hết hạn trong 7 ngày tới. Vui lòng kiểm tra và thực hiện đánh giá thử việc đúng hạn.");
+  const [expiringProbationContracts, setExpiringProbationContracts] = useState<EmployeeContractResponse[]>([]);
 
   const [bulkAssignRoleModalOpen, setBulkAssignRoleModalOpen] = useState(false);
   const [bulkAssignRoleLoading, setBulkAssignRoleLoading] = useState(false);
@@ -357,6 +413,7 @@ export const EmployeeManagement: React.FC = () => {
     filterDepartmentId,
     employmentType,
     contractStatus,
+    expiringProbationOnly,
     userStatus,
     startDate,
     endDate,
@@ -389,7 +446,7 @@ export const EmployeeManagement: React.FC = () => {
     const yr = yearStr !== "ALL" ? Number(yearStr) : undefined;
     try {
       const res = await employeeApi.getEmployeeStatsByGender(yr);
-      const data = res?.data?.data || res;
+      const data = res;
       if (data && Object.keys(data).length > 0) {
         const genderLabels: Record<string, string> = { "0": "Nam", "1": "Nữ", "2": "Khác", "NAM": "Nam", "NU": "Nữ", "KHAC": "Khác" };
         setGenderStats(Object.entries(data).map(([key, val]) => ({ name: genderLabels[key] || key, value: Number(val) })));
@@ -408,7 +465,7 @@ export const EmployeeManagement: React.FC = () => {
     const yr = yearStr !== "ALL" ? Number(yearStr) : undefined;
     try {
       const res = await employeeApi.getEmployeeStatsByAgeGroup(yr);
-      const data = res?.data?.data || res;
+      const data = res;
       if (data && Object.keys(data).length > 0) {
         setAgeStats(Object.entries(data).map(([name, value]) => ({ name, value: Number(value) })));
       } else {
@@ -546,7 +603,17 @@ export const EmployeeManagement: React.FC = () => {
         ...(roleIds.length > 0 && { roleIds })
       });
       if (res.data.success) {
-        showBanner(`Đã gửi thư mời đăng ký đến: ${inviteEmail}`);
+        const invitedEmail = inviteEmail.trim();
+        if (hasActiveEmployeeFilters()) {
+          setActionBanner({
+            message: `Đã gửi thư mời đăng ký đến ${invitedEmail}. Bộ lọc hiện tại có thể đang ẩn tài khoản mới.`,
+            actionText: "Xem danh sách mới nhất",
+            onAction: () => { void showNewEmployeesAtTop(); },
+          });
+        } else {
+          showBanner(`Đã gửi thư mời đăng ký đến: ${invitedEmail}`);
+          void showNewEmployeesAtTop();
+        }
         setInviteModalOpen(false);
         setInviteEmail("");
         setInviteRoleId("");
@@ -692,15 +759,24 @@ export const EmployeeManagement: React.FC = () => {
         roleId: roleIdVal
       });
       if (res.data.success) {
-        const { successCount, failureCount, errors } = res.data.data || {};
+        const { successCount, failureCount, errors, createdEmployees = [] } = res.data.data || {};
+        const createdIds = createdEmployees.map((employee: any) => String(employee.id || employee.userId)).filter(Boolean);
         if (failureCount > 0 && errors && errors.length > 0) {
           showBanner(`Đã tạo thành công ${successCount || 0} nhân viên. Lỗi ${failureCount} email: ${errors.join("; ")}`, true);
         } else {
           showBanner(`Tạo hàng loạt ${successCount || emailsList.length} nhân viên thành công!`);
         }
+        if (hasActiveEmployeeFilters()) {
+          setActionBanner({
+            message: `Đã thêm ${successCount || createdIds.length} nhân viên; bộ lọc hiện tại đang có thể ẩn các bản ghi mới.`,
+            actionText: "Xem các nhân viên mới",
+            onAction: () => { void showNewEmployeesAtTop(createdIds); },
+          });
+        } else {
+          void showNewEmployeesAtTop(createdIds);
+        }
         setBulkCreateEmployeesModalOpen(false);
         setBulkEmployeeEmails("");
-        fetchUsers();
         fetchStatistics();
       }
     } catch (err: any) {
@@ -710,28 +786,32 @@ export const EmployeeManagement: React.FC = () => {
     }
   };
 
-  const fetchUsers = async () => {
+  const fetchUsers = async (options?: { firstPage?: boolean; defaultSort?: boolean; ignoreFilters?: boolean }) => {
     setLoading(true);
     try {
-      const sortParams = sortRules.length > 0
-        ? sortRules.map(r => `${r.field}:${r.dir.toLowerCase()}`)
-        : ["id:desc"];
+      const effectiveSortRules = options?.defaultSort ? [{ field: "createdAt", dir: "DESC" as const }] : sortRules;
+      const sortParams = effectiveSortRules.length > 0
+        ? effectiveSortRules.map(r => `${r.field}:${r.dir.toLowerCase()}`)
+        : ["createdAt:desc"];
 
       const params: any = {
-        page,
+        page: options?.firstPage ? 0 : page,
         size: pageSize,
         sort: sortParams,
       };
 
-      if (searchKeyword.trim()) params.keyword = searchKeyword.trim();
-      if (filterRole) params.roleIds = filterRole;
-      if (contractStatus) params.status = contractStatus;
-      if (userStatus) params.userStatus = userStatus;
-      if (employmentType) params.employmentTypeEnum = employmentType;
-      if (filterGender !== "") params.gender = parseInt(filterGender);
-      if (filterDepartmentId) params.departmentId = filterDepartmentId;
-      if (startDate) params.createdFrom = `${startDate}T00:00:00`;
-      if (endDate) params.createdTo = `${endDate}T23:59:59`;
+      if (!options?.ignoreFilters) {
+        if (searchKeyword.trim()) params.keyword = searchKeyword.trim();
+        if (filterRole) params.roleIds = filterRole;
+        if (contractStatus) params.status = contractStatus;
+        if (expiringProbationOnly) params.expiringProbationWithin7Days = true;
+        if (userStatus) params.userStatus = userStatus;
+        if (employmentType) params.employmentTypeEnum = employmentType;
+        if (filterGender !== "") params.gender = parseInt(filterGender);
+        if (filterDepartmentId) params.departmentId = filterDepartmentId;
+        if (startDate) params.createdFrom = `${startDate}T00:00:00`;
+        if (endDate) params.createdTo = `${endDate}T23:59:59`;
+      }
 
       const res = await employeeApi.getEmployeesPage(params).catch(() => null);
 
@@ -754,6 +834,7 @@ export const EmployeeManagement: React.FC = () => {
           employeeStatus: emp.status || "",         // EmployeeStatusEnum — hiển thị cột Trạng thái NV
           contractStatus: emp.status || "",
           address: emp.address || "",
+          lastLoginAt: emp.lastLoginAt || null,
           createdAt: emp.createdAt || emp.startDate || "",
           updatedAt: emp.updatedAt || null,
           roles: emp.roles || [],
@@ -764,7 +845,7 @@ export const EmployeeManagement: React.FC = () => {
           employmentType: emp.employmentTypeEnum || emp.employmentType || "FULL_TIME",
           employeeCode: emp.employeeCode || `EP-2607-${String(emp.id || emp.userId).padStart(4, "0")}`
         }));
-        setUsers(mappedUsers as any);
+        setUsers(mappedUsers);
         setTotalPages(pageData.totalPages || 1);
         setTotalElements(pageData.totalElements || 0);
         if (typeof pageData.totalElements === "number") {
@@ -796,11 +877,12 @@ export const EmployeeManagement: React.FC = () => {
     setFilterDepartmentId("");
     setEmploymentType("");
     setContractStatus("");
+    setExpiringProbationOnly(false);
     setUserStatus("");
     setStartDate("");
     setEndDate("");
     setSelectedTeacherCategories([]);
-    setSortRules([{ field: "id", dir: "DESC" }]);
+    setSortRules([{ field: "createdAt", dir: "DESC" }]);
     setPage(0);
   };
 
@@ -863,7 +945,7 @@ export const EmployeeManagement: React.FC = () => {
     }
   };
 
-  const handleQuickToggleStatus = async (user: UserResponse) => {
+  const handleQuickToggleStatus = async (user: EmployeeUser) => {
     const newStatus = user.status === "ACTIVE" ? "LOCKED" : "ACTIVE";
     try {
       const res = await userApi.updateUser(user.id, {
@@ -981,7 +1063,7 @@ export const EmployeeManagement: React.FC = () => {
       status: updatedFields.status,
       employmentType: updatedFields.employmentType,
       employmentTypeEnum: updatedFields.employmentType,
-      departmentId: (updatedFields.departmentId && updatedFields.departmentId !== "0") ? Number(updatedFields.departmentId) : undefined,
+      departmentId: (updatedFields.departmentId && updatedFields.departmentId !== "0") ? updatedFields.departmentId : undefined,
     });
     if (!res.data?.success) {
       throw new Error(res.data?.message || "Cập nhật thất bại");
@@ -992,17 +1074,66 @@ export const EmployeeManagement: React.FC = () => {
     await fetchUsers();
   };
 
-  const handleTriggerNotifyHR = async (e: React.MouseEvent) => {
+  const handleOpenNotifyHR = async (e: React.MouseEvent) => {
     e.stopPropagation();
     setNotifyLoading(true);
     try {
-      const res = await employeeApi.notifyExpiringProbation();
-      showBanner(res.message || "Đã gửi mail/thông báo nhắc nhở phòng HR thành công!");
+      const [recipientRes, contractRes] = await Promise.all([
+        hrApi.getContractReminderRecipients(),
+        hrApi.getExpiringProbationContracts(),
+      ]);
+      const recipients = recipientRes.data.data || [];
+      const contracts = contractRes.data.data || [];
+      setHrRecipients(recipients);
+      setExpiringProbationContracts(contracts);
+      setSelectedHrIds([]);
+      setHrRecipientPage(0);
+      setHrRecipientSearch("");
+      setHrNotifyModalOpen(true);
     } catch (err: any) {
-      showBanner(err.message || "Lỗi gửi thông báo nhắc HR", true);
+      showBanner(err.message || "Không thể tải danh sách HR", true);
     } finally {
       setNotifyLoading(false);
     }
+  };
+
+  const handleSendProbationReminder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedHrIds.length === 0) {
+      showBanner("Vui lòng chọn ít nhất một nhân sự HR", true);
+      return;
+    }
+    if (!hrNotifyContent.trim()) {
+      showBanner("Vui lòng nhập nội dung thông báo", true);
+      return;
+    }
+    if (expiringProbationContracts.length === 0) {
+      showBanner("Không có hợp đồng thử việc nào hết hạn trong 7 ngày tới", true);
+      return;
+    }
+    setNotifyLoading(true);
+    try {
+      await hrApi.bulkRemindExpiration({
+        ids: expiringProbationContracts.map(contract => String(contract.id)),
+        recipientUserIds: selectedHrIds,
+        subject: hrNotifySubject.trim(),
+        content: hrNotifyContent.trim(),
+      });
+      showBanner(`Đã gửi nhắc hạn tới ${selectedHrIds.length} nhân sự HR!`);
+      setHrNotifyModalOpen(false);
+    } catch (err: any) {
+      showBanner(err.message || "Không thể gửi thông báo tới HR", true);
+    } finally {
+      setNotifyLoading(false);
+    }
+  };
+
+  const handleSelectExpiringProbation = () => {
+    setContractStatus("");
+    setExpiringProbationOnly(true);
+    setPage(0);
+    scrollToSection("management");
+    showBanner("Đang hiển thị hợp đồng thử việc hết hạn từ hôm nay đến 7 ngày tới.");
   };
 
   const handleExportUsersExcel = async () => {
@@ -1047,7 +1178,7 @@ export const EmployeeManagement: React.FC = () => {
     }
   };
 
-  const handleExportSingleEmployeeDetailExcel = async (userId: string | number) => {
+  const handleExportSingleEmployeeDetailExcel = async (userId: string) => {
     try {
       showBanner("Đang khởi tạo file xuất CSV chi tiết cho nhân sự...");
       const res = await employeeApi.exportEmployeeDetailToExcel(userId).catch(() => null);
@@ -1151,10 +1282,27 @@ export const EmployeeManagement: React.FC = () => {
     return renderChartFn();
   };
 
+  const filteredHrRecipients = hrRecipients.filter(hr => {
+    const keyword = hrRecipientSearch.trim().toLowerCase();
+    return !keyword || hr.fullName.toLowerCase().includes(keyword) || hr.email.toLowerCase().includes(keyword);
+  });
+  const hrPageSize = 5;
+  const hrRecipientTotalPages = Math.max(1, Math.ceil(filteredHrRecipients.length / hrPageSize));
+  const pagedHrRecipients = filteredHrRecipients.slice(hrRecipientPage * hrPageSize, (hrRecipientPage + 1) * hrPageSize);
+
   return (
     <div className="mx-auto max-w-none w-full px-4 sm:px-6 lg:px-10 py-6 space-y-8 animate-in fade-in-50 duration-300">
       
       {/* Toast Banners */}
+      {actionBanner && (
+        <div className="fixed bottom-6 right-6 z-[9999] flex max-w-xl items-center gap-3 rounded-2xl bg-emerald-600 px-5 py-3.5 text-white shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
+          <CheckCircle2 className="h-5 w-5 shrink-0" />
+          <span className="text-sm font-semibold">{actionBanner.message}</span>
+          <button onClick={actionBanner.onAction} className="shrink-0 rounded-xl bg-white/20 px-2.5 py-1 text-xs font-bold text-amber-200 underline hover:text-white">
+            [{actionBanner.actionText}]
+          </button>
+        </div>
+      )}
       {successBanner && (
         <div className="fixed bottom-6 right-6 z-[9999] flex items-center gap-3 rounded-2xl bg-emerald-600 text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
           <CheckCircle2 className="h-5 w-5 shrink-0" />
@@ -1431,7 +1579,7 @@ export const EmployeeManagement: React.FC = () => {
 
             {/* Card 4: Probation Expiring Warning Card */}
             <Card
-              onClick={() => { setContractStatus("PROBATION"); setPage(0); showBanner("Đã lọc danh sách theo hợp đồng thử việc!"); }}
+              onClick={handleSelectExpiringProbation}
               className="lg:col-span-4 border-2 border-amber-500/40 bg-gradient-to-br from-amber-500/10 via-card to-card shadow-xs cursor-pointer group flex flex-col justify-between"
             >
               <CardHeader className="pb-2">
@@ -1451,7 +1599,7 @@ export const EmployeeManagement: React.FC = () => {
                     </>
                   )}
                 </div>
-                <Button size="sm" onClick={handleTriggerNotifyHR} disabled={notifyLoading} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs gap-1">
+                <Button size="sm" onClick={handleOpenNotifyHR} disabled={notifyLoading} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs gap-1">
                   <Mail className="h-3.5 w-3.5" /> Gửi Mail HR
                 </Button>
               </CardContent>
@@ -1529,6 +1677,9 @@ export const EmployeeManagement: React.FC = () => {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
+              <Button onClick={() => setCreateSingleModalOpen(true)} variant="default" size="sm" className="h-9 gap-1.5 font-bold bg-blue-600 hover:bg-blue-700 text-white cursor-pointer shadow-sm">
+                <Plus className="h-4 w-4" /> <span>Thêm 1 nhân viên</span>
+              </Button>
               <Button onClick={handleSyncProfiles} variant="outline" size="sm" disabled={syncLoading} className="h-9 gap-1.5 font-semibold text-indigo-600 border-indigo-500/30 hover:bg-indigo-500/10 cursor-pointer" title="Đồng bộ toàn bộ tài khoản nhân sự chưa có hồ sơ">
                 {syncLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                 <span>Đồng bộ hồ sơ</span>
@@ -1537,7 +1688,7 @@ export const EmployeeManagement: React.FC = () => {
                 <FileSpreadsheet className="h-4 w-4" /> <span>Xuất File CSV</span>
               </Button>
               <Button onClick={() => setBulkCreateEmployeesModalOpen(true)} variant="outline" size="sm" className="h-9 gap-1.5 font-semibold text-blue-600 border-indigo-500/30 hover:bg-indigo-500/10 cursor-pointer">
-                <UserPlus className="h-4 w-4" /> <span>Thêm nhân viên</span>
+                <UserPlus className="h-4 w-4" /> <span>Thêm nhiều nhân viên</span>
               </Button>
               <Button onClick={() => setInviteModalOpen(true)} variant="outline" size="sm" className="h-9 gap-1.5 font-semibold text-primary border-border/40 cursor-pointer">
                 <Mail className="h-4 w-4" /> <span>Mời nhân viên</span>
@@ -1915,7 +2066,10 @@ export const EmployeeManagement: React.FC = () => {
                   </TableRow>
                 ) : (
                   users.map((user, idx) => (
-                    <TableRow key={user.id} className="hover:bg-foreground/10 transition-colors border-border/30">
+                    <TableRow key={user.id} className={cn(
+                      "hover:bg-foreground/10 transition-colors border-border/30",
+                      newlyCreatedIds.includes(String(user.id)) && "bg-emerald-500/20 border-l-4 border-l-emerald-500 font-semibold"
+                    )}>
                       <TableCell>
                         <Checkbox checked={selectedUserIds.includes(String(user.id))} onCheckedChange={() => handleSelectUser(String(user.id))} className="translate-y-0.5 border-border/30" />
                       </TableCell>
@@ -2281,6 +2435,61 @@ export const EmployeeManagement: React.FC = () => {
         </div>
       )}
 
+      {hrNotifyModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+          <div className="w-full max-w-2xl rounded-2xl border border-border bg-card shadow-2xl overflow-hidden animate-in fade-in-50 zoom-in-95 duration-200">
+            <div className="flex items-start justify-between border-b border-border px-6 py-4">
+              <div>
+                <h3 className="text-lg font-bold text-foreground flex items-center gap-2"><Mail className="h-5 w-5 text-amber-600" /> Gửi nhắc hạn tới HR</h3>
+                <p className="mt-1 text-xs text-muted-foreground">{expiringProbationContracts.length} hợp đồng thử việc hết hạn từ hôm nay đến 7 ngày tới.</p>
+              </div>
+              <button onClick={() => !notifyLoading && setHrNotifyModalOpen(false)} disabled={notifyLoading} className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"><X className="h-4 w-4" /></button>
+            </div>
+
+            <form onSubmit={handleSendProbationReminder} className="p-6 space-y-5">
+              <section className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <Label className="text-xs font-bold">1. Chọn nhân sự HR nhận thông báo</Label>
+                  <span className="rounded-full bg-primary/10 px-2 py-1 text-[11px] font-bold text-primary">Đã chọn {selectedHrIds.length}</span>
+                </div>
+                <Input value={hrRecipientSearch} onChange={e => { setHrRecipientSearch(e.target.value); setHrRecipientPage(0); }} placeholder="Tìm HR theo tên hoặc email..." className="h-9 text-xs" />
+                <div className="overflow-hidden rounded-xl border border-border">
+                  {pagedHrRecipients.length > 0 ? pagedHrRecipients.map(hr => (
+                    <label key={hr.id} className="flex cursor-pointer items-center gap-3 border-b border-border/60 px-3 py-2.5 last:border-0 hover:bg-muted/50">
+                      <Checkbox checked={selectedHrIds.includes(String(hr.id))} onCheckedChange={checked => setSelectedHrIds(current => checked ? [...current, String(hr.id)] : current.filter(id => id !== String(hr.id)))} />
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">{hr.fullName.charAt(0).toUpperCase()}</div>
+                      <div className="min-w-0 flex-1"><p className="truncate text-xs font-bold text-foreground">{hr.fullName}</p><p className="truncate text-[11px] text-muted-foreground">{hr.email}</p></div>
+                      <span className="rounded-md bg-emerald-500/10 px-2 py-1 text-[10px] font-bold text-emerald-700">HR</span>
+                    </label>
+                  )) : <p className="p-6 text-center text-xs text-muted-foreground">Không tìm thấy nhân sự HR.</p>}
+                </div>
+                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                  <span>{filteredHrRecipients.length} nhân sự HR đang hoạt động</span>
+                  <div className="flex items-center gap-2">
+                    <Button type="button" size="sm" variant="outline" disabled={hrRecipientPage === 0} onClick={() => setHrRecipientPage(page => page - 1)} className="h-7 w-7 p-0"><ChevronLeft className="h-3.5 w-3.5" /></Button>
+                    <span>{hrRecipientPage + 1}/{hrRecipientTotalPages}</span>
+                    <Button type="button" size="sm" variant="outline" disabled={hrRecipientPage + 1 >= hrRecipientTotalPages} onClick={() => setHrRecipientPage(page => page + 1)} className="h-7 w-7 p-0"><ChevronRight className="h-3.5 w-3.5" /></Button>
+                  </div>
+                </div>
+              </section>
+
+              <section className="grid gap-3 border-t border-border pt-4">
+                <Label className="text-xs font-bold">2. Nội dung gửi</Label>
+                <Input value={hrNotifySubject} onChange={e => setHrNotifySubject(e.target.value)} placeholder="Tiêu đề email" className="h-9 text-xs" required />
+                <textarea rows={5} value={hrNotifyContent} onChange={e => setHrNotifyContent(e.target.value)} placeholder="Nhập nội dung nhắc hạn..." required className="w-full resize-none rounded-lg border border-input bg-background p-3 text-xs outline-none focus:ring-2 focus:ring-primary/20" />
+              </section>
+
+              <div className="flex justify-end gap-2 border-t border-border pt-4">
+                <Button type="button" variant="outline" onClick={() => setHrNotifyModalOpen(false)} disabled={notifyLoading}>Hủy</Button>
+                <Button type="submit" disabled={notifyLoading || selectedHrIds.length === 0 || expiringProbationContracts.length === 0} className="gap-2 bg-amber-600 text-white hover:bg-amber-700">
+                  {notifyLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />} Gửi tới HR đã chọn
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* MODAL 4: BULK EMAIL MODAL */}
       {bulkEmailModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
@@ -2636,8 +2845,31 @@ export const EmployeeManagement: React.FC = () => {
         onConfirm={confirmBulkDeleteAction}
       />
 
+      {/* CREATE SINGLE EMPLOYEE MODAL */}
+      <CreateSingleEmployeeModal
+        open={createSingleModalOpen}
+        onClose={() => setCreateSingleModalOpen(false)}
+        departments={departments}
+        roles={roles}
+        onSuccess={(msg, newEmployee) => {
+          const newId = String(newEmployee?.id || newEmployee?.userId || "");
+          if (hasActiveEmployeeFilters()) {
+            setActionBanner({
+              message: `${msg} Bộ lọc hiện tại đang có thể ẩn bản ghi mới.`,
+              actionText: "Xem chi tiết",
+              onAction: () => {
+                if (newEmployee) handleOpenDetailModalForUser(newEmployee as UserResponse);
+                setActionBanner(null);
+              },
+            });
+          } else {
+            showBanner(msg);
+            void showNewEmployeesAtTop(newId ? [newId] : []);
+          }
+        }}
+        onError={(msg) => showBanner(msg, true)}
+      />
+
     </div>
   );
 };
-
-

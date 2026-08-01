@@ -2,6 +2,7 @@ package com.ailms.service.imp;
 
 import com.ailms.entity.UserEntity;
 import com.ailms.entity.enums.UserStatusEnum;
+import com.ailms.exception.BusinessException;
 import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.repository.UserRepository;
 import com.ailms.response.ChildRecordDetailResponse;
@@ -18,6 +19,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -31,6 +34,7 @@ public class UserTrashService implements ITrashable {
     private final UserRepository userRepository;
     private final EntityManager entityManager;
     private final IAuditLogService auditLogService;
+    private final TrashItemTransactionExecutor transactionExecutor;
 
     @Override
     public String getEntityType() {
@@ -174,6 +178,7 @@ public class UserTrashService implements ITrashable {
         executeNativeUpdate("DELETE FROM teacher_availability WHERE employee_id = :id", id);
         executeNativeUpdate("DELETE FROM teacher_category WHERE employee_id = :id", id);
         executeNativeUpdate("DELETE FROM course_teacher WHERE user_id = :id", id);
+        executeNativeUpdate("UPDATE class_online SET teacher_id = NULL WHERE teacher_id = :id", id);
         executeNativeUpdate("DELETE FROM teaching_session_payment WHERE employee_id = :id", id);
         executeNativeUpdate("DELETE FROM attendance WHERE employee_id = :id", id);
         executeNativeUpdate("DELETE FROM leave_request WHERE employee_id = :id", id);
@@ -187,26 +192,39 @@ public class UserTrashService implements ITrashable {
         executeNativeUpdate("DELETE FROM student_interest WHERE student_user_id = :id", id);
         executeNativeUpdate("DELETE FROM student_profile WHERE user_id = :id", id);
 
+        executeNativeUpdate("DELETE FROM quiz_answer WHERE attempt_id IN (SELECT id FROM quiz_attempt WHERE user_id = :id)", id);
         executeNativeUpdate("DELETE FROM quiz_attempt WHERE user_id = :id", id);
         executeNativeUpdate("DELETE FROM submission WHERE user_id = :id", id);
         executeNativeUpdate("DELETE FROM lesson_progress WHERE user_id = :id", id);
         executeNativeUpdate("DELETE FROM course_progress WHERE user_id = :id", id);
+        // Orders and enrollment packages can still reference the user's enrollments.
+        // Remove those references before deleting enrollment to satisfy the foreign keys.
+        executeNativeUpdate("DELETE FROM payment_transaction WHERE order_id IN (SELECT id FROM `order` WHERE user_id = :id)", id);
+        executeNativeUpdate("DELETE FROM order_item WHERE order_id IN (SELECT id FROM `order` WHERE user_id = :id)", id);
+        executeNativeUpdate("DELETE FROM `order` WHERE user_id = :id", id);
+        executeNativeUpdate("DELETE FROM order_item WHERE related_enrollment_id IN (SELECT id FROM enrollment WHERE user_id = :id)", id);
+        executeNativeUpdate("DELETE FROM enrollment_package WHERE enrollment_id IN (SELECT id FROM enrollment WHERE user_id = :id)", id);
         executeNativeUpdate("DELETE FROM enrollment WHERE user_id = :id", id);
         executeNativeUpdate("DELETE FROM certificate WHERE user_id = :id", id);
         executeNativeUpdate("DELETE FROM study_goal WHERE user_id = :id", id);
         executeNativeUpdate("DELETE FROM class_member WHERE user_id = :id", id);
         executeNativeUpdate("DELETE FROM course_member WHERE user_id = :id", id);
+        executeNativeUpdate("DELETE FROM learning_activity_log WHERE user_id = :id", id);
+        executeNativeUpdate("DELETE FROM learning_session WHERE user_id = :id", id);
+        executeNativeUpdate("DELETE FROM waitlist WHERE user_id = :id", id);
 
         executeNativeUpdate("DELETE FROM user_role WHERE user_id = :id", id);
         executeNativeUpdate("DELETE FROM audit_log WHERE user_id = :id", id);
+        executeNativeUpdate("UPDATE notification SET created_by_admin_id = NULL WHERE created_by_admin_id = :id", id);
         executeNativeUpdate("DELETE FROM notification WHERE user_id = :id", id);
+        executeNativeUpdate("UPDATE leave_request SET approver_id = NULL WHERE approver_id = :id", id);
         executeNativeUpdate("DELETE FROM cart_item WHERE user_id = :id", id);
         executeNativeUpdate("DELETE FROM review WHERE user_id = :id", id);
         executeNativeUpdate("DELETE FROM search_history WHERE user_id = :id", id);
 
         executeNativeUpdate("DELETE FROM `user` WHERE id = :id", id);
 
-        auditLogService.log("HARD_DELETE", "USER", id, oldValInfo, null);
+        auditAfterCommit("HARD_DELETE", id, oldValInfo, null);
         log.info("Successfully hard deleted user ID: {}", id);
     }
 
@@ -217,20 +235,24 @@ public class UserTrashService implements ITrashable {
         UserEntity user = userRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of("User", id));
 
+        if (user.getStatus() != UserStatusEnum.DELETED) {
+            throw new BusinessException("Chỉ được khôi phục người dùng đang nằm trong thùng rác.");
+        }
+
         UserStatusEnum restoreStatus = user.getStatusBeforeDelete() != null
                 ? user.getStatusBeforeDelete()
                 : UserStatusEnum.ACTIVE;
+        if (restoreStatus == UserStatusEnum.DELETED) restoreStatus = UserStatusEnum.ACTIVE;
 
         String oldStatusStr = String.valueOf(user.getStatus());
         user.setStatus(restoreStatus);
         user.setStatusBeforeDelete(null);
-        userRepository.save(user);
+        userRepository.saveAndFlush(user);
 
-        auditLogService.log("RESTORE", "USER", id, "Status: " + oldStatusStr, "Status: " + restoreStatus);
+        auditAfterCommit("RESTORE", id, "Status: " + oldStatusStr, "Status: " + restoreStatus);
         log.info("Successfully restored user ID: {} to status: {}", id, restoreStatus);
     }
 
-    @Transactional
     @Override
     public Map<String, Object> bulkHardDelete(List<Long> ids) {
         log.info("Bulk hard deleting users: {}", ids);
@@ -241,7 +263,7 @@ public class UserTrashService implements ITrashable {
         if (ids != null) {
             for (Long id : ids) {
                 try {
-                    hardDelete(id);
+                    transactionExecutor.hardDelete(this, id);
                     successCount++;
                 } catch (Exception e) {
                     failureCount++;
@@ -257,7 +279,6 @@ public class UserTrashService implements ITrashable {
         return result;
     }
 
-    @Transactional
     @Override
     public Map<String, Object> bulkRestore(List<Long> ids) {
         log.info("Bulk restoring users: {}", ids);
@@ -268,7 +289,7 @@ public class UserTrashService implements ITrashable {
         if (ids != null) {
             for (Long id : ids) {
                 try {
-                    restore(id);
+                    transactionExecutor.restore(this, id);
                     successCount++;
                 } catch (Exception e) {
                     failureCount++;
@@ -285,12 +306,34 @@ public class UserTrashService implements ITrashable {
     }
 
     private void executeNativeUpdate(String sql, Long id) {
-        try {
-            entityManager.createNativeQuery(sql)
-                    .setParameter("id", id)
-                    .executeUpdate();
-        } catch (Exception e) {
-            log.warn("Native query update failed: {}", e.getMessage());
+        entityManager.createNativeQuery(sql)
+                .setParameter("id", id)
+                .executeUpdate();
+    }
+
+    /**
+     * AuditLogService uses REQUIRES_NEW. Calling it while the user transaction still owns
+     * row/FK locks can deadlock the two transactions, so audit only after the main commit.
+     */
+    private void auditAfterCommit(String action, Long id, Object oldValue, Object newValue) {
+        Runnable writeAudit = () -> {
+            try {
+                auditLogService.log(action, "USER", id, oldValue, newValue);
+            } catch (Exception exception) {
+                // The business operation is already committed; an audit outage must not
+                // turn a successful delete/restore into an HTTP 500 response.
+                log.error("Could not write {} audit for user ID {}", action, id, exception);
+            }
+        };
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    writeAudit.run();
+                }
+            });
+        } else {
+            writeAudit.run();
         }
     }
 

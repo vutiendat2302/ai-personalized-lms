@@ -2,9 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
 import {
   Select,
   SelectContent,
@@ -19,28 +17,25 @@ import {
   AlertTriangle,
   CheckCircle2,
   AlertCircle,
-  FileCode2,
   Sparkles,
   ArrowRight,
   ArrowLeft,
-  DollarSign,
-  Calendar,
-  Clock,
-  Briefcase,
-  User,
-  Building2,
   Eye,
   Loader2,
 } from "lucide-react";
 import { employeeApi } from "@/api/employees/employeeApi";
 import { DatePickerInput } from "@/components/ui/DatePickerInput";
 import type { EmployeeExtended } from "@/types/employee";
+import sourceSansRegularUrl from "@fontsource/source-sans-3/files/source-sans-3-vietnamese-400-normal.woff2?url";
+import sourceSansItalicUrl from "@fontsource/source-sans-3/files/source-sans-3-vietnamese-400-italic.woff2?url";
+import sourceSansBoldUrl from "@fontsource/source-sans-3/files/source-sans-3-vietnamese-700-normal.woff2?url";
+import sourceSansBoldItalicUrl from "@fontsource/source-sans-3/files/source-sans-3-vietnamese-700-italic.woff2?url";
 
 interface NewContractWizardModalProps {
   open: boolean;
   onClose: () => void;
   employee: EmployeeExtended;
-  onSuccess: (msg: string) => void;
+  onSuccess: (msg: string, contract?: { id?: string }) => void;
   onError: (msg: string) => void;
 }
 
@@ -55,9 +50,10 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
 
   // Active check states
   const [checkingActive, setCheckingActive] = useState(true);
+  const [activeCheckError, setActiveCheckError] = useState("");
   const [activeContractInfo, setActiveContractInfo] = useState<{
     hasActiveContract: boolean;
-    activeContractId?: number;
+    activeContractId?: string;
     activeContractType?: string;
     startDate?: string;
   } | null>(null);
@@ -69,33 +65,49 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
   const [wizardStep, setWizardStep] = useState<"SELECT_BRANCH" | "BRANCH_A_FORM" | "BRANCH_B_FORM">("SELECT_BRANCH");
 
   // Form Fields Common
-  const [contractType, setContractType] = useState<"PROBATION" | "FIXED_TERM" | "INDEFINITE" | "SEASONAL">("PROBATION");
-  const [startDate, setStartDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [contractType, setContractType] = useState<"PROBATION" | "FIXED_TERM" | "INDEFINITE">("PROBATION");
+  const todayLocal = (() => {
+    const date = new Date();
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  })();
+  const [startDate, setStartDate] = useState<string>(todayLocal);
   const [endDate, setEndDate] = useState<string>("");
   const [baseSalary, setBaseSalary] = useState<number>(20000000);
   const [salaryType, setSalaryType] = useState<"MONTHLY" | "DAILY" | "HOURLY">("MONTHLY");
-  const [signedAt, setSignedAt] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [signedAt, setSignedAt] = useState<string>(todayLocal);
 
   // Branch A States (Upload)
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string>("");
+  const [formError, setFormError] = useState<string>("");
   const [submittingA, setSubmittingA] = useState(false);
 
   // Branch B States (Template Generator)
   const [templates, setTemplates] = useState<Array<{
-    templateId: number;
+    templateId: string;
     name: string;
     contractTypeEnum: string;
     templateContent: string;
     placeholders: string[];
     version: number;
   }>>([]);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [templatesError, setTemplatesError] = useState("");
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [submittingB, setSubmittingB] = useState(false);
+  const [generateConfirmOpen, setGenerateConfirmOpen] = useState(false);
+
+  const formatSalaryInput = (value: number) => value > 0 ? value.toLocaleString("vi-VN") : "";
+  const handleSalaryChange = (rawValue: string) => {
+    const digits = rawValue.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+    setBaseSalary(digits ? Number(digits) : 0);
+    setFormError("");
+  };
 
   // Load Active Check
   const runActiveCheck = async () => {
     setCheckingActive(true);
+    setActiveCheckError("");
     try {
       const targetId = employee.userId || employee.id;
       const res = await employeeApi.checkActiveContract(targetId);
@@ -104,6 +116,8 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
       }
     } catch (e: any) {
       console.warn("Active contract check failed", e);
+      setActiveContractInfo(null);
+      setActiveCheckError(e?.message || "Không thể kiểm tra hợp đồng đang hiệu lực. Vui lòng thử lại.");
     } finally {
       setCheckingActive(false);
     }
@@ -111,28 +125,31 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
 
   useEffect(() => {
     runActiveCheck();
-    // Pre-load templates
-    employeeApi.getContractTemplates().then((res) => {
-      if (res.data && Array.isArray(res.data)) {
-        setTemplates(res.data);
-        if (res.data.length > 0) {
-          setSelectedTemplateId(res.data[0].templateId);
-        }
-      }
-    }).catch((e) => console.warn("Failed to load templates", e));
   }, [employee]);
 
-  // Update selected template when contractType changes in Branch B
+  // Mỗi loại hợp đồng tải đúng danh sách template tương ứng và reset live preview.
   useEffect(() => {
-    if (templates.length > 0) {
-      const matched = templates.find((t) => t.contractTypeEnum === contractType);
-      if (matched) {
-        setSelectedTemplateId(matched.templateId);
-      } else {
-        setSelectedTemplateId(templates[0].templateId);
+    let active = true;
+    setSelectedTemplateId(null);
+    setTemplatesLoading(true);
+    setTemplatesError("");
+    employeeApi.getContractTemplates(contractType).then((res) => {
+      if (!active) return;
+      const matchingTemplates = Array.isArray(res.data) ? res.data.filter(template => template.contractTypeEnum === contractType) : [];
+      setTemplates(matchingTemplates);
+      if (matchingTemplates.length > 0) {
+        setSelectedTemplateId(matchingTemplates[0].templateId);
       }
-    }
-  }, [contractType, templates]);
+    }).catch(() => {
+      if (active) {
+        setTemplates([]);
+        setTemplatesError("Không tải được mẫu hợp đồng từ máy chủ.");
+      }
+    }).finally(() => {
+      if (active) setTemplatesLoading(false);
+    });
+    return () => { active = false; };
+  }, [contractType]);
 
   // Terminate Active Contract Action
   const handleTerminateActiveContract = async () => {
@@ -167,12 +184,25 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
     }
   };
 
+  // Kiểm tra dữ liệu chung trước khi đi vào từng nhánh tạo hợp đồng.
+  const validateContractInformation = (requireFile: boolean) => {
+    const errors: string[] = [];
+    if (!contractType) errors.push("loại hợp đồng");
+    if (!salaryType) errors.push("hình thức trả lương");
+    if (!startDate) errors.push("ngày bắt đầu");
+    if (!signedAt) errors.push("ngày ký kết");
+    if (!Number.isFinite(baseSalary) || baseSalary <= 0) errors.push("mức lương lớn hơn 0");
+    if (startDate && endDate && endDate <= startDate) errors.push("ngày kết thúc phải sau ngày bắt đầu");
+    if (signedAt && startDate && signedAt > startDate) errors.push("ngày ký không được sau ngày bắt đầu hiệu lực");
+    if (requireFile && !uploadedFile) errors.push("file hợp đồng");
+    const message = errors.length ? `Vui lòng kiểm tra: ${errors.join(", ")}.` : "";
+    setFormError(message);
+    return errors.length === 0;
+  };
+
   // Submit Branch A
   const handleSubmitBranchA = async () => {
-    if (!uploadedFile) {
-      setFileError("Vui lòng chọn tệp hợp đồng đính kèm!");
-      return;
-    }
+    if (!validateContractInformation(true)) return;
     setSubmittingA(true);
     try {
       const targetId = employee.userId || employee.id;
@@ -193,9 +223,9 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
       }
 
       // Step A2: Upload file
-      await employeeApi.uploadContractFile(contractId, uploadedFile);
+      const uploadResponse = await employeeApi.uploadContractFile(contractId, uploadedFile!);
 
-      onSuccess("Tạo hợp đồng và tải file đính kèm thành công!");
+      onSuccess("Tạo hợp đồng và tải file đính kèm thành công!", uploadResponse.data?.data || { id: contractId });
       onClose();
     } catch (e: any) {
       onError(e.message || "Lỗi tạo hợp đồng ở Nhánh A");
@@ -205,7 +235,9 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
   };
 
   // Submit Branch B
+  // Nhánh B sinh hợp đồng từ mẫu đã chọn thay vì tải tệp có sẵn.
   const handleSubmitBranchB = async () => {
+    if (!validateContractInformation(false)) return;
     if (!selectedTemplateId) {
       onError("Vui lòng chọn mẫu hợp đồng!");
       return;
@@ -213,7 +245,7 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
     setSubmittingB(true);
     try {
       const targetId = employee.userId || employee.id;
-      await employeeApi.generateContract({
+      const generateResponse = await employeeApi.generateContract({
         employeeId: targetId,
         contractTypeEnum: contractType,
         templateId: selectedTemplateId,
@@ -224,7 +256,7 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
         signedAt: signedAt ? `${signedAt}T00:00:00` : undefined,
       });
 
-      onSuccess("Sinh file PDF từ template và khởi tạo hợp đồng thành công!");
+      onSuccess("Sinh file PDF từ template và khởi tạo hợp đồng thành công!", generateResponse.data?.data);
       onClose();
     } catch (e: any) {
       onError(e.message || "Lỗi sinh hợp đồng ở Nhánh B");
@@ -236,22 +268,45 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
   // Calculate live preview HTML for Branch B
   const getLivePreviewHtml = () => {
     const selectedTpl = templates.find((t) => t.templateId === selectedTemplateId);
-    if (!selectedTpl) return "<div style='padding:20px;text-align:center;'>Vui lòng chọn template</div>";
+    if (!selectedTpl) return "";
 
     let html = selectedTpl.templateContent || "";
+    const now = new Date();
+    const formatContractDate = (value?: string) => value
+      ? new Intl.DateTimeFormat("vi-VN").format(new Date(`${value}T00:00:00`))
+      : "";
     const values: Record<string, string> = {
+      contractNumber: `HDLD-${employee.employeeCode || employee.userId || employee.id}/${contractType}`,
+      currentDay: String(now.getDate()).padStart(2, "0"),
+      currentMonth: String(now.getMonth() + 1).padStart(2, "0"),
+      currentYear: String(now.getFullYear()),
       employeeName: employee.fullName || "Nguyễn Văn A",
+      gender: employee.gender === 1 ? "Nữ" : employee.gender === 2 ? "Khác" : "Nam",
+      dateOfBirth: employee.dateOfBirth ? formatContractDate(employee.dateOfBirth.slice(0, 10)) : "01/01/1995",
+      nationality: "Việt Nam",
+      citizenId: "001090123456",
+      citizenIssueDate: "15/08/2021",
+      citizenIssuePlace: "Cục Cảnh sát QLHC về trật tự xã hội",
       email: employee.userEmail || "",
       phone: employee.phone || "",
       address: employee.address || "",
       position: employee.position || "",
       department: employee.departmentName || "",
       contractType: contractType,
-      startDate: startDate || "DD/MM/YYYY",
-      endDate: endDate || "Vô thời hạn",
-      baseSalary: baseSalary ? `${Number(baseSalary).toLocaleString()} VNĐ` : "0 VNĐ",
+      contractStartDate: formatContractDate(startDate) || "DD/MM/YYYY",
+      contractEndDate: formatContractDate(endDate) || "Vô thời hạn",
+      startDate: formatContractDate(startDate) || "DD/MM/YYYY",
+      endDate: formatContractDate(endDate) || "Vô thời hạn",
+      probationPeriod: "02 tháng",
+      workingLocation: "Văn phòng Công ty Cổ phần Giáo dục AILMS - Số 1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội",
+      salary: baseSalary ? `${Number(baseSalary).toLocaleString("vi-VN")} VNĐ` : "0 VNĐ",
+      baseSalary: baseSalary ? `${Number(baseSalary).toLocaleString("vi-VN")} VNĐ` : "0 VNĐ",
       salaryType: salaryType,
-      signedAt: signedAt || new Date().toLocaleDateString("vi-VN"),
+      payDay: "05",
+      allowance: "Phụ cấp ăn trưa 730.000 VNĐ/tháng, phụ cấp xăng xe 500.000 VNĐ/tháng",
+      workingHours: "08 giờ/ngày (từ 08h00 đến 17h00, từ Thứ Hai đến Thứ Sáu)",
+      noticePeriod: "30",
+      signedAt: formatContractDate(signedAt) || now.toLocaleDateString("vi-VN"),
       companyName: "CÔNG TY CỔ PHẦN GIÁO DỤC AILMS",
       companyAddress: "Số 1 Đại Cồ Việt, Hai Bà Trưng, Hà Nội",
       companyTaxCode: "0101234567",
@@ -262,19 +317,31 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
     };
 
     for (const [key, val] of Object.entries(values)) {
-      html = html.replaceAll(`{{${key}}}`, val);
+      const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      html = html.replace(new RegExp(`{{\\s*${escapedKey}\\s*}}`, "g"), val);
     }
-    return html;
+    const vietnameseFontStyle = `<style>
+      @font-face { font-family: 'Source Sans 3 Contract'; src: url('${sourceSansRegularUrl}') format('woff2'); font-style: normal; font-weight: 400; }
+      @font-face { font-family: 'Source Sans 3 Contract'; src: url('${sourceSansItalicUrl}') format('woff2'); font-style: italic; font-weight: 400; }
+      @font-face { font-family: 'Source Sans 3 Contract'; src: url('${sourceSansBoldUrl}') format('woff2'); font-style: normal; font-weight: 700; }
+      @font-face { font-family: 'Source Sans 3 Contract'; src: url('${sourceSansBoldItalicUrl}') format('woff2'); font-style: italic; font-weight: 700; }
+      html, body, body * { font-family: 'Source Sans 3 Contract', 'Source Sans 3', Arial, sans-serif !important; }
+      body { text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; }
+    </style>`;
+    if (/<head[^>]*>/i.test(html)) {
+      return html.replace(/<head([^>]*)>/i, `<head$1><meta charset="UTF-8"/>${vietnameseFontStyle}`);
+    }
+    return `<!doctype html><html lang="vi"><head><meta charset="UTF-8"/>${vietnameseFontStyle}</head><body>${html}</body></html>`;
   };
 
   return (
     <div
-      onClick={onClose}
-      className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6 overflow-y-auto animate-in fade-in duration-200"
+      onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}
+      className="fixed inset-0 z-60 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6 overflow-y-auto animate-in fade-in duration-200"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="bg-card border border-border/60 w-full max-w-5xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]"
+        className="bg-card border border-border/60 w-[96vw] max-w-[96vw] rounded-2xl shadow-2xl overflow-hidden flex flex-col h-[96vh] max-h-[96vh]"
       >
         {/* HEADER */}
         <div className="p-5 bg-muted/40 border-b border-border/40 flex items-center justify-between shrink-0">
@@ -303,6 +370,15 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
             <div className="py-12 text-center space-y-3">
               <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
               <p className="text-xs text-muted-foreground font-medium">Đang kiểm tra hợp đồng hiệu lực của nhân viên...</p>
+            </div>
+          ) : activeCheckError ? (
+            <div className="py-10 text-center space-y-4 rounded-2xl border border-destructive/30 bg-destructive/5">
+              <AlertCircle className="h-8 w-8 text-destructive mx-auto" />
+              <div className="space-y-1">
+                <p className="text-sm font-extrabold text-destructive">Không thể kiểm tra hợp đồng hiện tại</p>
+                <p className="text-xs text-muted-foreground">{activeCheckError}</p>
+              </div>
+              <Button size="sm" variant="outline" onClick={runActiveCheck}>Thử lại</Button>
             </div>
           ) : activeContractInfo?.hasActiveContract ? (
             /* ACTIVE WARNING MODAL (QUY TẮC 1.1) */
@@ -442,10 +518,9 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
                       <Select value={contractType} onValueChange={(v: any) => setContractType(v)}>
                         <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="PROBATION">Hợp đồng thử việc (PROBATION)</SelectItem>
+                          <SelectItem value="PROBATION">Thỏa thuận thử việc (PROBATION)</SelectItem>
                           <SelectItem value="FIXED_TERM">Hợp đồng xác định thời hạn (FIXED_TERM)</SelectItem>
                           <SelectItem value="INDEFINITE">Hợp đồng không xác định thời hạn (INDEFINITE)</SelectItem>
-                          <SelectItem value="SEASONAL">Hợp đồng theo mùa vụ (SEASONAL)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -465,9 +540,11 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
                     <div className="space-y-1">
                       <Label className="text-xs font-bold text-muted-foreground">Mức lương cơ bản (VNĐ)</Label>
                       <Input
-                        type="number"
-                        value={baseSalary}
-                        onChange={(e) => setBaseSalary(Number(e.target.value))}
+                        type="text"
+                        inputMode="numeric"
+                        value={formatSalaryInput(baseSalary)}
+                        onChange={(e) => handleSalaryChange(e.target.value)}
+                        placeholder="Ví dụ: 20.000.000"
                         className="h-9 text-xs font-semibold"
                       />
                     </div>
@@ -523,6 +600,7 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
                     {fileError && <p className="text-xs font-bold text-red-500 flex items-center gap-1 mt-1"><AlertCircle className="h-3.5 w-3.5" /> {fileError}</p>}
                   </div>
 
+                  {formError && <p className="text-xs font-bold text-destructive flex items-center gap-1"><AlertCircle className="h-3.5 w-3.5" /> {formError}</p>}
                   {/* FOOTER ACTIONS */}
                   <div className="flex justify-end gap-2 pt-4 border-t border-border/30">
                     <Button variant="ghost" onClick={onClose} className="h-9 text-xs font-bold">Hủy</Button>
@@ -553,7 +631,7 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
                   {/* GRID FORM & LIVE PREVIEW */}
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                     {/* LEFT: FORM DATA (5 Cols) */}
-                    <div className="lg:col-span-5 space-y-4">
+                    <div className="lg:col-span-4 space-y-4">
                       <div className="space-y-1">
                         <Label className="text-xs font-bold text-muted-foreground">Loại hợp đồng (ContractType)</Label>
                         <Select value={contractType} onValueChange={(v: any) => setContractType(v)}>
@@ -571,17 +649,24 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
                         <Label className="text-xs font-bold text-muted-foreground">Mẫu template HTML</Label>
                         <Select
                           value={selectedTemplateId ? String(selectedTemplateId) : ""}
-                          onValueChange={(v) => setSelectedTemplateId(Number(v))}
+                          onValueChange={(v) => setSelectedTemplateId(v)}
+                          disabled={templatesLoading || templates.length === 0}
                         >
                           <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Chọn mẫu..." /></SelectTrigger>
                           <SelectContent>
-                            {templates.map((tpl) => (
+                            {templates.filter((tpl) => tpl.contractTypeEnum === contractType).map((tpl) => (
                               <SelectItem key={tpl.templateId} value={String(tpl.templateId)}>
                                 {tpl.name} ({tpl.contractTypeEnum})
                               </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
+                        {templatesLoading && <p className="text-[11px] text-muted-foreground">Đang tải mẫu hợp đồng...</p>}
+                        {!templatesLoading && (templatesError || templates.length === 0) && (
+                          <p className="text-[11px] font-semibold text-destructive">
+                            {templatesError || `Chưa có mẫu ACTIVE cho loại ${contractType}.`}
+                          </p>
+                        )}
                       </div>
 
                       <div className="grid grid-cols-2 gap-3">
@@ -599,9 +684,11 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
                         <div className="space-y-1">
                           <Label className="text-xs font-bold text-muted-foreground">Mức lương cơ bản</Label>
                           <Input
-                            type="number"
-                            value={baseSalary}
-                            onChange={(e) => setBaseSalary(Number(e.target.value))}
+                            type="text"
+                            inputMode="numeric"
+                            value={formatSalaryInput(baseSalary)}
+                            onChange={(e) => handleSalaryChange(e.target.value)}
+                            placeholder="Ví dụ: 20.000.000"
                             className="h-9 text-xs font-semibold"
                           />
                         </div>
@@ -625,7 +712,7 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
                     </div>
 
                     {/* RIGHT: LIVE PREVIEW (7 Cols) */}
-                    <div className="lg:col-span-7 space-y-2 flex flex-col">
+                    <div className="lg:col-span-8 space-y-2 flex flex-col">
                       <div className="flex items-center justify-between">
                         <Label className="text-xs font-bold text-muted-foreground flex items-center gap-1.5">
                           <Eye className="h-3.5 w-3.5 text-purple-600" /> Live Preview (Thời gian thực)
@@ -633,20 +720,29 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
                         <span className="text-[10px] italic text-muted-foreground">Tự động cập nhật theo dữ liệu đang nhập</span>
                       </div>
 
-                      <div className="flex-1 min-h-[360px] max-h-[440px] rounded-2xl border border-border/80 bg-white dark:bg-slate-950 p-4 overflow-y-auto shadow-inner text-black dark:text-slate-100 text-xs">
-                        <div
-                          dangerouslySetInnerHTML={{ __html: getLivePreviewHtml() }}
-                          className="prose prose-sm max-w-none dark:prose-invert"
-                        />
+                      <div className="flex-1 min-h-[62vh] rounded-2xl border border-border/80 bg-white overflow-hidden shadow-inner">
+                        {getLivePreviewHtml() ? (
+                          <iframe
+                            title="Xem trước hợp đồng"
+                            srcDoc={getLivePreviewHtml()}
+                            sandbox=""
+                            className="w-full h-[62vh] border-0 bg-white"
+                          />
+                        ) : (
+                          <div className="h-[62vh] grid place-items-center p-6 text-center text-xs text-slate-500">
+                            {templatesLoading ? "Đang tải bản xem trước..." : "Chọn một mẫu hợp đồng để xem preview."}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
 
+                  {formError && <p className="text-xs font-bold text-destructive flex items-center gap-1"><AlertCircle className="h-3.5 w-3.5" /> {formError}</p>}
                   {/* FOOTER ACTIONS */}
                   <div className="flex justify-end gap-2 pt-4 border-t border-border/30">
                     <Button variant="ghost" onClick={onClose} className="h-9 text-xs font-bold">Hủy</Button>
                     <Button
-                      onClick={handleSubmitBranchB}
+                      onClick={() => { if (validateContractInformation(false) && selectedTemplateId) setGenerateConfirmOpen(true); }}
                       disabled={submittingB}
                       className="h-9 text-xs font-bold gap-1.5 bg-primary px-5"
                     >
@@ -660,6 +756,22 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
           )}
         </div>
       </div>
+      {generateConfirmOpen && (
+        <div className="fixed inset-0 z-250 bg-black/60 flex items-center justify-center p-4" onMouseDown={() => setGenerateConfirmOpen(false)}>
+          <div className="w-full max-w-md rounded-2xl bg-card border border-border p-5 shadow-2xl space-y-4" onMouseDown={(event) => event.stopPropagation()}>
+            <div>
+              <h4 className="text-base font-black">Xác nhận sinh hợp đồng PDF</h4>
+              <p className="text-xs text-muted-foreground mt-1">Hãy xác nhận bạn đã kiểm tra loại hợp đồng, template, mức lương và các mốc thời gian trong bản xem trước.</p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setGenerateConfirmOpen(false)}>Quay lại kiểm tra</Button>
+              <Button size="sm" disabled={submittingB} onClick={() => { setGenerateConfirmOpen(false); handleSubmitBranchB(); }}>
+                Xác nhận & Sinh PDF
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

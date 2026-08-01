@@ -20,6 +20,7 @@ export interface ConfirmDialogProps {
   variant?: "destructive" | "default" | "warning";
   loading?: boolean;
   onConfirm: () => void | Promise<void>;
+  children?: React.ReactNode;
 }
 
 export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
@@ -32,6 +33,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   variant = "destructive",
   loading = false,
   onConfirm,
+  children,
 }) => {
   const handleConfirm = async () => {
     try {
@@ -72,6 +74,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
           <DialogDescription className="text-xs text-muted-foreground leading-relaxed mt-1">
             {description}
           </DialogDescription>
+          {children}
         </DialogHeader>
 
         <DialogFooter className="flex flex-col sm:flex-row gap-2 mt-4 sm:justify-end">

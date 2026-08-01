@@ -13,6 +13,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.http.MediaType;
+import org.springframework.web.multipart.MultipartFile;
 
 import org.springframework.security.access.prepost.PreAuthorize;
 import java.util.List;
@@ -29,6 +31,15 @@ public class EmployeeController {
     public ResponseEntity<ApiResponse<EmployeeResponse>> create(@Valid @RequestBody CreateEmployeeRequest request) {
         EmployeeResponse response = employeeService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of("Employee created successfully", response));
+    }
+
+    @PostMapping(value = "/onboard", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<EmployeeResponse>> onboard(
+            @Valid @RequestPart("request") CreateEmployeeRequest request,
+            @RequestPart(value = "contractFile", required = false) MultipartFile contractFile) {
+        EmployeeResponse response = employeeService.onboard(request, contractFile);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.of("User, employee and contract created successfully", response));
     }
 
     @PutMapping("/{id}")
@@ -201,4 +212,3 @@ public class EmployeeController {
                 .body(excelBytes);
     }
 }
-

@@ -1,16 +1,17 @@
 package com.ailms.entity.enums;
 
 /**
- * Loại tệp được lưu trữ trong hệ thống.
- * AVATAR                : Ảnh đại diện người dùng.
- * COURSE_MATERIAL       : Tài liệu khóa học.
- * ASSIGNMENT_SUBMISSION : Bài nộp của học viên.
- * CERTIFICATION         : Chứng chỉ hoặc giấy chứng nhận.
+ * Phân loại tệp tin theo định dạng lưu trữ trong hệ thống.
+ * IMAGE                 : Tập tin hình ảnh (.png, .jpg, .svg...).
+ * DOCUMENT              : Tập tin tài liệu (.pdf, .docx, .xlsx...).
+ * VIDEO                 : Tập tin video (.mp4, .mkv...).
+ * AUDIO                 : Tập tin âm thanh (.mp3, .wav...).
+ * OTHER                 : Các định dạng khác.
  */
 public enum FileTypeEnum {
-    AVATAR,
-    COURSE_MATERIAL,
-    ASSIGNMENT_SUBMISSION,
-    CERTIFICATION,
-    DOCUMENT
+    IMAGE,
+    DOCUMENT,
+    VIDEO,
+    AUDIO,
+    OTHER
 }

@@ -93,7 +93,10 @@ httpClient.interceptors.request.use((config) => {
  * 19 request còn lại sẽ đứng đợi trong queue.
  * ============================================================ */
 let isRefreshing = false;
-let queue: ((token: string) => void)[] = [];
+let queue: Array<{
+  resolve: (token: string) => void;
+  reject: (error: unknown) => void;
+}> = [];
 
 /* ============================================================
  * RESPONSE INTERCEPTOR
@@ -137,11 +140,11 @@ httpClient.interceptors.response.use(
        * Chỉ đưa Request hiện tại vào Queue.
        * ===================================================== */
       if (isRefreshing) {
-        return new Promise((resolve) => {
-          queue.push((newToken: string) => {
+        return new Promise<string>((resolve, reject) => {
+          queue.push({ resolve, reject });
+        }).then((newToken) => {
             originalReq.headers.Authorization = `Bearer ${newToken}`;
-            resolve(httpClient(originalReq));
-          });
+            return httpClient(originalReq);
         });
       }
 
@@ -169,7 +172,7 @@ httpClient.interceptors.response.use(
         /* ===================================================
          * Đánh thức toàn bộ Request đang chờ.
          * =================================================== */
-        queue.forEach((cb) => cb(newToken));
+        queue.forEach(({ resolve }) => resolve(newToken));
         queue = [];
 
          // Gắn Access Token mới vào Request hiện tại
@@ -177,15 +180,16 @@ httpClient.interceptors.response.use(
 
         // Gửi lại Request
         return httpClient(originalReq);
-      } catch {
+      } catch (refreshError) {
         /* ===================================================
          * Refresh Token không hợp lệ hoặc đã hết hạn.
          * Xóa Access Token và chuyển người dùng về Login.
          * =================================================== */
         setAccessToken(null);
+        queue.forEach(({ reject }) => reject(refreshError));
         queue = [];
         window.location.href = "/login";
-        return Promise.reject(errData);
+        return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;
       }

@@ -9,6 +9,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("${api.prefix}/classes")
 @RequiredArgsConstructor
@@ -49,6 +51,20 @@ public class ClassMemberController {
             @PathVariable Long userId) {
         ClassMemberEntity member = classMemberService.rejoin(classId, userId);
         return ResponseEntity.ok(ApiResponse.of("Rejoined class successfully", mapToResponse(member)));
+    }
+
+    @GetMapping("/members/user/{userId}")
+    public ResponseEntity<ApiResponse<List<ClassMemberResponse>>> getByUserId(@PathVariable Long userId) {
+        List<ClassMemberResponse> members = classMemberService.getByUserId(userId);
+        return ResponseEntity.ok(ApiResponse.of("Class memberships retrieved successfully", members));
+    }
+
+    @GetMapping("/{classId}/members")
+    public ResponseEntity<ApiResponse<List<ClassMemberResponse>>> getByClassId(@PathVariable Long classId) {
+        return ResponseEntity.ok(ApiResponse.of(
+                "Class members retrieved successfully",
+                classMemberService.getByClassId(classId)
+        ));
     }
 
     private ClassMemberResponse mapToResponse(ClassMemberEntity entity) {

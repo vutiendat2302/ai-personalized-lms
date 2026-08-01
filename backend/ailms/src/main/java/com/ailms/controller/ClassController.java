@@ -5,6 +5,7 @@ import com.ailms.request.UpdateClassRequest;
 import com.ailms.response.PageResponse;
 import com.ailms.request.ClassSearchRequest;
 import com.ailms.response.ClassResponse;
+import com.ailms.response.ClassScheduleResponse;
 
 
 import com.ailms.response.ApiResponse;
@@ -54,6 +55,11 @@ public class ClassController {
     public ResponseEntity<ApiResponse<List<ClassResponse>>> getByCourseId(@PathVariable Long courseId) {
         List<ClassResponse> response = classService.getByCourseId(courseId);
         return ResponseEntity.ok(ApiResponse.of("Classes retrieved successfully", response));
+    }
+
+    @GetMapping("/{id}/schedules")
+    public ResponseEntity<ApiResponse<List<ClassScheduleResponse>>> getSchedules(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.of("Class schedules retrieved successfully", classService.getSchedules(id)));
     }
 
     @DeleteMapping("/{id}")

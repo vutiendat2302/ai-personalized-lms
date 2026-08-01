@@ -1,9 +1,11 @@
 package com.ailms.service.imp;
 
 import com.ailms.request.BulkTrashRequest;
+import com.ailms.response.ChildRecordDetailResponse;
 import com.ailms.response.PageResponse;
 import com.ailms.response.TrashItemResponse;
 import com.ailms.service.ITrashable;
+import com.ailms.exception.BusinessException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageImpl;
@@ -31,7 +33,7 @@ public class TrashAggregatorService {
         return trashableServices.stream()
                 .filter(s -> s.getEntityType().equalsIgnoreCase(finalType))
                 .findFirst()
-                .orElse(null);
+                .orElseThrow(() -> new BusinessException("Loại dữ liệu thùng rác không được hỗ trợ: " + finalType));
     }
 
     public PageResponse<TrashItemResponse> getAllTrashItems(String entityType, String keyword, Pageable pageable) {
@@ -70,9 +72,6 @@ public class TrashAggregatorService {
         }
 
         ITrashable service = getService(entityType);
-        if (service == null) {
-            return PageResponse.from(new PageImpl<>(Collections.emptyList(), pageable, 0));
-        }
         return service.getTrashItems(keyword, pageable);
     }
 
@@ -84,7 +83,7 @@ public class TrashAggregatorService {
         return getService(entityType).checkChildRecords(id);
     }
 
-    public List<com.ailms.response.ChildRecordDetailResponse> getChildRecordDetails(String entityType, Long id) {
+    public List<ChildRecordDetailResponse> getChildRecordDetails(String entityType, Long id) {
         return getService(entityType).getChildRecordDetails(id);
     }
 

@@ -14,6 +14,8 @@ import com.ailms.mapper.CertificateMapper;
 import com.ailms.repository.CertificateRepository;
 import com.ailms.repository.EnrollmentRepository;
 import com.ailms.repository.LessonProgressRepository;
+import com.ailms.repository.CourseRepository;
+import com.ailms.repository.UserRepository;
 import com.ailms.response.CertificateResponse;
 import com.ailms.service.ICertificateService;
 import com.ailms.service.IEmailService;
@@ -35,6 +37,8 @@ public class CertificateService implements ICertificateService {
     private final CertificateRepository certificateRepository;
     private final EnrollmentRepository enrollmentRepository;
     private final LessonProgressRepository lessonProgressRepository;
+    private final CourseRepository courseRepository;
+    private final UserRepository userRepository;
     private final CertificateMapper certificateMapper;
     private final IEmailService emailService;
     private final ApplicationEventPublisher applicationEventPublisher;
@@ -147,6 +151,12 @@ public class CertificateService implements ICertificateService {
     private CertificateResponse enrichResponse(CertificateEntity entity) {
         CertificateResponse res = certificateMapper.toResponse(entity);
         res.setValid(entity.getStatus() == CertificateStatusEnum.ISSUED);
+        if (entity.getCourseId() != null) {
+            courseRepository.findById(entity.getCourseId()).ifPresent(course -> res.setCourseName(course.getName()));
+        }
+        if (entity.getUserId() != null) {
+            userRepository.findById(entity.getUserId()).ifPresent(user -> res.setStudentName(user.getFullName()));
+        }
         return res;
     }
 }

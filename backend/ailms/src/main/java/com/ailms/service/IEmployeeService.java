@@ -6,6 +6,7 @@ import com.ailms.response.PageResponse;
 
 import java.util.List;
 import java.util.Map;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * Service quản lý thông tin và hồ sơ nhân sự (nhân viên/giáo viên).
@@ -46,6 +47,9 @@ public interface IEmployeeService {
      * @return đối tượng chứa thông tin chi tiết kết quả
      */
     EmployeeResponse create(CreateEmployeeRequest request);
+
+    /** Tạo tài khoản, hồ sơ nhân viên và hợp đồng trong một transaction. */
+    EmployeeResponse onboard(CreateEmployeeRequest request, MultipartFile contractFile);
 
     /**
      * Cập nhật thông tin bản ghi theo ID.
@@ -166,6 +170,5 @@ public interface IEmployeeService {
      */
     byte[] exportEmployeeDetailToExcel(Long userId);
 }
-
 
 

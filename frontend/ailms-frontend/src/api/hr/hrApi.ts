@@ -59,9 +59,11 @@ export interface EmployeeContractResponse {
   signingToken?: string;
   signingTokenExpiresAt?: string;
   originalFileDownloadUrl?: string;
+  downloadUrl?: string;
   baseSalary: number;
   salaryTypeEnum?: "HOURLY" | "DAILY" | "MONTHLY" | string;
   createdBy?: string;
+  createdByName?: string;
   createdAt?: string;
   updatedBy?: string;
   updatedAt?: string;
@@ -143,11 +145,9 @@ export const hrApi = {
   hardDeleteEmployee: (id: string) =>
     httpClient.delete<ApiResponse<void>>(`/v1/employees/trash/${id}`),
 
-  bulkHardDeleteEmployees: (ids: (string)[]) =>
+  bulkHardDeleteEmployees: (ids: string[]) =>
     httpClient.post<ApiResponse<any>>(
-      "/v1/employees/trash/bulk-hard-delete",
-      ids.map((id) => Number(id)).filter((n) => !isNaN(n))
-    ),
+      "/v1/employees/trash/bulk-hard-delete", ids),
 
   // Contracts
   getContracts: (employeeId?: string) =>
@@ -156,11 +156,23 @@ export const hrApi = {
   createContract: (payload: any) =>
     httpClient.post<ApiResponse<EmployeeContractResponse>>("/v1/employee-contracts", payload),
 
+  deleteAllEmployeeContracts: (employeeId: string) =>
+    httpClient.delete<ApiResponse<void>>(`/v1/contracts/employee/${employeeId}`),
+
   bulkTerminateContracts: (ids: string[], reason?: string) =>
     httpClient.post<ApiResponse<any>>("/v1/employee-contracts/bulk-terminate", { ids, reason }),
 
-  bulkRemindExpiration: (ids: string[]) =>
-    httpClient.post<ApiResponse<any>>("/v1/employee-contracts/bulk-remind-expiration", { ids }),
+  bulkRemindExpiration: (payload: { ids: string[]; recipientUserIds: string[]; subject?: string; content: string }) =>
+    httpClient.post<ApiResponse<any>>("/v1/employee-contracts/bulk-remind-expiration", payload),
+
+  bulkDownloadContractsZip: (ids: string[]) =>
+    httpClient.post("/v1/employee-contracts/bulk-download-zip", { ids }, { responseType: "blob" }),
+
+  getContractReminderRecipients: () =>
+    httpClient.get<ApiResponse<Array<{ id: string; fullName: string; email: string }>>>("/v1/employee-contracts/reminder-recipients"),
+
+  getExpiringProbationContracts: () =>
+    httpClient.get<ApiResponse<EmployeeContractResponse[]>>("/v1/employee-contracts/expiring-probation"),
 
   getDashboardStats: () =>
     httpClient.get<ApiResponse<ContractDashboardStatsResponse>>("/v1/contracts/dashboard-stats"),

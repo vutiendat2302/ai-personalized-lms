@@ -81,6 +81,13 @@ public class SubmissionService implements ISubmissionService {
         }
 
         SubmissionEntity saved = submissionRepository.save(entity);
+        if (saved.getFileMetadata() != null) {
+            var metadata = saved.getFileMetadata();
+            metadata.setUsageType(com.ailms.entity.enums.FileUsageTypeEnum.ASSIGNMENT_SUBMISSION);
+            metadata.setReferenceEntityId(saved.getId());
+            metadata.setReferenceEntityType("Submission");
+            fileMetadataRepository.save(metadata);
+        }
         return submissionMapper.toResponse(saved);
     }
 

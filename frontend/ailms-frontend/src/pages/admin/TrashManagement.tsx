@@ -47,7 +47,8 @@ import {
   Eye,
   Info,
   Calendar,
-  Database
+  Database,
+  FileText
 } from "lucide-react";
 
 const getPageNumbers = (currentPage: number, total: number) => {
@@ -66,10 +67,11 @@ const getPageNumbers = (currentPage: number, total: number) => {
   return pages;
 };
 
+const SINGLE_HARD_DELETE_CONFIRMATION_CODE = "123456";
+
 export const TrashManagement: React.FC = () => {
   const tableRef = useRef<HTMLDivElement>(null);
   const [trashItems, setTrashItems] = useState<TrashItemDTO[]>([]);
-  const [allFetchedItems, setAllFetchedItems] = useState<TrashItemDTO[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   
@@ -98,7 +100,6 @@ export const TrashManagement: React.FC = () => {
   const [pageSize, setPageSize] = useState(10);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
-  const [jumpPageInput, setJumpPageInput] = useState("1");
   const [sortDir, setSortDir] = useState<"ASC" | "DESC">("DESC");
 
   // Modals States
@@ -130,7 +131,6 @@ export const TrashManagement: React.FC = () => {
   }, [searchKeyword]);
 
   useEffect(() => {
-    setJumpPageInput(String(page + 1));
   }, [page]);
 
   // Main Fetch Hook
@@ -152,7 +152,6 @@ export const TrashManagement: React.FC = () => {
         const pageData = res.data.data;
         let items: TrashItemDTO[] = pageData.content || [];
 
-        setAllFetchedItems(items);
 
         if (filterEntityType !== "ALL") {
           items = items.filter(i => (i.entityType || "USER").toUpperCase() === filterEntityType.toUpperCase());
@@ -269,16 +268,24 @@ export const TrashManagement: React.FC = () => {
     if (selectedIds.length === 0) return;
     setLoading(true);
     try {
-      const res = await trashApi.bulkRestore({
-        entityType: filterEntityType === "ALL" ? "USER" : filterEntityType,
-        ids: selectedIds
-      });
-      if (res.data.success) {
-        showBanner(`Đã khôi phục thành công ${selectedIds.length} bản ghi!`);
+      // API xử lý theo từng loại thực thể nên cần tách lựa chọn trước khi khôi phục.
+      const groups = selectedIds.reduce<Record<string, string[]>>((result, id) => {
+        const item = trashItems.find(candidate => candidate.id === id);
+        const type = (item?.entityType || (filterEntityType === "ALL" ? "USER" : filterEntityType)).toUpperCase();
+        (result[type] ||= []).push(id);
+        return result;
+      }, {});
+      const responses = await Promise.all(Object.entries(groups).map(([entityType, ids]) =>
+        trashApi.bulkRestore({ entityType, ids })
+      ));
+      const successCount = responses.reduce((sum, response) => sum + Number(response.data.data?.successCount || 0), 0);
+      const failureCount = responses.reduce((sum, response) => sum + Number(response.data.data?.failureCount || 0), 0);
+      if (successCount > 0) {
+        showBanner(`Đã khôi phục ${successCount} bản ghi${failureCount ? `, ${failureCount} bản ghi lỗi` : ""}!`, failureCount > 0);
         setSelectedIds([]);
         fetchTrashData();
       } else {
-        showBanner(res.data.message || "Khôi phục thất bại", true);
+        showBanner("Không có bản ghi nào được khôi phục", true);
       }
     } catch (err: any) {
       showBanner(err.message || "Lỗi khôi phục hàng loạt", true);
@@ -311,7 +318,7 @@ export const TrashManagement: React.FC = () => {
 
   const handleConfirmSingleHardDelete = async () => {
     if (!targetItem) return;
-    if (confirmInput.trim().toUpperCase() !== targetItem.code.toUpperCase() && confirmInput.trim().toUpperCase() !== "XOACUNG") {
+    if (confirmInput.trim() !== SINGLE_HARD_DELETE_CONFIRMATION_CODE) {
       showBanner("Mã xác nhận không chính xác!", true);
       return;
     }
@@ -349,16 +356,25 @@ export const TrashManagement: React.FC = () => {
 
     setLoading(true);
     try {
-      const res = await trashApi.bulkHardDelete({
-        entityType: filterEntityType === "ALL" ? "USER" : filterEntityType,
-        ids: selectedIds
-      });
-      if (res.data.success) {
-        showBanner(`Đã xóa cứng vĩnh viễn ${selectedIds.length} bản ghi khỏi CSDL!`);
+      // Tách theo loại thực thể để mỗi yêu cầu xóa dùng đúng nghiệp vụ backend.
+      const groups = selectedIds.reduce<Record<string, string[]>>((result, id) => {
+        const item = trashItems.find(candidate => candidate.id === id);
+        const type = (item?.entityType || (filterEntityType === "ALL" ? "USER" : filterEntityType)).toUpperCase();
+        (result[type] ||= []).push(id);
+        return result;
+      }, {});
+      const responses = await Promise.all(Object.entries(groups).map(([entityType, ids]) =>
+        trashApi.bulkHardDelete({ entityType, ids })
+      ));
+      const successCount = responses.reduce((sum, response) => sum + Number(response.data.data?.successCount || 0), 0);
+      const failureCount = responses.reduce((sum, response) => sum + Number(response.data.data?.failureCount || 0), 0);
+      if (successCount > 0) {
+        showBanner(`Đã xóa vĩnh viễn ${successCount} bản ghi${failureCount ? `, ${failureCount} bản ghi lỗi` : ""}!`, failureCount > 0);
         setSelectedIds([]);
         fetchTrashData();
       } else {
-        showBanner(res.data.message || "Xóa hàng loạt thất bại", true);
+        const errors = responses.flatMap(response => response.data.data?.errors || []);
+        showBanner(errors[0] || "Không có bản ghi nào xóa được", true);
       }
     } catch (err: any) {
       showBanner(err.message || "Không thể thực hiện xóa hàng loạt", true);
@@ -378,6 +394,8 @@ export const TrashManagement: React.FC = () => {
         return <Badge variant="outline" className="bg-purple-500/10 text-purple-600 border-purple-500/20 font-bold gap-1"><BookOpen className="h-3 w-3" /> Khóa học</Badge>;
       case "DEPARTMENT":
         return <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/20 font-bold gap-1"><Building2 className="h-3 w-3" /> Phòng ban</Badge>;
+      case "FILE":
+        return <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 font-bold gap-1"><FileText className="h-3 w-3" /> Tệp tin</Badge>;
       default:
         return <Badge variant="outline" className="bg-slate-500/10 text-slate-600 border-slate-500/20 font-bold">{type}</Badge>;
     }
@@ -392,9 +410,8 @@ export const TrashManagement: React.FC = () => {
   // Validation rules for Hard Delete buttons
   const isSingleHardDeleteValid =
     disclaimerChecked &&
-    targetItem &&
-    (confirmInput.trim().toUpperCase() === targetItem.code.toUpperCase() ||
-      confirmInput.trim().toUpperCase() === "XOACUNG");
+    targetItem !== null &&
+    confirmInput.trim() === SINGLE_HARD_DELETE_CONFIRMATION_CODE;
 
   const isBulkHardDeleteValid =
     disclaimerChecked &&
@@ -573,6 +590,7 @@ export const TrashManagement: React.FC = () => {
                   <SelectItem value="USER">Tài khoản (User)</SelectItem>
                   <SelectItem value="COURSE">Khóa học (Course)</SelectItem>
                   <SelectItem value="DEPARTMENT">Phòng ban (Department)</SelectItem>
+                  <SelectItem value="FILE">Tệp tin (File)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -997,11 +1015,11 @@ export const TrashManagement: React.FC = () => {
           <div className="space-y-4 my-2">
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-foreground">
-                Nhập mã <code className="bg-muted px-1.5 py-0.5 rounded text-red-600 font-mono">{targetItem?.code || "XOACUNG"}</code> để xác nhận:
+                Nhập mã <code className="bg-muted px-1.5 py-0.5 rounded text-red-600 font-mono">{SINGLE_HARD_DELETE_CONFIRMATION_CODE}</code> để xác nhận:
               </Label>
               <Input
                 type="text"
-                placeholder="Nhập mã xác nhận..."
+                placeholder={`Nhập ${SINGLE_HARD_DELETE_CONFIRMATION_CODE}...`}
                 value={confirmInput}
                 onChange={(e) => setConfirmInput(e.target.value)}
                 className="h-9 text-xs border border-border/50 font-mono"

@@ -10,20 +10,18 @@ import com.ailms.exception.DuplicateResourceException;
 import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.mapper.EmployeeMapper;
 import com.ailms.repository.*;
-import com.ailms.request.CreateEmployeeContractRequest;
-import com.ailms.request.CreateEmployeeRequest;
-import com.ailms.request.EmployeeSearchRequest;
-import com.ailms.request.UpdateEmployeeRequest;
+import com.ailms.request.*;
 import com.ailms.response.EmployeeResponse;
+import com.ailms.response.EmployeeContractResponse;
 import com.ailms.response.PageResponse;
 import com.ailms.security.JwtUtils;
 import com.ailms.service.IEmailService;
 import com.ailms.service.IEmployeeContractService;
 import com.ailms.service.IEmployeeService;
 import com.ailms.common.util.CsvBuilder;
-import com.ailms.common.util.CsvExport;
 import com.ailms.common.util.SortFieldResolver;
 
+import java.math.BigDecimal;
 import java.time.temporal.ChronoUnit;
 import java.util.function.Function;
 
@@ -39,6 +37,10 @@ import com.ailms.repository.specification.EmployeeSpecification;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -101,28 +103,41 @@ public class EmployeeService implements IEmployeeService {
             if (employeeRepository.existsById(request.getUserId())) {
                 throw new DuplicateResourceException("Employee profile already exists for user ID: " + request.getUserId());
             }
+            if (!StringUtils.hasText(user.getFullName()) && StringUtils.hasText(user.getEmail())) {
+                user.setFullName(user.getEmail().trim().toLowerCase(Locale.ROOT));
+                user = userRepository.save(user);
+            }
         } else {
             // HR creating new user account + employee profile in one step
             if (request.getEmail() == null || request.getEmail().isBlank()) {
                 throw new BusinessException("Email là bắt buộc để tạo nhân viên mới.");
             }
+            request.setUsername(request.getEmail().trim().toLowerCase());
+            if (userRepository.existsByUsername(request.getUsername().trim())) {
+                throw new DuplicateResourceException("Tên đăng nhập đã tồn tại: " + request.getUsername());
+            }
 
-            java.util.Optional<UserEntity> existingUserOpt = userRepository.findByEmail(request.getEmail().trim());
-            if (existingUserOpt.isPresent()) {
-                user = existingUserOpt.get();
-                if (employeeRepository.existsById(user.getId())) {
-                    throw new DuplicateResourceException("Tài khoản với email này đã là nhân sự trong hệ thống: " + request.getEmail());
-                }
+            if (userRepository.existsByEmail(request.getEmail().trim())) {
+                throw new DuplicateResourceException("Email đã được sử dụng: " + request.getEmail());
             } else {
                 String tempPassword = request.getPassword() != null && !request.getPassword().isBlank()
                         ? request.getPassword()
                         : "Password@123";
 
+                String normalizedEmail = request.getEmail().trim().toLowerCase(Locale.ROOT);
+                String employeeName = request.getFullName() != null && !request.getFullName().isBlank()
+                        ? request.getFullName().trim()
+                        : normalizedEmail;
+                request.setFullName(employeeName);
+
                 user = UserEntity.builder()
-                        .username(request.getEmail().trim())
-                        .email(request.getEmail().trim())
+                        .username(request.getUsername().trim())
+                        .email(normalizedEmail)
                         .passwordHash(passwordEncoder.encode(tempPassword))
-                        .fullName(request.getFullName() != null ? request.getFullName() : request.getEmail().trim())
+                        .fullName(employeeName)
+                        .phone(request.getPhone())
+                        .gender(request.getGender())
+                        .dateOfBirth(request.getDateOfBirth() != null ? request.getDateOfBirth().atStartOfDay() : null)
                         .status(UserStatusEnum.ACTIVE)
                         .build();
                 user = userRepository.save(user);
@@ -145,20 +160,32 @@ public class EmployeeService implements IEmployeeService {
                         .build();
                 userRoleRepository.save(userRole);
 
-                // Send JWT invite set-password email
-                final String recipientEmail = user.getEmail();
-                final String jwtToken = jwtUtils.generateSetPasswordToken(user.getId());
-                try {
-                    emailService.sendSetPasswordEmail(recipientEmail, jwtToken);
-                } catch (Exception e) {
-                    log.error("Failed to send welcome set-password email to {}", recipientEmail, e);
+                // Onboarding có hợp đồng sẽ gộp link đặt mật khẩu + link ký + OTP trong một email.
+                // Các luồng tạo nhân viên không có hợp đồng vẫn nhận email đặt mật khẩu độc lập.
+                if (request.getContractCreationMode() == null || request.getContractCreationMode().isBlank()) {
+                    final String recipientEmail = user.getEmail();
+                    final String jwtToken = jwtUtils.generateSetPasswordToken(user.getId());
+                    TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                        @Override
+                        public void afterCommit() {
+                            try {
+                                emailService.sendSetPasswordEmail(recipientEmail, jwtToken);
+                            } catch (Exception e) {
+                                log.error("Failed to send welcome set-password email to {}", recipientEmail, e);
+                            }
+                        }
+                    });
                 }
             }
         }
 
         EmployeeEntity entity = employeeMapper.toEntity(request);
         entity.setUserEntity(user);
-        entity.setEmployeeCode(CodeGenerator.generate("EP", employeeRepository::existsByEmployeeCode));
+        String requestedCode = request.getEmployeeCode() != null ? request.getEmployeeCode().trim().toUpperCase() : "";
+        if (!requestedCode.isEmpty() && employeeRepository.existsByEmployeeCode(requestedCode)) {
+            throw new DuplicateResourceException("Employee code already exists: " + requestedCode);
+        }
+        entity.setEmployeeCode(requestedCode.isEmpty() ? CodeGenerator.generate("EP", employeeRepository::existsByEmployeeCode) : requestedCode);
         entity.setStatus(EmployeeStatusEnum.ACTIVE);
         entity.setDepartment(resolveDepartment(request.getDepartmentId()));
         if (entity.getStartDate() == null) {
@@ -169,7 +196,7 @@ public class EmployeeService implements IEmployeeService {
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CREATE", "EMPLOYEE", saved.getUserId(), null, saved));
 
         // Create initial contract if contract info provided
-        if (request.getBaseSalary() != null && request.getBaseSalary().compareTo(java.math.BigDecimal.ZERO) > 0) {
+        if (request.getBaseSalary() != null && request.getBaseSalary().compareTo(BigDecimal.ZERO) > 0) {
             CreateEmployeeContractRequest contractReq = CreateEmployeeContractRequest.builder()
                     .employeeId(saved.getUserId())
                     .contractTypeEnum(request.getContractTypeEnum() != null ? request.getContractTypeEnum() : ContractTypeEnum.PROBATION)
@@ -185,6 +212,94 @@ public class EmployeeService implements IEmployeeService {
         return employeeMapper.toResponse(saved);
     }
 
+    @Override
+    @Transactional
+    public EmployeeResponse onboard(CreateEmployeeRequest request, MultipartFile contractFile) {
+        if (request.getPhone() == null || request.getPhone().isBlank()
+                || request.getGender() == null || request.getDateOfBirth() == null) {
+            throw new BusinessException("Email, số điện thoại, giới tính và ngày sinh là bắt buộc.");
+        }
+        if (request.getRoleId() == null) {
+            throw new BusinessException("Vai trò hệ thống là bắt buộc.");
+        }
+        RoleEntity selectedRole = roleRepository.findById(request.getRoleId())
+                .orElseThrow(() -> ResourceNotFoundException.of("Role", request.getRoleId()));
+        String roleCode = selectedRole.getCode() == null ? "" : selectedRole.getCode().toUpperCase(Locale.ROOT);
+        if (request.getEmploymentTypeEnum() == EmploymentTypeEnum.FULL_TIME
+                && !("HR".equals(roleCode) || "TEACHER".equals(roleCode))) {
+            throw new BusinessException("Nhân sự toàn thời gian chỉ được chọn vai trò HR hoặc TEACHER.");
+        }
+        if (request.getEmploymentTypeEnum() == EmploymentTypeEnum.PART_TIME && !"TA".equals(roleCode)) {
+            throw new BusinessException("Nhân sự bán thời gian chỉ được chọn vai trò TA.");
+        }
+        boolean teachingContract = "TEACHER".equalsIgnoreCase(selectedRole.getCode())
+                || "TA".equalsIgnoreCase(selectedRole.getCode());
+        if (teachingContract) {
+            request.setContractTypeEnum(ContractTypeEnum.INDEFINITE);
+            request.setSalaryTypeEnum(SalaryTypeEnum.HOURLY);
+            request.setContractEndDate(null);
+            request.setBaseSalary(null);
+        }
+        if (request.getContractTypeEnum() == null || request.getContractStartDate() == null
+                || request.getSalaryTypeEnum() == null || (!teachingContract && request.getBaseSalary() == null)) {
+            throw new BusinessException("Thông tin hợp đồng chưa đầy đủ.");
+        }
+        boolean requiresEndDate = request.getContractTypeEnum() == ContractTypeEnum.PROBATION
+                || request.getContractTypeEnum() == ContractTypeEnum.FIXED_TERM;
+        if (requiresEndDate && request.getContractEndDate() == null) {
+            throw new BusinessException("Ngày kết thúc là bắt buộc với hợp đồng thử việc hoặc xác định thời hạn.");
+        }
+        if (requiresEndDate && !request.getContractEndDate().isAfter(request.getContractStartDate())) {
+            throw new BusinessException("Ngày kết thúc hợp đồng phải sau ngày bắt đầu.");
+        }
+
+        // Không để create() tự sinh contract; onboarding xử lý đúng nhánh upload/template bên dưới.
+        BigDecimal salary = request.getBaseSalary();
+        request.setBaseSalary(null);
+        EmployeeResponse employee = create(request);
+        request.setBaseSalary(salary);
+
+        EmployeeContractResponse createdContract;
+        if ("WEB_GENERATE".equalsIgnoreCase(request.getContractCreationMode())) {
+            if (request.getContractTemplateId() == null) {
+                throw new BusinessException("Mẫu hợp đồng là bắt buộc khi tạo hợp đồng trên web.");
+            }
+            createdContract = employeeContractService.generateContract(GenerateEmployeeContractRequest.builder()
+                    .employeeId(employee.getId())
+                    .contractTypeEnum(request.getContractTypeEnum())
+                    .templateId(request.getContractTemplateId())
+                    .startDate(request.getContractStartDate())
+                    .endDate(request.getContractEndDate())
+                    .baseSalary(salary)
+                    .salaryTypeEnum(request.getSalaryTypeEnum())
+                    .signedAt(request.getContractSignedAt())
+                    .build());
+        } else {
+            if (contractFile == null || contractFile.isEmpty()) {
+                throw new BusinessException("File hợp đồng là bắt buộc khi chọn tải file.");
+            }
+            if (contractFile.getOriginalFilename() == null
+                    || !contractFile.getOriginalFilename().toLowerCase(Locale.ROOT).endsWith(".pdf")) {
+                throw new BusinessException("Hợp đồng gửi ký điện tử phải là file PDF.");
+            }
+            var contract = employeeContractService.create(CreateEmployeeContractRequest.builder()
+                    .employeeId(employee.getId())
+                    .contractTypeEnum(request.getContractTypeEnum())
+                    .startDate(request.getContractStartDate())
+                    .endDate(request.getContractEndDate())
+                    .baseSalary(salary)
+                    .salaryTypeEnum(request.getSalaryTypeEnum())
+                    .signedAt(request.getContractSignedAt())
+                    .build());
+            createdContract = employeeContractService.uploadContractFile(contract.getId(), contractFile);
+        }
+        // Xác nhận phía công ty và gửi link để nhân viên xem hợp đồng, nhận OTP và ký.
+        employeeContractService.signCompany(createdContract.getId(), SignCompanyRequest.builder()
+                .setPasswordToken(jwtUtils.generateSetPasswordToken(Long.valueOf(employee.getId())))
+                .build());
+        return employee;
+    }
+
     @Transactional
     @Override
     public EmployeeResponse update(Long id, UpdateEmployeeRequest request) {
@@ -193,7 +308,7 @@ public class EmployeeService implements IEmployeeService {
         EmployeeEntity existing = employeeRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
 
-        String oldValue = SimpleJsonWriter.toJson(existing);
+        EmployeeResponse oldValue = employeeMapper.toResponse(existing);
         if (existing.getUserEntity() != null && existing.getUserEntity().getStatus() == UserStatusEnum.DELETED) {
             throw new BusinessException("Cannot update a deleted employee.");
         }
@@ -201,6 +316,18 @@ public class EmployeeService implements IEmployeeService {
         if (request.getStatus() != null && request.getStatus() != existing.getStatus()) {
             if (request.getStatus() == EmployeeStatusEnum.TERMINATED) {
                 throw new BusinessException("Cannot terminate employee via general update. Use /terminate endpoint instead.");
+            }
+        }
+
+        LocalDateTime effectiveStart = request.getStartDate() != null ? request.getStartDate() : existing.getStartDate();
+        LocalDateTime effectiveEnd = request.getEndDate() != null ? request.getEndDate() : existing.getEndDate();
+        if (effectiveStart != null && effectiveEnd != null && effectiveEnd.isBefore(effectiveStart)) {
+            throw new BusinessException("End date must be after or equal to start date.");
+        }
+        if (request.getDateOfBirth() != null) {
+            int age = Period.between(request.getDateOfBirth().toLocalDate(), LocalDate.now()).getYears();
+            if (age < 18 || age > 75) {
+                throw new BusinessException("Employee age must be between 18 and 75.");
             }
         }
 
@@ -212,8 +339,9 @@ public class EmployeeService implements IEmployeeService {
         }
 
         EmployeeEntity updated = employeeRepository.save(existing);
-        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "UPDATE", "EMPLOYEE", id, oldValue, updated));
-        return employeeMapper.toResponse(updated);
+        EmployeeResponse updatedResponse = employeeMapper.toResponse(updated);
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "UPDATE", "EMPLOYEE", id, oldValue, updatedResponse));
+        return updatedResponse;
     }
 
     @Transactional
@@ -245,7 +373,7 @@ public class EmployeeService implements IEmployeeService {
         }
 
         List<SalaryEntity> draftSalaries = salaryRepository.findByEmployee_UserId(id).stream()
-                .filter(s -> s.getStatus() == com.ailms.entity.enums.SalaryStatusEnum.DRAFT)
+                .filter(s -> s.getStatus() == SalaryStatusEnum.DRAFT)
                 .toList();
         if (!draftSalaries.isEmpty()) {
             throw new BusinessException("Cannot delete employee: Employee has unfinalized (DRAFT) salaries.");
@@ -515,11 +643,11 @@ public class EmployeeService implements IEmployeeService {
 
     @Transactional
     @Override
-    public java.util.Map<String, Object> bulkHardDelete(List<Long> ids) {
+    public Map<String, Object> bulkHardDelete(List<Long> ids) {
         log.info("Bulk permanently deleting employees: {}", ids);
         int successCount = 0;
         int failureCount = 0;
-        List<String> errors = new java.util.ArrayList<>();
+        List<String> errors = new ArrayList<>();
 
         if (ids != null) {
             for (Long id : ids) {
@@ -533,7 +661,7 @@ public class EmployeeService implements IEmployeeService {
             }
         }
 
-        java.util.Map<String, Object> result = new java.util.HashMap<>();
+        Map<String, Object> result = new HashMap<>();
         result.put("successCount", successCount);
         result.put("failureCount", failureCount);
         result.put("errors", errors);
@@ -552,7 +680,7 @@ public class EmployeeService implements IEmployeeService {
     @Override
     public Map<String, Long> getContractStatusStats(Integer year) {
         log.info("Getting contract status stats for year {}", year);
-        java.util.Map<String, Long> map = new java.util.HashMap<>();
+        Map<String, Long> map = new HashMap<>();
         map.put("ACTIVE", 0L);
         map.put("PROBATION", 0L);
         map.put("EXPIRED", 0L);
@@ -987,8 +1115,3 @@ public class EmployeeService implements IEmployeeService {
         return builder.build();
     }
 }
-
-
-
-
-

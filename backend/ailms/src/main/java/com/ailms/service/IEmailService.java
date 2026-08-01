@@ -80,7 +80,8 @@ public interface IEmailService {
     /**
      * Gửi email thông báo mời ký điện tử hợp đồng lao động kèm link công khai.
      */
-    void sendContractSigningLinkEmail(String toEmail, String employeeName, String signingLink, LocalDateTime expiresAt);
+    void sendContractSigningLinkEmail(String toEmail, String employeeName, String signingLink, String otp,
+                                      String setPasswordToken, LocalDateTime expiresAt);
 
     /**
      * Gửi email chứa mã OTP 6 chữ số phục vụ ký điện tử hợp đồng lao động.
@@ -96,4 +97,3 @@ public interface IEmailService {
      */
     void sendBulkEmail(List<String> toEmails, String subject, String content);
 }
-

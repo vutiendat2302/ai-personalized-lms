@@ -12,9 +12,12 @@ import com.ailms.entity.ClassEntity;
 import com.ailms.entity.CourseEntity;
 import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.mapper.ClassMapper;
+import com.ailms.mapper.ClassScheduleMapper;
 import com.ailms.repository.ClassRepository;
 import com.ailms.repository.CourseRepository;
+import com.ailms.repository.ClassScheduleRepository;
 import com.ailms.response.ClassResponse;
+import com.ailms.response.ClassScheduleResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -47,6 +50,8 @@ public class ClassService implements IClassService {
     private final ClassRepository classRepository;
     private final CourseRepository courseRepository;
     private final ClassMapper classMapper;
+    private final ClassScheduleRepository classScheduleRepository;
+    private final ClassScheduleMapper classScheduleMapper;
 
     private static final String RESOURCE_NAME = "Class";
 
@@ -65,6 +70,14 @@ public class ClassService implements IClassService {
     public List<ClassResponse> getByCourseId(Long courseId) {
         log.info("Getting classes by course id: {}", courseId);
         return classMapper.toResponseList(classRepository.findByCourseEntity_Id(courseId));
+    }
+
+    @Override
+    public List<ClassScheduleResponse> getSchedules(Long classId) {
+        if (!classRepository.existsById(classId)) {
+            throw ResourceNotFoundException.of(RESOURCE_NAME, classId);
+        }
+        return classScheduleMapper.toResponseList(classScheduleRepository.findByClassEntity_Id(classId));
     }
 
     @Transactional

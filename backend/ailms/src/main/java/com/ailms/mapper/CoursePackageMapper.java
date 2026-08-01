@@ -14,6 +14,8 @@ public interface CoursePackageMapper {
 
     @Mapping(target = "courseId", source = "courseEntity.id")
     @Mapping(target = "courseName", source = "courseEntity.name")
+    @Mapping(target = "classId", source = "classEntity.id")
+    @Mapping(target = "className", source = "classEntity.name")
     CoursePackageResponse toResponse(CoursePackageEntity entity);
 
     List<CoursePackageResponse> toResponseList(List<CoursePackageEntity> list);

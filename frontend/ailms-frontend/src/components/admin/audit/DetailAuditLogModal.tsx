@@ -322,8 +322,8 @@ export const DetailAuditLogModal: React.FC<DetailAuditLogModalProps> = ({
       onMouseDown={(e) => e.stopPropagation()}
       onPointerDown={(e) => e.stopPropagation()}
     >
-      <Dialog open={open} onOpenChange={(val) => { if (!val) onClose(); }}>
-        <DialogContent className="max-w-5xl w-[94vw] max-h-[92vh] flex flex-col p-0 overflow-hidden rounded-2xl bg-card border border-border/40 shadow-2xl backdrop-blur-xs">
+      <Dialog disablePointerDismissal={false} open={open} onOpenChange={(val) => { if (!val) onClose(); }}>
+        <DialogContent className="z-[120] max-w-5xl w-[94vw] max-h-[92vh] flex flex-col p-0 overflow-hidden rounded-2xl bg-card border border-border/40 shadow-2xl backdrop-blur-xs">
           
           {/* FIXED HEADER */}
           <DialogHeader className="p-6 bg-linear-to-br from-primary/10 via-card to-card border-b border-border/40 shrink-0 relative">

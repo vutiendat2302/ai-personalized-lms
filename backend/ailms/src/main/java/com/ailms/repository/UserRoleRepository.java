@@ -1,19 +1,15 @@
 package com.ailms.repository;
 
 import com.ailms.entity.UserRoleEntity;
+import com.ailms.entity.UserEntity;
 import com.ailms.repository.base.BaseRepository;
-import jakarta.persistence.Entity;
 import org.springframework.data.jpa.repository.EntityGraph;
-import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.security.core.parameters.P;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Locale;
 
 @Repository
 public interface UserRoleRepository extends BaseRepository<UserRoleEntity, Long> {
@@ -36,6 +32,14 @@ public interface UserRoleRepository extends BaseRepository<UserRoleEntity, Long>
            OR ur.roleEntity.name IN ('ADMIN', 'HR', 'ROLE_ADMIN', 'ROLE_HR')
     """)
     List<String> findAdminAndHrEmails();
+
+    @Query("""
+        SELECT DISTINCT ur.userEntity FROM UserRoleEntity ur
+        JOIN ur.roleEntity role
+        WHERE UPPER(role.code) IN ('HR', 'ROLE_HR')
+           OR UPPER(role.name) IN ('HR', 'ROLE_HR', 'NHÂN SỰ')
+        """)
+    List<UserEntity> findHrUsers();
 
     boolean existsByRoleEntity_Id(Long roleId);
 
@@ -63,5 +67,4 @@ public interface UserRoleRepository extends BaseRepository<UserRoleEntity, Long>
     """)
     List<Object[]> countUsersGroupByRole();
 }
-
 

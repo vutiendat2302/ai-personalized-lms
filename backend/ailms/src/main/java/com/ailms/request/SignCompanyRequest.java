@@ -16,4 +16,7 @@ public class SignCompanyRequest {
 
     /** Mật khẩu xác thực lại (tùy chọn). */
     private String confirmPassword;
+
+    /** Token thiết lập mật khẩu, chỉ có trong luồng onboarding nhân viên mới. */
+    private String setPasswordToken;
 }

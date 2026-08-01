@@ -22,6 +22,7 @@ public class EmployeeSearchRequest extends CommonSearchRequest<EmployeeStatusEnu
     private Integer gender;
     private List<Long> userIds;
     private com.ailms.entity.enums.UserStatusEnum userStatus;
+    private Boolean expiringProbationWithin7Days;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime startDateFrom;

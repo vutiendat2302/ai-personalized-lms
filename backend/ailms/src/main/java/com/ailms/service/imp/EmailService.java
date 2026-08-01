@@ -327,13 +327,27 @@ public class EmailService implements IEmailService {
     }
 
     @Override
-    public void sendContractSigningLinkEmail(String toEmail, String employeeName, String signingLink, LocalDateTime expiresAt) {
+    public void sendContractSigningLinkEmail(String toEmail, String employeeName, String signingLink, String otp,
+                                             String setPasswordToken, LocalDateTime expiresAt) {
         try {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
             helper.setTo(toEmail);
-            helper.setSubject("Mời ký điện tử Hợp đồng Lao động - AILMS");
+            helper.setSubject("Hoàn tất tài khoản và ký Hợp đồng Lao động - AILMS");
             String formattedExpiresAt = expiresAt != null ? expiresAt.format(DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy")) : "";
+            String setPasswordSection = "";
+            if (setPasswordToken != null && !setPasswordToken.isBlank()) {
+                String setPasswordLink = frontendUrl.endsWith("/set-password")
+                        ? frontendUrl + "?token=" + setPasswordToken
+                        : frontendUrl + "/set-password?token=" + setPasswordToken;
+                setPasswordSection = """
+                    <div style="margin:20px 0;padding:16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;">
+                      <h3 style="margin-top:0;color:#0f172a;">Bước 1 — Thiết lập mật khẩu tài khoản</h3>
+                      <p>Thiết lập mật khẩu trước, sau đó quay lại email này để mở hợp đồng và ký.</p>
+                      <p style="text-align:center"><a href="%s" style="background:#475569;color:white;padding:10px 22px;font-weight:bold;text-decoration:none;border-radius:6px;display:inline-block;">Thiết lập mật khẩu</a></p>
+                    </div>
+                    """.formatted(setPasswordLink);
+            }
             helper.setText("""
             <html>
             <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
@@ -341,12 +355,17 @@ public class EmailService implements IEmailService {
                     <h2 style="color: #2563eb; margin-top: 0;">Mời ký điện tử Hợp đồng Lao động</h2>
                     <p>Kính chào anh/chị <strong>%s</strong>,</p>
                     <p>Bộ phận HR Công ty Cổ phần Giáo dục AILMS đã hoàn tất ký và gửi đến anh/chị bản Hợp đồng Lao động điện tử.</p>
-                    <p>Vui lòng nhấn vào nút bên dưới để xem trước hợp đồng và tiến hành xác nhận ký điện tử:</p>
+                    <p>Vui lòng thực hiện lần lượt các bước bên dưới. Email OTP bảo mật sẽ chỉ được gửi khi anh/chị chủ động bắt đầu bước ký.</p>
+                    %s
+                    <h3 style="color:#0f172a;">Bước 2 — Xem và ký hợp đồng</h3>
                     <p style="margin: 28px 0; text-align: center;">
                         <a href="%s"
                            style="background-color: #2563eb; color: white; padding: 12px 28px; font-weight: bold; text-decoration: none; border-radius: 6px; display: inline-block;">
                             Truy cập Link Ký Hợp Đồng
                         </a>
+                    </p>
+                    <p style="font-size:13px;color:#64748b;background:#f8fafc;padding:12px;border-radius:6px;">
+                      Mã OTP chỉ được gửi sau khi anh/chị mở hợp đồng và bấm chuyển sang bước <strong>Ký và xác thực OTP</strong>.
                     </p>
                     <p>Hoặc sao chép đường dẫn sau vào trình duyệt:</p>
                     <p style="word-break: break-all; color: #2563eb;"><a href="%s">%s</a></p>
@@ -356,7 +375,7 @@ public class EmailService implements IEmailService {
                 </div>
             </body>
             </html>
-            """.formatted(employeeName, signingLink, signingLink, signingLink, formattedExpiresAt), true);
+            """.formatted(employeeName, setPasswordSection, signingLink, signingLink, signingLink, formattedExpiresAt), true);
             mailSender.send(message);
             log.info("Contract signing link email sent to {}", toEmail);
         } catch (Exception e) {
@@ -416,5 +435,3 @@ public class EmailService implements IEmailService {
         }
     }
 }
-
-
