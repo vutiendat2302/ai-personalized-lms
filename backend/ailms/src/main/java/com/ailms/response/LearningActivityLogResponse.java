@@ -21,6 +21,10 @@ public class LearningActivityLogResponse {
     private String entityType;
 
     private Long entityId;
+    private String entityName;
+    private Long courseId;
+    private String courseName;
+    private String className;
 
     private String metadata;
 

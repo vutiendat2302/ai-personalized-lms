@@ -396,6 +396,8 @@ export const TrashManagement: React.FC = () => {
         return <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/20 font-bold gap-1"><Building2 className="h-3 w-3" /> Phòng ban</Badge>;
       case "FILE":
         return <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 font-bold gap-1"><FileText className="h-3 w-3" /> Tệp tin</Badge>;
+      case "SALARY":
+        return <Badge variant="outline" className="bg-indigo-500/10 text-indigo-600 border-indigo-500/20 font-bold">Bảng lương</Badge>;
       default:
         return <Badge variant="outline" className="bg-slate-500/10 text-slate-600 border-slate-500/20 font-bold">{type}</Badge>;
     }
@@ -591,6 +593,7 @@ export const TrashManagement: React.FC = () => {
                   <SelectItem value="COURSE">Khóa học (Course)</SelectItem>
                   <SelectItem value="DEPARTMENT">Phòng ban (Department)</SelectItem>
                   <SelectItem value="FILE">Tệp tin (File)</SelectItem>
+                  <SelectItem value="SALARY">Bảng lương (Salary)</SelectItem>
                 </SelectContent>
               </Select>
             </div>

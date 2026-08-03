@@ -14,6 +14,16 @@ export interface ApiResponse<T> {
   timestamp: string;
 }
 
+export interface PageResponse<T> {
+  content: T[];
+  pageNumber: number;
+  pageSize: number;
+  totalElements: number;
+  totalPages: number;
+  first: boolean;
+  last: boolean;
+}
+
 export interface ErrorResponse {
   timestamp: string;
   status: number;

@@ -16,6 +16,7 @@ import com.ailms.response.NotificationResponse;
 import com.ailms.response.NotificationUnreadCountResponse;
 import com.ailms.response.PageResponse;
 import com.ailms.service.INotificationService;
+import com.ailms.service.IEmailService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -27,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -37,6 +39,7 @@ public class NotificationService implements INotificationService {
     private final NotificationRepository notificationRepository;
     private final UserRepository userRepository;
     private final NotificationMapper notificationMapper;
+    private final IEmailService emailService;
 
     /** Kích thước batch khi insert thông báo broadcast. */
     private static final int BATCH_SIZE = 500;
@@ -61,6 +64,16 @@ public class NotificationService implements INotificationService {
                 notifications.add(buildAdminNotification(admin, recipient, request));
             }
             notificationRepository.saveAll(notifications);
+            List<String> recipientEmails = notifications.stream()
+                    .map(NotificationEntity::getUser)
+                    .filter(Objects::nonNull)
+                    .map(UserEntity::getEmail)
+                    .filter(email -> email != null && !email.isBlank())
+                    .distinct()
+                    .toList();
+            if (!recipientEmails.isEmpty()) {
+                emailService.sendBulkEmail(recipientEmails, request.getTitle(), request.getContent());
+            }
             log.info("Saved {} targeted notifications", notifications.size());
 
         } else if (Boolean.TRUE.equals(request.getBroadcastAll())) {
@@ -98,7 +111,7 @@ public class NotificationService implements INotificationService {
     public void sendRoleTargetedAsync(UserEntity admin, CreateAdminNotificationRequest request) {
         log.info("Starting async role-targeted notification for role: {} from admin {}", request.getTargetRole(), admin.getId());
         // Lấy danh sách user theo role thông qua join query
-        List<UserEntity> targetUsers = userRepository.findUsersByRoleName(request.getTargetRole());
+        List<UserEntity> targetUsers = userRepository.findUsersByRoleName(request.getTargetRole(), UserStatusEnum.DELETED);
         processBatchNotifications(admin, targetUsers, request);
         log.info("Completed async role notification to {} users", targetUsers.size());
     }
@@ -121,6 +134,11 @@ public class NotificationService implements INotificationService {
         if (!batch.isEmpty()) {
             notificationRepository.saveAll(batch);
             total += batch.size();
+        }
+        List<String> recipientEmails = recipients.stream().map(UserEntity::getEmail)
+                .filter(email -> email != null && !email.isBlank()).distinct().toList();
+        if (!recipientEmails.isEmpty()) {
+            emailService.sendBulkEmail(recipientEmails, request.getTitle(), request.getContent());
         }
         log.info("Batch notification processing completed. Total saved: {}", total);
     }

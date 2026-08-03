@@ -32,6 +32,8 @@ import student_profile
 import guardian
 import student_interest
 import study_goal
+import learning_activity_log
+import learning_session
 import teacher_category
 import teacher_availability
 import course
@@ -43,6 +45,11 @@ import lesson_resource
 import search_history
 import course_class
 import teaching_compensation
+import payroll
+import migrate_salary_period
+import course_package
+import sales_order
+import student_tuition_payment
 
 
 def main():
@@ -72,12 +79,20 @@ def main():
             course.seed(cursor) 
             course_sectiton.seed(cursor)
             lesson.seed(cursor)
+            # Nhật ký cần course/section/lesson tồn tại để gắn đúng đối tượng học tập.
+            learning_activity_log.seed(cursor)
+            learning_session.seed(cursor)
             review.seed(cursor)
             degree.seed(cursor)
             lesson_resource.seed(cursor)
             course_class.seed(cursor)
             teaching_compensation.seed(cursor)
+            migrate_salary_period.migrate(cursor)
+            payroll.seed(cursor)
             search_history.seed(cursor)
+            course_package.seed(cursor)
+            sales_order.seed(cursor)
+            student_tuition_payment.seed(cursor)
             
             
         conn.commit()

@@ -1,5 +1,6 @@
 package com.ailms.repository.specification;
 
+import com.ailms.common.util.SpecificationBuilder;
 import com.ailms.entity.DepartmentEntity;
 import com.ailms.entity.EmployeeEntity;
 import com.ailms.entity.SalaryEntity;
@@ -10,59 +11,50 @@ import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.jpa.domain.Specification;
 
-import java.util.ArrayList;
-import java.util.List;
-
 public final class SalarySpecification {
 
     private SalarySpecification() {
     }
 
     public static Specification<SalaryEntity> filterAndSearch(SalarySearchRequest request) {
-        return (root, query, cb) -> {
-            if (request == null) {
-                return cb.conjunction();
-            }
+        SpecificationBuilder<SalaryEntity> builder = SpecificationBuilder.of();
+        builder.custom((root, ignoredQuery, cb) -> cb.isNull(root.get("deletedAt")));
 
-            List<Predicate> predicates = new ArrayList<>();
+        if (request == null) {
+            return builder.build();
+        }
 
-            if (request.getKeyword() != null && !request.getKeyword().isBlank()) {
-                String kw = "%" + request.getKeyword().trim().toLowerCase() + "%";
-                Join<SalaryEntity, EmployeeEntity> employeeJoin = root.join("employee", JoinType.LEFT);
-                Join<EmployeeEntity, UserEntity> userJoin = employeeJoin.join("userEntity", JoinType.LEFT);
+        if (request.getKeyword() != null && !request.getKeyword().isBlank()) {
+            String keywordPattern = "%" + request.getKeyword().trim().toLowerCase() + "%";
+            builder.custom((root, ignoredQuery, cb) -> {
+                Join<SalaryEntity, EmployeeEntity> employee = root.join("employee", JoinType.LEFT);
+                Join<EmployeeEntity, UserEntity> user = employee.join("userEntity", JoinType.LEFT);
+                Predicate employeeCode = cb.like(cb.lower(employee.get("employeeCode")), keywordPattern);
+                Predicate fullName = cb.like(cb.lower(user.get("fullName")), keywordPattern);
+                return cb.or(employeeCode, fullName);
+            });
+        }
 
-                Predicate codePredicate = cb.like(cb.lower(employeeJoin.get("employeeCode")), kw);
-                Predicate namePredicate = cb.like(cb.lower(userJoin.get("fullName")), kw);
-                predicates.add(cb.or(codePredicate, namePredicate));
-            }
+        if (request.getPeriod() != null) {
+            builder.equalIfPresent("period", request.getPeriod());
+        } else {
+            builder.greaterOrEqualIfPresent("period", request.getPeriodFrom());
+            builder.lessOrEqualIfPresent("period", request.getPeriodTo());
+        }
 
-            if (request.getPeriod() != null) {
-                predicates.add(cb.equal(root.get("period"), request.getPeriod()));
-            }
+        builder.equalIfPresent("status", request.getStatus());
+        builder.equalIfPresent("salaryTypeEnum", request.getSalaryTypeEnum());
+        builder.greaterOrEqualIfPresent("createdAt", request.getCreatedFrom());
+        builder.lessOrEqualIfPresent("createdAt", request.getCreatedTo());
 
-            if (request.getStatus() != null) {
-                predicates.add(cb.equal(root.get("status"), request.getStatus()));
-            }
+        if (request.getDepartmentId() != null) {
+            builder.custom((root, ignoredQuery, cb) -> {
+                Join<SalaryEntity, EmployeeEntity> employee = root.join("employee", JoinType.LEFT);
+                Join<EmployeeEntity, DepartmentEntity> department = employee.join("department", JoinType.LEFT);
+                return cb.equal(department.get("id"), request.getDepartmentId());
+            });
+        }
 
-            if (request.getSalaryTypeEnum() != null) {
-                predicates.add(cb.equal(root.get("salaryTypeEnum"), request.getSalaryTypeEnum()));
-            }
-
-            if (request.getDepartmentId() != null) {
-                Join<SalaryEntity, EmployeeEntity> empJoin = root.join("employee", JoinType.LEFT);
-                Join<EmployeeEntity, DepartmentEntity> deptJoin = empJoin.join("department", JoinType.LEFT);
-                predicates.add(cb.equal(deptJoin.get("id"), request.getDepartmentId()));
-            }
-
-            if (request.getCreatedFrom() != null) {
-                predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), request.getCreatedFrom()));
-            }
-
-            if (request.getCreatedTo() != null) {
-                predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), request.getCreatedTo()));
-            }
-
-            return cb.and(predicates.toArray(new Predicate[0]));
-        };
+        return builder.build();
     }
 }

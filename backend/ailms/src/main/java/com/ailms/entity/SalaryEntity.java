@@ -17,8 +17,8 @@ import java.util.List;
  * Lưu trữ bảng lương tổng hợp của nhân viên theo từng kỳ thanh toán (tháng/năm).
  */
 @Entity
-@Table(name = "salary", uniqueConstraints = {
-        @UniqueConstraint(name = "uk_employee_period", columnNames = {"employee_id", "period"})
+@Table(name = "salary", indexes = {
+        @Index(name = "idx_salary_employee_period", columnList = "employee_id,period")
 })
 @Getter
 @Setter
@@ -72,6 +72,20 @@ public class SalaryEntity extends BaseEntity {
     /** Thời điểm hoàn tất chuyển khoản / thanh toán lương. */
     @Column(name = "paid_at")
     private LocalDateTime paidAt;
+
+    /** Thời điểm Admin xuất danh sách chuyển khoản ngân hàng. */
+    @Column(name = "transfer_exported_at")
+    private LocalDateTime transferExportedAt;
+
+    @Column(name = "submitted_at")
+    private LocalDateTime submittedAt;
+
+    @Column(name = "approved_at")
+    private LocalDateTime approvedAt;
+
+    /** Xóa mềm; null nghĩa là bản ghi đang hoạt động. */
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
 
     /** Ghi chú chi tiết về kỳ lương. */
     @Column(name = "description")

@@ -12,6 +12,7 @@ import { useCartStore } from "@/store/useCartStore";
 import { WorkspaceSwitcher } from "@/components/WorkspaceSwitcher";
 import type { StudentProfileData } from "@/api/students/studentApi";
 import type { ApiResponse } from "@/types/base";
+import { notificationApi, type NotificationItem } from "@/api/notifications/notificationApi";
 
 
 export const Header: React.FC = () => {
@@ -21,6 +22,10 @@ export const Header: React.FC = () => {
   const { openLogin, openRegister, openChangePassword } = useModalStore();
   const { items: cartItems, toggleCart } = useCartStore();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [notificationOpen, setNotificationOpen] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notificationLoading, setNotificationLoading] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [searchFocused, setSearchFocused] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -32,6 +37,50 @@ export const Header: React.FC = () => {
   const [onboardingModalOpen, setOnboardingModalOpen] = useState(false);
   const [onboardingInitialStep, setOnboardingInitialStep] = useState(1);
   const searchRef = useRef<HTMLDivElement>(null);
+
+  const loadNotifications = async () => {
+    if (!auth.accessToken) return;
+    setNotificationLoading(true);
+    try {
+      const [page, count] = await Promise.all([
+        notificationApi.getMine(0, 8),
+        notificationApi.getUnreadCount(),
+      ]);
+      setNotifications(page?.content || []);
+      setUnreadCount(count || 0);
+    } catch {
+      setNotifications([]);
+      setUnreadCount(0);
+    } finally {
+      setNotificationLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!auth.accessToken) {
+      setNotifications([]);
+      setUnreadCount(0);
+      return;
+    }
+    void loadNotifications();
+    const timer = window.setInterval(() => void loadNotifications(), 60000);
+    return () => window.clearInterval(timer);
+  }, [auth.accessToken, auth.user?.id]);
+
+  const openNotification = async (item: NotificationItem) => {
+    if (!item.isRead) {
+      try {
+        await notificationApi.markRead(item.id);
+        setNotifications((items) => items.map((entry) => entry.id === item.id ? { ...entry, isRead: true } : entry));
+        setUnreadCount((count) => Math.max(0, count - 1));
+      } catch { /* Không chặn việc xem thông báo khi cập nhật trạng thái thất bại. */ }
+    }
+    if (item.targetUrl) {
+      setNotificationOpen(false);
+      if (/^https?:\/\//i.test(item.targetUrl)) window.location.assign(item.targetUrl);
+      else navigate(item.targetUrl);
+    }
+  };
 
   const isStudent = Boolean(
     auth.user?.roles?.some((r: any) => {
@@ -506,7 +555,7 @@ export const Header: React.FC = () => {
                               className="flex flex-col bg-muted/20 border border-border/80 rounded-xl overflow-hidden cursor-pointer hover:shadow-md hover:border-primary/20 transition-all group"
                             >
                               <div className="aspect-video overflow-hidden bg-muted relative">
-                                <img src={c.image} alt={c.name} className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300" />
+                                {c.image ? <img src={c.image} alt={c.name} className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300" /> : <div className="flex h-full w-full items-center justify-center bg-primary/5"><BookOpen className="h-6 w-6 text-primary/40" /></div>}
                               </div>
                               <div className="p-2 flex-1 flex flex-col justify-between space-y-1">
                                 <span className="text-[10px] font-extrabold uppercase text-primary tracking-wider">{c.category}</span>
@@ -577,10 +626,60 @@ export const Header: React.FC = () => {
 
 
               {/* Notification Bell */}
-              <button className="p-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors relative" title="Thông báo">
+              <button
+                onClick={() => { setNotificationOpen((open) => !open); setDropdownOpen(false); }}
+                className="p-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors relative"
+                title="Thông báo"
+                aria-label={`Thông báo${unreadCount ? `, ${unreadCount} chưa đọc` : ""}`}
+              >
                 <Bell className="h-4.5 w-4.5" />
-                <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-destructive" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-destructive text-[9px] font-bold text-white flex items-center justify-center ring-2 ring-background">
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </span>
+                )}
               </button>
+
+              {notificationOpen && (
+                <div className="absolute right-10 top-12 z-50 w-[min(92vw,360px)] overflow-hidden rounded-2xl border border-border/70 bg-card shadow-2xl animate-in fade-in-50 slide-in-from-top-2">
+                  <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
+                    <div>
+                      <p className="text-sm font-bold text-foreground">Thông báo</p>
+                      <p className="text-[10px] text-muted-foreground">Theo tài khoản và vai trò hiện tại</p>
+                    </div>
+                    {unreadCount > 0 && (
+                      <button
+                        className="text-[11px] font-semibold text-primary hover:underline"
+                        onClick={async () => { await notificationApi.markAllRead(); setUnreadCount(0); setNotifications((items) => items.map((item) => ({ ...item, isRead: true }))); }}
+                      >
+                        Đánh dấu đã đọc
+                      </button>
+                    )}
+                  </div>
+                  <div className="max-h-105 overflow-y-auto p-2">
+                    {notificationLoading ? (
+                      <div className="flex items-center justify-center gap-2 py-10 text-xs text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Đang tải thông báo...</div>
+                    ) : notifications.length === 0 ? (
+                      <div className="py-10 text-center"><Bell className="mx-auto mb-2 h-7 w-7 text-muted-foreground/40" /><p className="text-xs font-medium text-muted-foreground">Chưa có thông báo</p></div>
+                    ) : notifications.map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => void openNotification(item)}
+                        className={`mb-1 w-full rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-muted ${item.isRead ? "" : "bg-primary/5"}`}
+                      >
+                        <div className="flex items-start gap-2.5">
+                          <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${item.isRead ? "bg-muted-foreground/25" : "bg-primary"}`} />
+                          <span className="min-w-0">
+                            <span className="block truncate text-xs font-semibold text-foreground">{item.title}</span>
+                            <span className="mt-0.5 line-clamp-2 block text-[11px] leading-4 text-muted-foreground">{item.content}</span>
+                            <span className="mt-1 block text-[10px] text-muted-foreground/70">{new Date(item.createdAt).toLocaleString("vi-VN")}</span>
+                          </span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Avatar trigger */}
               <button 

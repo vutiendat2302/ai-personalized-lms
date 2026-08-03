@@ -3,6 +3,11 @@ package com.ailms.controller;
 import com.ailms.entity.ApprovalRequestEntity;
 import com.ailms.response.ApiResponse;
 import com.ailms.service.IApprovalRequestService;
+import com.ailms.repository.UserRepository;
+import com.ailms.repository.ApprovalRequestRepository;
+import com.ailms.repository.CourseRepository;
+import com.ailms.entity.enums.ApprovalStatusEnum;
+import com.ailms.entity.enums.CourseStatusEnum;
 import com.ailms.security.CustomUserDetails;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +29,9 @@ import java.util.LinkedHashMap;
 public class ApprovalRequestController {
 
     private final IApprovalRequestService approvalRequestService;
+    private final UserRepository userRepository;
+    private final ApprovalRequestRepository approvalRequestRepository;
+    private final CourseRepository courseRepository;
 
     @PostMapping("/request")
     public ResponseEntity<ApiResponse<ApprovalRequestEntity>> createRequest(
@@ -60,6 +68,12 @@ public class ApprovalRequestController {
         return ResponseEntity.ok(ApiResponse.of("Request cancelled successfully", null));
     }
 
+    @DeleteMapping("/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteApproved(@PathVariable Long id) {
+        approvalRequestService.deleteApprovedRequest(id);
+        return ResponseEntity.ok(ApiResponse.of("Approved request history deleted successfully", null));
+    }
+
     @GetMapping("/pending")
     public ResponseEntity<ApiResponse<List<ApprovalRequestEntity>>> getPendingRequests() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -69,6 +83,38 @@ public class ApprovalRequestController {
             return ResponseEntity.ok(ApiResponse.of(pending));
         }
         return ResponseEntity.status(401).build();
+    }
+
+    @GetMapping("/mine")
+    public ResponseEntity<ApiResponse<Map<String, List<Map<String, Object>>>>> getMine() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated() && auth.getPrincipal() instanceof CustomUserDetails userDetails) {
+            Long userId = userDetails.getUser().getId();
+            boolean hrOrAdmin = auth.getAuthorities().stream()
+                    .map(authority -> authority.getAuthority().toUpperCase())
+                    .anyMatch(role -> role.equals("ROLE_HR") || role.equals("HR")
+                            || role.equals("ROLE_ADMIN") || role.equals("ADMIN"));
+            List<ApprovalRequestEntity> assigned = hrOrAdmin
+                    ? approvalRequestService.getAllRequests()
+                    : approvalRequestService.getAssignedToUser(userId);
+            Map<String, List<Map<String, Object>>> result = Map.of(
+                    "requested", approvalRequestService.getRequestedByUser(userId).stream().map(this::toUserResponse).toList(),
+                    "toApprove", assigned.stream().map(this::toUserResponse).toList()
+            );
+            return ResponseEntity.ok(ApiResponse.of("Approval requests retrieved successfully", result));
+        }
+        return ResponseEntity.status(401).build();
+    }
+
+    @GetMapping("/summary")
+    public ResponseEntity<ApiResponse<Map<String, Long>>> getSummary() {
+        Map<String, Long> summary = Map.of(
+                "pending", approvalRequestRepository.countByStatus(ApprovalStatusEnum.PENDING)
+                        + courseRepository.countByStatus(CourseStatusEnum.PENDING),
+                "approved", approvalRequestRepository.countByStatus(ApprovalStatusEnum.CONFIRMED),
+                "rejected", approvalRequestRepository.countByStatus(ApprovalStatusEnum.REJECTED)
+        );
+        return ResponseEntity.ok(ApiResponse.of("Approval summary retrieved successfully", summary));
     }
 
     @GetMapping("/user/{userId}")
@@ -92,6 +138,17 @@ public class ApprovalRequestController {
         item.put("createdBy", request.getCreatedBy());
         item.put("createdAt", request.getCreatedAt());
         item.put("decidedAt", request.getDecidedAt());
+        item.put("level", request.getLevel());
+        item.put("totalLevels", request.getTotalLevels());
+        if (request.getCreatedBy() != null) {
+            userRepository.findById(request.getCreatedBy()).ifPresent(user -> {
+                item.put("requesterName", user.getFullName());
+                item.put("requesterEmail", user.getEmail());
+            });
+        }
+        if (request.getApproverId() != null) {
+            userRepository.findById(request.getApproverId()).ifPresent(user -> item.put("approverName", user.getFullName()));
+        }
         return item;
     }
 

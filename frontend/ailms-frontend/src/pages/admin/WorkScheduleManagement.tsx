@@ -1,714 +1,349 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import httpClient from "@/api/httpClient";
+import type { ApiResponse } from "@/types/base";
+import { useToast } from "@/hooks/useToast";
 import { Button } from "@/components/ui/button";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell,
-} from "@/components/ui/table";
-import { cn } from "@/lib/utils";
-import {
-  Briefcase,
-  Users,
-  Clock,
-  Plus,
-  Search,
-  Edit,
-  Trash2,
-  ChevronLeft,
-  ChevronRight,
-  CheckCircle2,
-  Calendar,
-  X,
-  Repeat
+  AlertTriangle, CalendarDays, ChevronLeft, ChevronRight, Clock, Columns3,
+  ExternalLink, GraduationCap, List, Loader2, Pencil, Save, Search, Trash2, UserRoundCheck, Users, X,
 } from "lucide-react";
 
-export interface WorkShiftItem {
-  id: string;
-  employeeCode: string;
-  employeeName: string;
-  departmentName: string;
-  shiftType: "MORNING" | "AFTERNOON" | "FULLTIME_ADMIN" | "NIGHT";
-  shiftHours: string;
-  workDate: string;
-  location: string;
-  status: "APPROVED" | "PENDING_SWAP" | "COMPLETED";
+type ViewMode = "WEEK" | "DAY" | "MONTH" | "LIST";
+type TeachingRole = "TEACHER" | "TA";
+
+interface TeachingResource {
+  userId: string;
+  fullName?: string;
+  email?: string;
+  role: TeachingRole;
 }
 
-const getPageNumbers = (currentPage: number, total: number) => {
-  const pages: (number | string)[] = [];
-  if (total <= 7) {
-    for (let i = 0; i < total; i++) pages.push(i);
-  } else {
-    pages.push(0);
-    if (currentPage > 2) {
-      pages.push("...");
-    }
-    const start = Math.max(1, currentPage - 1);
-    const end = Math.min(total - 2, currentPage + 1);
-    for (let i = start; i <= end; i++) {
-      pages.push(i);
-    }
-    if (currentPage < total - 3) {
-      pages.push("...");
-    }
-    pages.push(total - 1);
-  }
-  return pages;
+interface TeachingScheduleEvent {
+  id: string;
+  classId: string;
+  className?: string;
+  courseName?: string;
+  title?: string;
+  startAt: string;
+  endAt: string;
+  status?: string;
+  deliveryMode?: string;
+  meetingUrl?: string;
+  resources: TeachingResource[];
+  students: {
+    userId: string;
+    fullName?: string;
+    email?: string;
+    phone?: string;
+    joinedAt?: string;
+  }[];
+}
+
+const pad = (value: number) => String(value).padStart(2, "0");
+const dateKey = (date: Date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+const startOfWeek = (date: Date) => {
+  const result = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  result.setDate(result.getDate() - ((result.getDay() + 6) % 7));
+  return result;
 };
+const addDays = (date: Date, days: number) => {
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return result;
+};
+const timeText = (value: string) => new Date(value).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+const dateText = (value: Date | string) => new Date(value).toLocaleDateString("vi-VN", { weekday: "short", day: "2-digit", month: "2-digit" });
+const toLocalDateTimeValue = (value: string) => {
+  const date = new Date(value);
+  return `${dateKey(date)}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
+const durationMinutes = (event: TeachingScheduleEvent) => Math.max(15,
+  Math.round((new Date(event.endAt).getTime() - new Date(event.startAt).getTime()) / 60000));
 
-export const WorkScheduleManagement: React.FC = () => {
-  const [shifts, setShifts] = useState<WorkShiftItem[]>([
-    {
-      id: "wsh-1",
-      employeeCode: "EMP-FULL-01",
-      employeeName: "Vũ Tiến Đạt",
-      departmentName: "Phòng Công Nghệ & AI",
-      shiftType: "FULLTIME_ADMIN",
-      shiftHours: "08:00 - 17:00 (Nghỉ trưa 12:00 - 13:00)",
-      workDate: "2026-07-27",
-      location: "Trụ sở chính (Tầng 8, AILMS Building)",
-      status: "APPROVED",
-    },
-    {
-      id: "wsh-2",
-      employeeCode: "EMP-FULL-02",
-      employeeName: "Nguyễn Thị Mai",
-      departmentName: "Phòng Hành Chính Nhân Sự",
-      shiftType: "FULLTIME_ADMIN",
-      shiftHours: "08:00 - 17:00 (Nghỉ trưa 12:00 - 13:00)",
-      workDate: "2026-07-27",
-      location: "Trụ sở chính (Tầng 8, AILMS Building)",
-      status: "APPROVED",
-    },
-    {
-      id: "wsh-3",
-      employeeCode: "EMP-PART-03",
-      employeeName: "Lê Minh Triết",
-      departmentName: "Phòng Đào Tạo & Giảng Viên",
-      shiftType: "AFTERNOON",
-      shiftHours: "13:30 - 17:30",
-      workDate: "2026-07-27",
-      location: "Trụ sở chính (Tầng 6)",
-      status: "PENDING_SWAP",
-    },
-    {
-      id: "wsh-4",
-      employeeCode: "EMP-FULL-04",
-      employeeName: "Trần Bảo Nam",
-      departmentName: "Phòng Marketing",
-      shiftType: "FULLTIME_ADMIN",
-      shiftHours: "08:00 - 17:00 (Nghỉ trưa 12:00 - 13:00)",
-      workDate: "2026-07-27",
-      location: "Trụ sở chính (Tầng 7)",
-      status: "APPROVED",
-    },
-  ]);
+interface ScheduleEditForm {
+  title: string;
+  scheduledAt: string;
+  durationMin: string;
+  meetingUrl: string;
+  status: string;
+}
 
-  // Search & Filter
-  const [searchTerm, setSearchTerm] = useState("");
-  const [shiftTypeFilter, setShiftTypeFilter] = useState("ALL");
+interface QuickStaffProfile {
+  id: string;
+  fullName?: string;
+  email?: string;
+  userEmail?: string;
+  phone?: string;
+  avatarUrl?: string;
+  employeeCode?: string;
+  departmentName?: string;
+  position?: string;
+  status?: string;
+  roles?: string[];
+}
 
-  // Pagination
-  const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(10);
-  const [jumpPageInput, setJumpPageInput] = useState<string>("1");
+interface WorkScheduleManagementProps {
+  title?: string;
+  description?: string;
+}
 
-  // Modals
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingShift, setEditingShift] = useState<WorkShiftItem | null>(null);
+export const WorkScheduleManagement: React.FC<WorkScheduleManagementProps> = ({
+  title = "Lịch giảng dạy Teacher & TA",
+  description = "Chỉ hiển thị buổi dạy thực tế; nhân viên hành chính full-time không thuộc phạm vi màn này.",
+}) => {
+  const { error, success } = useToast();
+  const [viewMode, setViewMode] = useState<ViewMode>("WEEK");
+  const [anchorDate, setAnchorDate] = useState(new Date());
+  const [events, setEvents] = useState<TeachingScheduleEvent[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState<"ALL" | TeachingRole>("ALL");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [conflictOnly, setConflictOnly] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<TeachingScheduleEvent | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [editForm, setEditForm] = useState<ScheduleEditForm | null>(null);
+  const [quickProfile, setQuickProfile] = useState<QuickStaffProfile | null>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(false);
 
-  // Form State
-  const [formEmployeeCode, setFormEmployeeCode] = useState("EMP-FULL-01");
-  const [formEmployeeName, setFormEmployeeName] = useState("");
-  const [formDepartmentName, setFormDepartmentName] = useState("Phòng Công Nghệ & AI");
-  const [formShiftType, setFormShiftType] = useState<WorkShiftItem["shiftType"]>("FULLTIME_ADMIN");
-  const [formShiftHours, setFormShiftHours] = useState("08:00 - 17:00");
-  const [formWorkDate, setFormWorkDate] = useState("2026-07-27");
-  const [formLocation, setFormLocation] = useState("Trụ sở chính (Tầng 8)");
-  const [formStatus, setFormStatus] = useState<WorkShiftItem["status"]>("APPROVED");
-
-  useEffect(() => {
-    setJumpPageInput(String(page + 1));
-  }, [page]);
-
-  const handleOpenModal = (sh?: WorkShiftItem) => {
-    if (sh) {
-      setEditingShift(sh);
-      setFormEmployeeCode(sh.employeeCode);
-      setFormEmployeeName(sh.employeeName);
-      setFormDepartmentName(sh.departmentName);
-      setFormShiftType(sh.shiftType);
-      setFormShiftHours(sh.shiftHours);
-      setFormWorkDate(sh.workDate);
-      setFormLocation(sh.location);
-      setFormStatus(sh.status);
-    } else {
-      setEditingShift(null);
-      setFormEmployeeCode(`EMP-FULL-0${Math.floor(1 + Math.random() * 9)}`);
-      setFormEmployeeName("");
-      setFormDepartmentName("Phòng Công Nghệ & AI");
-      setFormShiftType("FULLTIME_ADMIN");
-      setFormShiftHours("08:00 - 17:00");
-      setFormWorkDate("2026-07-27");
-      setFormLocation("Trụ sở chính (Tầng 8)");
-      setFormStatus("APPROVED");
+  const visibleRange = useMemo(() => {
+    if (viewMode === "MONTH") {
+      const from = new Date(anchorDate.getFullYear(), anchorDate.getMonth(), 1);
+      const to = new Date(anchorDate.getFullYear(), anchorDate.getMonth() + 1, 0);
+      return { from, to };
     }
-    setIsModalOpen(true);
+    if (viewMode === "DAY") return { from: anchorDate, to: anchorDate };
+    const from = startOfWeek(anchorDate);
+    return { from, to: addDays(from, 6) };
+  }, [anchorDate, viewMode]);
+
+  const loadSchedule = async () => {
+    setLoading(true); setLoadError("");
+    try {
+      const response = await httpClient.get<ApiResponse<TeachingScheduleEvent[]>>("/v1/admin/teaching-schedules", {
+        params: { from: dateKey(visibleRange.from), to: dateKey(visibleRange.to) },
+      });
+      setEvents((response.data.data || []).map(item => ({
+        ...item,
+        id: String(item.id), classId: String(item.classId),
+        resources: (item.resources || []).map(resource => ({ ...resource, userId: String(resource.userId) })),
+        students: (item.students || []).map(student => ({ ...student, userId: String(student.userId) })),
+      })));
+    } catch (cause: any) {
+      setEvents([]);
+      const message = cause?.response?.data?.message || "Không tải được lịch giảng dạy.";
+      setLoadError(message); error(message);
+    } finally { setLoading(false); }
   };
 
-  const [actionMessage, setActionMessage] = useState<{ text: string; isError?: boolean } | null>(null);
-  const [deleteShiftConfirm, setDeleteShiftConfirm] = useState<{ id: string; name: string } | null>(null);
+  useEffect(() => { void loadSchedule(); }, [visibleRange.from.getTime(), visibleRange.to.getTime()]);
 
-  const showBanner = (text: string, isError = false) => {
-    setActionMessage({ text, isError });
-    setTimeout(() => setActionMessage(null), 4000);
+  const resources = useMemo(() => {
+    const map = new Map<string, TeachingResource>();
+    events.flatMap(item => item.resources).forEach(item => map.set(item.userId, item));
+    return [...map.values()].sort((a, b) => (a.fullName || "").localeCompare(b.fullName || "", "vi"));
+  }, [events]);
+
+  const conflictingEventIds = useMemo(() => {
+    const ids = new Set<string>();
+    resources.forEach(resource => {
+      const assigned = events.filter(item => item.status === "ACTIVE"
+        && item.resources.some(person => person.userId === resource.userId));
+      assigned.forEach((first, index) => assigned.slice(index + 1).forEach(second => {
+        if (new Date(first.startAt) < new Date(second.endAt) && new Date(second.startAt) < new Date(first.endAt)) {
+          ids.add(first.id); ids.add(second.id);
+        }
+      }));
+    });
+    return ids;
+  }, [events, resources]);
+
+  const filteredEvents = useMemo(() => events.filter(item => {
+    const keyword = search.trim().toLocaleLowerCase("vi");
+    const matchesKeyword = !keyword || [item.className, item.courseName, item.title, ...item.resources.map(r => r.fullName)]
+      .some(value => value?.toLocaleLowerCase("vi").includes(keyword));
+    const matchesRole = roleFilter === "ALL" || item.resources.some(resource => resource.role === roleFilter);
+    const matchesStatus = statusFilter === "ALL" || item.status === statusFilter;
+    return matchesKeyword && matchesRole && matchesStatus && (!conflictOnly || conflictingEventIds.has(item.id));
+  }), [events, search, roleFilter, statusFilter, conflictOnly, conflictingEventIds]);
+
+  const selectedConflicts = useMemo(() => {
+    if (!selectedEvent) return [];
+    return events.filter(other => selectedEvent.status === "ACTIVE" && other.status === "ACTIVE" && other.id !== selectedEvent.id
+      && new Date(selectedEvent.startAt) < new Date(other.endAt)
+      && new Date(other.startAt) < new Date(selectedEvent.endAt)
+      && selectedEvent.resources.some(person => other.resources.some(candidate => candidate.userId === person.userId)));
+  }, [events, selectedEvent]);
+
+  const visibleResources = useMemo(() => resources.filter(resource => {
+    if (roleFilter !== "ALL" && resource.role !== roleFilter) return false;
+    return filteredEvents.some(item => item.resources.some(person => person.userId === resource.userId));
+  }), [resources, filteredEvents, roleFilter]);
+
+  const days = viewMode === "MONTH"
+    ? Array.from({ length: visibleRange.to.getDate() }, (_, index) => new Date(anchorDate.getFullYear(), anchorDate.getMonth(), index + 1))
+    : viewMode === "DAY" ? [anchorDate] : Array.from({ length: 7 }, (_, index) => addDays(visibleRange.from, index));
+
+  const moveDate = (direction: number) => {
+    const next = new Date(anchorDate);
+    if (viewMode === "MONTH") next.setMonth(next.getMonth() + direction);
+    else next.setDate(next.getDate() + direction * (viewMode === "DAY" ? 1 : 7));
+    setAnchorDate(next);
   };
 
-  const handleSaveShift = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formEmployeeName.trim()) {
-      showBanner("Vui lòng nhập tên nhân viên!", true);
-      return;
+  const openDetail = (event: TeachingScheduleEvent) => {
+    setSelectedEvent(event);
+    setEditing(false);
+    setEditForm(null);
+  };
+
+  const openStaffProfile = async (resource: TeachingResource) => {
+    setProfileOpen(true); setProfileLoading(true);
+    setQuickProfile({ id: resource.userId, fullName: resource.fullName, email: resource.email, roles: [resource.role] });
+    try {
+      const response = await httpClient.get<ApiResponse<QuickStaffProfile>>(`/v1/employees/${resource.userId}`);
+      const profile = response.data.data;
+      setQuickProfile({ ...profile, id: String(profile.id || resource.userId),
+        fullName: profile.fullName || resource.fullName, email: profile.email || profile.userEmail || resource.email,
+        roles: profile.roles?.length ? profile.roles : [resource.role] });
+    } catch (cause: any) {
+      error(cause?.response?.data?.message || "Không tải được hồ sơ Teacher/TA.");
+    } finally { setProfileLoading(false); }
+  };
+
+  const beginEdit = () => {
+    if (!selectedEvent) return;
+    setEditForm({ title: selectedEvent.title || "", scheduledAt: toLocalDateTimeValue(selectedEvent.startAt),
+      durationMin: String(durationMinutes(selectedEvent)), meetingUrl: selectedEvent.meetingUrl || "",
+      status: selectedEvent.status || "ACTIVE" });
+    setEditing(true);
+  };
+
+  const saveSchedule = async () => {
+    if (!selectedEvent || !editForm) return;
+    const duration = Number(editForm.durationMin);
+    if (!editForm.scheduledAt || !Number.isInteger(duration) || duration < 15 || duration > 720) {
+      error("Thời gian bắt đầu và thời lượng từ 15 đến 720 phút là bắt buộc."); return;
     }
-
-    if (editingShift) {
-      setShifts((prev) =>
-        prev.map((s) =>
-          s.id === editingShift.id
-            ? {
-                ...s,
-                employeeCode: formEmployeeCode,
-                employeeName: formEmployeeName,
-                departmentName: formDepartmentName,
-                shiftType: formShiftType,
-                shiftHours: formShiftHours,
-                workDate: formWorkDate,
-                location: formLocation,
-                status: formStatus,
-              }
-            : s
-        )
-      );
-      showBanner(`Cập nhật ca làm việc của ${formEmployeeName} thành công!`);
-    } else {
-      const newShift: WorkShiftItem = {
-        id: `wsh-${Date.now()}`,
-        employeeCode: formEmployeeCode,
-        employeeName: formEmployeeName,
-        departmentName: formDepartmentName,
-        shiftType: formShiftType,
-        shiftHours: formShiftHours,
-        workDate: formWorkDate,
-        location: formLocation,
-        status: formStatus,
-      };
-      setShifts((prev) => [newShift, ...prev]);
-      showBanner(`Phân ca làm việc mới cho ${formEmployeeName} thành công!`);
-    }
-    setIsModalOpen(false);
+    setSaving(true);
+    try {
+      const response = await httpClient.put<ApiResponse<TeachingScheduleEvent>>(`/v1/admin/teaching-schedules/${selectedEvent.id}`,
+        { ...editForm, durationMin: duration });
+      const updated = response.data.data;
+      const normalized: TeachingScheduleEvent = { ...updated, id: String(updated.id), classId: String(updated.classId),
+        resources: (updated.resources || []).map(resource => ({ ...resource, userId: String(resource.userId) })),
+        students: (updated.students || []).map(student => ({ ...student, userId: String(student.userId) })) };
+      setEvents(current => current.map(item => item.id === normalized.id ? normalized : item));
+      setSelectedEvent(normalized); setEditing(false); success("Đã cập nhật lịch dạy.");
+    } catch (cause: any) {
+      error(cause?.response?.data?.message || "Không cập nhật được lịch dạy.");
+    } finally { setSaving(false); }
   };
 
-  const handleDeleteShift = (id: string, name: string) => {
-    setDeleteShiftConfirm({ id, name });
+  const deleteSchedule = async () => {
+    if (!selectedEvent) return;
+    setDeleting(true);
+    try {
+      await httpClient.delete(`/v1/admin/teaching-schedules/${selectedEvent.id}`);
+      setEvents(current => current.map(item => item.id === selectedEvent.id ? { ...item, status: "INACTIVE" } : item));
+      setSelectedEvent(null); success("Đã hủy lịch dạy; lịch sử vẫn được giữ lại.");
+    } catch (cause: any) {
+      error(cause?.response?.data?.message || "Không hủy được lịch dạy.");
+    } finally { setDeleting(false); }
   };
 
-  const confirmDeleteShiftAction = () => {
-    if (!deleteShiftConfirm) return;
-    setShifts((prev) => prev.filter((s) => s.id !== deleteShiftConfirm.id));
-    showBanner("Đã xóa ca làm việc thành công.");
-    setDeleteShiftConfirm(null);
-  };
-
-  const filteredShifts = shifts.filter((s) => {
-    const matchesSearch =
-      s.employeeName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.employeeCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.departmentName.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesType = shiftTypeFilter === "ALL" ? true : s.shiftType === shiftTypeFilter;
-    return matchesSearch && matchesType;
-  });
-
-  const totalElements = filteredShifts.length;
-  const totalPages = Math.ceil(totalElements / pageSize);
-  const paginatedShifts = filteredShifts.slice(
-    page * pageSize,
-    (page + 1) * pageSize
+  const EventChip = ({ event }: { event: TeachingScheduleEvent }) => (
+    <button type="button" onClick={() => openDetail(event)}
+      className={`w-full rounded-lg border p-2 text-left transition hover:border-primary ${conflictingEventIds.has(event.id) ? "border-destructive/60 bg-destructive/5" : "border-primary/20 bg-primary/5"}`}>
+      <div className="flex items-center justify-between gap-1"><span className="font-mono text-[10px] font-bold text-primary">{timeText(event.startAt)}–{timeText(event.endAt)}</span>{conflictingEventIds.has(event.id) && <AlertTriangle className="h-3 w-3 text-destructive" />}</div>
+      <p className="mt-1 line-clamp-2 text-[11px] font-semibold">{event.className || "Lớp chưa đặt tên"}</p>
+      <p className="mt-0.5 truncate text-[9px] text-muted-foreground">{event.title || event.courseName}</p>
+    </button>
   );
 
-  return (
-    <div className="mx-auto max-w-7xl px-6 py-8 space-y-6 animate-in fade-in duration-300">
-      {/* Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-extrabold text-foreground tracking-tight flex items-center gap-2">
-            <Briefcase className="h-6 w-6 text-primary" />
-            <span>Quản Lý Lịch Làm Việc & Phân Ca (Work Schedule Management)</span>
-          </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Quản lý ca làm việc cho Nhân viên Full-time (Hành chính 08:00 - 17:00), Part-time & Duyệt đăng ký đổi ca.
-          </p>
-        </div>
-        <Button onClick={() => handleOpenModal()} className="rounded-xl font-bold text-xs bg-primary text-primary-foreground gap-1">
-          <Plus className="h-4 w-4" /> Phân Ca Làm Việc Mới
-        </Button>
+  return <div className="mx-auto max-w-[1600px] space-y-5 px-4 py-6">
+    <div className="flex flex-wrap items-start justify-between gap-4">
+      <div><h1 className="flex items-center gap-2 text-2xl font-bold"><CalendarDays className="h-6 w-6 text-primary" />{title}</h1><p className="mt-1 text-xs text-muted-foreground">{description}</p></div>
+      <div className="flex rounded-xl border bg-card p-1">
+        {([ ["WEEK", Columns3, "Tuần"], ["DAY", Clock, "Ngày"], ["MONTH", CalendarDays, "Tháng"], ["LIST", List, "Danh sách"] ] as const).map(([mode, Icon, label]) => <button key={mode} onClick={() => setViewMode(mode)} className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold ${viewMode === mode ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}><Icon className="h-3.5 w-3.5" />{label}</button>)}
       </div>
-
-      {/* KPI Overview Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="p-4 border border-border/80 bg-card rounded-2xl flex items-center gap-3">
-          <div className="p-3 rounded-xl bg-primary/10 text-primary">
-            <Briefcase className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-[11px] font-bold text-muted-foreground uppercase">Tổng Số Ca Trong Ngày</p>
-            <p className="text-xl font-extrabold text-foreground">{shifts.length} Ca</p>
-          </div>
-        </Card>
-
-        <Card className="p-4 border border-border/80 bg-card rounded-2xl flex items-center gap-3">
-          <div className="p-3 rounded-xl bg-emerald-500/10 text-emerald-600">
-            <CheckCircle2 className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-[11px] font-bold text-muted-foreground uppercase">Ca Đã Phê Duyệt</p>
-            <p className="text-xl font-extrabold text-foreground">
-              {shifts.filter((s) => s.status === "APPROVED").length} Ca
-            </p>
-          </div>
-        </Card>
-
-        <Card className="p-4 border border-amber-500/30 bg-amber-500/5 rounded-2xl flex items-center gap-3">
-          <div className="p-3 rounded-xl bg-amber-500/20 text-amber-600">
-            <Repeat className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-[11px] font-bold text-amber-600 uppercase">Yêu Cầu Đổi Ca Chờ Duyệt</p>
-            <p className="text-xl font-extrabold text-amber-600">
-              {shifts.filter((s) => s.status === "PENDING_SWAP").length} Yêu cầu
-            </p>
-          </div>
-        </Card>
-
-        <Card className="p-4 border border-border/80 bg-card rounded-2xl flex items-center gap-3">
-          <div className="p-3 rounded-xl bg-indigo-500/10 text-indigo-600">
-            <Users className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-[11px] font-bold text-muted-foreground uppercase">Nhân Viên Tham Gia</p>
-            <p className="text-xl font-extrabold text-foreground">
-              {new Set(shifts.map((s) => s.employeeCode)).size} Nhân viên
-            </p>
-          </div>
-        </Card>
-      </div>
-
-      {/* Main Table Card */}
-      <Card className="border border-border/80 rounded-2xl overflow-hidden bg-card shadow-sm">
-        {/* Toolbar & Filters */}
-        <div className="p-4 bg-muted/20 border-b border-border/30 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-12 gap-3 items-end">
-          <div className="flex flex-col gap-1 lg:col-span-8">
-            <Label className="text-[11px] font-bold text-muted-foreground">Từ khóa tìm kiếm</Label>
-            <div className="relative w-full">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
-              <Input
-                type="text"
-                placeholder="Tìm theo Mã NV, Tên nhân viên hoặc Phòng ban..."
-                value={searchTerm}
-                onChange={(e) => { setSearchTerm(e.target.value); setPage(0); }}
-                className="pl-8 h-9 text-xs border border-border bg-background rounded-lg focus-visible:ring-2 focus-visible:ring-primary/20"
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1 lg:col-span-4">
-            <Label className="text-[11px] font-bold text-muted-foreground">Loại ca làm việc</Label>
-            <Select value={shiftTypeFilter} onValueChange={(val) => { setShiftTypeFilter(val || "ALL"); setPage(0); }}>
-              <SelectTrigger className="h-9 text-xs bg-background border border-border rounded-lg font-semibold">
-                <SelectValue placeholder="Tất cả ca làm" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">Tất cả ca làm</SelectItem>
-                <SelectItem value="FULLTIME_ADMIN">Fulltime Hành Chính (08:00 - 17:00)</SelectItem>
-                <SelectItem value="MORNING">Ca Sáng (08:00 - 12:00)</SelectItem>
-                <SelectItem value="AFTERNOON">Ca Chiều (13:30 - 17:30)</SelectItem>
-                <SelectItem value="NIGHT">Ca Tối / Đêm</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        {/* Table Content */}
-        <CardContent className="p-0 relative">
-          <Table containerClassName="max-h-[calc(100vh-320px)] min-h-[350px] overflow-auto border-b border-border/20" className="-mt-3 pb-4">
-            <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur-md shadow-2xs border-b border-border/40">
-              <TableRow className="border-b border-border/30 bg-muted/20 hover:bg-muted/20">
-                <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pl-4">Mã NV & Nhân Viên</TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Phòng Ban</TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Loại Ca Làm Việc</TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Khung Giờ Ca Làm</TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Ngày Làm Việc</TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Trạng Thái</TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider text-right pr-4">Thao Tác</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody className="opacity-90">
-              {paginatedShifts.length > 0 ? (
-                paginatedShifts.map((sh) => (
-                  <TableRow key={sh.id} className="hover:bg-foreground/10 transition-colors border-border/30">
-                    <TableCell className="pl-4">
-                      <span className="px-2 py-0.5 rounded bg-primary/10 text-primary font-bold font-mono text-[10px] border border-primary/20">
-                        {sh.employeeCode}
-                      </span>
-                      <div className="font-semibold text-xs text-foreground mt-0.5">{sh.employeeName}</div>
-                    </TableCell>
-                    <TableCell className="font-semibold text-xs text-foreground">{sh.departmentName}</TableCell>
-                    <TableCell>
-                      <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600 font-extrabold text-[10px] border border-indigo-500/20">
-                        {sh.shiftType === "FULLTIME_ADMIN" ? "Fulltime Hành Chính" : sh.shiftType}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1 text-xs font-semibold text-foreground">
-                        <Clock className="h-3.5 w-3.5 text-primary" />
-                        <span>{sh.shiftHours}</span>
-                      </div>
-                      <div className="text-[10px] text-muted-foreground">{sh.location}</div>
-                    </TableCell>
-                    <TableCell className="font-semibold text-xs text-foreground">
-                      <div className="flex items-center gap-1">
-                        <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span>{sh.workDate}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {sh.status === "APPROVED" && (
-                        <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 text-[10px] font-bold border border-emerald-500/20">
-                          Đã phê duyệt
-                        </span>
-                      )}
-                      {sh.status === "PENDING_SWAP" && (
-                        <span className="px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 text-[10px] font-bold border border-amber-500/20">
-                          Chờ duyệt đổi ca
-                        </span>
-                      )}
-                      {sh.status === "COMPLETED" && (
-                        <span className="px-2.5 py-0.5 rounded-full bg-slate-500/10 text-slate-600 text-[10px] font-bold border border-slate-500/20">
-                          Hoàn tất
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right pr-4">
-                      <div className="flex items-center justify-end gap-1">
-                        <Button
-                          onClick={() => handleOpenModal(sh)}
-                          variant="ghost"
-                          size="icon"
-                          title="Chỉnh sửa"
-                          className="h-7 w-7 text-muted-foreground hover:bg-muted"
-                        >
-                          <Edit className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          onClick={() => handleDeleteShift(sh.id, sh.employeeName)}
-                          variant="ghost"
-                          size="icon"
-                          title="Xóa"
-                          className="h-7 w-7 text-rose-600 hover:bg-rose-500/10"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={7} className="py-12 text-center text-muted-foreground text-sm">
-                    Không tìm thấy ca làm việc nào phù hợp.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-
-        {/* Modern Table Footer */}
-        <div className="px-5 py-3 border-t border-border/40 bg-card/40 flex flex-col md:flex-row items-center justify-between gap-4 text-xs">
-          {/* Left: Total Results Summary */}
-          <div className="text-muted-foreground font-medium">
-            Showing <span className="font-semibold text-foreground">{totalElements === 0 ? 0 : page * pageSize + 1}</span> to{" "}
-            <span className="font-semibold text-foreground">{Math.min((page + 1) * pageSize, totalElements)}</span> of{" "}
-            <span className="font-semibold text-foreground">{totalElements}</span> results
-          </div>
-
-          <div className="flex flex-wrap items-center gap-5">
-            {/* Middle: Rows per page Select */}
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground font-medium">Rows per page:</span>
-              <Select
-                value={String(pageSize)}
-                onValueChange={(val) => {
-                  setPageSize(Number(val));
-                  setPage(0);
-                }}
-              >
-                <SelectTrigger className="h-8 w-16 text-xs bg-background border border-border/40 rounded-lg font-semibold">
-                  <SelectValue placeholder={String(pageSize)} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="10">10</SelectItem>
-                  <SelectItem value="20">20</SelectItem>
-                  <SelectItem value="50">50</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Go to Page Input */}
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                const pageNum = parseInt(jumpPageInput, 10);
-                if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
-                  setPage(pageNum - 1);
-                } else {
-                  setJumpPageInput(String(page + 1));
-                }
-              }}
-              className="flex items-center gap-1.5"
-            >
-              <span className="text-muted-foreground font-medium">Go to:</span>
-              <Input
-                type="number"
-                min={1}
-                max={totalPages || 1}
-                value={jumpPageInput}
-                onChange={(e) => setJumpPageInput(e.target.value)}
-                onBlur={() => {
-                  const pageNum = parseInt(jumpPageInput, 10);
-                  if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
-                    setPage(pageNum - 1);
-                  } else {
-                    setJumpPageInput(String(page + 1));
-                  }
-                }}
-                className="h-8 w-14 text-center text-xs font-semibold bg-background border border-border/40 rounded-lg px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                title="Nhập số trang và nhấn Enter"
-              />
-            </form>
-
-            {/* Right: Numbered Pagination Buttons */}
-            <div className="flex items-center gap-1">
-              <Button
-                disabled={page === 0}
-                onClick={() => setPage((prev) => prev - 1)}
-                variant="outline"
-                size="sm"
-                className="h-8 px-2.5 text-xs font-semibold gap-1 border-border/40 rounded-lg hover:bg-muted"
-              >
-                <ChevronLeft className="h-3.5 w-3.5" />
-                <span>Previous</span>
-              </Button>
-
-              {getPageNumbers(page, totalPages).map((p, pIdx) => {
-                if (p === "...") {
-                  return (
-                    <span key={`dots-${pIdx}`} className="px-2 text-muted-foreground font-bold pointer-events-none">
-                      ...
-                    </span>
-                  );
-                }
-                const pageNum = p as number;
-                const isCurrent = pageNum === page;
-                return (
-                  <Button
-                    key={pageNum}
-                    onClick={() => setPage(pageNum)}
-                    variant={isCurrent ? "default" : "outline"}
-                    size="sm"
-                    className={cn(
-                      "h-8 min-w-[32px] px-2 text-xs font-semibold rounded-lg transition-all",
-                      isCurrent
-                        ? "bg-primary text-primary-foreground shadow-xs"
-                        : "border-border/40 text-foreground hover:bg-muted/70"
-                    )}
-                  >
-                    {pageNum + 1}
-                  </Button>
-                );
-              })}
-
-              <Button
-                disabled={page >= totalPages - 1 || totalPages === 0}
-                onClick={() => setPage((prev) => prev + 1)}
-                variant="outline"
-                size="sm"
-                className="h-8 px-2.5 text-xs font-semibold gap-1 border-border/40 rounded-lg hover:bg-muted"
-              >
-                <span>Next</span>
-                <ChevronRight className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          </div>
-        </div>
-      </Card>
-
-      {/* SHIFT EDIT/CREATE MODAL */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-in fade-in duration-200">
-          <div className="bg-card w-full max-w-lg rounded-3xl border border-border shadow-2xl overflow-hidden flex flex-col">
-            <div className="p-5 border-b border-border flex items-center justify-between bg-muted/20">
-              <div className="flex items-center gap-2">
-                <Briefcase className="h-5 w-5 text-primary" />
-                <h3 className="font-extrabold text-foreground text-sm">
-                  {editingShift ? `Chỉnh Sửa Ca Làm: ${editingShift.employeeName}` : "Phân Ca Làm Việc Mới"}
-                </h3>
-              </div>
-              <button onClick={() => setIsModalOpen(false)} className="p-1 rounded-lg hover:bg-muted text-muted-foreground">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveShift} className="p-6 space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-[11px] font-bold text-muted-foreground">Mã Nhân Viên</Label>
-                  <Input
-                    type="text"
-                    value={formEmployeeCode}
-                    onChange={(e) => setFormEmployeeCode(e.target.value)}
-                    placeholder="E.g. EMP-FULL-01"
-                    className="h-9 text-xs font-mono"
-                    required
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <Label className="text-[11px] font-bold text-muted-foreground">Tên Nhân Viên</Label>
-                  <Input
-                    type="text"
-                    value={formEmployeeName}
-                    onChange={(e) => setFormEmployeeName(e.target.value)}
-                    placeholder="E.g. Vũ Tiến Đạt"
-                    className="h-9 text-xs"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-[11px] font-bold text-muted-foreground">Phòng Ban Phụ Trách</Label>
-                <Input
-                  type="text"
-                  value={formDepartmentName}
-                  onChange={(e) => setFormDepartmentName(e.target.value)}
-                  placeholder="E.g. Phòng Công Nghệ & AI"
-                  className="h-9 text-xs"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-[11px] font-bold text-muted-foreground">Loại Ca Làm</Label>
-                  <Select value={formShiftType} onValueChange={(val) => setFormShiftType((val as any) || "FULLTIME_ADMIN")}>
-                    <SelectTrigger className="h-9 text-xs font-semibold">
-                      <SelectValue placeholder="Chọn ca" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="FULLTIME_ADMIN">Fulltime Hành Chính</SelectItem>
-                      <SelectItem value="MORNING">Ca Sáng</SelectItem>
-                      <SelectItem value="AFTERNOON">Ca Chiều</SelectItem>
-                      <SelectItem value="NIGHT">Ca Đêm</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-1">
-                  <Label className="text-[11px] font-bold text-muted-foreground">Ngày Làm Việc</Label>
-                  <Input
-                    type="date"
-                    value={formWorkDate}
-                    onChange={(e) => setFormWorkDate(e.target.value)}
-                    className="h-9 text-xs"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-[11px] font-bold text-muted-foreground">Khung Giờ Ca Làm</Label>
-                <Input
-                  type="text"
-                  value={formShiftHours}
-                  onChange={(e) => setFormShiftHours(e.target.value)}
-                  placeholder="E.g. 08:00 - 17:00 (Nghỉ trưa 12:00 - 13:00)"
-                  className="h-9 text-xs"
-                  required
-                />
-              </div>
-
-              <div className="space-y-1">
-                <Label className="text-[11px] font-bold text-muted-foreground">Địa Điểm Làm Việc</Label>
-                <Input
-                  type="text"
-                  value={formLocation}
-                  onChange={(e) => setFormLocation(e.target.value)}
-                  placeholder="E.g. Trụ sở chính (Tầng 8)"
-                  className="h-9 text-xs"
-                />
-              </div>
-
-              <div className="pt-3 flex justify-end gap-2 border-t border-border">
-                <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)} className="h-9 text-xs font-semibold rounded-xl">
-                  Hủy
-                </Button>
-                <Button type="submit" className="h-9 text-xs font-bold bg-primary text-primary-foreground rounded-xl">
-                  Lưu Ca Làm Việc
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* TOAST BANNER NOTIFICATIONS */}
-      {actionMessage && (
-        <div
-          className={cn(
-            "fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300",
-            actionMessage.isError ? "bg-destructive" : "bg-emerald-600"
-          )}
-        >
-          <span className="text-sm font-semibold">{actionMessage.text}</span>
-        </div>
-      )}
-
-      {/* CONFIRM DELETE DIALOG */}
-      <ConfirmDialog
-        open={Boolean(deleteShiftConfirm)}
-        onOpenChange={(open) => { if (!open) setDeleteShiftConfirm(null); }}
-        title="Xác nhận xóa lịch làm việc"
-        description={`Bạn có chắc muốn xóa lịch làm việc của nhân viên "${deleteShiftConfirm?.name}"? Thao tác không thể hoàn tác.`}
-        confirmText="Xóa ca làm việc"
-        cancelText="Hủy bỏ"
-        onConfirm={confirmDeleteShiftAction}
-      />
-
     </div>
-  );
+
+    <div className="grid gap-3 sm:grid-cols-3">
+      <Card><CardContent className="flex items-center gap-3 p-4"><GraduationCap className="h-5 w-5 text-primary" /><div><p className="text-[10px] font-semibold uppercase text-muted-foreground">Buổi dạy</p><p className="text-xl font-bold">{filteredEvents.length}</p></div></CardContent></Card>
+      <Card><CardContent className="flex items-center gap-3 p-4"><Users className="h-5 w-5 text-indigo-500" /><div><p className="text-[10px] font-semibold uppercase text-muted-foreground">Teacher / TA</p><p className="text-xl font-bold">{visibleResources.length}</p></div></CardContent></Card>
+      <Card className={conflictingEventIds.size ? "border-destructive/40" : ""}><CardContent className="flex items-center gap-3 p-4"><AlertTriangle className={`h-5 w-5 ${conflictingEventIds.size ? "text-destructive" : "text-emerald-500"}`} /><div><p className="text-[10px] font-semibold uppercase text-muted-foreground">Xung đột lịch</p><p className="text-xl font-bold">{conflictingEventIds.size}</p></div></CardContent></Card>
+    </div>
+
+    <Card><CardContent className="space-y-3 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-2"><Button size="icon" variant="outline" onClick={() => moveDate(-1)}><ChevronLeft className="h-4 w-4" /></Button><Button variant="outline" onClick={() => setAnchorDate(new Date())}>Hôm nay</Button><Button size="icon" variant="outline" onClick={() => moveDate(1)}><ChevronRight className="h-4 w-4" /></Button><strong className="ml-2 text-sm">{viewMode === "MONTH" ? `Tháng ${anchorDate.getMonth() + 1}/${anchorDate.getFullYear()}` : `${dateKey(visibleRange.from)} — ${dateKey(visibleRange.to)}`}</strong></div><Button variant={conflictOnly ? "destructive" : "outline"} onClick={() => setConflictOnly(value => !value)}><AlertTriangle className="mr-1.5 h-4 w-4" />{conflictOnly ? "Đang lọc xung đột" : "Chỉ xem xung đột"}</Button></div>
+      <div className="grid gap-2 md:grid-cols-3"><div className="relative"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Lớp, khóa học, tên hoặc email Teacher/TA..." className="pl-9" /></div>
+        <Select value={roleFilter} onValueChange={value => setRoleFilter(value as typeof roleFilter)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="ALL">Tất cả Teacher & TA</SelectItem><SelectItem value="TEACHER">Teacher</SelectItem><SelectItem value="TA">Teaching Assistant</SelectItem></SelectContent></Select>
+        <Select value={statusFilter} onValueChange={setStatusFilter}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="ALL">Tất cả trạng thái</SelectItem><SelectItem value="ACTIVE">Đang hoạt động</SelectItem><SelectItem value="INACTIVE">Đã hủy</SelectItem></SelectContent></Select>
+      </div>
+    </CardContent></Card>
+
+    {loading ? <Card><div className="flex h-72 items-center justify-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" />Đang tải lịch giảng dạy...</div></Card> : loadError ? <Card><div className="flex h-72 flex-col items-center justify-center gap-3 text-sm text-destructive"><AlertTriangle className="h-7 w-7" /><span>{loadError}</span><Button variant="outline" onClick={() => void loadSchedule()}>Tải lại</Button></div></Card> : viewMode === "MONTH" ?
+      <Card className="overflow-hidden"><div className="grid grid-cols-7 border-b bg-muted/30">{["T2", "T3", "T4", "T5", "T6", "T7", "CN"].map(day => <div key={day} className="p-2 text-center text-xs font-bold">{day}</div>)}</div><div className="grid grid-cols-7">{Array.from({ length: (days[0].getDay() + 6) % 7 }).map((_, i) => <div key={`blank-${i}`} className="min-h-28 border-b border-r bg-muted/10" />)}{days.map(day => { const sessionCount = filteredEvents.filter(item => dateKey(new Date(item.startAt)) === dateKey(day)).length; return <button key={dateKey(day)} onClick={() => { setAnchorDate(day); setViewMode("DAY"); }} className="group min-h-28 border-b border-r p-3 text-left transition hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"><span className="text-xs font-bold text-muted-foreground group-hover:text-primary">{day.getDate()}</span><div className="flex h-16 items-center justify-center">{sessionCount > 0 ? <div className="text-center"><strong className="block text-2xl font-black text-primary">{sessionCount}</strong><span className="text-[10px] font-semibold text-muted-foreground">buổi dạy</span></div> : <span className="text-[10px] text-muted-foreground/60">Không có buổi dạy</span>}</div></button>; })}</div></Card>
+    : viewMode === "LIST" ? <Card><CardHeader><CardTitle className="text-sm">Danh sách buổi dạy</CardTitle></CardHeader><CardContent className="space-y-2">{filteredEvents.map(item => <button key={item.id} onClick={() => openDetail(item)} className="grid w-full gap-2 rounded-xl border p-3 text-left hover:border-primary md:grid-cols-[150px_1fr_220px_120px]"><span className="font-mono text-xs font-bold">{dateText(item.startAt)}<br />{timeText(item.startAt)}–{timeText(item.endAt)}</span><span><strong className="block text-sm">{item.className}</strong><small className="text-muted-foreground">{item.courseName}</small></span><span className="text-xs">{item.resources.map(r => `${r.fullName} (${r.role})`).join(", ") || "Chưa phân công"}</span><Badge variant="outline" className="w-fit">{item.status || "—"}</Badge></button>)}{!filteredEvents.length && <p className="py-16 text-center text-sm text-muted-foreground">Không có buổi dạy phù hợp.</p>}</CardContent></Card>
+    : <Card className="overflow-hidden"><div className="max-h-162.5 overflow-auto"><div className={`grid min-w-275 ${viewMode === "DAY" ? "grid-cols-[240px_1fr]" : "grid-cols-[240px_repeat(7,minmax(150px,1fr))]"}`}><div className="sticky left-0 top-0 z-30 border-b border-r bg-card p-3 text-xs font-bold">Teacher / TA</div>{days.map(day => <div key={dateKey(day)} className="sticky top-0 z-20 border-b border-r bg-card p-3 text-center"><strong className="block text-xs">{dateText(day)}</strong><span className="text-[10px] text-muted-foreground">{dateKey(day)}</span></div>)}{visibleResources.map(resource => <React.Fragment key={resource.userId}><button type="button" onClick={() => void openStaffProfile(resource)} title={`Xem hồ sơ ${resource.fullName || "Teacher/TA"}`} className="group sticky left-0 z-10 border-b border-r bg-card p-3 text-left transition hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"><div className="flex items-center gap-2"><div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">{(resource.fullName || "?").charAt(0)}</div><div className="min-w-0"><p className="truncate text-xs font-bold group-hover:text-primary">{resource.fullName || "Chưa có tên"}</p><Badge variant="outline" className="mt-1 text-[9px]">{resource.role}</Badge><p className="mt-1 text-[9px] font-semibold text-primary opacity-0 transition group-hover:opacity-100">Xem nhanh</p></div></div></button>{days.map(day => <div key={`${resource.userId}-${dateKey(day)}`} className="min-h-28 space-y-2 border-b border-r bg-muted/5 p-2">{filteredEvents.filter(item => dateKey(new Date(item.startAt)) === dateKey(day) && item.resources.some(person => person.userId === resource.userId)).map(item => <EventChip key={item.id} event={item} />)}</div>)}</React.Fragment>)}{!visibleResources.length && <div className="col-span-full py-20 text-center text-sm text-muted-foreground">Không có Teacher/TA hoặc buổi dạy phù hợp.</div>}</div></div></Card>}
+
+    <Dialog open={Boolean(selectedEvent)} onOpenChange={open => { if (!open) { setSelectedEvent(null); setEditing(false); } }}>
+      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+        <DialogHeader><DialogTitle>{selectedEvent?.title || selectedEvent?.className}</DialogTitle><DialogDescription>Thông tin buổi dạy, Teacher/TA và kiểm tra xung đột</DialogDescription></DialogHeader>
+        {selectedEvent && <div className="space-y-4 text-sm">
+          {editing && editForm ? <div className="grid gap-4 rounded-xl border bg-muted/20 p-4 sm:grid-cols-2">
+            <div className="space-y-1.5 sm:col-span-2"><Label>Tiêu đề buổi dạy</Label><Input value={editForm.title} maxLength={255} onChange={e => setEditForm({ ...editForm, title: e.target.value })} /></div>
+            <div className="space-y-1.5"><Label>Ngày giờ bắt đầu *</Label><Input type="datetime-local" value={editForm.scheduledAt} onChange={e => setEditForm({ ...editForm, scheduledAt: e.target.value })} /></div>
+            <div className="space-y-1.5"><Label>Thời lượng (phút) *</Label><Input type="number" min={15} max={720} step={15} value={editForm.durationMin} onChange={e => setEditForm({ ...editForm, durationMin: e.target.value })} /></div>
+            <div className="space-y-1.5 sm:col-span-2"><Label>Liên kết phòng học</Label><Input type="url" value={editForm.meetingUrl} placeholder="https://..." onChange={e => setEditForm({ ...editForm, meetingUrl: e.target.value })} /></div>
+            <div className="space-y-1.5"><Label>Trạng thái</Label><Select value={editForm.status} onValueChange={status => setEditForm({ ...editForm, status })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="ACTIVE">Đang hoạt động</SelectItem><SelectItem value="INACTIVE">Đã hủy</SelectItem></SelectContent></Select></div>
+          </div> : <div className="grid gap-3 rounded-xl bg-muted/30 p-4 sm:grid-cols-2">
+            <div><span className="text-xs text-muted-foreground">Thời gian</span><p className="font-semibold">{dateText(selectedEvent.startAt)}, {timeText(selectedEvent.startAt)}–{timeText(selectedEvent.endAt)}</p></div>
+            <div><span className="text-xs text-muted-foreground">Thời lượng</span><p className="font-semibold">{durationMinutes(selectedEvent)} phút</p></div>
+            <div><span className="text-xs text-muted-foreground">Lớp / khóa học</span><p className="font-semibold">{selectedEvent.className || "Chưa cập nhật"}</p><p className="text-xs text-muted-foreground">{selectedEvent.courseName || "Chưa cập nhật"}</p></div>
+            <div><span className="text-xs text-muted-foreground">Hình thức / trạng thái</span><p className="font-semibold">{selectedEvent.deliveryMode || "Chưa cập nhật"}</p><Badge variant="outline">{selectedEvent.status || "—"}</Badge></div>
+          </div>}
+          {selectedConflicts.length > 0 && <div className="rounded-xl border border-destructive/40 bg-destructive/5 p-4"><p className="flex items-center gap-2 font-bold text-destructive"><AlertTriangle className="h-4 w-4" />Xung đột với {selectedConflicts.length} buổi dạy</p>{selectedConflicts.map(item => <button key={item.id} type="button" onClick={() => openDetail(item)} className="mt-2 block w-full rounded-lg border bg-card p-2 text-left text-xs hover:border-destructive"><strong>{item.title || item.className}</strong> · {dateText(item.startAt)} {timeText(item.startAt)}–{timeText(item.endAt)}</button>)}</div>}
+          <div><p className="mb-2 text-xs font-bold uppercase text-muted-foreground">Người phụ trách</p><div className="grid gap-2 sm:grid-cols-2">{selectedEvent.resources.map(resource => <button key={resource.userId} type="button" onClick={() => void openStaffProfile(resource)} className="flex items-center justify-between rounded-lg border p-3 text-left transition hover:border-primary hover:bg-primary/5"><div><strong>{resource.fullName || "Chưa có tên"}</strong><p className="text-xs text-muted-foreground">{resource.email}</p><p className="mt-1 text-[10px] font-semibold text-primary">Xem thông tin nhanh</p></div><Badge>{resource.role}</Badge></button>)}</div></div>
+          <div className="rounded-xl border p-4"><div className="mb-3 flex items-center justify-between"><div><p className="text-xs font-bold uppercase text-muted-foreground">Học viên trong lớp</p><p className="mt-0.5 text-xs text-muted-foreground">Chọn học viên để mở hồ sơ quản lý đầy đủ</p></div><Badge variant="outline">{selectedEvent.students?.length || 0} học viên</Badge></div>
+            <div className="max-h-56 space-y-2 overflow-y-auto pr-1">{(selectedEvent.students || []).map(student => <Link key={student.userId} to="/admin/students" state={{ studentId: student.userId }} className="flex items-center justify-between rounded-lg border p-3 transition hover:border-primary hover:bg-primary/5"><div className="flex min-w-0 items-center gap-3"><div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">{(student.fullName || "?").charAt(0)}</div><div className="min-w-0"><strong className="block truncate">{student.fullName || "Chưa có tên"}</strong><p className="truncate text-xs text-muted-foreground">{student.email || student.phone || "Chưa có thông tin liên hệ"}</p></div></div><span className="shrink-0 text-xs font-semibold text-primary">Xem chi tiết</span></Link>)}{!selectedEvent.students?.length && <div className="py-6 text-center text-xs text-muted-foreground">Lớp chưa có học viên đang hoạt động.</div>}</div>
+          </div>
+          <div className="flex flex-wrap justify-between gap-2 border-t pt-4"><Button variant="destructive" onClick={() => setDeleteOpen(true)} disabled={selectedEvent.status === "INACTIVE"}><Trash2 className="mr-1.5 h-4 w-4" />Hủy lịch</Button><div className="flex flex-wrap gap-2">{editing ? <><Button variant="outline" onClick={() => setEditing(false)} disabled={saving}><X className="mr-1.5 h-4 w-4" />Bỏ chỉnh sửa</Button><Button onClick={() => void saveSchedule()} disabled={saving}>{saving ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Save className="mr-1.5 h-4 w-4" />}Lưu lịch</Button></> : <><Button variant="outline" onClick={beginEdit} disabled={selectedEvent.status === "INACTIVE"}><Pencil className="mr-1.5 h-4 w-4" />Chỉnh sửa</Button>{selectedEvent.meetingUrl && <a href={selectedEvent.meetingUrl} target="_blank" rel="noreferrer"><Button variant="outline"><ExternalLink className="mr-1.5 h-4 w-4" />Mở phòng học</Button></a>}<Link to={`/admin/classes/${selectedEvent.classId}`} className="inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground"><UserRoundCheck className="mr-1.5 h-4 w-4" />Chi tiết lớp</Link></>}</div></div>
+        </div>}
+      </DialogContent>
+    </Dialog>
+    <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
+      <DialogContent className="max-w-md">
+        <DialogHeader><DialogTitle>Thông tin Teacher/TA</DialogTitle><DialogDescription>Thông tin cơ bản của nhân sự phụ trách giảng dạy</DialogDescription></DialogHeader>
+        {profileLoading && !quickProfile ? <div className="flex h-36 items-center justify-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" />Đang tải hồ sơ...</div> : quickProfile && <div className="space-y-4">
+          <div className="flex items-center gap-4 rounded-xl bg-primary/5 p-4">
+            {quickProfile.avatarUrl ? <img src={quickProfile.avatarUrl} alt={quickProfile.fullName || "Teacher/TA"} className="h-14 w-14 rounded-full object-cover" /> : <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-xl font-bold text-primary">{(quickProfile.fullName || "?").charAt(0)}</div>}
+            <div className="min-w-0"><h3 className="truncate text-base font-bold">{quickProfile.fullName || "Chưa cập nhật tên"}</h3><p className="text-xs text-muted-foreground">{quickProfile.employeeCode || `ID: ${quickProfile.id}`}</p><div className="mt-2 flex flex-wrap gap-1">{(quickProfile.roles || []).map(role => <Badge key={role} variant="outline">{role}</Badge>)}</div></div>
+          </div>
+          <div className="grid gap-3 text-sm sm:grid-cols-2">
+            <div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Email</p><p className="mt-1 break-all font-semibold">{quickProfile.email || "Chưa cập nhật"}</p></div>
+            <div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Số điện thoại</p><p className="mt-1 font-semibold">{quickProfile.phone || "Chưa cập nhật"}</p></div>
+            <div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Phòng ban</p><p className="mt-1 font-semibold">{quickProfile.departmentName || "Chưa cập nhật"}</p></div>
+            <div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Vị trí</p><p className="mt-1 font-semibold">{quickProfile.position || "Teacher/TA"}</p></div>
+          </div>
+          {profileLoading && <p className="flex items-center justify-center gap-2 text-xs text-muted-foreground"><Loader2 className="h-3.5 w-3.5 animate-spin" />Đang đồng bộ thông tin mới nhất...</p>}
+        </div>}
+      </DialogContent>
+    </Dialog>
+    <ConfirmDialog open={deleteOpen} onOpenChange={setDeleteOpen} title="Hủy lịch dạy" description="Lịch sẽ ngừng hoạt động nhưng vẫn được giữ lại để tra cứu lịch sử. Bạn chắc chắn muốn tiếp tục?" confirmText="Hủy lịch dạy" loading={deleting} onConfirm={deleteSchedule} />
+  </div>;
 };

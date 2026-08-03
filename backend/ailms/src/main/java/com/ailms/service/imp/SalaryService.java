@@ -17,9 +17,12 @@ import com.ailms.request.UpdateSalaryRequest;
 import com.ailms.response.PageResponse;
 import com.ailms.response.SalaryResponse;
 import com.ailms.response.SalarySummaryResponse;
+import com.ailms.response.PayrollBatchResponse;
 import com.ailms.response.SalaryTrendPoint;
 import com.ailms.security.CustomUserDetails;
 import com.ailms.service.IApprovalRequestService;
+import com.ailms.service.IEmailService;
+import com.ailms.service.INotificationService;
 import com.ailms.service.ISalaryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,10 +38,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -53,6 +58,10 @@ public class SalaryService implements ISalaryService {
     private final SalaryMapper salaryMapper;
     private final EmployeeContractRepository employeeContractRepository;
     private final IApprovalRequestService approvalRequestService;
+    private final INotificationService notificationService;
+    private final IEmailService emailService;
+    private final UserRepository userRepository;
+    private final UserRoleRepository userRoleRepository;
     private final AttendanceRepository attendanceRepository;
     private final TeachingSessionPaymentRepository teachingSessionPaymentRepository;
 
@@ -108,7 +117,7 @@ public class SalaryService implements ISalaryService {
         }
 
         EmployeeContractEntity contract = activeContracts.stream()
-                .max(java.util.Comparator.comparing(EmployeeContractEntity::getStartDate))
+                .max(Comparator.comparing(EmployeeContractEntity::getStartDate))
                 .get();
 
         SalaryEntity entity = salaryMapper.toEntity(request);
@@ -149,8 +158,10 @@ public class SalaryService implements ISalaryService {
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
 
         String oldValue = SimpleJsonWriter.toJson(existing);
-        if (existing.getStatus() != SalaryStatusEnum.DRAFT) {
-            throw new BusinessException("Only draft salaries can be updated.");
+        if (existing.getStatus() != SalaryStatusEnum.DRAFT
+                && existing.getStatus() != SalaryStatusEnum.PENDING
+                && existing.getStatus() != SalaryStatusEnum.REJECTED) {
+            throw new BusinessException("Approved or paid salaries cannot be updated.");
         }
 
         if (request.getPeriod() != null && !request.getPeriod().equals(existing.getPeriod())) {
@@ -168,7 +179,7 @@ public class SalaryService implements ISalaryService {
         }
 
         EmployeeContractEntity contract = activeContracts.stream()
-                .max(java.util.Comparator.comparing(EmployeeContractEntity::getStartDate))
+                .max(Comparator.comparing(EmployeeContractEntity::getStartDate))
                 .get();
 
         BigDecimal meal = request.getMealAllowance() != null ? request.getMealAllowance() : getDetailAmount(existing, "MEAL_ALLOWANCE");
@@ -242,9 +253,13 @@ public class SalaryService implements ISalaryService {
         boolean isFullTime = employee.getEmploymentTypeEnum() == EmploymentTypeEnum.FULL_TIME;
         
         BigDecimal baseSalary = contract.getBaseSalary();
+        if (baseSalary == null || baseSalary.compareTo(BigDecimal.ZERO) < 0) {
+            throw new BusinessException("Hợp đồng của nhân viên " + employee.getEmployeeCode() + " chưa có mức lương hợp lệ");
+        }
         BigDecimal absentDeduct = BigDecimal.ZERO;
         BigDecimal halfDayDeduct = BigDecimal.ZERO;
         BigDecimal lateDeduct = BigDecimal.ZERO;
+        BigDecimal teachingCompensation = BigDecimal.ZERO;
 
         LocalDate start = period.atDay(1);
         LocalDate end = period.atEndOfMonth();
@@ -257,11 +272,19 @@ public class SalaryService implements ISalaryService {
             int halfDayCount = 0;
             int lateCount = 0;
             for (AttendanceEntity att : attendances) {
+                if (att.getStatus() == AttendanceStatusEnum.INVALID) {
+                    throw new BusinessException("Dữ liệu chấm công không hợp lệ của nhân viên "
+                            + employee.getEmployeeCode() + " ngày " + att.getWorkDate());
+                }
                 if (att.getStatus() == AttendanceStatusEnum.ABSENT) {
                     absentCount++;
-                } else if (att.getStatus() == AttendanceStatusEnum.HALF_DAY) {
+                } else if (att.getStatus() == AttendanceStatusEnum.HALF_DAY
+                        || att.getStatus() == AttendanceStatusEnum.HALF_DAY_LATE) {
                     halfDayCount++;
-                } else if (att.getStatus() == AttendanceStatusEnum.LATE) {
+                }
+                if (att.getStatus() == AttendanceStatusEnum.LATE
+                        || att.getStatus() == AttendanceStatusEnum.PRESENT_LATE
+                        || att.getStatus() == AttendanceStatusEnum.HALF_DAY_LATE) {
                     lateCount++;
                 }
             }
@@ -270,17 +293,14 @@ public class SalaryService implements ISalaryService {
             halfDayDeduct = dailyWage.multiply(new BigDecimal("0.5")).multiply(BigDecimal.valueOf(halfDayCount));
             // 5.3: Trừ phạt đi muộn 100k/lần
             lateDeduct = new BigDecimal("100000").multiply(BigDecimal.valueOf(lateCount));
+
+            // Giáo viên full-time nhận thêm thù lao các buổi dạy đã được xác nhận trong kỳ.
+            if (userRoleRepository.hasActiveTeacherRole(employee.getUserId(), LocalDateTime.now())) {
+                teachingCompensation = getConfirmedTeachingCompensation(employee.getUserId(), startDateTime, endDateTime);
+            }
         } else {
             // PART_TIME: baseSalary = SUM(teaching_session_payment.amount) for CONFIRMED payments
-            List<TeachingSessionPaymentEntity> payments = teachingSessionPaymentRepository.findByEmployeeAndStatusAndPeriod(
-                employee.getUserId(),
-                SessionPaymentStatusEnum.CONFIRMED,
-                startDateTime,
-                endDateTime
-            );
-            baseSalary = payments.stream()
-                .map(TeachingSessionPaymentEntity::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+            baseSalary = getConfirmedTeachingCompensation(employee.getUserId(), startDateTime, endDateTime);
             
             meal = BigDecimal.ZERO;
             phone = BigDecimal.ZERO;
@@ -303,8 +323,19 @@ public class SalaryService implements ISalaryService {
                 isFullTime,
                 absentDeduct,
                 halfDayDeduct,
-                lateDeduct
+                lateDeduct,
+                teachingCompensation
         );
+    }
+
+    private BigDecimal getConfirmedTeachingCompensation(Long employeeId,
+                                                         LocalDateTime start,
+                                                         LocalDateTime end) {
+        return teachingSessionPaymentRepository.findByEmployeeAndStatusAndPeriod(
+                        employeeId, SessionPaymentStatusEnum.CONFIRMED, start, end).stream()
+                .filter(payment -> payment.getAmount() != null)
+                .map(TeachingSessionPaymentEntity::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private void calculateAndPopulateSalary(SalaryEntity entity,
@@ -321,7 +352,8 @@ public class SalaryService implements ISalaryService {
                                             boolean isFullTime,
                                             BigDecimal absentDeduct,
                                             BigDecimal halfDayDeduct,
-                                            BigDecimal lateDeduct) {
+                                            BigDecimal lateDeduct,
+                                            BigDecimal teachingCompensation) {
         meal = meal != null ? meal : BigDecimal.ZERO;
         phone = phone != null ? phone : BigDecimal.ZERO;
         uniform = uniform != null ? uniform : BigDecimal.ZERO;
@@ -329,12 +361,13 @@ public class SalaryService implements ISalaryService {
         performance = performance != null ? performance : BigDecimal.ZERO;
         bonus = bonus != null ? bonus : BigDecimal.ZERO;
         otherDeduction = otherDeduction != null ? otherDeduction : BigDecimal.ZERO;
+        teachingCompensation = teachingCompensation != null ? teachingCompensation : BigDecimal.ZERO;
         int depCount = dependents != null ? dependents : 0;
 
         BigDecimal totalAttendanceDeduction = absentDeduct.add(halfDayDeduct).add(lateDeduct);
 
         // 1. Gross Salary
-        BigDecimal gross = baseSalary.add(meal).add(phone).add(uniform).add(responsibility).add(performance).add(bonus)
+        BigDecimal gross = baseSalary.add(teachingCompensation).add(meal).add(phone).add(uniform).add(responsibility).add(performance).add(bonus)
                 .subtract(totalAttendanceDeduction);
         if (gross.compareTo(BigDecimal.ZERO) < 0) {
             gross = BigDecimal.ZERO;
@@ -364,7 +397,7 @@ public class SalaryService implements ISalaryService {
         if (taxableMeal.compareTo(BigDecimal.ZERO) < 0) {
             taxableMeal = BigDecimal.ZERO;
         }
-        BigDecimal taxableIncome = baseSalary.add(responsibility).add(performance).add(bonus).add(taxableMeal)
+        BigDecimal taxableIncome = baseSalary.add(teachingCompensation).add(responsibility).add(performance).add(bonus).add(taxableMeal)
                 .subtract(totalAttendanceDeduction);
         if (taxableIncome.compareTo(BigDecimal.ZERO) < 0) {
             taxableIncome = BigDecimal.ZERO;
@@ -388,7 +421,7 @@ public class SalaryService implements ISalaryService {
         }
 
         entity.setBaseSalary(baseSalary);
-        entity.setBonus(meal.add(phone).add(uniform).add(responsibility).add(performance).add(bonus));
+        entity.setBonus(teachingCompensation.add(meal).add(phone).add(uniform).add(responsibility).add(performance).add(bonus));
         entity.setDeduction(totalIns.add(pit).add(otherDeduction).add(totalAttendanceDeduction));
         entity.setTotalSalary(net);
 
@@ -399,6 +432,10 @@ public class SalaryService implements ISalaryService {
         }
 
         addDetail(entity, "BASE_SALARY", baseSalary, isFullTime ? "Lương cơ bản" : "Lương dạy học (Part-time)");
+        if (teachingCompensation.compareTo(BigDecimal.ZERO) > 0) {
+            addDetail(entity, "TEACHING_COMPENSATION", teachingCompensation,
+                    "Thù lao các buổi dạy đã xác nhận trong kỳ");
+        }
         if (isFullTime) {
             addDetail(entity, "MEAL_ALLOWANCE", meal, "Phụ cấp ăn trưa");
             addDetail(entity, "PHONE_ALLOWANCE", phone, "Phụ cấp điện thoại");
@@ -474,7 +511,8 @@ public class SalaryService implements ISalaryService {
             throw new BusinessException("Bảng lương đã duyệt hoặc đã thanh toán. Không thể xóa.");
         }
 
-        salaryRepository.delete(existing);
+        existing.setDeletedAt(LocalDateTime.now());
+        salaryRepository.save(existing);
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "DELETE", "SALARY", id, oldValue, null));
     }
 
@@ -485,12 +523,14 @@ public class SalaryService implements ISalaryService {
         SalaryEntity existing = salaryRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
 
-        if (existing.getStatus() != SalaryStatusEnum.DRAFT) {
-            throw new BusinessException("Only DRAFT salaries can be approved.");
+        if (existing.getStatus() != SalaryStatusEnum.PENDING) {
+            throw new BusinessException("Only salaries waiting for approval can be approved.");
         }
 
         existing.setStatus(SalaryStatusEnum.CONFIRMED);
+        existing.setApprovedAt(LocalDateTime.now());
         SalaryEntity saved = salaryRepository.save(existing);
+        notifyPayrollApprovedCreators(List.of(saved), saved.getPeriod(), saved.getApprovedAt());
         return salaryMapper.toResponse(saved);
     }
 
@@ -501,8 +541,8 @@ public class SalaryService implements ISalaryService {
         SalaryEntity existing = salaryRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
 
-        if (existing.getStatus() != SalaryStatusEnum.CONFIRMED && existing.getStatus() != SalaryStatusEnum.DRAFT) {
-            throw new BusinessException("Salary record must be in DRAFT or CONFIRMED status to be paid.");
+        if (existing.getStatus() != SalaryStatusEnum.CONFIRMED || existing.getPaidAt() == null) {
+            throw new BusinessException("Transfer list must be exported before salary can be marked as paid.");
         }
 
         existing.setStatus(SalaryStatusEnum.PAID);
@@ -533,8 +573,18 @@ public class SalaryService implements ISalaryService {
     @Override
     public SalarySummaryResponse getSummary(YearMonth period) {
         YearMonth targetPeriod = period != null ? period : YearMonth.now();
+        return getSummaryRange(targetPeriod, targetPeriod);
+    }
 
-        List<SalaryEntity> slips = salaryRepository.findByPeriod(targetPeriod);
+    @Override
+    public SalarySummaryResponse getSummaryRange(YearMonth periodFrom, YearMonth periodTo) {
+        YearMonth from = periodFrom != null ? periodFrom : YearMonth.now();
+        YearMonth to = periodTo != null ? periodTo : from;
+        if (to.isBefore(from) || ChronoUnit.MONTHS.between(from, to) > 599) {
+            throw new BusinessException("Salary period range must be between 1 and 600 months");
+        }
+
+        List<SalaryEntity> slips = salaryRepository.findByPeriodBetweenAndDeletedAtIsNull(from, to);
 
         long totalSlips = slips.size();
         long draftCount = slips.stream().filter(s -> s.getStatus() == SalaryStatusEnum.DRAFT).count();
@@ -561,12 +611,12 @@ public class SalaryService implements ISalaryService {
                 ));
 
         List<SalaryTrendPoint> trend = new ArrayList<>();
-        YearMonth startMonth = targetPeriod.minusMonths(5);
-        List<SalaryEntity> historicalSlips = salaryRepository.findByPeriodBetween(startMonth, targetPeriod);
+        YearMonth startMonth = from.equals(to) ? to.minusMonths(5) : from;
+        List<SalaryEntity> historicalSlips = salaryRepository.findByPeriodBetweenAndDeletedAtIsNull(startMonth, to);
 
         DateTimeFormatter fmt = DateTimeFormatter.ofPattern("MM/yyyy");
         YearMonth curr = startMonth;
-        while (!curr.isAfter(targetPeriod)) {
+        while (!curr.isAfter(to)) {
             YearMonth m = curr;
             BigDecimal sum = historicalSlips.stream()
                     .filter(s -> m.equals(s.getPeriod()))
@@ -582,7 +632,7 @@ public class SalaryService implements ISalaryService {
         }
 
         return SalarySummaryResponse.builder()
-                .period(targetPeriod.toString())
+                .period(from.equals(to) ? from.toString() : from + " — " + to)
                 .totalSalaryPaid(totalSalaryPaid)
                 .totalSlips(totalSlips)
                 .draftCount(draftCount)
@@ -595,12 +645,292 @@ public class SalaryService implements ISalaryService {
                 .build();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<PayrollBatchResponse> getPayrollBatches(YearMonth periodFrom, YearMonth periodTo) {
+        YearMonth from = periodFrom != null ? periodFrom : YearMonth.now();
+        YearMonth to = periodTo != null ? periodTo : from;
+        if (to.isBefore(from)) throw new BusinessException("Invalid payroll period range");
+        return salaryRepository.findByPeriodBetweenAndDeletedAtIsNull(from, to).stream()
+                .collect(Collectors.groupingBy(SalaryEntity::getPeriod))
+                .entrySet().stream().sorted(Map.Entry.<YearMonth, List<SalaryEntity>>comparingByKey().reversed())
+                .map(entry -> {
+                    List<SalaryEntity> slips = entry.getValue();
+                    long draft = countStatus(slips, SalaryStatusEnum.DRAFT);
+                    long pending = countStatus(slips, SalaryStatusEnum.PENDING);
+                    long transferExported = slips.stream().filter(item -> item.getStatus() == SalaryStatusEnum.CONFIRMED
+                            && item.getPaidAt() != null).count();
+                    long confirmed = slips.stream().filter(item -> item.getStatus() == SalaryStatusEnum.CONFIRMED
+                            && item.getPaidAt() == null).count();
+                    long paid = countStatus(slips, SalaryStatusEnum.PAID);
+                    String status = pending > 0 ? "PENDING"
+                            : countStatus(slips, SalaryStatusEnum.REJECTED) > 0 ? "REJECTED"
+                            : draft > 0 ? "DRAFT"
+                            : confirmed > 0 ? "CONFIRMED"
+                            : transferExported > 0 ? "TRANSFER_EXPORTED" : "PAID";
+                    BigDecimal total = slips.stream().map(SalaryEntity::getTotalSalary)
+                            .filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
+                    return PayrollBatchResponse.builder().id(entry.getKey().toString()).period(entry.getKey())
+                            .status(status).slipCount(slips.size()).draftCount(draft).pendingCount(pending)
+                            .confirmedCount(confirmed).transferExportedCount(transferExported)
+                            .paidCount(paid).totalAmount(total)
+                            .rejectionReason(slips.stream().map(SalaryEntity::getDescription)
+                                    .filter(value -> value != null && value.startsWith("REJECTED: "))
+                                    .map(value -> value.substring("REJECTED: ".length())).findFirst().orElse(null))
+                            .submittedAt(resolveBatchSubmittedAt(slips))
+                            .approvedAt(resolveBatchApprovedAt(slips))
+                            .createdBy(slips.stream().map(SalaryEntity::getCreatedBy).filter(Objects::nonNull)
+                                    .distinct().map(String::valueOf).findFirst().orElse(null))
+                            .build();
+                }).toList();
+    }
+
+    private long countStatus(List<SalaryEntity> slips, SalaryStatusEnum status) {
+        return slips.stream().filter(item -> item.getStatus() == status).count();
+    }
+
+    /**
+     * Các bảng lương được tạo trước khi có submitted_at vẫn phải hiển thị được mốc thời gian.
+     * Với dữ liệu mới luôn ưu tiên timestamp nghiệp vụ; timestamp audit chỉ là fallback cho dữ liệu cũ.
+     */
+    private LocalDateTime resolveBatchSubmittedAt(List<SalaryEntity> slips) {
+        LocalDateTime submittedAt = slips.stream().map(SalaryEntity::getSubmittedAt)
+                .filter(Objects::nonNull).max(LocalDateTime::compareTo).orElse(null);
+        if (submittedAt != null) return submittedAt;
+        boolean wasSubmitted = slips.stream().anyMatch(item -> item.getStatus() != SalaryStatusEnum.DRAFT);
+        if (!wasSubmitted) return null;
+        return slips.stream().map(SalaryEntity::getUpdatedAt).filter(Objects::nonNull)
+                .max(LocalDateTime::compareTo)
+                .orElseGet(() -> slips.stream().map(SalaryEntity::getCreatedAt).filter(Objects::nonNull)
+                        .max(LocalDateTime::compareTo).orElse(null));
+    }
+
+    private LocalDateTime resolveBatchApprovedAt(List<SalaryEntity> slips) {
+        LocalDateTime approvedAt = slips.stream().map(SalaryEntity::getApprovedAt)
+                .filter(Objects::nonNull).max(LocalDateTime::compareTo).orElse(null);
+        if (approvedAt != null) return approvedAt;
+        boolean wasApproved = slips.stream().anyMatch(item -> item.getStatus() == SalaryStatusEnum.CONFIRMED
+                || item.getStatus() == SalaryStatusEnum.PAID);
+        if (!wasApproved) return null;
+        return slips.stream().map(SalaryEntity::getUpdatedAt).filter(Objects::nonNull)
+                .max(LocalDateTime::compareTo).orElse(null);
+    }
+
+    @Override
+    @Transactional
+    public int submitPayroll(YearMonth period) {
+        List<SalaryEntity> slips = salaryRepository.findByPeriodAndDeletedAtIsNull(period);
+        if (slips.isEmpty()) throw new BusinessException("Payroll does not exist");
+        if (slips.stream().anyMatch(item -> item.getStatus() != SalaryStatusEnum.DRAFT))
+            throw new BusinessException("Only a fully draft payroll can be submitted");
+        LocalDateTime submittedAt = LocalDateTime.now();
+        slips.forEach(item -> { item.setStatus(SalaryStatusEnum.PENDING); item.setSubmittedAt(submittedAt); });
+        salaryRepository.saveAll(slips);
+        return slips.size();
+    }
+
+    @Override
+    @Transactional
+    public int cancelPayrollSubmission(YearMonth period) {
+        List<SalaryEntity> slips = requirePayrollStatus(period, SalaryStatusEnum.PENDING,
+                "Chỉ có thể hủy bảng lương đang chờ duyệt");
+        assertPayrollOwnedByCurrentHr(slips);
+        slips.forEach(item -> {
+            item.setStatus(SalaryStatusEnum.DRAFT);
+            item.setSubmittedAt(null);
+            item.setApprovedAt(null);
+        });
+        salaryRepository.saveAll(slips);
+        return slips.size();
+    }
+
+    @Override
+    @Transactional
+    public int approvePayroll(YearMonth period) {
+        List<SalaryEntity> slips = requirePayrollStatus(period, SalaryStatusEnum.PENDING,
+                "Only a payroll waiting for approval can be approved");
+        LocalDateTime approvedAt = LocalDateTime.now();
+        slips.forEach(item -> { item.setStatus(SalaryStatusEnum.CONFIRMED); item.setApprovedAt(approvedAt); });
+        salaryRepository.saveAll(slips);
+        notifyPayrollApprovedCreators(slips, period, approvedAt);
+        return slips.size();
+    }
+
+    @Override
+    @Transactional
+    public int rejectPayroll(YearMonth period, String reason) {
+        if (reason == null || reason.isBlank() || reason.trim().length() < 5)
+            throw new BusinessException("Rejection reason must contain at least 5 characters");
+        List<SalaryEntity> slips = requirePayrollStatus(period, SalaryStatusEnum.PENDING,
+                "Only a payroll waiting for approval can be rejected");
+        String normalizedReason = reason.trim();
+        slips.forEach(item -> { item.setStatus(SalaryStatusEnum.REJECTED); item.setDescription("REJECTED: " + normalizedReason); });
+        salaryRepository.saveAll(slips);
+        notifyPayrollCreators(slips, period, normalizedReason);
+        return slips.size();
+    }
+
+    @Override
+    @Transactional
+    public int resubmitPayroll(YearMonth period) {
+        List<SalaryEntity> slips = requirePayrollStatus(period, SalaryStatusEnum.REJECTED,
+                "Only a rejected payroll can be resubmitted");
+        LocalDateTime resubmittedAt = LocalDateTime.now();
+        slips.forEach(item -> { item.setStatus(SalaryStatusEnum.PENDING); item.setSubmittedAt(resubmittedAt); item.setApprovedAt(null); });
+        salaryRepository.saveAll(slips);
+        return slips.size();
+    }
+
+    private void notifyPayrollCreators(List<SalaryEntity> slips, YearMonth period, String reason) {
+        List<Long> creatorIds = slips.stream().map(SalaryEntity::getCreatedBy).filter(Objects::nonNull).distinct().toList();
+        List<UserEntity> recipients = creatorIds.isEmpty() ? List.of() : userRepository.findAllById(creatorIds);
+        if (recipients.isEmpty()) {
+            log.warn("Payroll {} has no valid createdBy; notification was not sent", period);
+            return;
+        }
+        String title = "Bảng lương " + period + " bị từ chối";
+        String content = "Admin đã từ chối bảng lương kỳ " + period + ". Lý do: " + reason + ". Vui lòng chỉnh sửa và gửi lại.";
+        sendPayrollNotification(recipients, title, content, slips.getFirst().getId());
+    }
+
+    private void notifyPayrollApprovedCreators(List<SalaryEntity> slips, YearMonth period, LocalDateTime approvedAt) {
+        if (slips == null || slips.isEmpty()) return;
+
+        try {
+            List<Long> creatorIds = slips.stream().map(SalaryEntity::getCreatedBy)
+                    .filter(Objects::nonNull).distinct().toList();
+            if (creatorIds.isEmpty()) {
+                log.warn("Payroll {} has no createdBy; approval notification was not sent", period);
+                return;
+            }
+
+            Set<Long> adminIds = userRepository.findUsersByRoleName("ADMIN", UserStatusEnum.DELETED).stream()
+                    .map(UserEntity::getId).collect(Collectors.toSet());
+            List<UserEntity> recipients = userRepository.findAllById(creatorIds).stream()
+                    .filter(user -> !adminIds.contains(user.getId()))
+                    .toList();
+            if (recipients.isEmpty()) {
+                log.info("Payroll {} was created by an Admin; approval notification was skipped", period);
+                return;
+            }
+
+            BigDecimal totalAmount = slips.stream().map(SalaryEntity::getTotalSalary)
+                    .filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
+            String approvedTime = approvedAt != null
+                    ? approvedAt.format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")) : "";
+            String title = "Bảng lương " + period + " đã được duyệt";
+            String content = "Bảng lương kỳ " + period + " gồm " + slips.size()
+                    + " phiếu, tổng thực nhận " + totalAmount.toPlainString()
+                    + " VNĐ đã được duyệt lúc " + approvedTime + ".";
+
+            sendPayrollNotification(recipients, title, content, slips.getFirst().getId());
+        } catch (Exception exception) {
+            log.error("Failed to notify payroll {} creators after approval", period, exception);
+        }
+    }
+
+    @Override
+    @Transactional
+    public int deleteDraftPayroll(YearMonth period) {
+        List<SalaryEntity> slips = salaryRepository.findByPeriodAndDeletedAtIsNull(period);
+        if (slips.isEmpty()) throw new BusinessException("Draft payroll does not exist");
+        boolean isAdmin = getCurrentUserRoles().contains("ROLE_ADMIN");
+        if (!isAdmin) {
+            assertPayrollOwnedByCurrentHr(slips);
+            if (slips.stream().anyMatch(item -> item.getStatus() != SalaryStatusEnum.DRAFT
+                    && item.getStatus() != SalaryStatusEnum.PENDING))
+                throw new BusinessException("HR chỉ được xóa bảng lương nháp hoặc đang chờ duyệt do mình tạo");
+        } else if (slips.stream().anyMatch(item -> item.getStatus() != SalaryStatusEnum.DRAFT)) {
+            throw new BusinessException("Only a fully draft payroll can be deleted");
+        }
+        for (SalaryEntity slip : slips) {
+            if (approvalRequestService.isLocked("SALARY", slip.getId()))
+                throw new BusinessException("Payroll has an approval request and cannot be deleted");
+        }
+        slips.forEach(item -> item.setDeletedAt(LocalDateTime.now()));
+        salaryRepository.saveAll(slips);
+        return slips.size();
+    }
+
+    private void assertPayrollOwnedByCurrentHr(List<SalaryEntity> slips) {
+        Long currentUserId = getCurrentUserId();
+        if (slips.stream().anyMatch(item -> item.getCreatedBy() == null
+                || !currentUserId.equals(item.getCreatedBy()))) {
+            throw new BusinessException("HR chỉ được thao tác với bảng lương do mình tạo");
+        }
+    }
+
+    @Override
+    @Transactional
+    public int deleteApprovedPayroll(YearMonth period) {
+        List<SalaryEntity> slips = salaryRepository.findByPeriodAndDeletedAtIsNull(period);
+        if (slips.isEmpty()) throw new BusinessException("Payroll does not exist");
+        for (SalaryEntity slip : slips) {
+            applicationEventPublisher.publishEvent(new AuditLogEvent(this, "DELETE", "SALARY", slip.getId(),
+                    SimpleJsonWriter.toJson(slip), null));
+        }
+        slips.forEach(item -> item.setDeletedAt(LocalDateTime.now()));
+        salaryRepository.saveAll(slips);
+        return slips.size();
+    }
+
+    @Override
+    public List<SalaryResponse> getTrash() {
+        return salaryMapper.toResponseList(salaryRepository.findByDeletedAtIsNotNull());
+    }
+
+    @Override
+    @Transactional
+    public int restorePayroll(YearMonth period) {
+        List<SalaryEntity> slips = getTrashPayroll(period);
+        slips.forEach(item -> item.setDeletedAt(null));
+        salaryRepository.saveAll(slips);
+        return slips.size();
+    }
+
+    @Override
+    @Transactional
+    public int hardDeletePayroll(YearMonth period) {
+        List<SalaryEntity> slips = getTrashPayroll(period);
+        salaryRepository.deleteAll(slips);
+        return slips.size();
+    }
+
+    @Override
+    @Transactional
+    public byte[] exportTransferList(YearMonth period) {
+        List<SalaryEntity> slips = requirePayrollStatus(period, SalaryStatusEnum.CONFIRMED,
+                "Only a fully approved payroll can be exported for transfer");
+        byte[] csv = exportCsvRange(period, period, null, SalaryStatusEnum.CONFIRMED);
+        slips.forEach(item -> item.setPaidAt(LocalDateTime.now()));
+        salaryRepository.saveAll(slips);
+        return csv;
+    }
+
+    @Override
+    @Transactional
+    public int markPayrollPaid(YearMonth period) {
+        List<SalaryEntity> slips = salaryRepository.findByPeriodAndDeletedAtIsNull(period);
+        if (slips.isEmpty() || slips.stream().anyMatch(item -> item.getStatus() != SalaryStatusEnum.CONFIRMED
+                || item.getPaidAt() == null))
+            throw new BusinessException("Transfer list must be exported before the payroll can be paid");
+        slips.forEach(item -> { item.setStatus(SalaryStatusEnum.PAID); item.setPaidAt(LocalDateTime.now()); });
+        salaryRepository.saveAll(slips);
+        return slips.size();
+    }
+
     /** Tạo bảng lương cho các nhân viên đủ điều kiện trong kỳ yêu cầu. */
     @Transactional
     @Override
     public int generatePeriod(GenerateSalaryPeriodRequest request) {
         YearMonth period = request.getPeriod() != null ? request.getPeriod() : YearMonth.now();
         log.info("Generating batch salary slips for period: {}", period);
+
+        List<SalaryEntity> existingPeriod = salaryRepository.findByPeriodAndDeletedAtIsNull(period);
+        if (existingPeriod.stream().anyMatch(item -> item.getStatus() != SalaryStatusEnum.DRAFT
+                && item.getStatus() != SalaryStatusEnum.REJECTED)) {
+            throw new BusinessException("Bảng lương kỳ " + period + " đã gửi duyệt hoặc đã duyệt, không thể tính lại");
+        }
 
         List<EmployeeEntity> activeEmployees = employeeRepository.findAll().stream()
                 .filter(e -> e.getStatus() == null || e.getStatus() == EmployeeStatusEnum.ACTIVE)
@@ -609,14 +939,7 @@ public class SalaryService implements ISalaryService {
         int generatedCount = 0;
 
         for (EmployeeEntity emp : activeEmployees) {
-            Optional<SalaryEntity> existingOpt = salaryRepository.findByEmployee_UserIdAndPeriod(emp.getUserId(), period);
-
-            if (existingOpt.isPresent()) {
-                SalaryEntity existing = existingOpt.get();
-                if (!request.isOverwriteExisting() || existing.getStatus() == SalaryStatusEnum.PAID) {
-                    continue;
-                }
-            }
+            Optional<SalaryEntity> existingOpt = salaryRepository.findByEmployee_UserIdAndPeriodAndDeletedAtIsNull(emp.getUserId(), period);
 
             List<EmployeeContractEntity> activeContracts = employeeContractRepository.findByEmployee_UserId(emp.getUserId()).stream()
                     .filter(c -> c.getStatus() == BaseStatusEnum.ACTIVE)
@@ -629,7 +952,7 @@ public class SalaryService implements ISalaryService {
             }
 
             EmployeeContractEntity contract = activeContracts.stream()
-                    .max(java.util.Comparator.comparing(EmployeeContractEntity::getStartDate))
+                    .max(Comparator.comparing(EmployeeContractEntity::getStartDate))
                     .get();
 
             SalaryEntity entity = existingOpt.orElseGet(() -> SalaryEntity.builder()
@@ -657,6 +980,10 @@ public class SalaryService implements ISalaryService {
 
             salaryRepository.save(entity);
             generatedCount++;
+        }
+
+        if (generatedCount == 0) {
+            throw new BusinessException("Không có nhân viên đang hoạt động với hợp đồng hợp lệ để tạo bảng lương kỳ " + period);
         }
 
         return generatedCount;
@@ -698,7 +1025,17 @@ public class SalaryService implements ISalaryService {
     @Override
     public byte[] exportCsv(YearMonth period, Long departmentId, SalaryStatusEnum status) {
         YearMonth targetPeriod = period != null ? period : YearMonth.now();
-        List<SalaryEntity> list = salaryRepository.findByPeriod(targetPeriod);
+        return exportCsvRange(targetPeriod, targetPeriod, departmentId, status);
+    }
+
+    @Override
+    public byte[] exportCsvRange(YearMonth periodFrom, YearMonth periodTo, Long departmentId, SalaryStatusEnum status) {
+        YearMonth from = periodFrom != null ? periodFrom : YearMonth.now();
+        YearMonth to = periodTo != null ? periodTo : from;
+        if (to.isBefore(from) || ChronoUnit.MONTHS.between(from, to) > 599) {
+            throw new BusinessException("Salary period range must be between 1 and 600 months");
+        }
+        List<SalaryEntity> list = salaryRepository.findByPeriodBetweenAndDeletedAtIsNull(from, to);
 
         if (departmentId != null) {
             list = list.stream()
@@ -729,7 +1066,40 @@ public class SalaryService implements ISalaryService {
                .append(s.getPaidAt() != null ? s.getPaidAt() : "").append("\n");
         }
 
-        return csv.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        return csv.toString().getBytes(StandardCharsets.UTF_8);
+    }
+
+    private List<SalaryEntity> requirePayrollStatus(
+            YearMonth period, SalaryStatusEnum requiredStatus, String errorMessage) {
+        List<SalaryEntity> slips = salaryRepository.findByPeriodAndDeletedAtIsNull(period);
+        if (slips.isEmpty() || slips.stream().anyMatch(item -> item.getStatus() != requiredStatus)) {
+            throw new BusinessException(errorMessage);
+        }
+        return slips;
+    }
+
+    private List<SalaryEntity> getTrashPayroll(YearMonth period) {
+        List<SalaryEntity> slips = salaryRepository.findByDeletedAtIsNotNull().stream()
+                .filter(item -> period.equals(item.getPeriod()))
+                .toList();
+        if (slips.isEmpty()) {
+            throw new BusinessException("Payroll is not in trash");
+        }
+        return slips;
+    }
+
+    private void sendPayrollNotification(
+            List<UserEntity> recipients, String title, String content, Long referenceId) {
+        recipients.forEach(recipient -> notificationService.createSystemNotification(
+                recipient, NotificationTypeEnum.GENERAL, title, content, referenceId, "/admin/salaries"));
+        List<String> emails = recipients.stream()
+                .filter(user -> user.getEmail() != null && !user.getEmail().isBlank())
+                .map(UserEntity::getEmail)
+                .distinct()
+                .toList();
+        if (!emails.isEmpty()) {
+            emailService.sendBulkEmail(emails, title, content);
+        }
     }
 
     @Override
@@ -753,7 +1123,7 @@ public class SalaryService implements ISalaryService {
     private List<String> getCurrentUserRoles() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated()) {
-            return java.util.Collections.emptyList();
+            return Collections.emptyList();
         }
         return auth.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
@@ -784,12 +1154,9 @@ public class SalaryService implements ISalaryService {
         List<String> roles = getCurrentUserRoles();
 
         if (roles.contains("ROLE_ADMIN") || roles.contains("ROLE_HR")) {
-            return (root, query, cb) -> cb.conjunction();
+            return Specification.unrestricted();
         }
 
-        Specification<SalaryEntity> spec = (root, query, cb) -> cb.disjunction();
-        spec = spec.or((root, query, cb) -> cb.equal(root.get("employee").get("userId"), currentUserId));
-
-        return spec;
+        return (root, ignoredQuery, cb) -> cb.equal(root.get("employee").get("userId"), currentUserId);
     }
 }

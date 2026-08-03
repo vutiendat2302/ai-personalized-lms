@@ -21,6 +21,7 @@ interface CreatePackageDialogProps {
   onOpenChange: (open: boolean) => void;
   courseId: string;
   courseName: string;
+  courseStatus: string;
   onPackageCreated: (newPkg: CoursePackage) => void;
 }
 
@@ -29,6 +30,7 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
   onOpenChange,
   courseId,
   courseName,
+  courseStatus,
   onPackageCreated,
 }) => {
   const navigate = useNavigate();
@@ -54,20 +56,41 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!packageName) return;
+    setError("");
+    if (courseStatus !== "ACTIVE") {
+      setError("Không thể tạo gói bán: khóa học phải ở trạng thái Đang hoạt động (ACTIVE).");
+      return;
+    }
+    const normalizedName = packageName.trim();
+    if (normalizedName.length < 3 || normalizedName.length > 150) {
+      setError("Tên gói bán phải có từ 3 đến 150 ký tự.");
+      return;
+    }
+    if (!Number.isFinite(price) || price <= 0) {
+      setError("Giá bán phải lớn hơn 0.");
+      return;
+    }
+    if (!Number.isInteger(durationDays) || durationDays <= 0 || durationDays > 3650) {
+      setError("Thời hạn truy cập phải là số nguyên từ 1 đến 3.650 ngày.");
+      return;
+    }
 
     if (deliveryMode === "GROUP_CLASS" && readyClasses.length === 0) {
-      return; // Cannot submit if no READY class exists
+      setError("Cần có ít nhất một lớp ACTIVE phù hợp trước khi tạo gói lớp nhóm.");
+      return;
     }
 
     const selectedClass = readyClasses.find((c) => String(c.id) === selectedClassId);
 
-    if (deliveryMode === "GROUP_CLASS" && !selectedClassId) return;
+    if (deliveryMode === "GROUP_CLASS" && !selectedClassId) {
+      setError("Vui lòng chọn lớp học nhóm.");
+      return;
+    }
     setSubmitting(true); setError("");
     try {
       const saved = await adminCourseClassApi.createPackage({
         courseId, classId: deliveryMode === "GROUP_CLASS" ? selectedClassId : null,
-        name: packageName, deliveryMode, price, originalPrice: price, durationDays, status: "ACTIVE",
+        name: normalizedName, deliveryMode, price, originalPrice: price, durationDays, status: "ACTIVE",
       });
       onPackageCreated({ ...saved, id: String(saved.id), courseId: String(saved.courseId), active: saved.status === "ACTIVE",
         attachedClassId: saved.classId ? String(saved.classId) : undefined, attachedClassName: saved.className,
@@ -225,7 +248,7 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
 
               {readyClasses.length === 0 ? (
                 <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                   <div className="text-xs text-amber-800 space-y-1">
                     <p className="font-semibold">
                       Chưa có lớp học nào ở trạng thái READY cho khóa học này.
@@ -284,6 +307,7 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
               type="submit"
               disabled={
                 !packageName ||
+                courseStatus !== "ACTIVE" ||
                 submitting ||
                 (deliveryMode === "GROUP_CLASS" && (!selectedClassId || readyClasses.length === 0))
               }

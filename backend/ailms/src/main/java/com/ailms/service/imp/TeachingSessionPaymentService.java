@@ -41,6 +41,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
+import java.util.Comparator;
+import java.util.Collections;
 
 @Service
 @RequiredArgsConstructor
@@ -101,8 +103,8 @@ public class TeachingSessionPaymentService implements ITeachingSessionPaymentSer
         ClassOnlineEntity classOnline = classOnlineRepository.findById(classOnlineId)
                 .orElseThrow(() -> ResourceNotFoundException.of("ClassOnline", classOnlineId));
 
-        if (teachingSessionPaymentRepository.findByClassOnlineId(classOnlineId).isPresent()) {
-            throw new BusinessException("Payment already exists for this online class session.");
+        if (teachingSessionPaymentRepository.findByClassOnlineIdAndEmployee_UserId(classOnlineId, employeeId).isPresent()) {
+            throw new BusinessException("Payment already exists for this employee and online class session.");
         }
 
         // Resolve teaching rate active at the time of session
@@ -118,7 +120,7 @@ public class TeachingSessionPaymentService implements ITeachingSessionPaymentSer
         }
 
         TeachingRateEntity rate = activeRates.stream()
-                .max(java.util.Comparator.comparing(TeachingRateEntity::getEffectiveFrom))
+                .max(Comparator.comparing(TeachingRateEntity::getEffectiveFrom))
                 .get();
 
         int actualDurationMin = classOnline.getDurationMin() != null ? classOnline.getDurationMin() : durationMin;
@@ -219,7 +221,7 @@ public class TeachingSessionPaymentService implements ITeachingSessionPaymentSer
             }
 
             TeachingRateEntity rate = activeRates.stream()
-                    .max(java.util.Comparator.comparing(TeachingRateEntity::getEffectiveFrom))
+                    .max(Comparator.comparing(TeachingRateEntity::getEffectiveFrom))
                     .get();
 
             existing.setTeachingRate(rate);
@@ -284,7 +286,7 @@ public class TeachingSessionPaymentService implements ITeachingSessionPaymentSer
     private List<String> getCurrentUserRoles() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated()) {
-            return java.util.Collections.emptyList();
+            return Collections.emptyList();
         }
         return auth.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)

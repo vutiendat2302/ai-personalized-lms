@@ -1,4 +1,3 @@
-import React from "react";
 import type { SalaryStatusEnum, SalaryTypeEnum } from "@/types/salaryManagement";
 
 export const formatVND = (amount?: number): string => {
@@ -30,6 +29,13 @@ export const getStatusBadge = (status: SalaryStatusEnum) => {
         <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/30">
           <span className="h-1.5 w-1.5 rounded-full bg-blue-500"></span>
           Đã duyệt (CONFIRMED)
+        </span>
+      );
+    case "TRANSFER_EXPORTED":
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-violet-500/10 text-violet-700 dark:text-violet-400 border border-violet-500/30">
+          <span className="h-1.5 w-1.5 rounded-full bg-violet-500"></span>
+          Đã xuất chuyển khoản
         </span>
       );
     case "PAID":

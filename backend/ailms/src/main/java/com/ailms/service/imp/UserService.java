@@ -1,7 +1,6 @@
 package com.ailms.service.imp;
 import com.ailms.common.converter.SimpleJsonWriter;
 import com.ailms.common.util.CsvBuilder;
-import com.ailms.common.util.CsvExport;
 import com.ailms.event.AuditLogEvent;
 import com.ailms.service.IEmailService;
 import com.ailms.service.IUserService;
@@ -31,7 +30,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.core.Authentication;
@@ -39,6 +37,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import com.ailms.security.CustomUserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import jakarta.persistence.EntityManager;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Period;
@@ -65,7 +64,7 @@ public class UserService implements IUserService {
     private final GuardianRepository guardianRepository;
     private final GuardianMapper guardianMapper;
     private final EmployeeRepository employeeRepository;
-    private final jakarta.persistence.EntityManager entityManager;
+    private final EntityManager entityManager;
 
     @Value("${app.frontend.set-password:http://localhost:5173/set-password}")
     private String setPasswordUrl;
@@ -521,7 +520,7 @@ public class UserService implements IUserService {
             RoleEntity role = ur.getRoleEntity();
             for (RolePermissionEntity rp : role.getRolePermissions()) {
                 PermissionEntity perm = rp.getPermissionEntity();
-                EffectivePermissionResponse resp = permMap.computeIfAbsent(perm.getId(), id -> {
+                EffectivePermissionResponse resp = permMap.computeIfAbsent(perm.getId(), _ -> {
                     EffectivePermissionResponse r = new EffectivePermissionResponse();
                     r.setPermissionId(perm.getId());
                     r.setPermissionName(perm.getName());
@@ -720,7 +719,7 @@ public class UserService implements IUserService {
     @Override
     public Map<String, Long> countUsersByGender() {
         log.info("Thống kê số lượng user theo giới tính");
-        List<Object[]> results = userRepository.countUsersGroupByGender();
+        List<Object[]> results = userRepository.countUsersGroupByGender(UserStatusEnum.DELETED);
         Map<String, Long> countMap = new LinkedHashMap<>();
         countMap.put("NAM", 0L);
         countMap.put("NU", 0L);
@@ -814,7 +813,7 @@ public class UserService implements IUserService {
     public List<MonthlyUserCountResponse> getMonthlyNewUsers(Integer year) {
         int targetYear = (year != null && year > 0) ? year : LocalDate.now().getYear();
         log.info("Lấy số lượng người dùng mới theo tháng trong năm: {}", targetYear);
-        List<Object[]> queryResults = userRepository.countMonthlyNewUsersByYear(targetYear);
+        List<Object[]> queryResults = userRepository.countMonthlyNewUsersByYear(targetYear, UserStatusEnum.DELETED);
         Map<Integer, Long> monthCountMap = new HashMap<>();
         for (Object[] row : queryResults) {
             Integer month = (Integer) row[0];
@@ -1067,12 +1066,38 @@ public class UserService implements IUserService {
 
     }
 
+    private long countNativeDependencies(String table, String column, Long id) {
+        return ((Number) entityManager.createNativeQuery("SELECT COUNT(*) FROM " + table + " WHERE " + column + " = :id")
+                .setParameter("id", id).getSingleResult()).longValue();
+    }
+
     @Transactional
     @Override
     public void hardDeleteUser(Long id) {
         log.info("Permanently deleting user ID: {}", id);
         if (!userRepository.existsById(id)) {
             throw ResourceNotFoundException.of("User", id);
+        }
+
+        Map<String, Long> dependencies = new LinkedHashMap<>();
+        dependencies.put("guardian", countNativeDependencies("guardian", "student_user_id", id));
+        dependencies.put("student_interest", countNativeDependencies("student_interest", "student_user_id", id));
+        dependencies.put("study_goal", countNativeDependencies("study_goal", "user_id", id));
+        dependencies.put("enrollment", countNativeDependencies("enrollment", "user_id", id));
+        dependencies.put("learning_activity_log", countNativeDependencies("learning_activity_log", "user_id", id));
+        dependencies.put("course_progress", countNativeDependencies("course_progress", "user_id", id));
+        dependencies.put("lesson_progress", countNativeDependencies("lesson_progress", "user_id", id));
+        dependencies.put("quiz_attempt", countNativeDependencies("quiz_attempt", "user_id", id));
+        dependencies.put("submission", countNativeDependencies("submission", "user_id", id));
+        dependencies.put("certificate", countNativeDependencies("certificate", "user_id", id));
+        dependencies.put("class_member", countNativeDependencies("class_member", "user_id", id));
+        dependencies.put("course_member", countNativeDependencies("course_member", "user_id", id));
+        dependencies.put("order", countNativeDependencies("`order`", "user_id", id));
+        Map<String, Long> existingDependencies = dependencies.entrySet().stream()
+                .filter(entry -> entry.getValue() > 0).collect(Collectors.toMap(
+                        Map.Entry::getKey, Map.Entry::getValue, (left, right) -> left, LinkedHashMap::new));
+        if (!existingDependencies.isEmpty()) {
+            throw new BusinessException("Không thể xóa cứng người dùng vì còn dữ liệu phụ thuộc: " + existingDependencies);
         }
 
         // 1. Delete employee / teacher child records
@@ -1180,4 +1205,3 @@ public class UserService implements IUserService {
         }
     }
 }
-

@@ -1,4 +1,4 @@
-export type SalaryStatusEnum = "DRAFT" | "PENDING" | "CONFIRMED" | "PAID" | "REJECTED" | "CANCELLED";
+export type SalaryStatusEnum = "DRAFT" | "PENDING" | "CONFIRMED" | "TRANSFER_EXPORTED" | "PAID" | "REJECTED" | "CANCELLED";
 export type SalaryTypeEnum = "HOURLY" | "DAILY" | "MONTHLY";
 
 export interface SalaryDetailResponse {
@@ -44,6 +44,7 @@ export interface SalarySummaryResponse {
   draftCount: number;
   pendingCount: number;
   confirmedCount: number;
+  transferExportedCount: number;
   paidCount: number;
   statusDistribution: Record<string, number>;
   salaryByDepartment: Record<string, number>;
@@ -53,6 +54,8 @@ export interface SalarySummaryResponse {
 export interface SalarySearchFilters {
   keyword?: string;
   period?: string; // YYYY-MM
+  periodFrom?: string;
+  periodTo?: string;
   status?: SalaryStatusEnum | "ALL";
   departmentId?: string | "ALL";
   salaryTypeEnum?: SalaryTypeEnum | "ALL";
@@ -65,4 +68,20 @@ export interface SalarySearchFilters {
 export interface GenerateSalaryPeriodPayload {
   period: string; // YYYY-MM
   overwriteExisting?: boolean;
+}
+
+export interface PayrollBatchResponse {
+  id: string;
+  period: string;
+  status: SalaryStatusEnum;
+  slipCount: number;
+  draftCount: number;
+  pendingCount: number;
+  confirmedCount: number;
+  paidCount: number;
+  totalAmount: number;
+  rejectionReason?: string;
+  submittedAt?: string;
+  approvedAt?: string;
+  createdBy?: string;
 }

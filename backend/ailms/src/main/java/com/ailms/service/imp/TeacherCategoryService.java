@@ -7,6 +7,7 @@ import com.ailms.entity.TeacherCategoryEntity;
 import com.ailms.entity.enums.BaseStatusEnum;
 import com.ailms.entity.enums.ClassMemberRole;
 import com.ailms.entity.enums.ClassMemberStatusEnum;
+import com.ailms.entity.enums.NotificationTypeEnum;
 import com.ailms.event.AuditLogEvent;
 import com.ailms.exception.BusinessException;
 import com.ailms.exception.DuplicateResourceException;
@@ -20,7 +21,7 @@ import com.ailms.repository.TeacherCategoryRepository;
 import com.ailms.request.CreateTeacherCategoryRequest;
 import com.ailms.request.UpdateTeacherCategoryRequest;
 import com.ailms.response.TeacherCategoryResponse;
-import com.ailms.service.IEmailService;
+import com.ailms.service.INotificationService;
 import com.ailms.service.ITeacherCategoryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,7 +44,7 @@ public class TeacherCategoryService implements ITeacherCategoryService {
     private final CourseRepository courseRepository;
     private final ClassMemberRepository classMemberRepository;
     private final TeacherCategoryMapper teacherCategoryMapper;
-    private final IEmailService emailService;
+    private final INotificationService notificationService;
     private final ApplicationEventPublisher applicationEventPublisher;
 
     private static final String RESOURCE_NAME = "TeacherCategory";
@@ -98,15 +99,17 @@ public class TeacherCategoryService implements ITeacherCategoryService {
 
         TeacherCategoryEntity saved = teacherCategoryRepository.save(tc);
 
-        // Async email notice to teacher/TA
-        if (employee.getUserEntity() != null && employee.getUserEntity().getEmail() != null) {
-            final String email = employee.getUserEntity().getEmail();
-            final String catName = category.getName();
-            try {
-                emailService.sendInviteEmail(email, "You have been assigned to teaching category: " + catName);
-            } catch (Exception e) {
-                log.error("Failed to send assignment notification email to {}", email, e);
-            }
+        // Thông báo nội bộ cho Teacher/TA; nghiệp vụ này không gửi email.
+        if (employee.getUserEntity() != null) {
+            notificationService.createSystemNotification(
+                    employee.getUserEntity(),
+                    NotificationTypeEnum.GENERAL,
+                    "Bạn được phân công chuyên môn mới",
+                    "Bạn đã được phân công phụ trách danh mục “" + category.getName()
+                            + "”. Bạn có thể xem và quản lý các khóa học thuộc chuyên môn này.",
+                    category.getId(),
+                    "/teacher/courses"
+            );
         }
 
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "ASSIGN_TEACHER_CATEGORY", "TEACHER_CATEGORY", saved.getId(), null, saved));

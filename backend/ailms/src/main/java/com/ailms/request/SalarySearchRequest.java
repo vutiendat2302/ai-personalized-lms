@@ -22,6 +22,12 @@ public class SalarySearchRequest extends BaseSearchRequest {
     @DateTimeFormat(pattern = "yyyy-MM")
     private YearMonth period;
 
+    @DateTimeFormat(pattern = "yyyy-MM")
+    private YearMonth periodFrom;
+
+    @DateTimeFormat(pattern = "yyyy-MM")
+    private YearMonth periodTo;
+
     private SalaryStatusEnum status;
 
     private Long departmentId;

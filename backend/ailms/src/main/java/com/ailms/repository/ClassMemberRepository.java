@@ -20,4 +20,6 @@ public interface ClassMemberRepository extends BaseRepository<ClassMemberEntity,
     long countById_ClassIdAndStatus(Long classId, ClassMemberStatusEnum status);
     List<ClassMemberEntity> findById_ClassIdAndStatusOrderByWaitlistedAtAsc(Long classId, ClassMemberStatusEnum status);
     Optional<ClassMemberEntity> findById_ClassIdAndId_UserId(Long classId, Long userId);
+    @EntityGraph(attributePaths = {"classEntity", "userEntity"})
+    List<ClassMemberEntity> findById_ClassIdInAndStatus(List<Long> classIds, ClassMemberStatusEnum status);
 }

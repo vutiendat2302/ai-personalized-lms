@@ -28,7 +28,7 @@ public interface UserRoleRepository extends BaseRepository<UserRoleEntity, Long>
 
     @Query("""
         SELECT DISTINCT ur.userEntity.email FROM UserRoleEntity ur
-        WHERE ur.roleEntity.code IN ('ADMIN', 'HR', 'ROLE_ADMIN', 'ROLE_HR') 
+        WHERE ur.roleEntity.code IN ('ADMIN', 'HR', 'ROLE_ADMIN', 'ROLE_HR')
            OR ur.roleEntity.name IN ('ADMIN', 'HR', 'ROLE_ADMIN', 'ROLE_HR')
     """)
     List<String> findAdminAndHrEmails();
@@ -42,6 +42,16 @@ public interface UserRoleRepository extends BaseRepository<UserRoleEntity, Long>
     List<UserEntity> findHrUsers();
 
     boolean existsByRoleEntity_Id(Long roleId);
+
+    @Query("""
+        SELECT CASE WHEN COUNT(ur) > 0 THEN true ELSE false END
+        FROM UserRoleEntity ur
+        WHERE ur.userEntity.id = :userId
+          AND UPPER(ur.roleEntity.code) IN ('TEACHER', 'ROLE_TEACHER')
+          AND (ur.assignedAt IS NULL OR ur.assignedAt <= :now)
+          AND (ur.expiredAt IS NULL OR ur.expiredAt > :now)
+        """)
+    boolean hasActiveTeacherRole(@Param("userId") Long userId, @Param("now") LocalDateTime now);
 
     List<UserRoleEntity> findByRoleEntity_Id(Long roleId);
 
@@ -67,4 +77,3 @@ public interface UserRoleRepository extends BaseRepository<UserRoleEntity, Long>
     """)
     List<Object[]> countUsersGroupByRole();
 }
-

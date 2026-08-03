@@ -122,6 +122,23 @@ def _ensure_online_sessions(cursor, class_row):
 def seed(cursor):
     print("→ Seeding Class Online / Teaching Rate / Teaching Payment...")
 
+    # Một buổi có thể trả riêng cho giáo viên chính và từng trợ giảng.
+    cursor.execute("""
+        SELECT index_name FROM information_schema.statistics
+        WHERE table_schema=DATABASE() AND table_name='teaching_session_payment'
+          AND index_name='uk_session_payment_employee' LIMIT 1
+    """)
+    if not cursor.fetchone():
+        cursor.execute("""ALTER TABLE teaching_session_payment
+            ADD UNIQUE INDEX uk_session_payment_employee (class_online_id, employee_id)""")
+    cursor.execute("""
+        SELECT index_name FROM information_schema.statistics
+        WHERE table_schema=DATABASE() AND table_name='teaching_session_payment'
+          AND index_name='uk_class_online_id' LIMIT 1
+    """)
+    if cursor.fetchone():
+        cursor.execute("ALTER TABLE teaching_session_payment DROP INDEX uk_class_online_id")
+
     cursor.execute(
         """
         SELECT c.id AS class_id, c.name AS class_name, cm.user_id AS teacher_id
@@ -134,27 +151,26 @@ def seed(cursor):
         """
     )
     rows = cursor.fetchall()
-    classes = {}
-    for row in rows:
-        classes.setdefault(row["class_id"], row)
-
-    if not classes:
+    if not rows:
         print("   [warning] Không có lớp ACTIVE kèm giảng viên. Hãy chạy course_class.seed() trước.")
         return
 
     stats = {"online_sessions": 0, "rates": 0, "payments": 0}
     now = datetime.now()
 
-    for class_index, class_row in enumerate(classes.values()):
-        stats["online_sessions"] += _ensure_online_sessions(cursor, class_row)
+    initialized_classes = set()
+    for class_index, class_row in enumerate(rows):
+        if class_row["class_id"] not in initialized_classes:
+            stats["online_sessions"] += _ensure_online_sessions(cursor, class_row)
+            initialized_classes.add(class_row["class_id"])
         cursor.execute(
             """
             SELECT id, scheduled_at, duration_min, teacher_id, title
             FROM class_online
-            WHERE class_id=%s AND teacher_id=%s
+            WHERE class_id=%s
             ORDER BY scheduled_at
             """,
-            (class_row["class_id"], class_row["teacher_id"]),
+            (class_row["class_id"],),
         )
         sessions = cursor.fetchall()
         if not sessions:
@@ -182,8 +198,8 @@ def seed(cursor):
         for session_index, session in enumerate(past_sessions):
             if _exists(
                 cursor,
-                "SELECT 1 FROM teaching_session_payment WHERE class_online_id=%s LIMIT 1",
-                (session["id"],),
+                "SELECT 1 FROM teaching_session_payment WHERE class_online_id=%s AND employee_id=%s LIMIT 1",
+                (session["id"], class_row["teacher_id"]),
             ):
                 continue
 

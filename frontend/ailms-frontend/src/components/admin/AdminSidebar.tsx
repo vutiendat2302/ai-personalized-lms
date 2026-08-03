@@ -26,6 +26,10 @@ import {
   FileText,
   Files,
   MessageSquareWarning,
+  Receipt,
+  Package,
+  ShoppingCart,
+  TrendingUp,
 } from "lucide-react";
 
 interface SidebarGroup {
@@ -79,7 +83,7 @@ export const AdminSidebar: React.FC = () => {
         { label: "Điểm danh", path: "/admin/fulltime-attendance", icon: Clock },
         { label: "Quản lý bảng lương", path: "/admin/salaries", icon: DollarSign },
         { label: "Quản lý lịch làm việc", path: "/admin/work-schedule", icon: Briefcase },
-        { label: "Phê duyệt", path: "/admin/approval-center", icon: CheckSquare },
+        { label: "Hàng đợi yêu cầu xử lý", path: "/admin/approval-center", icon: CheckSquare },
         { label: "Phân công giảng viên", path: "/admin/category-teachers", icon: GraduationCap },
       ],
     },
@@ -87,18 +91,27 @@ export const AdminSidebar: React.FC = () => {
       title: "ĐÀO TẠO & KINH DOANH",
       items: [
         { label: "Quản lý khóa học", path: "/admin/courses", icon: BookOpen },
-        { label: "Duyệt khóa học", path: "/admin/courses/approvals", icon: CheckSquare },
         { label: "Kiểm duyệt đánh giá", path: "/admin/reviews/moderation", icon: MessageSquareWarning },
         { label: "Quản lý lớp học", path: "/admin/classrooms", icon: Video },
-        { label: "Yêu cầu chờ xử lý", path: "/admin/pending-requests", icon: CheckSquare, badge: "6" },
         { label: "Thời khóa biểu online", path: "/admin/online-schedule", icon: Calendar },
         { label: "Quản lý Quizz", path: "/admin/quizzes", icon: HelpCircle },
         { label: "Quản lý Assignment", path: "/admin/assignments", icon: FileCode2 },
-        { label: "Quản lý đơn hàng", path: "/admin/orders", icon: ShoppingBag },
-        { label: "Quản lý doanh thu", path: "/admin/revenue", icon: DollarSign },
-        { label: "Quản lý mã giảm giá", path: "/admin/coupons", icon: Tag },
       ],
     },
+
+    {
+      title: "QUẢN LÝ BÁN HÀNG",
+      items: [
+        { label: "Sales Dashboard", path: "/sales/dashboard", icon: TrendingUp },
+        { label: "Đơn hàng", path: "/sales/orders", icon: ShoppingBag },
+        { label: "Thanh toán & Đối soát", path: "/sales/payments", icon: Receipt },
+        { label: "Mã giảm giá (Coupon)", path: "/sales/coupons", icon: Tag },
+        { label: "Gói học (Packages)", path: "/sales/course-packages", icon: Package },
+        { label: "Ghi danh & Kích hoạt", path: "/sales/enrollments", icon: UserCheck },
+        { label: "Giỏ hàng đang treo", path: "/sales/carts", icon: ShoppingCart, badge: "2" },
+      ],
+    },
+
     {
       title: "BÁO CÁO & GIÁM SÁT",
       items: [

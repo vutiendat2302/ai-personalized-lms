@@ -10,7 +10,9 @@ import com.ailms.request.UpdateStudentProfileRequest;
 import com.ailms.response.PageResponse;
 import com.ailms.response.StudentProfileResponse;
 
+import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Service quản lý thông tin hồ sơ học viên và quy trình khảo sát ban đầu (onboarding).
@@ -118,13 +120,30 @@ public interface IStudentProfileService {
      */
     StudentProfileResponse findByIdOrNull(Long id);
 
-    java.util.Map<String, Object> getStudentOverviewStats();
-    java.util.Map<String, Long> getStudentOnboardingStats();
-    java.util.Map<String, Long> getStudentGoalTypeStats();
-    java.util.Map<String, Object> getStudentStreakLeaderboard();
-    java.util.Map<String, Long> getStudentActivityTrend30Days();
+    /** Lấy thống kê tổng quan học viên. */
+    Map<String, Object> getStudentOverviewStats();
+
+    /** Thống kê tiến độ onboarding. */
+    Map<String, Long> getStudentOnboardingStats();
+
+    /** Thống kê loại mục tiêu học tập. */
+    Map<String, Long> getStudentGoalTypeStats();
+
+    /** Lấy bảng xếp hạng streak. */
+    Map<String, Object> getStudentStreakLeaderboard();
+
+    /** Thống kê hoạt động 30 ngày. */
+    Map<String, Long> getStudentActivityTrend30Days();
+
+    /** Lấy hoạt động chi tiết theo ngày. */
+    List<Map<String, Object>> getStudentActivityDetails(LocalDate date);
+
+    /** Đếm học viên không hoạt động. */
     long getInactiveStudentCount(int days);
-    java.util.Map<String, Long> getTopStudentInterests();
+
+    /** Thống kê sở thích phổ biến. */
+    Map<String, Long> getTopStudentInterests();
+
+    /** Lấy sở thích của học viên. */
+    List<String> getStudentInterestNames(Long userId);
 }
-
-

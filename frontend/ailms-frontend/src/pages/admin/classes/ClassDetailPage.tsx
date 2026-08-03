@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -43,6 +43,7 @@ import httpClient from "@/api/httpClient";
 export const ClassDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [cls, setCls] = useState<Classroom | null>(null);
   const [loading, setLoading] = useState(true);
@@ -120,10 +121,10 @@ export const ClassDetailPage: React.FC = () => {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => navigate("/admin/classrooms")}
+            onClick={() => { const state = location.state as { returnTo?: string; studentId?: string } | null; navigate(state?.returnTo || "/admin/classrooms", { state: state?.studentId ? { studentId: state.studentId } : null }); }}
             className="h-9 px-3 text-slate-700"
           >
-            <ArrowLeft className="w-4 h-4 mr-1.5" /> Quay lại
+            <ArrowLeft className="w-4 h-4 mr-1.5" /> {(location.state as any)?.studentId ? "Quay lại học viên" : "Quay lại"}
           </Button>
           <div>
             <div className="flex items-center gap-2">

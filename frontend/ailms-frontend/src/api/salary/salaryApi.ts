@@ -6,19 +6,59 @@ import type {
   SalarySummaryResponse,
   SalarySearchFilters,
   GenerateSalaryPeriodPayload,
+  PayrollBatchResponse,
 } from "@/types/salaryManagement";
 
 export const salaryApi = {
+  getPayrollBatches: (params: { periodFrom: string; periodTo: string }) =>
+    httpClient.get<ApiResponse<PayrollBatchResponse[]>>("/v1/salaries/payroll-batches", { params }).then(res => res.data.data),
+
+  submitPayroll: (period: string) =>
+    httpClient.post<ApiResponse<number>>(`/v1/salaries/payroll-batches/${period}/submit`).then(res => res.data.data),
+
+  cancelPayrollSubmission: (period: string) =>
+    httpClient.post<ApiResponse<number>>(`/v1/salaries/payroll-batches/${period}/cancel-submission`).then(res => res.data.data),
+
+  approvePayroll: (period: string) =>
+    httpClient.post<ApiResponse<number>>(`/v1/salaries/payroll-batches/${period}/approve`).then(res => res.data.data),
+
+  rejectPayroll: (period: string, reason: string) =>
+    httpClient.post<ApiResponse<number>>(`/v1/salaries/payroll-batches/${period}/reject`, { reason }).then(res => res.data.data),
+
+  resubmitPayroll: (period: string) =>
+    httpClient.post<ApiResponse<number>>(`/v1/salaries/payroll-batches/${period}/resubmit`).then(res => res.data.data),
+
+  deleteDraftPayroll: (period: string) =>
+    httpClient.delete<ApiResponse<number>>(`/v1/salaries/payroll-batches/${period}/draft`).then(res => res.data.data),
+
+  deleteApprovedPayroll: (period: string) =>
+    httpClient.delete<ApiResponse<number>>(`/v1/salaries/payroll-batches/${period}/approved`).then(res => res.data.data),
+
+  getTrash: () => httpClient.get<ApiResponse<SalaryResponse[]>>("/v1/salaries/payroll-trash").then(res => res.data.data),
+  restorePayroll: (period: string) => httpClient.post<ApiResponse<number>>(`/v1/salaries/payroll-trash/${period}/restore`).then(res => res.data.data),
+  hardDeletePayroll: (period: string) => httpClient.delete<ApiResponse<number>>(`/v1/salaries/payroll-trash/${period}/hard`).then(res => res.data.data),
+
+  exportTransferList: (period: string) =>
+    httpClient.post(`/v1/salaries/payroll-batches/${period}/export-transfer`, undefined, { responseType: "blob" }).then(res => res.data),
+
+  markPayrollPaid: (period: string) =>
+    httpClient.post<ApiResponse<number>>(`/v1/salaries/payroll-batches/${period}/mark-paid`).then(res => res.data.data),
+
   getSummary: (params?: { period?: string }) =>
     httpClient
       .get<ApiResponse<SalarySummaryResponse>>("/v1/salaries/summary", { params })
       .then((res) => res.data.data),
+
+  getSummaryRange: (params: { periodFrom: string; periodTo: string }) =>
+    httpClient.get<ApiResponse<SalarySummaryResponse>>("/v1/salaries/summary-range", { params }).then((res) => res.data.data),
 
   getSalaries: (params?: SalarySearchFilters) => {
     const cleanParams: Record<string, any> = {};
     if (params) {
       if (params.keyword?.trim()) cleanParams.keyword = params.keyword.trim();
       if (params.period) cleanParams.period = params.period;
+      if (params.periodFrom) cleanParams.periodFrom = params.periodFrom;
+      if (params.periodTo) cleanParams.periodTo = params.periodTo;
       if (params.status && params.status !== "ALL") cleanParams.status = params.status;
       if (params.departmentId && params.departmentId !== "ALL") cleanParams.departmentId = params.departmentId;
       if (params.salaryTypeEnum && params.salaryTypeEnum !== "ALL") cleanParams.salaryTypeEnum = params.salaryTypeEnum;
@@ -34,6 +74,9 @@ export const salaryApi = {
 
   getById: (id: string) =>
     httpClient.get<ApiResponse<SalaryResponse>>(`/v1/salaries/${id}`).then((res) => res.data.data),
+
+  update: (id: string, payload: { mealAllowance?: number; phoneAllowance?: number; uniformAllowance?: number; responsibilityAllowance?: number; performanceAllowance?: number; insuranceSalary?: number; dependents?: number; bonus?: number; deduction?: number; description?: string }) =>
+    httpClient.put<ApiResponse<SalaryResponse>>(`/v1/salaries/${id}`, payload).then((res) => res.data.data),
 
   generatePeriod: (payload: GenerateSalaryPeriodPayload) =>
     httpClient.post<ApiResponse<number>>("/v1/salaries/generate-period", payload).then((res) => res.data.data),
@@ -64,4 +107,7 @@ export const salaryApi = {
       })
       .then((res) => res.data);
   },
+
+  exportCsvRange: (params: { periodFrom: string; periodTo: string; departmentId?: string; status?: string }) =>
+    httpClient.get("/v1/salaries/export-range", { params, responseType: "blob" }).then((res) => res.data),
 };

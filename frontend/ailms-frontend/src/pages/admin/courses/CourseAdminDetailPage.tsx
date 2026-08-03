@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +29,7 @@ import { adminCourseClassApi } from "@/api/courses/adminCourseClassApi";
 export const CourseAdminDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [course, setCourse] = useState<CourseExtended | null>(null);
   const [curriculum, setCurriculum] = useState<any[]>([]);
@@ -39,6 +40,15 @@ export const CourseAdminDetailPage: React.FC = () => {
   const [lessonLoading, setLessonLoading] = useState(false);
   const [lessonError, setLessonError] = useState("");
   const [activeTab, setActiveTab] = useState<string>("packages");
+  const navigationState = location.state as { returnTo?: string; returnLabel?: string; studentId?: string; approvalView?: unknown } | null;
+
+  const handleBack = () => {
+    navigate(navigationState?.returnTo || "/admin/courses", {
+      state: navigationState?.approvalView
+        ? { approvalView: navigationState.approvalView }
+        : navigationState?.studentId ? { studentId: navigationState.studentId } : null,
+    });
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -95,19 +105,25 @@ export const CourseAdminDetailPage: React.FC = () => {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => navigate("/admin/courses")}
+          onClick={handleBack}
           className="h-9 px-3 text-slate-700"
         >
-          <ArrowLeft className="w-4 h-4 mr-1.5" /> Quay lại danh sách
+          <ArrowLeft className="w-4 h-4 mr-1.5" /> Quay lại {navigationState?.returnLabel || (navigationState?.studentId ? "học viên" : "danh sách khóa học")}
         </Button>
         <span className="text-slate-300">|</span>
+        <div className="hidden items-center gap-2 text-xs text-slate-500 md:flex">
+          <button type="button" onClick={handleBack} className="font-semibold hover:text-blue-600">{navigationState?.returnLabel || (navigationState?.studentId ? "Học viên" : "Quản lý khóa học")}</button>
+          <span>/</span>
+          <span className="text-slate-700">Chi tiết khóa học</span>
+        </div>
+        <span className="hidden text-slate-300 md:inline">|</span>
         <span className="text-xs text-slate-500 font-medium">
           Mã khóa: <code className="bg-slate-100 px-1.5 py-0.5 rounded">{course.id}</code>
         </span>
       </div>
 
       {/* Course Detail Banner Header */}
-      <Card className="border-slate-200 shadow-none bg-gradient-to-r from-slate-900 to-slate-800 text-white overflow-hidden relative">
+      <Card className="border-slate-200 shadow-none bg-linear-to-r from-slate-900 to-slate-800 text-white overflow-hidden relative">
         <CardContent className="p-6 md:p-8 flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
           <div className="space-y-3 max-w-2xl">
             <div className="flex flex-wrap items-center gap-2">
@@ -186,6 +202,7 @@ export const CourseAdminDetailPage: React.FC = () => {
           <CoursePackageTab
             courseId={course.id}
             courseName={course.name}
+            courseStatus={course.status}
             packages={course.packages}
           />
         </TabsContent>

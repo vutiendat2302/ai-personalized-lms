@@ -1,8 +1,10 @@
 package com.ailms.repository;
 
 import com.ailms.entity.StudyGoalEntity;
+import com.ailms.entity.enums.StudyGoalStatusEnum;
 import com.ailms.repository.base.BaseRepository;
-import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -15,8 +17,6 @@ public interface StudyGoalRepository extends BaseRepository<StudyGoalEntity, Lon
 
     List<StudyGoalEntity> findByCourseId(Long courseId);
 
-    @org.springframework.data.jpa.repository.Query("SELECT g.studyGoalTypeEnum, COUNT(g) FROM StudyGoalEntity g WHERE g.status = com.ailms.entity.enums.StudyGoalStatusEnum.IN_PROGRESS GROUP BY g.studyGoalTypeEnum")
-    List<Object[]> countActiveGoalsByGoalType();
+    @Query("SELECT g.studyGoalTypeEnum, COUNT(g) FROM StudyGoalEntity g WHERE g.status = :status GROUP BY g.studyGoalTypeEnum")
+    List<Object[]> countGoalsByTypeAndStatus(@Param("status") StudyGoalStatusEnum status);
 }
-
-

@@ -30,9 +30,8 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { Checkbox } from "@/components/ui/checkbox";
-import { EmployeeDetailModal } from "@/components/admin/employee/EmployeeDetailModal";
-import { DatePickerInput, formatDateDisplay } from "@/components/ui/DatePickerInput";
+import { attendanceAdminApi } from "@/api/attendance/attendanceApi";
+import { useToast } from "@/hooks/useToast";
 import { ContractManagement } from "./ContractManagement";
 import {
   Users,
@@ -41,40 +40,13 @@ import {
   Clock,
   DollarSign,
   Calendar,
-  AlertTriangle,
   Search,
   RefreshCw,
   X,
-  FileCheck,
   ChevronLeft,
   ChevronRight,
   Trash,
   Trash2,
-  Loader2,
-  CheckCircle2,
-  AlertCircle,
-  FileSpreadsheet,
-  FileX,
-  FilePlus,
-  ShieldAlert,
-  Filter,
-  Building2,
-  Briefcase,
-  UserCheck,
-  Eye,
-  CheckSquare,
-  Square,
-  PieChart,
-  BarChart3,
-  Layers,
-  Send,
-  Archive,
-  Download,
-  DownloadCloud,
-  Paperclip,
-  AlertOctagon,
-  Info,
-  TrendingUp,
 } from "lucide-react";
 
 const getPageNumbers = (currentPage: number, total: number) => {
@@ -100,6 +72,7 @@ const getPageNumbers = (currentPage: number, total: number) => {
 };
 
 export const HRManagement: React.FC = () => {
+  const { success, error } = useToast();
   const [activeTab, setActiveTab] = useState<
     "employees" | "contracts" | "attendance" | "payroll" | "leaves"
   >("employees");
@@ -111,23 +84,8 @@ export const HRManagement: React.FC = () => {
   const [salaries, setSalaries] = useState<SalaryResponse[]>([]);
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequestResponse[]>([]);
 
-  // Tab 2: Contracts Detailed State & Filters
-  const [ctSearchTerm, setCtSearchTerm] = useState("");
-  const [ctStatusFilter, setCtStatusFilter] = useState<string>("ALL");
-  const [ctTypeFilter, setCtTypeFilter] = useState<string>("ALL");
-  const [ctDeptFilter, setCtDeptFilter] = useState<string>("ALL");
-  const [ctExpiryFilter, setCtExpiryFilter] = useState<string>("ALL");
-  const [ctFileFilter, setCtFileFilter] = useState<string>("ALL");
-  const [selectedContractIds, setSelectedContractIds] = useState<(string | number)[]>([]);
-
-  // Bulk Terminate Modal State
-  const [bulkTerminateModalOpen, setBulkTerminateModalOpen] = useState(false);
+  const [selectedContractIds, setSelectedContractIds] = useState<string[]>([]);
   const [bulkTerminateReason, setBulkTerminateReason] = useState("");
-  const [bulkTerminating, setBulkTerminating] = useState(false);
-
-  // Selected Employee for Detail Modal
-  const [selectedEmployeeForDetail, setSelectedEmployeeForDetail] = useState<any>(null);
-  const [detailModalOpen, setDetailModalOpen] = useState(false);
 
   // Search & Modals
   const [searchTerm, setSearchTerm] = useState("");
@@ -135,19 +93,14 @@ export const HRManagement: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
 
   // Trash & Delete states
-  const [trashModalOpen, setTrashModalOpen] = useState(false);
   const [trashEmployees, setTrashEmployees] = useState<EmployeeResponse[]>([]);
-  const [trashLoading, setTrashLoading] = useState(false);
-  const [selectedTrashIds, setSelectedTrashIds] = useState<(string | number)[]>([]);
-  const [actionMessage, setActionMessage] = useState<{ text: string; isError?: boolean } | null>(null);
-
+  const [selectedTrashIds, setSelectedTrashIds] = useState<string[]>([]);
   const showBanner = (text: string, isError = false) => {
-    setActionMessage({ text, isError });
-    setTimeout(() => setActionMessage(null), 4000);
+    if (isError) error(text);
+    else success(text);
   };
 
   const fetchTrashEmployees = async () => {
-    setTrashLoading(true);
     try {
       const res = await hrApi.getTrashEmployees();
       if (res.data.success && Array.isArray(res.data.data)) {
@@ -155,23 +108,21 @@ export const HRManagement: React.FC = () => {
       }
     } catch (e) {
       console.error("Lỗi lấy danh sách thùng rác:", e);
-    } finally {
-      setTrashLoading(false);
     }
   };
 
-  const [softDeleteConfirmId, setSoftDeleteConfirmId] = useState<string | number | null>(null);
-  const [hardDeleteConfirmId, setHardDeleteConfirmId] = useState<string | number | null>(null);
+  const [softDeleteConfirmId, setSoftDeleteConfirmId] = useState<string | null>(null);
+  const [hardDeleteConfirmId, setHardDeleteConfirmId] = useState<string | null>(null);
   const [bulkHardDeleteConfirm, setBulkHardDeleteConfirm] = useState(false);
 
-  const handleSoftDeleteEmployee = (id: string | number) => {
+  const handleSoftDeleteEmployee = (id: string) => {
     setSoftDeleteConfirmId(id);
   };
 
   const confirmSoftDeleteAction = async () => {
     if (!softDeleteConfirmId) return;
     try {
-      const res = await hrApi.softDeleteEmployee(Number(softDeleteConfirmId));
+      const res = await hrApi.softDeleteEmployee(softDeleteConfirmId);
       if (res.data.success) {
         showBanner("Đã xóa mềm nhân viên thành công (chuyển vào Thùng rác)!");
         fetchData();
@@ -184,14 +135,14 @@ export const HRManagement: React.FC = () => {
     }
   };
 
-  const handleHardDeleteEmployee = (id: string | number) => {
+  const handleHardDeleteEmployee = (id: string) => {
     setHardDeleteConfirmId(id);
   };
 
   const confirmHardDeleteAction = async () => {
     if (!hardDeleteConfirmId) return;
     try {
-      const res = await hrApi.hardDeleteEmployee(Number(hardDeleteConfirmId));
+      const res = await hrApi.hardDeleteEmployee(hardDeleteConfirmId);
       if (res.data.success) {
         showBanner("Đã xóa vĩnh viễn nhân viên thành công!");
         fetchData();
@@ -202,11 +153,6 @@ export const HRManagement: React.FC = () => {
     } finally {
       setHardDeleteConfirmId(null);
     }
-  };
-
-  const handleBulkHardDelete = () => {
-    if (selectedTrashIds.length === 0) return;
-    setBulkHardDeleteConfirm(true);
   };
 
   const confirmBulkHardDeleteAction = async () => {
@@ -230,10 +176,6 @@ export const HRManagement: React.FC = () => {
   const [empPageSize, setEmpPageSize] = useState(10);
   const [empJumpPageInput, setEmpJumpPageInput] = useState<string>("1");
 
-  const [ctPage, setCtPage] = useState(0);
-  const [ctPageSize, setCtPageSize] = useState(10);
-  const [ctJumpPageInput, setCtJumpPageInput] = useState<string>("1");
-
   const [attPage, setAttPage] = useState(0);
   const [attPageSize, setAttPageSize] = useState(10);
   const [attJumpPageInput, setAttJumpPageInput] = useState<string>("1");
@@ -247,82 +189,9 @@ export const HRManagement: React.FC = () => {
   const [lvJumpPageInput, setLvJumpPageInput] = useState<string>("1");
 
   useEffect(() => { setEmpJumpPageInput(String(empPage + 1)); }, [empPage]);
-  useEffect(() => { setCtJumpPageInput(String(ctPage + 1)); }, [ctPage]);
   useEffect(() => { setAttJumpPageInput(String(attPage + 1)); }, [attPage]);
   useEffect(() => { setSalJumpPageInput(String(salPage + 1)); }, [salPage]);
   useEffect(() => { setLvJumpPageInput(String(lvPage + 1)); }, [lvPage]);
-
-  // Contract Bulk Action Handlers
-  const handleExportSelectedContractsCSV = () => {
-    const targetContracts = selectedContractIds.length > 0
-      ? contracts.filter(c => selectedContractIds.includes(c.id))
-      : contracts;
-
-    if (targetContracts.length === 0) {
-      showBanner("Không có hợp đồng nào để xuất!", true);
-      return;
-    }
-
-    const headers = ["ID", "Mã NV", "Họ Tên", "Phòng Ban", "Loại HĐ", "Mức Lương", "Đơn Vị", "Ngày Ký", "Ngày Bắt Đầu", "Ngày Kết Thúc", "Trạng Thái"];
-    const rows = targetContracts.map(c => [
-      c.id,
-      c.employeeCode || "",
-      `"${c.fullName || ""}"`,
-      `"${c.departmentName || ""}"`,
-      c.contractTypeEnum || c.contractType || "",
-      c.baseSalary || 0,
-      c.salaryTypeEnum || "MONTHLY",
-      c.signedAt || "",
-      c.startDate || c.validFrom || "",
-      c.endDate || c.validTo || "Vô thời hạn",
-      c.status || ""
-    ]);
-
-    const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `danh_sach_hop_dong_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showBanner(`Đã xuất file CSV cho ${targetContracts.length} hợp đồng thành công!`);
-  };
-
-  const handleBulkSendReminders = async () => {
-    if (selectedContractIds.length === 0) return;
-    try {
-      await hrApi.bulkRemindExpiration(selectedContractIds);
-      showBanner(`Đã gửi email nhắc nhở hết hạn tới ${selectedContractIds.length} hợp đồng!`);
-    } catch (e: any) {
-      showBanner(`Đã phát thông báo nhắc nhở cho ${selectedContractIds.length} hợp đồng!`);
-    }
-  };
-
-  const handleConfirmBulkTerminate = async () => {
-    if (selectedContractIds.length === 0) return;
-    if (selectedContractIds.length > 50) {
-      showBanner("Cảnh báo: Chỉ được phép chọn tối đa 50 hợp đồng cho mỗi lần chấm dứt hàng loạt!", true);
-      return;
-    }
-    setBulkTerminating(true);
-    try {
-      await hrApi.bulkTerminateContracts(selectedContractIds, bulkTerminateReason);
-      setContracts(prev => prev.map(c => selectedContractIds.includes(c.id) ? { ...c, status: "TERMINATED" } : c));
-      setSelectedContractIds([]);
-      setBulkTerminateModalOpen(false);
-      setBulkTerminateReason("");
-      showBanner(`Đã chấm dứt hàng loạt ${selectedContractIds.length} hợp đồng thành công! (Ghi nhận Audit Trail)`);
-    } catch (e: any) {
-      setContracts(prev => prev.map(c => selectedContractIds.includes(c.id) ? { ...c, status: "TERMINATED" } : c));
-      setSelectedContractIds([]);
-      setBulkTerminateModalOpen(false);
-      setBulkTerminateReason("");
-      showBanner(`Đã cập nhật trạng thái TERMINATED cho ${selectedContractIds.length} hợp đồng!`);
-    } finally {
-      setBulkTerminating(false);
-    }
-  };
 
   // New Employee Form State
   const [fullName, setFullName] = useState("");
@@ -341,249 +210,6 @@ export const HRManagement: React.FC = () => {
     return `EP-${yy}${mm}-${rand}`;
   };
 
-  const MOCK_EMPLOYEES: EmployeeResponse[] = [
-    {
-      id: "emp-1",
-      userId: "usr-1",
-      userName: "datbritget",
-      userEmail: "dat.vt@ailms.edu.vn",
-      employeeCode: "EP-2607-A3F9C1",
-      fullName: "Vũ Tiến Đạt",
-      departmentName: "Phòng Công Nghệ & AI",
-      position: "Quản trị viên Hệ thống & Chuyên gia AI",
-      employmentType: "FULL_TIME",
-      status: "ACTIVE",
-      baseSalary: 25000000,
-      joinedAt: "2026-07-01",
-    },
-    {
-      id: "emp-2",
-      userId: "usr-4",
-      userName: "trietle",
-      userEmail: "triet.lm@outlook.com",
-      employeeCode: "EP-2607-F88B12",
-      fullName: "Lê Minh Triết",
-      departmentName: "Phòng Giảng Dạy & Đào Tạo",
-      position: "Giảng viên Lập trình Web Fullstack",
-      employmentType: "FULL_TIME",
-      status: "PROBATION",
-      baseSalary: 18000000,
-      joinedAt: "2026-06-01",
-      probationEndDate: "2026-07-31", // Alert expiring in < 7 days
-    },
-    {
-      id: "emp-3",
-      userId: "usr-5",
-      userName: "haivo",
-      userEmail: "hai.vo@ailms.edu.vn",
-      employeeCode: "EP-2607-C3D4E5",
-      fullName: "Võ Văn Hải",
-      departmentName: "Phòng Trợ Giảng & Hỗ Trợ",
-      position: "Trợ giảng Python AI",
-      employmentType: "PART_TIME",
-      status: "ACTIVE",
-      baseSalary: 8000000,
-      joinedAt: "2026-07-10",
-    },
-  ];
-
-  const MOCK_CONTRACTS: EmployeeContractResponse[] = [
-    {
-      id: "ct-101",
-      employeeId: "emp-1",
-      employeeCode: "EP-2607-A3F9C1",
-      fullName: "Vũ Tiến Đạt",
-      departmentName: "Phòng Kỹ thuật & AI",
-      position: "Trưởng nhóm AI",
-      contractType: "OFFICIAL",
-      contractTypeEnum: "INDEFINITE",
-      fileUrl: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
-      fileName: "Hop_Dong_Vo_Thoi_Han_VuTienDat.pdf",
-      fileSize: 2450000,
-      signedAt: "2025-01-05",
-      startDate: "2025-01-05",
-      endDate: undefined,
-      status: "ACTIVE",
-      baseSalary: 25000000,
-      salaryTypeEnum: "MONTHLY",
-      createdBy: "Nguyễn Văn Admin",
-      createdAt: "2025-01-05T09:00:00",
-    },
-    {
-      id: "ct-102",
-      employeeId: "emp-2",
-      employeeCode: "EP-2607-F88B12",
-      fullName: "Lê Minh Triết",
-      departmentName: "Phòng Đào tạo & Học vụ",
-      position: "Giảng viên Senior",
-      contractType: "PROBATION",
-      contractTypeEnum: "PROBATION",
-      fileUrl: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
-      fileName: "HD_Thu_Viec_LeMinhTriet.pdf",
-      fileSize: 1850000,
-      signedAt: "2026-06-15",
-      startDate: "2026-06-15",
-      endDate: "2026-08-15", // Expiring within 30 days
-      status: "ACTIVE",
-      baseSalary: 18000000,
-      salaryTypeEnum: "MONTHLY",
-      createdBy: "Trần Thị HR",
-      createdAt: "2026-06-15T10:30:00",
-    },
-    {
-      id: "ct-103",
-      employeeId: "emp-3",
-      employeeCode: "EP-2607-C91A04",
-      fullName: "Phạm Hoàng Nam",
-      departmentName: "Phòng Kinh doanh & Marketing",
-      position: "Chuyên viên tư vấn tuyển sinh",
-      contractType: "OFFICIAL",
-      contractTypeEnum: "FIXED_TERM",
-      fileUrl: undefined,
-      fileName: undefined,
-      fileSize: undefined,
-      signedAt: "2025-08-01",
-      startDate: "2025-08-01",
-      endDate: "2026-08-10", // Expiring within 30 days, missing file!
-      status: "ACTIVE",
-      baseSalary: 15000000,
-      salaryTypeEnum: "MONTHLY",
-      createdBy: "Trần Thị HR",
-      createdAt: "2025-08-01T08:15:00",
-    },
-    {
-      id: "ct-104",
-      employeeId: "emp-4",
-      employeeCode: "EP-2607-D45E89",
-      fullName: "Trần Bảo Ngọc",
-      departmentName: "Phòng Hành chính Nhân sự",
-      position: "Chuyên viên Tuyển dụng",
-      contractType: "OFFICIAL",
-      contractTypeEnum: "FIXED_TERM",
-      fileUrl: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
-      fileName: "HD_Xac_Dinh_Thoi_Han_TranBaoNgoc.pdf",
-      fileSize: 3100000,
-      signedAt: "2024-09-01",
-      startDate: "2024-09-01",
-      endDate: "2025-09-01",
-      status: "EXPIRED",
-      baseSalary: 16000000,
-      salaryTypeEnum: "MONTHLY",
-      createdBy: "Nguyễn Văn Admin",
-      createdAt: "2024-09-01T14:00:00",
-    },
-    {
-      id: "ct-105",
-      employeeId: "emp-5",
-      employeeCode: "EP-2607-E78F22",
-      fullName: "Đặng Hoàng Anh",
-      departmentName: "Phòng Đào tạo & Học vụ",
-      position: "Trợ giảng Python AI",
-      contractType: "PART_TIME",
-      contractTypeEnum: "PART_TIME",
-      fileUrl: undefined,
-      fileName: undefined,
-      fileSize: undefined,
-      signedAt: "2026-07-10",
-      startDate: "2026-07-10",
-      endDate: "2026-12-31",
-      status: "ACTIVE",
-      baseSalary: 120000,
-      salaryTypeEnum: "HOURLY",
-      createdBy: "Trần Thị HR",
-      createdAt: "2026-07-10T11:00:00",
-    },
-    {
-      id: "ct-106",
-      employeeId: "emp-6",
-      employeeCode: "EP-2607-F12D55",
-      fullName: "Nguyễn Thị Hà",
-      departmentName: "Phòng Kỹ thuật & AI",
-      position: "DevOps Engineer",
-      contractType: "OFFICIAL",
-      contractTypeEnum: "FIXED_TERM",
-      fileUrl: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
-      fileName: "HD_NguyenThiHa_DevOps.pdf",
-      fileSize: 1950000,
-      signedAt: "2025-11-01",
-      startDate: "2025-11-01",
-      endDate: "2026-11-01",
-      status: "TERMINATED",
-      baseSalary: 22000000,
-      salaryTypeEnum: "MONTHLY",
-      createdBy: "Nguyễn Văn Admin",
-      createdAt: "2025-11-01T09:30:00",
-      updatedBy: "Lê Trọng Trí (Admin)",
-      updatedAt: "2026-07-15T16:20:00",
-    },
-  ];
-
-  const MOCK_ATTENDANCES: AttendanceResponse[] = [
-    {
-      id: "att-1",
-      employeeId: "emp-1",
-      employeeName: "Vũ Tiến Đạt",
-      workDate: "2026-07-24",
-      checkInTime: "07:58:00",
-      checkOutTime: "17:02:00",
-      status: "PRESENT",
-    },
-    {
-      id: "att-2",
-      employeeId: "emp-2",
-      employeeName: "Lê Minh Triết",
-      workDate: "2026-07-24",
-      checkInTime: "08:35:00", // Late check-in > 8:00
-      checkOutTime: "17:00:00",
-      status: "LATE",
-      penaltyAmount: 100000,
-    },
-  ];
-
-  const MOCK_SALARIES: SalaryResponse[] = [
-    {
-      id: "sal-1",
-      employeeId: "emp-1",
-      employeeName: "Vũ Tiến Đạt",
-      employeeCode: "EP-2607-A3F9C1",
-      employmentType: "FULL_TIME",
-      period: "2026-07",
-      grossSalary: 25000000,
-      insuranceDeduction: 2625000, // 10.5%
-      taxDeduction: 1850000,
-      penaltyDeduction: 0,
-      netSalary: 20525000,
-      status: "APPROVED",
-    },
-    {
-      id: "sal-2",
-      employeeId: "emp-2",
-      employeeName: "Lê Minh Triết",
-      employeeCode: "EP-2607-F88B12",
-      employmentType: "FULL_TIME",
-      period: "2026-07",
-      grossSalary: 18000000,
-      insuranceDeduction: 1890000,
-      taxDeduction: 1100000,
-      penaltyDeduction: 200000, // 2 late days
-      netSalary: 14810000,
-      status: "DRAFT",
-    },
-  ];
-
-  const MOCK_LEAVES: LeaveRequestResponse[] = [
-    {
-      id: "lv-1",
-      employeeId: "emp-2",
-      employeeName: "Lê Minh Triết",
-      startDate: "2026-07-28",
-      endDate: "2026-07-29",
-      reason: "Nghỉ phép cá nhân đi khám sức khỏe định kỳ",
-      status: "PENDING",
-      createdAt: "2026-07-24T08:00:00Z",
-    },
-  ];
-
   const fetchData = async () => {
     try {
       const empRes = await hrApi.getEmployees();
@@ -601,15 +227,38 @@ export const HRManagement: React.FC = () => {
       if (ctRes.data.success && Array.isArray(ctRes.data.data)) {
         setContracts(ctRes.data.data);
       } else {
-        setContracts(MOCK_CONTRACTS);
+        setContracts([]);
       }
     } catch (e) {
-      setContracts(MOCK_CONTRACTS);
+      setContracts([]);
     }
 
-    setAttendances(MOCK_ATTENDANCES);
-    setSalaries(MOCK_SALARIES);
-    setLeaveRequests(MOCK_LEAVES);
+    try {
+      const page = await attendanceAdminApi.getAttendances({ page: 0, size: 200, sortBy: "workDate", sortDir: "DESC" });
+      setAttendances((page?.content || []).map((item) => ({
+        id: String(item.id),
+        employeeId: String(item.employeeId),
+        employeeName: item.employeeName || "Chưa có tên",
+        workDate: item.workDate,
+        checkInTime: item.checkInTime,
+        checkOutTime: item.checkOutTime,
+        status: (["PRESENT_LATE", "HALF_DAY_LATE"].includes(item.status) ? "LATE" :
+          ["CANCELLED", "INVALID"].includes(item.status) ? "ABSENT" : item.status) as AttendanceResponse["status"],
+      })));
+    } catch {
+      setAttendances([]);
+      error("Không tải được dữ liệu điểm danh.");
+    }
+
+    try {
+      const salaryRes = await hrApi.getSalaries();
+      setSalaries(Array.isArray(salaryRes.data.data) ? salaryRes.data.data : []);
+    } catch { setSalaries([]); }
+
+    try {
+      const leaveRes = await hrApi.getLeaveRequests();
+      setLeaveRequests(Array.isArray(leaveRes.data.data) ? leaveRes.data.data : []);
+    } catch { setLeaveRequests([]); }
   };
 
   useEffect(() => {
@@ -969,7 +618,7 @@ export const HRManagement: React.FC = () => {
                       const pageNum = p as number;
                       const isCurrent = pageNum === empPage;
                       return (
-                        <Button key={pageNum} onClick={() => setEmpPage(pageNum)} variant={isCurrent ? "default" : "outline"} size="sm" className={cn("h-8 min-w-[32px] px-2 text-xs font-semibold rounded-lg transition-all", isCurrent ? "bg-primary text-primary-foreground shadow-xs" : "border-border/40 text-foreground hover:bg-muted/70")}>
+                        <Button key={pageNum} onClick={() => setEmpPage(pageNum)} variant={isCurrent ? "default" : "outline"} size="sm" className={cn("h-8 min-w-8 px-2 text-xs font-semibold rounded-lg transition-all", isCurrent ? "bg-primary text-primary-foreground shadow-xs" : "border-border/40 text-foreground hover:bg-muted/70")}>
                           {pageNum + 1}
                         </Button>
                       );
@@ -1117,7 +766,7 @@ export const HRManagement: React.FC = () => {
                       const pageNum = p as number;
                       const isCurrent = pageNum === attPage;
                       return (
-                        <Button key={pageNum} onClick={() => setAttPage(pageNum)} variant={isCurrent ? "default" : "outline"} size="sm" className={cn("h-8 min-w-[32px] px-2 text-xs font-semibold rounded-lg transition-all", isCurrent ? "bg-primary text-primary-foreground shadow-xs" : "border-border/40 text-foreground hover:bg-muted/70")}>
+                        <Button key={pageNum} onClick={() => setAttPage(pageNum)} variant={isCurrent ? "default" : "outline"} size="sm" className={cn("h-8 min-w-8 px-2 text-xs font-semibold rounded-lg transition-all", isCurrent ? "bg-primary text-primary-foreground shadow-xs" : "border-border/40 text-foreground hover:bg-muted/70")}>
                           {pageNum + 1}
                         </Button>
                       );
@@ -1269,7 +918,7 @@ export const HRManagement: React.FC = () => {
                       const pageNum = p as number;
                       const isCurrent = pageNum === salPage;
                       return (
-                        <Button key={pageNum} onClick={() => setSalPage(pageNum)} variant={isCurrent ? "default" : "outline"} size="sm" className={cn("h-8 min-w-[32px] px-2 text-xs font-semibold rounded-lg transition-all", isCurrent ? "bg-primary text-primary-foreground shadow-xs" : "border-border/40 text-foreground hover:bg-muted/70")}>
+                        <Button key={pageNum} onClick={() => setSalPage(pageNum)} variant={isCurrent ? "default" : "outline"} size="sm" className={cn("h-8 min-w-8 px-2 text-xs font-semibold rounded-lg transition-all", isCurrent ? "bg-primary text-primary-foreground shadow-xs" : "border-border/40 text-foreground hover:bg-muted/70")}>
                           {pageNum + 1}
                         </Button>
                       );
@@ -1427,7 +1076,7 @@ export const HRManagement: React.FC = () => {
                       const pageNum = p as number;
                       const isCurrent = pageNum === lvPage;
                       return (
-                        <Button key={pageNum} onClick={() => setLvPage(pageNum)} variant={isCurrent ? "default" : "outline"} size="sm" className={cn("h-8 min-w-[32px] px-2 text-xs font-semibold rounded-lg transition-all", isCurrent ? "bg-primary text-primary-foreground shadow-xs" : "border-border/40 text-foreground hover:bg-muted/70")}>
+                        <Button key={pageNum} onClick={() => setLvPage(pageNum)} variant={isCurrent ? "default" : "outline"} size="sm" className={cn("h-8 min-w-8 px-2 text-xs font-semibold rounded-lg transition-all", isCurrent ? "bg-primary text-primary-foreground shadow-xs" : "border-border/40 text-foreground hover:bg-muted/70")}>
                           {pageNum + 1}
                         </Button>
                       );
@@ -1557,19 +1206,6 @@ export const HRManagement: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
-      )}
-
-      {/* TOAST BANNER NOTIFICATIONS */}
-      {actionMessage && (
-        <div
-          className={cn(
-            "fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300",
-            actionMessage.isError ? "bg-destructive" : "bg-emerald-600"
-          )}
-        >
-          {actionMessage.isError ? <AlertCircle className="h-5 w-5 shrink-0" /> : <CheckCircle2 className="h-5 w-5 shrink-0" />}
-          <span className="text-sm font-semibold">{actionMessage.text}</span>
         </div>
       )}
 

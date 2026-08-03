@@ -1,21 +1,21 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import type { SalaryResponse } from "@/types/salaryManagement";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { getStatusBadge, formatVND } from "./salaryUtils";
 import { salaryApi } from "@/api/salary/salaryApi";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
-  User,
-  Calendar,
-  Building2,
   CreditCard,
   CheckCircle2,
   DollarSign,
   Loader2,
-  X,
   FileSpreadsheet,
   AlertTriangle,
+  Pencil,
+  Save,
 } from "lucide-react";
 
 interface SalaryDetailDrawerProps {
@@ -24,6 +24,9 @@ interface SalaryDetailDrawerProps {
   onClose: () => void;
   onRefresh?: () => void;
   onActionSuccess?: (msg: string) => void;
+  canApprove?: boolean;
+  canMarkPaid?: boolean;
+  canEdit?: boolean;
 }
 
 export const SalaryDetailDrawer: React.FC<SalaryDetailDrawerProps> = ({
@@ -32,9 +35,26 @@ export const SalaryDetailDrawer: React.FC<SalaryDetailDrawerProps> = ({
   onClose,
   onRefresh,
   onActionSuccess,
+  canApprove = false,
+  canMarkPaid = false,
+  canEdit = false,
 }) => {
   const [loadingAction, setLoadingAction] = useState<boolean>(false);
   const [confirmPayOpen, setConfirmPayOpen] = useState<boolean>(false);
+  const [editing, setEditing] = useState(false);
+  const [bonus, setBonus] = useState(0);
+  const [deduction, setDeduction] = useState(0);
+  const [description, setDescription] = useState("");
+  const [adjustments, setAdjustments] = useState({ mealAllowance: 0, phoneAllowance: 0, uniformAllowance: 0, responsibilityAllowance: 0, performanceAllowance: 0, insuranceSalary: 0, dependents: 0 });
+
+  useEffect(() => {
+    const detail = (key: string) => salary?.details?.find(item => item.itemKey === key)?.amount || 0;
+    setEditing(false);
+    setBonus(salary?.bonus || 0);
+    setDeduction(salary?.deduction || 0);
+    setDescription(salary?.description || "");
+    setAdjustments({ mealAllowance: detail("MEAL_ALLOWANCE"), phoneAllowance: detail("PHONE_ALLOWANCE"), uniformAllowance: detail("UNIFORM_ALLOWANCE"), responsibilityAllowance: detail("RESPONSIBILITY_ALLOWANCE"), performanceAllowance: detail("PERFORMANCE_ALLOWANCE"), insuranceSalary: detail("INSURANCE_SALARY"), dependents: Math.round(detail("DEPENDENT_DEDUCTION") / 4400000) });
+  }, [salary]);
 
   if (!salary) return null;
 
@@ -67,9 +87,21 @@ export const SalaryDetailDrawer: React.FC<SalaryDetailDrawerProps> = ({
     }
   };
 
+  const handleSave = async () => {
+    if (!salary) return;
+    try {
+      setLoadingAction(true);
+      await salaryApi.update(salary.id, { ...adjustments, bonus, deduction, description: description.trim() });
+      onActionSuccess?.(`Đã cập nhật phiếu lương của ${salary.employeeName || "nhân viên"}`);
+      setEditing(false); onRefresh?.(); onClose();
+    } catch {
+      onActionSuccess?.("Không thể cập nhật phiếu lương");
+    } finally { setLoadingAction(false); }
+  };
+
   // Group breakdown details
   const earningsList = salary.details?.filter((d) =>
-    ["BASE_SALARY", "MEAL_ALLOWANCE", "PHONE_ALLOWANCE", "UNIFORM_ALLOWANCE", "RESPONSIBILITY_ALLOWANCE", "PERFORMANCE_ALLOWANCE", "BONUS"].includes(d.itemKey)
+    ["BASE_SALARY", "TEACHING_COMPENSATION", "MEAL_ALLOWANCE", "PHONE_ALLOWANCE", "UNIFORM_ALLOWANCE", "RESPONSIBILITY_ALLOWANCE", "PERFORMANCE_ALLOWANCE", "BONUS"].includes(d.itemKey)
   ) || [];
 
   const deductionsList = salary.details?.filter((d) =>
@@ -83,7 +115,7 @@ export const SalaryDetailDrawer: React.FC<SalaryDetailDrawerProps> = ({
   return (
     <>
       <Sheet open={isOpen} onOpenChange={onClose}>
-        <SheetContent side="right" className="w-full sm:max-w-xl p-0 flex flex-col bg-background">
+        <SheetContent className="w-full sm:max-w-xl p-0 flex flex-col bg-background">
           <SheetHeader className="p-6 pb-4 border-b border-border/40 bg-card">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -98,6 +130,15 @@ export const SalaryDetailDrawer: React.FC<SalaryDetailDrawerProps> = ({
           </SheetHeader>
 
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            {editing && (
+              <div className="grid gap-4 rounded-xl border border-primary/20 bg-primary/5 p-4 sm:grid-cols-2">
+                {[{ key: "mealAllowance", label: "Phụ cấp ăn trưa" }, { key: "phoneAllowance", label: "Phụ cấp điện thoại" }, { key: "uniformAllowance", label: "Phụ cấp trang phục" }, { key: "responsibilityAllowance", label: "Phụ cấp trách nhiệm" }, { key: "performanceAllowance", label: "Phụ cấp hiệu suất" }, { key: "insuranceSalary", label: "Mức lương đóng bảo hiểm" }].map(field => <div key={field.key} className="space-y-1.5"><Label>{field.label}</Label><Input type="number" min={0} value={adjustments[field.key as keyof typeof adjustments]} onChange={event => setAdjustments(current => ({ ...current, [field.key]: Math.max(0, Number(event.target.value)) }))} /></div>)}
+                <div className="space-y-1.5"><Label>Số người phụ thuộc</Label><Input type="number" min={0} step={1} value={adjustments.dependents} onChange={event => setAdjustments(current => ({ ...current, dependents: Math.max(0, Math.floor(Number(event.target.value))) }))} /></div>
+                <div className="space-y-1.5"><Label>Thưởng bổ sung</Label><Input type="number" min={0} value={bonus} onChange={event => setBonus(Math.max(0, Number(event.target.value)))} /></div>
+                <div className="space-y-1.5"><Label>Khấu trừ khác</Label><Input type="number" min={0} value={deduction} onChange={event => setDeduction(Math.max(0, Number(event.target.value)))} /></div>
+                <div className="space-y-1.5 sm:col-span-2"><Label>Ghi chú điều chỉnh</Label><textarea value={description} onChange={event => setDescription(event.target.value)} maxLength={500} className="min-h-20 w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20" /></div>
+              </div>
+            )}
             {/* Cảnh báo nếu lương thực nhận âm hoặc bằng 0 */}
             {salary.totalSalary <= 0 && (
               <div className="p-3 bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 rounded-xl text-xs flex items-center gap-2">
@@ -215,7 +256,8 @@ export const SalaryDetailDrawer: React.FC<SalaryDetailDrawerProps> = ({
             </Button>
 
             <div className="flex items-center gap-2">
-              {(salary.status === "DRAFT" || salary.status === "PENDING") && (
+              {canEdit && (salary.status === "DRAFT" || salary.status === "PENDING" || salary.status === "REJECTED") && (editing ? <Button onClick={handleSave} disabled={loadingAction} size="sm" className="gap-1.5 text-xs"><Save className="h-3.5 w-3.5" />Lưu thay đổi</Button> : <Button onClick={() => setEditing(true)} variant="outline" size="sm" className="gap-1.5 text-xs"><Pencil className="h-3.5 w-3.5" />Chỉnh sửa phiếu lương</Button>)}
+              {canApprove && salary.status === "PENDING" && (
                 <Button
                   onClick={handleApprove}
                   disabled={loadingAction}
@@ -227,7 +269,7 @@ export const SalaryDetailDrawer: React.FC<SalaryDetailDrawerProps> = ({
                 </Button>
               )}
 
-              {salary.status === "CONFIRMED" && (
+              {canMarkPaid && salary.status === "TRANSFER_EXPORTED" && (
                 <Button
                   onClick={() => setConfirmPayOpen(true)}
                   disabled={loadingAction}

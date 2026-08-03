@@ -12,18 +12,30 @@ import { adminCourseClassApi } from "@/api/courses/adminCourseClassApi";
 interface CoursePackageTabProps {
   courseId: string;
   courseName: string;
+  courseStatus: string;
   packages: CoursePackage[];
 }
 
 export const CoursePackageTab: React.FC<CoursePackageTabProps> = ({
   courseId,
   courseName,
+  courseStatus,
   packages: initialPackages,
 }) => {
   const navigate = useNavigate();
   const [packages, setPackages] = useState<CoursePackage[]>(initialPackages);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [error, setError] = useState("");
+  const canCreatePackage = courseStatus === "ACTIVE";
+
+  const openCreateDialog = () => {
+    if (!canCreatePackage) {
+      setError("Chỉ khóa học ở trạng thái Đang hoạt động (ACTIVE) mới được tạo gói bán.");
+      return;
+    }
+    setError("");
+    setIsDialogOpen(true);
+  };
 
   const handleToggleActive = async (id: string) => {
     const pkg: any = packages.find((item) => item.id === id);
@@ -67,7 +79,7 @@ export const CoursePackageTab: React.FC<CoursePackageTabProps> = ({
         );
       case "COMBO":
         return (
-          <Badge className="bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold px-2.5 py-1">
+          <Badge className="bg-linear-to-r from-amber-500 to-orange-500 text-white font-semibold px-2.5 py-1">
             <Layers className="w-3.5 h-3.5 mr-1" /> Gói Combo
           </Badge>
         );
@@ -86,12 +98,23 @@ export const CoursePackageTab: React.FC<CoursePackageTabProps> = ({
           </p>
         </div>
         <Button
-          onClick={() => setIsDialogOpen(true)}
+          onClick={openCreateDialog}
+          disabled={!canCreatePackage}
+          title={!canCreatePackage ? "Khóa học phải được phê duyệt và ở trạng thái ACTIVE" : undefined}
           className="bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm"
         >
           <Plus className="w-4 h-4 mr-1.5" /> Tạo Gói Bán Mới
         </Button>
       </div>
+      {!canCreatePackage && (
+        <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+          <BookOpen className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <p className="font-semibold">Chưa thể tạo gói bán</p>
+            <p className="mt-0.5">Khóa học hiện ở trạng thái {courseStatus}. Hãy phê duyệt và chuyển khóa học sang ACTIVE trước.</p>
+          </div>
+        </div>
+      )}
 
       {/* Horizontal Package Cards List */}
       <div className="space-y-3">
@@ -102,7 +125,8 @@ export const CoursePackageTab: React.FC<CoursePackageTabProps> = ({
               variant="outline"
               size="sm"
               className="mt-3"
-              onClick={() => setIsDialogOpen(true)}
+              onClick={openCreateDialog}
+              disabled={!canCreatePackage}
             >
               + Thêm Gói Đầu Tiên
             </Button>
@@ -199,6 +223,7 @@ export const CoursePackageTab: React.FC<CoursePackageTabProps> = ({
         onOpenChange={setIsDialogOpen}
         courseId={courseId}
         courseName={courseName}
+        courseStatus={courseStatus}
         onPackageCreated={handlePackageCreated}
       />
     </div>

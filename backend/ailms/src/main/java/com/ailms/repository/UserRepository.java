@@ -3,8 +3,6 @@ package com.ailms.repository;
 import com.ailms.entity.UserEntity;
 import com.ailms.entity.enums.UserStatusEnum;
 import com.ailms.repository.base.BaseRepository;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -31,11 +29,12 @@ public interface UserRepository extends BaseRepository<UserEntity, Long> {
 
     UserEntity findByUsername(String userName);
 
-    @Query("SELECT u.gender, COUNT(u) FROM UserEntity u WHERE u.status != UserStatusEnum.DELETED GROUP BY u.gender")
-    java.util.List<Object[]> countUsersGroupByGender();
+    @Query("SELECT u.gender, COUNT(u) FROM UserEntity u WHERE u.status <> :excludedStatus GROUP BY u.gender")
+    List<Object[]> countUsersGroupByGender(@Param("excludedStatus") UserStatusEnum excludedStatus);
 
-    @Query("SELECT MONTH(u.createdAt), COUNT(u) FROM UserEntity u WHERE YEAR(u.createdAt) = :year AND u.status != UserStatusEnum.DELETED GROUP BY MONTH(u.createdAt)")
-    java.util.List<Object[]> countMonthlyNewUsersByYear(@Param("year") int year);
+    @Query("SELECT MONTH(u.createdAt), COUNT(u) FROM UserEntity u WHERE YEAR(u.createdAt) = :year AND u.status <> :excludedStatus GROUP BY MONTH(u.createdAt)")
+    List<Object[]> countMonthlyNewUsersByYear(@Param("year") int year,
+                                              @Param("excludedStatus") UserStatusEnum excludedStatus);
 
     List<UserEntity> findAllByStatusNot(UserStatusEnum userStatusEnum);
 
@@ -49,73 +48,13 @@ public interface UserRepository extends BaseRepository<UserEntity, Long> {
      */
     @Query("""
             SELECT DISTINCT ur.userEntity FROM UserRoleEntity ur
-            WHERE ur.roleEntity.name = :roleName
-            AND ur.userEntity.status != com.ailms.entity.enums.UserStatusEnum.DELETED
+            WHERE (UPPER(ur.roleEntity.code) = UPPER(:roleName)
+                OR UPPER(ur.roleEntity.name) = UPPER(:roleName))
+            AND ur.userEntity.status <> :excludedStatus
             """)
-    List<UserEntity> findUsersByRoleName(@Param("roleName") String roleName);
+    List<UserEntity> findUsersByRoleName(@Param("roleName") String roleName,
+                                         @Param("excludedStatus") UserStatusEnum excludedStatus);
 
     List<UserEntity> findByStatus(UserStatusEnum userStatusEnum);
 
-    @org.springframework.data.jpa.repository.Modifying
-    @Query(value = "DELETE FROM attendance WHERE employee_id = :id", nativeQuery = true)
-    void deleteAttendancesByUserId(@Param("id") Long id);
-
-    @org.springframework.data.jpa.repository.Modifying
-    @Query(value = "DELETE FROM leave_request WHERE employee_id = :id", nativeQuery = true)
-    void deleteLeaveRequestsByUserId(@Param("id") Long id);
-
-    @org.springframework.data.jpa.repository.Modifying
-    @Query(value = "DELETE FROM employee_contract WHERE employee_id = :id", nativeQuery = true)
-    void deleteEmployeeContractsByUserId(@Param("id") Long id);
-
-    @org.springframework.data.jpa.repository.Modifying
-    @Query(value = "DELETE FROM salary WHERE employee_id = :id", nativeQuery = true)
-    void deleteSalariesByUserId(@Param("id") Long id);
-
-    @org.springframework.data.jpa.repository.Modifying
-    @Query(value = "DELETE FROM teaching_rate WHERE employee_id = :id", nativeQuery = true)
-    void deleteTeachingRatesByUserId(@Param("id") Long id);
-
-    @org.springframework.data.jpa.repository.Modifying
-    @Query(value = "DELETE FROM employee WHERE user_id = :id", nativeQuery = true)
-    void deleteEmployeeByUserId(@Param("id") Long id);
-
-    @org.springframework.data.jpa.repository.Modifying
-    @Query(value = "DELETE FROM guardian WHERE student_user_id = :id", nativeQuery = true)
-    void deleteGuardiansByUserId(@Param("id") Long id);
-
-    @org.springframework.data.jpa.repository.Modifying
-    @Query(value = "DELETE FROM student_interest WHERE student_user_id = :id", nativeQuery = true)
-    void deleteStudentInterestsByUserId(@Param("id") Long id);
-
-    @org.springframework.data.jpa.repository.Modifying
-    @Query(value = "DELETE FROM student_profile WHERE user_id = :id", nativeQuery = true)
-    void deleteStudentProfileByUserId(@Param("id") Long id);
-
-    @org.springframework.data.jpa.repository.Modifying
-    @Query(value = "DELETE FROM user_role WHERE user_id = :id", nativeQuery = true)
-    void deleteUserRolesByUserId(@Param("id") Long id);
-
-    @org.springframework.data.jpa.repository.Modifying
-    @Query(value = "DELETE FROM audit_log WHERE user_id = :id", nativeQuery = true)
-    void deleteAuditLogsByUserId(@Param("id") Long id);
-
-    @org.springframework.data.jpa.repository.Modifying
-    @Query(value = "DELETE FROM notification WHERE user_id = :id", nativeQuery = true)
-    void deleteNotificationsByUserId(@Param("id") Long id);
-
-    @org.springframework.data.jpa.repository.Modifying
-    @Query(value = "DELETE FROM cart_item WHERE user_id = :id", nativeQuery = true)
-    void deleteCartItemsByUserId(@Param("id") Long id);
-
-    @org.springframework.data.jpa.repository.Modifying
-    @Query(value = "DELETE FROM review WHERE user_id = :id", nativeQuery = true)
-    void deleteReviewsByUserId(@Param("id") Long id);
-
-    @org.springframework.data.jpa.repository.Modifying
-    @Query(value = "DELETE FROM `user` WHERE id = :id", nativeQuery = true)
-    void deleteUserByIdNative(@Param("id") Long id);
 }
-
-
-

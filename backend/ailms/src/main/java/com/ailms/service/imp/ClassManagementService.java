@@ -24,7 +24,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -134,6 +133,9 @@ public class ClassManagementService implements IClassManagementService {
 
         CourseEntity course = courseRepository.findById(request.getCourseId())
                 .orElseThrow(() -> ResourceNotFoundException.of("Course", request.getCourseId()));
+        if (course.getStatus() != CourseStatusEnum.ACTIVE) {
+            throw new BusinessException("Chỉ khóa học ở trạng thái ACTIVE mới được tạo gói bán.");
+        }
 
         ClassEntity clazz = null;
 
@@ -216,17 +218,16 @@ public class ClassManagementService implements IClassManagementService {
             List<CreateGroupClassRequest.ScheduleSlotRequest> requestedSlots = null;
             if (requestedScheduleJson != null && !requestedScheduleJson.trim().isEmpty()) {
                 try {
-                    requestedSlots = objectMapper.readValue(requestedScheduleJson, new TypeReference<List<CreateGroupClassRequest.ScheduleSlotRequest>>() {});
+                    requestedSlots = objectMapper.readValue(requestedScheduleJson, new TypeReference<>() {});
                 } catch (Exception e) {
                     log.error("Failed to parse requestedScheduleJson", e);
                 }
             }
 
             Long categoryId = pkg.getCourseEntity().getCategoryEntity() != null ? pkg.getCourseEntity().getCategoryEntity().getId() : 1L;
-            Optional<EmployeeEntity> matchedTeacher = teacherMatchingService.matchTeacherFor1on1(categoryId, requestedSlots);
+            EmployeeEntity teacher = teacherMatchingService.matchTeacherFor1on1(categoryId, requestedSlots).orElse(null);
 
-            if (matchedTeacher.isPresent()) {
-                EmployeeEntity teacher = matchedTeacher.get();
+            if (teacher != null) {
                 ClassEntity new1on1Class = ClassEntity.builder()
                         .courseEntity(pkg.getCourseEntity())
                         .categoryEntity(pkg.getCourseEntity().getCategoryEntity())
@@ -301,7 +302,7 @@ public class ClassManagementService implements IClassManagementService {
         List<ClassMemberEntity> waitlisted = classMemberRepository.findById_ClassIdAndStatusOrderByWaitlistedAtAsc(classId, ClassMemberStatusEnum.WAITLISTED);
 
         if (!waitlisted.isEmpty()) {
-            ClassMemberEntity toPromote = waitlisted.get(0);
+            ClassMemberEntity toPromote = waitlisted.getFirst();
             toPromote.setStatus(ClassMemberStatusEnum.ACTIVE);
             toPromote.setJoinedAt(LocalDateTime.now());
             classMemberRepository.save(toPromote);
@@ -329,16 +330,12 @@ public class ClassManagementService implements IClassManagementService {
 
         EnrollmentEntity enrollment = enrollmentRepository.findById(request.getEnrollmentId())
                 .orElseThrow(() -> ResourceNotFoundException.of("Enrollment", request.getEnrollmentId()));
+        if (enrollment.getUserEntity() == null || !enrollment.getUserEntity().getId().equals(userId)) {
+            throw new BusinessException("Enrollment does not belong to the requesting user.");
+        }
 
-        ApprovalRequestEntity approvalReq = ApprovalRequestEntity.builder()
-                .targetType("CLASS_TRANSFER_REQUEST")
-                .targetId(request.getEnrollmentId())
-                .approverId(userId)
-                .comment(request.getReason() + " | newClassId:" + request.getNewClassId())
-                .status(ApprovalStatusEnum.PENDING)
-                .build();
-
-        approvalRequestRepository.save(approvalReq);
+        createApprovalRequest("CLASS_TRANSFER_REQUEST", request.getEnrollmentId(), userId,
+                request.getReason() + " | newClassId:" + request.getNewClassId());
     }
 
     @Transactional
@@ -346,12 +343,10 @@ public class ClassManagementService implements IClassManagementService {
     public void approveClassTransfer(Long approvalRequestId, boolean approve, String rejectionReason, Long adminUserId) {
         log.info("Approving class transfer request: {}, approve: {}", approvalRequestId, approve);
 
-        ApprovalRequestEntity req = approvalRequestRepository.findById(approvalRequestId)
-                .orElseThrow(() -> ResourceNotFoundException.of("ApprovalRequest", approvalRequestId));
+        ApprovalRequestEntity req = getApprovalRequest(approvalRequestId);
 
+        applyApprovalDecision(req, approve, rejectionReason);
         if (approve) {
-            req.setStatus(ApprovalStatusEnum.CONFIRMED);
-            req.setDecidedAt(LocalDateTime.now());
             // Extract newClassId
             Long newClassId = null;
             if (req.getComment() != null && req.getComment().contains("newClassId:")) {
@@ -377,10 +372,12 @@ public class ClassManagementService implements IClassManagementService {
                     removeMemberAndPromoteWaitlist(enrollment.getCourseEntity().getId(), req.getApproverId());
 
                     // Add to new class
+                    UserEntity student = userRepository.findById(req.getApproverId())
+                            .orElseThrow(() -> ResourceNotFoundException.of("User", req.getApproverId()));
                     ClassMemberEntity newMem = ClassMemberEntity.builder()
                             .id(new ClassMemberId(newClassId, req.getApproverId()))
                             .classEntity(newClass)
-                            .userEntity(userRepository.findById(req.getApproverId()).get())
+                            .userEntity(student)
                             .roleInClass(ClassMemberRole.STUDENT)
                             .status(ClassMemberStatusEnum.ACTIVE)
                             .joinedAt(LocalDateTime.now())
@@ -388,10 +385,6 @@ public class ClassManagementService implements IClassManagementService {
                     classMemberRepository.save(newMem);
                 }
             }
-        } else {
-            req.setStatus(ApprovalStatusEnum.REJECTED);
-            req.setComment(rejectionReason);
-            req.setDecidedAt(LocalDateTime.now());
         }
 
         approvalRequestRepository.save(req);
@@ -402,35 +395,39 @@ public class ClassManagementService implements IClassManagementService {
     public void requestTeacherChange(Long userId, TeacherChangeRequest request) {
         log.info("User {} requesting teacher change for enrollment {}", userId, request.getEnrollmentId());
 
-        ApprovalRequestEntity approvalReq = ApprovalRequestEntity.builder()
-                .targetType("TEACHER_CHANGE_REQUEST")
-                .targetId(request.getEnrollmentId())
-                .approverId(userId)
-                .comment(request.getReason())
-                .status(ApprovalStatusEnum.PENDING)
-                .build();
-
-        approvalRequestRepository.save(approvalReq);
+        createApprovalRequest("TEACHER_CHANGE_REQUEST", request.getEnrollmentId(), userId, request.getReason());
     }
 
     @Transactional
     @Override
     public void approveTeacherChange(Long approvalRequestId, boolean approve, String rejectionReason, Long adminUserId) {
         log.info("Approving teacher change request: {}, approve: {}", approvalRequestId, approve);
-        ApprovalRequestEntity req = approvalRequestRepository.findById(approvalRequestId)
-                .orElseThrow(() -> ResourceNotFoundException.of("ApprovalRequest", approvalRequestId));
+        ApprovalRequestEntity req = getApprovalRequest(approvalRequestId);
 
-        if (approve) {
-            req.setStatus(ApprovalStatusEnum.CONFIRMED);
-            req.setDecidedAt(LocalDateTime.now());
-            // Dynamic re-match logic for 1-1 tutor
-        } else {
-            req.setStatus(ApprovalStatusEnum.REJECTED);
-            req.setComment(rejectionReason);
-            req.setDecidedAt(LocalDateTime.now());
-        }
-
+        applyApprovalDecision(req, approve, rejectionReason);
         approvalRequestRepository.save(req);
+    }
+
+    private void applyApprovalDecision(ApprovalRequestEntity request, boolean approve, String rejectionReason) {
+        request.setStatus(approve ? ApprovalStatusEnum.CONFIRMED : ApprovalStatusEnum.REJECTED);
+        request.setComment(approve ? request.getComment() : rejectionReason);
+        request.setDecidedAt(LocalDateTime.now());
+    }
+
+    private void createApprovalRequest(String targetType, Long targetId, Long approverId, String comment) {
+        ApprovalRequestEntity request = ApprovalRequestEntity.builder()
+                .targetType(targetType)
+                .targetId(targetId)
+                .approverId(approverId)
+                .comment(comment)
+                .status(ApprovalStatusEnum.PENDING)
+                .build();
+        approvalRequestRepository.save(request);
+    }
+
+    private ApprovalRequestEntity getApprovalRequest(Long id) {
+        return approvalRequestRepository.findById(id)
+                .orElseThrow(() -> ResourceNotFoundException.of("ApprovalRequest", id));
     }
 
     @Transactional

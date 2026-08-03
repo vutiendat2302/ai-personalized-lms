@@ -17,8 +17,10 @@ public class EnrollmentResponse {
     private Long userId;
 
     private Long courseId;
+    private String courseName;
 
     private Long classId;
+    private String className;
 
     private Byte status;
 

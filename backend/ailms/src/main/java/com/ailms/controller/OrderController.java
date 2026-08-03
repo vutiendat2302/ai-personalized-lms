@@ -13,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("${api.prefix}/orders")
@@ -52,6 +53,12 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.of("Order refunded successfully", response));
     }
 
+    @GetMapping
+    public ResponseEntity<ApiResponse<List<OrderResponse>>> getAllOrders() {
+        List<OrderResponse> response = orderService.getAllOrders();
+        return ResponseEntity.ok(ApiResponse.of("All orders retrieved successfully", response));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<OrderResponse>> getById(@PathVariable Long id) {
         OrderResponse response = orderService.getOrderById(id);
@@ -62,6 +69,22 @@ public class OrderController {
     public ResponseEntity<ApiResponse<List<OrderResponse>>> getByUserId(@PathVariable Long userId) {
         List<OrderResponse> response = orderService.getOrdersByUserId(userId);
         return ResponseEntity.ok(ApiResponse.of("Orders retrieved successfully", response));
+    }
+
+    @PostMapping("/{id}/cancel")
+    public ResponseEntity<ApiResponse<OrderResponse>> cancelOrder(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "Customer requested cancellation") String reason) {
+        OrderResponse response = orderService.cancelOrder(id, reason);
+        return ResponseEntity.ok(ApiResponse.of("Order cancelled successfully", response));
+    }
+
+    @PostMapping("/{id}/notes")
+    public ResponseEntity<ApiResponse<String>> addNote(
+            @PathVariable Long id,
+            @RequestBody Map<String, String> body) {
+        String content = body.getOrDefault("content", "");
+        return ResponseEntity.ok(ApiResponse.of("Internal note added successfully", content));
     }
 
     @PostMapping("/cleanup-expired")

@@ -12,7 +12,12 @@ import java.util.Optional;
 public interface SalaryRepository extends BaseRepository<SalaryEntity, Long> {
     List<SalaryEntity> findByEmployee_UserId(Long userId);
     Optional<SalaryEntity> findByEmployee_UserIdAndPeriod(Long userId, YearMonth period);
+    Optional<SalaryEntity> findByEmployee_UserIdAndPeriodAndDeletedAtIsNull(Long userId, YearMonth period);
     boolean existsByEmployee_UserIdAndPeriod(Long userId, YearMonth period);
     List<SalaryEntity> findByPeriod(YearMonth period);
     List<SalaryEntity> findByPeriodBetween(YearMonth startPeriod, YearMonth endPeriod);
+    List<SalaryEntity> findByPeriodAndDeletedAtIsNull(YearMonth period);
+    List<SalaryEntity> findByPeriodBetweenAndDeletedAtIsNull(YearMonth startPeriod, YearMonth endPeriod);
+    List<SalaryEntity> findByDeletedAtIsNotNull();
+    Optional<SalaryEntity> findByIdAndDeletedAtIsNull(Long id);
 }

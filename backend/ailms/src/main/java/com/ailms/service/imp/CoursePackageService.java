@@ -4,6 +4,7 @@ import com.ailms.entity.CourseEntity;
 import com.ailms.entity.CoursePackageEntity;
 import com.ailms.entity.ClassEntity;
 import com.ailms.entity.enums.DeliveryModeEnum;
+import com.ailms.entity.enums.CourseStatusEnum;
 import com.ailms.exception.BusinessException;
 import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.mapper.CoursePackageMapper;
@@ -74,6 +75,9 @@ public class CoursePackageService implements ICoursePackageService {
         log.info("Creating course package for course: {}", request.getCourseId());
         CourseEntity course = courseRepository.findById(request.getCourseId())
                 .orElseThrow(() -> ResourceNotFoundException.of("Course", request.getCourseId()));
+        if (course.getStatus() != CourseStatusEnum.ACTIVE) {
+            throw new BusinessException("Chỉ khóa học ở trạng thái ACTIVE mới được tạo gói bán.");
+        }
 
         CoursePackageEntity entity = coursePackageMapper.toEntity(request);
         entity.setCourseEntity(course);

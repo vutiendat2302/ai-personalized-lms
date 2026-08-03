@@ -14,6 +14,21 @@ public class StudentProfileResponse {
 
     private Long userId;
 
+    private Long id;
+    private String fullName;
+    private String email;
+    private String phone;
+    private String avatarUrl;
+    private Integer gender;
+    private LocalDateTime dateOfBirth;
+    private String status;
+    private Integer currentStreak;
+    private Integer longestStreak;
+    private java.util.List<String> goalTypes;
+    private LocalDateTime lastActiveAt;
+    private String enrolledCourseName;
+    private Boolean hasGuardian;
+
     private String studentCode;
 
     private String educationLevel;

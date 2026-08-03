@@ -11,5 +11,6 @@ public interface NotificationMapper {
     @Mapping(target = "userId", source = "user.id")
     @Mapping(target = "createdById", source = "createdByAdmin.id")
     @Mapping(target = "createdByName", source = "createdByAdmin.fullName")
+    @Mapping(target = "isRead", expression = "java(entity.isRead())")
     NotificationResponse toResponse(NotificationEntity entity);
 }

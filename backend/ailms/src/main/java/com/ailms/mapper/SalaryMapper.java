@@ -38,6 +38,10 @@ public interface SalaryMapper {
     @Mapping(target = "totalSalary", ignore = true)
     @Mapping(target = "status", ignore = true)
     @Mapping(target = "paidAt", ignore = true)
+    @Mapping(target = "transferExportedAt", ignore = true)
+    @Mapping(target = "submittedAt", ignore = true)
+    @Mapping(target = "approvedAt", ignore = true)
+    @Mapping(target = "deletedAt", ignore = true)
     @Mapping(target = "details", ignore = true)
     SalaryEntity toEntity(CreateSalaryRequest request);
 
@@ -50,6 +54,10 @@ public interface SalaryMapper {
     @Mapping(target = "updatedBy", ignore = true)
     @Mapping(target = "baseSalary", ignore = true)
     @Mapping(target = "salaryTypeEnum", ignore = true)
+    @Mapping(target = "transferExportedAt", ignore = true)
+    @Mapping(target = "submittedAt", ignore = true)
+    @Mapping(target = "approvedAt", ignore = true)
+    @Mapping(target = "deletedAt", ignore = true)
     @Mapping(target = "details", ignore = true)
     void updateFromRequest(UpdateSalaryRequest request, @MappingTarget SalaryEntity entity);
 }

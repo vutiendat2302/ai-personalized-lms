@@ -9,7 +9,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import { salaryApi } from "@/api/salary/salaryApi";
 import { Calculator, Loader2, AlertCircle } from "lucide-react";
 
@@ -28,7 +27,6 @@ export const GenerateSalaryModal: React.FC<GenerateSalaryModalProps> = ({
 }) => {
   const currentPeriod = defaultPeriod || new Date().toISOString().slice(0, 7);
   const [period, setPeriod] = useState<string>(currentPeriod);
-  const [overwriteExisting, setOverwriteExisting] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string>("");
 
@@ -50,7 +48,7 @@ export const GenerateSalaryModal: React.FC<GenerateSalaryModalProps> = ({
 
       const count = await salaryApi.generatePeriod({
         period,
-        overwriteExisting,
+        overwriteExisting: true,
       });
 
       const msg = `Đã tự động tính toán & khởi tạo thành công ${count} phiếu lương DRAFT cho kỳ ${period}!`;
@@ -100,19 +98,7 @@ export const GenerateSalaryModal: React.FC<GenerateSalaryModalProps> = ({
             />
           </div>
 
-          <div className="flex items-center space-x-2 pt-2 border-t border-border/60">
-            <Checkbox
-              id="overwrite"
-              checked={overwriteExisting}
-              onCheckedChange={(checked) => setOverwriteExisting(!!checked)}
-            />
-            <label
-              htmlFor="overwrite"
-              className="text-xs font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-            >
-              Đè lên các bản ghi DRAFT đã tạo trước đó trong kỳ
-            </label>
-          </div>
+          <p className="border-t pt-3 text-[11px] text-muted-foreground">Nếu kỳ đã có bản nháp, hệ thống sẽ tính lại bản nháp từ dữ liệu mới nhất. Bảng đã gửi duyệt hoặc đã duyệt sẽ được khóa.</p>
         </div>
 
         <DialogFooter className="gap-2 sm:gap-0 pt-2">

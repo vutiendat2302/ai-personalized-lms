@@ -26,7 +26,9 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping({"${api.prefix}/student-profiles", "${api.prefix}/students"})
@@ -96,6 +98,12 @@ public class StudentProfileController {
         return ResponseEntity.ok(ApiResponse.message("Interests assigned successfully"));
     }
 
+    @GetMapping("/{userId}/interests")
+    public ResponseEntity<ApiResponse<List<String>>> getStudentInterests(@PathVariable Long userId) {
+        return ResponseEntity.ok(ApiResponse.of("Student interests retrieved successfully",
+                studentProfileService.getStudentInterestNames(userId)));
+    }
+
     @PatchMapping("/{id}/has-goal")
     public ResponseEntity<ApiResponse<StudentProfileResponse>> updateHasGoal(
             @PathVariable Long id,
@@ -119,28 +127,34 @@ public class StudentProfileController {
     }
 
     @GetMapping("/stats/overview")
-    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> getOverviewStats() {
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getOverviewStats() {
         return ResponseEntity.ok(ApiResponse.of("Overview stats", studentProfileService.getStudentOverviewStats()));
     }
 
     @GetMapping("/stats/onboarding")
-    public ResponseEntity<ApiResponse<java.util.Map<String, Long>>> getOnboardingStats() {
+    public ResponseEntity<ApiResponse<Map<String, Long>>> getOnboardingStats() {
         return ResponseEntity.ok(ApiResponse.of("Onboarding stats", studentProfileService.getStudentOnboardingStats()));
     }
 
     @GetMapping("/stats/goals")
-    public ResponseEntity<ApiResponse<java.util.Map<String, Long>>> getGoalTypeStats() {
+    public ResponseEntity<ApiResponse<Map<String, Long>>> getGoalTypeStats() {
         return ResponseEntity.ok(ApiResponse.of("Goal type stats", studentProfileService.getStudentGoalTypeStats()));
     }
 
     @GetMapping("/stats/leaderboard")
-    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> getStreakLeaderboard() {
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getStreakLeaderboard() {
         return ResponseEntity.ok(ApiResponse.of("Streak leaderboard", studentProfileService.getStudentStreakLeaderboard()));
     }
 
     @GetMapping("/stats/activity-trend")
-    public ResponseEntity<ApiResponse<java.util.Map<String, Long>>> getActivityTrend() {
+    public ResponseEntity<ApiResponse<Map<String, Long>>> getActivityTrend() {
         return ResponseEntity.ok(ApiResponse.of("Activity trend 30 days", studentProfileService.getStudentActivityTrend30Days()));
+    }
+
+    @GetMapping("/stats/activity-logs")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getActivityLogs(
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) LocalDate date) {
+        return ResponseEntity.ok(ApiResponse.of("Activity logs by date", studentProfileService.getStudentActivityDetails(date)));
     }
 
     @GetMapping("/stats/inactive-warning")
@@ -149,7 +163,7 @@ public class StudentProfileController {
     }
 
     @GetMapping("/stats/interests")
-    public ResponseEntity<ApiResponse<java.util.Map<String, Long>>> getTopInterests() {
+    public ResponseEntity<ApiResponse<Map<String, Long>>> getTopInterests() {
         return ResponseEntity.ok(ApiResponse.of("Top interests stats", studentProfileService.getTopStudentInterests()));
     }
 

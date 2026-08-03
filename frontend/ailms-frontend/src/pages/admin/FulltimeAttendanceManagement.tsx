@@ -19,6 +19,9 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { attendanceAdminApi } from "@/api/attendance/attendanceApi";
+import type { AttendanceResponse, AttendanceStatusEnum } from "@/types/attendanceManagement";
+import { useToast } from "@/hooks/useToast";
 import {
   UserCheck,
   Clock,
@@ -72,83 +75,47 @@ const getPageNumbers = (currentPage: number, total: number) => {
 };
 
 export const FulltimeAttendanceManagement: React.FC = () => {
-  const [attendanceLogs, setAttendanceLogs] = useState<FulltimeAttendanceRecord[]>([
-    {
-      id: "att-ft-01",
-      employeeCode: "EMP-FT-001",
-      employeeName: "Vũ Tiến Đạt",
-      departmentName: "Phòng Công Nghệ & AI",
-      workDate: "2026-07-26",
-      checkInTime: "07:55:12",
-      checkOutTime: "17:30:40",
-      lateMinutes: 0,
-      overtimeHours: 0.5,
-      workdayCount: 1.0,
-      penaltyAmount: 0,
-      status: "ON_TIME",
-      ipAddress: "192.168.1.100 (Wifi Office)",
-    },
-    {
-      id: "att-ft-02",
-      employeeCode: "EMP-FT-002",
-      employeeName: "Nguyễn Thị Mai",
-      departmentName: "Phòng Hành Chính Nhân Sự",
-      workDate: "2026-07-26",
-      checkInTime: "08:18:05",
-      checkOutTime: "17:05:00",
-      lateMinutes: 18,
-      overtimeHours: 0,
-      workdayCount: 1.0,
-      penaltyAmount: 50000,
-      status: "LATE",
-      ipAddress: "192.168.1.105 (Wifi Office)",
-    },
-    {
-      id: "att-ft-03",
-      employeeCode: "EMP-FT-003",
-      employeeName: "Lê Minh Triết",
-      departmentName: "Phòng Đào Tạo & Giảng Viên",
-      workDate: "2026-07-26",
-      checkInTime: "08:00:00",
-      checkOutTime: "18:00:00",
-      lateMinutes: 0,
-      overtimeHours: 1.0,
-      workdayCount: 1.0,
-      penaltyAmount: 0,
-      status: "ON_TIME",
-      ipAddress: "192.168.1.112 (Wifi Office)",
-    },
-    {
-      id: "att-ft-04",
-      employeeCode: "EMP-FT-004",
-      employeeName: "Trần Bảo Nam",
-      departmentName: "Phòng Marketing",
-      workDate: "2026-07-26",
-      checkInTime: "--:--",
-      checkOutTime: "--:--",
-      lateMinutes: 0,
-      overtimeHours: 0,
-      workdayCount: 0.0,
-      penaltyAmount: 0,
-      status: "LEAVE_APPROVED",
-      ipAddress: "N/A (Nghỉ phép có đơn)",
-    },
-    {
-      id: "att-ft-05",
-      employeeCode: "EMP-FT-005",
-      employeeName: "Phạm Quốc Hùng",
-      departmentName: "Phòng Công Nghệ & AI",
-      workDate: "2026-07-26",
-      checkInTime: "08:35:10",
-      checkOutTime: "17:00:00",
-      lateMinutes: 35,
-      overtimeHours: 0,
-      workdayCount: 0.5,
-      penaltyAmount: 100000,
-      status: "LATE",
-      ipAddress: "192.168.1.120 (Wifi Office)",
-    },
-  ]);
+  const { success, error } = useToast();
+  const [attendanceLogs, setAttendanceLogs] = useState<FulltimeAttendanceRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const toTime = (value?: string) => value ? value.split("T").pop()?.slice(0, 8) || value : "--:--";
+  const toUiStatus = (status: AttendanceStatusEnum): FulltimeAttendanceRecord["status"] => {
+    if (status === "ON_LEAVE") return "LEAVE_APPROVED";
+    if (status === "ABSENT" || status === "CANCELLED" || status === "INVALID") return "ABSENT";
+    if (status === "LATE" || status === "PRESENT_LATE" || status === "HALF_DAY_LATE") return "LATE";
+    return "ON_TIME";
+  };
+  const mapAttendance = (item: AttendanceResponse): FulltimeAttendanceRecord => ({
+    id: String(item.id),
+    employeeCode: item.employeeCode || "—",
+    employeeName: item.employeeName || "Chưa có tên",
+    departmentName: item.departmentName || "Chưa phân phòng ban",
+    workDate: item.workDate,
+    checkInTime: toTime(item.checkInTime),
+    checkOutTime: toTime(item.checkOutTime),
+    lateMinutes: item.lateMinutes || 0,
+    overtimeHours: Number(((item.overtimeMinutes || 0) / 60).toFixed(1)),
+    workdayCount: item.status === "HALF_DAY" || item.status === "HALF_DAY_LATE" ? 0.5 : ["ABSENT", "ON_LEAVE", "CANCELLED", "INVALID"].includes(item.status) ? 0 : 1,
+    penaltyAmount: 0,
+    status: toUiStatus(item.status),
+    ipAddress: item.source === "DEVICE" ? "Thiết bị chấm công" : item.source === "MANUAL" ? "Điều chỉnh thủ công" : "Dữ liệu mô phỏng",
+  });
+
+  const loadAttendances = async () => {
+    setLoading(true);
+    try {
+      const response = await attendanceAdminApi.getAttendances({ page: 0, size: 200, sortBy: "workDate", sortDir: "DESC" });
+      setAttendanceLogs((response?.content || []).map(mapAttendance));
+    } catch {
+      setAttendanceLogs([]);
+      error("Không tải được dữ liệu điểm danh. Vui lòng thử lại.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { void loadAttendances(); }, []);
 
   // Search & Filter
   const [searchTerm, setSearchTerm] = useState("");
@@ -180,27 +147,39 @@ export const FulltimeAttendanceManagement: React.FC = () => {
     setFormStatus(log.status);
   };
 
-  const handleSaveEdit = (e: React.FormEvent) => {
+  const handleSaveEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingLog) return;
 
-    setAttendanceLogs((prev) =>
-      prev.map((a) =>
-        a.id === editingLog.id
-          ? {
-              ...a,
-              checkInTime: formCheckIn,
-              checkOutTime: formCheckOut,
-              lateMinutes: formLateMinutes,
-              overtimeHours: formOvertimeHours,
-              status: formStatus,
-              penaltyAmount: formLateMinutes > 15 ? (formLateMinutes > 30 ? 100000 : 50000) : 0,
-            }
-          : a
-      )
-    );
-    showBanner(`Đã cập nhật dữ liệu điểm danh của ${editingLog.employeeName}`);
-    setEditingLog(null);
+    const status: AttendanceStatusEnum = formStatus === "ON_TIME" ? "PRESENT" : formStatus === "LEAVE_APPROVED" ? "ON_LEAVE" : formStatus;
+    try {
+      await attendanceAdminApi.patchUpdate(editingLog.id, {
+        checkInTime: formCheckIn.includes("T") ? formCheckIn : `${editingLog.workDate}T${formCheckIn}`,
+        checkOutTime: formCheckOut.includes("T") ? formCheckOut : `${editingLog.workDate}T${formCheckOut}`,
+        status,
+        note: "Điều chỉnh từ màn hình quản lý điểm danh",
+      });
+      success(`Đã cập nhật điểm danh của ${editingLog.employeeName}`);
+      setEditingLog(null);
+      await loadAttendances();
+    } catch {
+      error("Không thể cập nhật điểm danh. Vui lòng kiểm tra dữ liệu và thử lại.");
+    }
+  };
+
+  const handleExport = async () => {
+    try {
+      const blob = await attendanceAdminApi.exportCsv({ sortBy: "workDate", sortDir: "DESC" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `bang-cham-cong-${new Date().toISOString().slice(0, 10)}.csv`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      success("Đã xuất bảng chấm công thành công.");
+    } catch {
+      error("Không thể xuất bảng chấm công.");
+    }
   };
 
   const filteredLogs = attendanceLogs.filter((log) => {
@@ -226,11 +205,6 @@ export const FulltimeAttendanceManagement: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-7xl px-6 py-8 space-y-6 animate-in fade-in duration-300">
-      {actionMessage && (
-        <div className={cn("fixed top-4 right-4 z-50 px-4 py-2 rounded-lg shadow-lg text-sm font-bold animate-in slide-in-from-top-2", actionMessage.isError ? "bg-rose-500 text-white" : "bg-emerald-500 text-white")}>
-          {actionMessage.text}
-        </div>
-      )}
       {/* Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -243,7 +217,7 @@ export const FulltimeAttendanceManagement: React.FC = () => {
           </p>
         </div>
         <Button
-          onClick={() => showBanner("Đang xuất dữ liệu bảng chấm công Excel...")}
+          onClick={handleExport}
           variant="outline"
           className="rounded-xl font-bold text-xs gap-1 h-9"
         >
@@ -346,7 +320,9 @@ export const FulltimeAttendanceManagement: React.FC = () => {
               </TableRow>
             </TableHeader>
             <TableBody className="opacity-90">
-              {paginatedLogs.length > 0 ? (
+              {loading ? (
+                <TableRow><TableCell colSpan={7} className="py-12 text-center text-muted-foreground text-sm">Đang tải dữ liệu điểm danh...</TableCell></TableRow>
+              ) : paginatedLogs.length > 0 ? (
                 paginatedLogs.map((log) => (
                   <TableRow key={log.id} className="hover:bg-foreground/10 transition-colors border-border/30">
                     <TableCell className="pl-4">
@@ -513,7 +489,7 @@ export const FulltimeAttendanceManagement: React.FC = () => {
                     variant={isCurrent ? "default" : "outline"}
                     size="sm"
                     className={cn(
-                      "h-8 min-w-[32px] px-2 text-xs font-semibold rounded-lg transition-all",
+                      "h-8 min-w-8 px-2 text-xs font-semibold rounded-lg transition-all",
                       isCurrent
                         ? "bg-primary text-primary-foreground shadow-xs"
                         : "border-border/40 text-foreground hover:bg-muted/70"

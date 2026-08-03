@@ -1,12 +1,14 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { salaryApi } from "@/api/salary/salaryApi";
+import { useToast } from "@/hooks/useToast";
+import { useAuth } from "@/hooks/useAuth";
 import { departmentApi, type DepartmentResponse } from "@/api/departments/departmentApi";
 import type {
   SalaryResponse,
   SalarySummaryResponse,
-  SalarySearchFilters,
   SalaryStatusEnum,
   SalaryTypeEnum,
+  PayrollBatchResponse,
 } from "@/types/salaryManagement";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +23,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -76,16 +79,29 @@ import {
   X,
   Building2,
   TrendingUp,
+  Trash2,
+  Send,
+  Eye,
 } from "lucide-react";
 
 const STATUS_COLORS: Record<string, string> = {
   DRAFT: "#9ca3af",
   PENDING: "#f59e0b",
   CONFIRMED: "#3b82f6",
+  TRANSFER_EXPORTED: "#8b5cf6",
   PAID: "#10b981",
 };
 
 export const SalaryManagement: React.FC = () => {
+  const { success, error } = useToast();
+  const { auth } = useAuth();
+  const normalizedRoles = (auth.user?.roles || []).map(role => String(role).replace("ROLE_", "").toUpperCase());
+  const isAdmin = normalizedRoles.includes("ADMIN");
+  const isHr = normalizedRoles.includes("HR") && !isAdmin;
+  const currentYear = new Date().getFullYear();
+  const [periodMode, setPeriodMode] = useState<"ALL" | "MONTH" | "QUARTER" | "YEAR">("ALL");
+  const [selectedYear, setSelectedYear] = useState(currentYear);
+  const [selectedQuarter, setSelectedQuarter] = useState(Math.floor(new Date().getMonth() / 3) + 1);
   // --- State Kỳ Lương (Default: tháng hiện tại YYYY-MM) ---
   const [period, setPeriod] = useState<string>(() => {
     const d = new Date();
@@ -93,6 +109,20 @@ export const SalaryManagement: React.FC = () => {
     const m = String(d.getMonth() + 1).padStart(2, "0");
     return `${y}-${m}`;
   });
+
+  const periodRange = useMemo(() => {
+    if (periodMode === "ALL") return { from: "2000-01", to: period, label: "Tất cả kỳ lương" };
+    if (periodMode === "MONTH") return { from: period, to: period, label: `Tháng ${period.slice(5, 7)}/${period.slice(0, 4)}` };
+    if (periodMode === "QUARTER") {
+      const startMonth = (selectedQuarter - 1) * 3 + 1;
+      return {
+        from: `${selectedYear}-${String(startMonth).padStart(2, "0")}`,
+        to: `${selectedYear}-${String(startMonth + 2).padStart(2, "0")}`,
+        label: `Quý ${selectedQuarter}/${selectedYear}`,
+      };
+    }
+    return { from: `${selectedYear}-01`, to: `${selectedYear}-12`, label: `Năm ${selectedYear}` };
+  }, [periodMode, period, selectedQuarter, selectedYear]);
 
   // --- States Phòng Ban ---
   const [departments, setDepartments] = useState<DepartmentResponse[]>([]);
@@ -123,14 +153,25 @@ export const SalaryManagement: React.FC = () => {
   const [generateModalOpen, setGenerateModalOpen] = useState<boolean>(false);
   const [confirmBulkPayOpen, setConfirmBulkPayOpen] = useState<boolean>(false);
   const [bulkActionLoading, setBulkActionLoading] = useState<boolean>(false);
-
-  // --- Banner Floating Notify ---
-  const [bannerMsg, setBannerMsg] = useState<{ text: string; isError?: boolean } | null>(null);
+  const [viewMode, setViewMode] = useState<"BATCHES" | "DETAIL">("BATCHES");
+  const [payrollBatches, setPayrollBatches] = useState<PayrollBatchResponse[]>([]);
+  const [allPayrollBatches, setAllPayrollBatches] = useState<PayrollBatchResponse[]>([]);
+  const [chartGroupBy, setChartGroupBy] = useState<"MONTH" | "QUARTER" | "YEAR">("MONTH");
+  const [chartYear, setChartYear] = useState(currentYear);
+  const [loadingBatches, setLoadingBatches] = useState(false);
+  const [draftToDelete, setDraftToDelete] = useState<string | null>(null);
+  const [approvedToDelete, setApprovedToDelete] = useState<string | null>(null);
+  const [batchKeyword, setBatchKeyword] = useState("");
+  const [batchStatus, setBatchStatus] = useState<SalaryStatusEnum | "ALL" | "APPROVED">("ALL");
+  const [rejectingPeriod, setRejectingPeriod] = useState<string | null>(null);
+  const [rejectionReason, setRejectionReason] = useState("");
+  const payrollBatchRequestRef = useRef(0);
 
   const showBanner = (text: string, isError = false) => {
-    setBannerMsg({ text, isError });
-    setTimeout(() => setBannerMsg(null), 5000);
+    if (isError) error(text);
+    else success(text);
   };
+  const formatDateTime = (value?: string) => value ? new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value)) : "—";
 
   // Fetch danh sách phòng ban
   useEffect(() => {
@@ -152,21 +193,11 @@ export const SalaryManagement: React.FC = () => {
     return () => clearTimeout(timer);
   }, [keywordInput]);
 
-  // Handle Prev / Next Month
-  const handleMonthChange = (offset: number) => {
-    const [y, m] = period.split("-").map(Number);
-    const date = new Date(y, m - 1 + offset, 1);
-    const newY = date.getFullYear();
-    const newM = String(date.getMonth() + 1).padStart(2, "0");
-    setPeriod(`${newY}-${newM}`);
-    setCurrentPage(0);
-  };
-
   // Fetch Summary Data
   const fetchSummary = async () => {
     try {
       setLoadingSummary(true);
-      const data = await salaryApi.getSummary({ period });
+      const data = await salaryApi.getSummaryRange({ periodFrom: periodRange.from, periodTo: periodRange.to });
       setSummaryData(data);
     } catch (err: any) {
       console.error("Failed to fetch salary summary:", err);
@@ -181,7 +212,9 @@ export const SalaryManagement: React.FC = () => {
       setLoadingList(true);
       const res = await salaryApi.getSalaries({
         keyword: debouncedKeyword,
-        period,
+        period: periodMode === "MONTH" ? period : undefined,
+        periodFrom: periodMode === "MONTH" ? undefined : periodRange.from,
+        periodTo: periodMode === "MONTH" ? undefined : periodRange.to,
         status: statusFilter,
         departmentId: departmentFilter !== "ALL" ? departmentFilter : undefined,
         salaryTypeEnum: salaryTypeFilter !== "ALL" ? salaryTypeFilter : undefined,
@@ -200,10 +233,114 @@ export const SalaryManagement: React.FC = () => {
     }
   };
 
+  const fetchPayrollBatches = async () => {
+    const requestId = ++payrollBatchRequestRef.current;
+    try {
+      setLoadingBatches(true);
+      const allRange = { periodFrom: "2000-01", periodTo: "2100-12" };
+      if (periodMode === "ALL") {
+        const all = await salaryApi.getPayrollBatches(allRange);
+        if (requestId !== payrollBatchRequestRef.current) return;
+        setPayrollBatches(all); setAllPayrollBatches(all);
+      } else {
+        const [filtered, all] = await Promise.all([
+          salaryApi.getPayrollBatches({ periodFrom: periodRange.from, periodTo: periodRange.to }),
+          salaryApi.getPayrollBatches(allRange),
+        ]);
+        if (requestId !== payrollBatchRequestRef.current) return;
+        setPayrollBatches(filtered); setAllPayrollBatches(all);
+      }
+    } catch {
+      showBanner("Không tải được danh sách bảng lương", true);
+    } finally {
+      if (requestId === payrollBatchRequestRef.current) setLoadingBatches(false);
+    }
+  };
+
   useEffect(() => {
     fetchSummary();
     fetchList();
-  }, [period, debouncedKeyword, statusFilter, departmentFilter, salaryTypeFilter, currentPage, pageSize]);
+  }, [periodRange.from, periodRange.to, periodMode, debouncedKeyword, statusFilter, departmentFilter, salaryTypeFilter, currentPage, pageSize]);
+
+  useEffect(() => {
+    fetchPayrollBatches();
+  }, [periodRange.from, periodRange.to, periodMode, period]);
+
+  const openPayroll = (batch: PayrollBatchResponse) => {
+    setPeriodMode("MONTH");
+    setPeriod(batch.period);
+    setViewMode("DETAIL");
+    setCurrentPage(0);
+    setStatusFilter("ALL");
+  };
+
+  const submitPayroll = async (batchPeriod: string) => {
+    try {
+      const count = await salaryApi.submitPayroll(batchPeriod);
+      showBanner(`Đã gửi ${count} phiếu lương cho Admin duyệt`);
+      fetchPayrollBatches(); fetchSummary(); fetchList();
+    } catch { showBanner("Không thể gửi bảng lương duyệt", true); }
+  };
+
+  const cancelPayrollSubmission = async (batchPeriod: string) => {
+    try {
+      const count = await salaryApi.cancelPayrollSubmission(batchPeriod);
+      showBanner(`Đã hủy gửi duyệt ${count} phiếu và đưa bảng lương về bản nháp`);
+      fetchPayrollBatches(); fetchSummary(); fetchList();
+    } catch { showBanner("Chỉ người HR tạo bảng lương mới có thể hủy chờ duyệt", true); }
+  };
+
+  const approvePayroll = async (batchPeriod: string) => {
+    try {
+      const count = await salaryApi.approvePayroll(batchPeriod);
+      showBanner(`Đã duyệt bảng lương gồm ${count} phiếu`);
+      fetchPayrollBatches(); fetchSummary(); fetchList();
+    } catch { showBanner("Không thể duyệt bảng lương", true); }
+  };
+
+  const rejectPayroll = async () => {
+    if (!rejectingPeriod || rejectionReason.trim().length < 5) return;
+    try {
+      await salaryApi.rejectPayroll(rejectingPeriod, rejectionReason.trim());
+      showBanner("Đã từ chối và gửi thông báo hệ thống cùng email cho HR");
+      setRejectingPeriod(null); setRejectionReason(""); fetchPayrollBatches(); fetchSummary(); fetchList();
+    } catch { showBanner("Không thể từ chối bảng lương", true); }
+  };
+
+  const resubmitPayroll = async (batchPeriod: string) => {
+    try {
+      await salaryApi.resubmitPayroll(batchPeriod);
+      showBanner("Đã gửi lại bảng lương cho Admin duyệt");
+      fetchPayrollBatches(); fetchSummary(); fetchList();
+    } catch { showBanner("Không thể gửi lại bảng lương", true); }
+  };
+
+  const deleteDraftPayroll = async () => {
+    if (!draftToDelete) return;
+    try {
+      await salaryApi.deleteDraftPayroll(draftToDelete);
+      showBanner(`Đã chuyển bảng lương tháng ${draftToDelete} vào thùng rác`);
+      setDraftToDelete(null); fetchPayrollBatches(); fetchSummary(); fetchList();
+    } catch { showBanner("HR chỉ được xóa bảng lương nháp hoặc chờ duyệt do mình tạo", true); }
+  };
+
+  const deleteApprovedPayroll = async () => {
+    if (!approvedToDelete) return;
+    try {
+      await salaryApi.deleteApprovedPayroll(approvedToDelete);
+      showBanner(`Đã xóa bảng lương đã duyệt tháng ${approvedToDelete}`);
+      setApprovedToDelete(null); fetchPayrollBatches(); fetchSummary(); fetchList();
+    } catch { showBanner("Không thể xóa bảng lương", true); }
+  };
+
+
+  const markPayrollPaid = async (batchPeriod: string) => {
+    try {
+      const count = await salaryApi.markPayrollPaid(batchPeriod);
+      showBanner(`Đã xác nhận thanh toán ${count} phiếu lương`);
+      fetchPayrollBatches(); fetchSummary(); fetchList();
+    } catch { showBanner("Phải xuất danh sách chuyển khoản trước khi xác nhận thanh toán", true); }
+  };
 
   // Bulk Approve
   const handleBulkApprove = async () => {
@@ -263,8 +400,9 @@ export const SalaryManagement: React.FC = () => {
   const handleExportCsv = async () => {
     try {
       showBanner("Đang khởi tạo báo cáo CSV kỳ lương...");
-      const blob = await salaryApi.exportCsv({
-        period,
+      const blob = await salaryApi.exportCsvRange({
+        periodFrom: periodRange.from,
+        periodTo: periodRange.to,
         departmentId: departmentFilter !== "ALL" ? departmentFilter : undefined,
         status: statusFilter !== "ALL" ? statusFilter : undefined,
       });
@@ -272,7 +410,7 @@ export const SalaryManagement: React.FC = () => {
       const url = window.URL.createObjectURL(new Blob([blob]));
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute("download", `Bao_Cao_Luong_${period}.csv`);
+      link.setAttribute("download", `Bao_Cao_Luong_${periodRange.from}_${periodRange.to}.csv`);
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -281,6 +419,20 @@ export const SalaryManagement: React.FC = () => {
       console.error("Export CSV failed:", err);
       showBanner("Lỗi khi xuất file CSV", true);
     }
+  };
+
+  const handleExportTransferList = async (batchPeriod?: string) => {
+    try {
+      if (!batchPeriod) throw new Error("Chưa chọn bảng lương tháng");
+      const blob = await salaryApi.exportTransferList(batchPeriod);
+      const url = URL.createObjectURL(new Blob([blob]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `Danh_Sach_Chuyen_Khoan_${batchPeriod || periodRange.from}_${batchPeriod || periodRange.to}.csv`;
+      link.click(); URL.revokeObjectURL(url);
+      showBanner("Đã xuất danh sách chuyển khoản. Bảng lương hiện có thể xác nhận thanh toán.");
+      fetchPayrollBatches(); fetchSummary(); fetchList();
+    } catch { showBanner("Không thể xuất danh sách chuyển khoản.", true); }
   };
 
   // Prepare Donut Chart Data
@@ -294,6 +446,8 @@ export const SalaryManagement: React.FC = () => {
           ? "Chờ duyệt (PENDING)"
           : name === "CONFIRMED"
           ? "Đã duyệt (CONFIRMED)"
+          : name === "TRANSFER_EXPORTED"
+          ? "Đã xuất chuyển khoản"
           : "Đã thanh toán (PAID)",
       key: name,
       value,
@@ -317,22 +471,51 @@ export const SalaryManagement: React.FC = () => {
     setCurrentPage(0);
   };
 
+  const selectedSalaryRows = salaries.filter(item => selectedIds.includes(item.id));
+  const canApproveSelection = selectedSalaryRows.length > 0 && selectedSalaryRows.every(item => item.status === "PENDING");
+  const canPaySelection = selectedSalaryRows.length > 0 && selectedSalaryRows.every(item => item.status === "TRANSFER_EXPORTED");
+  const roleVisiblePayrollBatches = payrollBatches;
+  const visiblePayrollBatches = roleVisiblePayrollBatches.filter(batch => {
+    const term = batchKeyword.trim().toLowerCase();
+    const keywordMatched = !term || batch.period.includes(term) || `payroll-${batch.period}`.includes(term);
+    const statusMatched = batchStatus === "ALL" || (batchStatus === "APPROVED"
+      ? ["CONFIRMED", "TRANSFER_EXPORTED", "PAID"].includes(batch.status)
+      : batch.status === batchStatus);
+    return keywordMatched && statusMatched;
+  });
+  const batchCounts = {
+    draft: roleVisiblePayrollBatches.filter(batch => batch.status === "DRAFT").length,
+    pending: roleVisiblePayrollBatches.filter(batch => batch.status === "PENDING").length,
+    approved: roleVisiblePayrollBatches.filter(batch => ["CONFIRMED", "TRANSFER_EXPORTED"].includes(batch.status)).length,
+    paid: roleVisiblePayrollBatches.filter(batch => batch.status === "PAID").length,
+    rejected: roleVisiblePayrollBatches.filter(batch => batch.status === "REJECTED").length,
+  };
+  const payrollAmountTrend = useMemo(() => {
+    const grouped = new Map<string, { sortKey: string; total: number; slips: number }>();
+    for (const batch of allPayrollBatches.filter(item => {
+      const approved = ["CONFIRMED", "TRANSFER_EXPORTED", "PAID"].includes(item.status);
+      return approved && (chartGroupBy === "YEAR" || Number(item.period.slice(0, 4)) === chartYear);
+    })) {
+      const [year, month] = batch.period.split("-").map(Number);
+      const quarter = Math.floor((month - 1) / 3) + 1;
+      const key = chartGroupBy === "MONTH" ? `${String(month).padStart(2, "0")}/${year}`
+        : chartGroupBy === "QUARTER" ? `Q${quarter}/${year}` : String(year);
+      const sortKey = chartGroupBy === "MONTH" ? batch.period
+        : chartGroupBy === "QUARTER" ? `${year}-${quarter}` : String(year);
+      const current = grouped.get(key) || { sortKey, total: 0, slips: 0 };
+      current.total += batch.totalAmount; current.slips += batch.slipCount;
+      grouped.set(key, current);
+    }
+    return [...grouped.entries()].map(([periodLabel, value]) => ({
+      period: periodLabel, sortKey: value.sortKey, total: value.total,
+      average: value.slips ? value.total / value.slips : 0,
+    })).sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+  }, [allPayrollBatches, chartGroupBy, chartYear]);
+  const amountByStatus = (statuses: SalaryStatusEnum[]) => roleVisiblePayrollBatches
+    .filter(batch => statuses.includes(batch.status)).reduce((sum, batch) => sum + batch.totalAmount, 0);
+
   return (
     <div className="p-6 space-y-6 max-w-[1600px] mx-auto">
-      {/* Banner Floating Notify */}
-      {bannerMsg && (
-        <div
-          className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl shadow-lg border text-sm flex items-center gap-2 animate-in slide-in-from-top duration-200 ${
-            bannerMsg.isError
-              ? "bg-red-50 border-red-200 text-red-700 dark:bg-red-950 dark:border-red-800 dark:text-red-300"
-              : "bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-950 dark:border-emerald-800 dark:text-emerald-300"
-          }`}
-        >
-          {bannerMsg.isError ? <AlertTriangle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
-          <span>{bannerMsg.text}</span>
-        </div>
-      )}
-
       {/* HEADER SECTION */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-border/60 pb-5">
         <div>
@@ -344,68 +527,70 @@ export const SalaryManagement: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Bộ Chọn Kỳ Lương (Month Picker Navigator) */}
-          <div className="flex items-center gap-1.5 bg-card p-1 rounded-xl border border-border/60 shadow-2xs">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => handleMonthChange(-1)}
-              className="h-8 w-8 p-0 rounded-lg hover:bg-muted"
-              title="Kỳ trước"
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-
-            <div className="flex items-center gap-1.5 px-2">
-              <span className="text-xs font-semibold text-muted-foreground">Kỳ lương:</span>
-              <input
-                type="month"
-                value={period}
-                onChange={(e) => {
-                  if (e.target.value) {
-                    setPeriod(e.target.value);
-                    setCurrentPage(0);
-                  }
-                }}
-                className="h-8 text-xs font-bold bg-transparent border-none focus:outline-hidden cursor-pointer"
-              />
-            </div>
-
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => handleMonthChange(1)}
-              className="h-8 w-8 p-0 rounded-lg hover:bg-muted"
-              title="Kỳ sau"
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-
-          {/* Nút Xuất CSV Báo Cáo */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleExportCsv}
-            className="h-9 text-xs gap-1.5 rounded-xl border-border/60 font-semibold cursor-pointer shadow-2xs"
-          >
-            <DownloadCloud className="h-4 w-4" /> Xuất báo cáo kỳ này
-          </Button>
-
-          {/* NÚT PRIMARY NỔI BẬT: Tạo Bảng Lương Kỳ Mới */}
-          <Button
-            size="sm"
-            onClick={() => setGenerateModalOpen(true)}
-            className="h-9 text-xs gap-1.5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-md cursor-pointer"
-          >
-            <Calculator className="h-4 w-4" /> Tạo bảng lương kỳ mới
-          </Button>
-        </div>
       </div>
 
+      {viewMode === "DETAIL" && <div className="flex items-center justify-between rounded-xl border bg-card p-3"><div><p className="text-sm font-bold">Chi tiết bảng lương tháng {period.slice(5, 7)}/{period.slice(0, 4)}</p><p className="text-xs text-muted-foreground">Danh sách phiếu lương của nhân viên thuộc bảng đã chọn</p></div><Button variant="outline" size="sm" onClick={() => { payrollBatchRequestRef.current++; setViewMode("BATCHES"); setPeriodMode("ALL"); setPayrollBatches(allPayrollBatches); setSelectedIds([]); setSelectedSalary(null); setStatusFilter("ALL"); setDepartmentFilter("ALL"); setSalaryTypeFilter("ALL"); setKeywordInput(""); setBatchKeyword(""); setBatchStatus("ALL"); setCurrentPage(0); }} className="gap-1.5 text-xs"><ChevronLeft className="h-4 w-4" />Quay lại danh sách bảng lương</Button></div>}
+
+      {viewMode === "BATCHES" && (
+        <div className="space-y-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <Card className="p-4"><p className="text-xs text-muted-foreground">Bản nháp cần hoàn thiện</p><p className="mt-1 text-2xl font-black">{batchCounts.draft} bảng</p><p className="mt-1 text-xs text-muted-foreground">{formatVND(amountByStatus(["DRAFT"]))}</p></Card>
+          <Card className="p-4 border-amber-500/20"><p className="text-xs text-muted-foreground">Đang chờ Admin duyệt</p><p className="mt-1 text-2xl font-black text-amber-600">{batchCounts.pending} bảng</p><p className="mt-1 text-xs text-muted-foreground">{formatVND(amountByStatus(["PENDING"]))} đang chờ xử lý</p></Card>
+          <Card className="p-4 border-blue-500/20"><p className="text-xs text-muted-foreground">Đã duyệt, chưa hoàn tất</p><p className="mt-1 text-2xl font-black text-blue-600">{batchCounts.approved} bảng</p><p className="mt-1 text-xs text-muted-foreground">{formatVND(amountByStatus(["CONFIRMED", "TRANSFER_EXPORTED"]))}</p></Card>
+          <Card className="p-4 border-emerald-500/20"><p className="text-xs text-muted-foreground">Đã thanh toán</p><p className="mt-1 text-2xl font-black text-emerald-600">{batchCounts.paid} bảng</p><p className="mt-1 text-xs text-muted-foreground">{formatVND(amountByStatus(["PAID"]))} đã chi</p></Card>
+          <Card className="p-4 border-red-500/20"><p className="text-xs text-muted-foreground">Bị từ chối cần sửa</p><p className="mt-1 text-2xl font-black text-red-600">{batchCounts.rejected} bảng</p><p className="mt-1 text-xs text-muted-foreground">Cần chỉnh sửa và gửi lại</p></Card>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-sm font-bold">Phân tích lịch sử bảng lương</h2><p className="text-xs text-muted-foreground">So sánh toàn bộ dữ liệu giữa các kỳ, độc lập với bộ lọc danh sách</p></div><div className="flex items-center gap-2"><Select value={chartGroupBy} onValueChange={value => setChartGroupBy(value as typeof chartGroupBy)}><SelectTrigger className="h-9 w-40 text-xs"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="MONTH">Theo tháng</SelectItem><SelectItem value="QUARTER">Theo quý</SelectItem><SelectItem value="YEAR">Theo năm</SelectItem></SelectContent></Select>{chartGroupBy !== "YEAR" && <div className="flex h-9 items-center rounded-lg border bg-background"><Button variant="ghost" size="sm" onClick={() => setChartYear(year => year - 1)} className="h-8 w-8 p-0" title="Năm trước"><ChevronLeft className="h-4 w-4" /></Button><Input type="number" min={2000} max={currentYear + 1} value={chartYear} onChange={event => setChartYear(Math.min(currentYear + 1, Math.max(2000, Number(event.target.value))))} className="h-8 w-20 border-0 text-center text-xs font-bold shadow-none" aria-label="Năm phân tích" /><Button variant="ghost" size="sm" onClick={() => setChartYear(year => Math.min(currentYear + 1, year + 1))} className="h-8 w-8 p-0" title="Năm sau"><ChevronRight className="h-4 w-4" /></Button></div>}</div></div>
+        <div className="grid gap-4 lg:grid-cols-3">
+          <Card className="lg:col-span-2"><CardHeader className="pb-2"><CardTitle className="text-sm">Tổng quỹ lương</CardTitle><CardDescription>So sánh tổng thực nhận {chartGroupBy === "MONTH" ? "giữa các tháng" : chartGroupBy === "QUARTER" ? "giữa các quý" : "giữa các năm"}</CardDescription></CardHeader><CardContent className="h-64"><ResponsiveContainer width="100%" height="100%"><BarChart data={payrollAmountTrend}><CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.25} /><XAxis dataKey="period" tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 10 }} tickFormatter={value => `${Math.round(Number(value) / 1_000_000)}tr`} /><Tooltip formatter={value => formatVND(Number(value))} /><Bar dataKey="total" name="Quỹ lương" fill="var(--primary)" radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer></CardContent></Card>
+          <Card><CardHeader className="pb-2"><CardTitle className="text-sm">Thực nhận bình quân</CardTitle><CardDescription>Bình quân mỗi nhân viên theo {chartGroupBy === "MONTH" ? "tháng" : chartGroupBy === "QUARTER" ? "quý" : "năm"}</CardDescription></CardHeader><CardContent className="h-64"><ResponsiveContainer width="100%" height="100%"><LineChart data={payrollAmountTrend}><CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.25} /><XAxis dataKey="period" tick={{ fontSize: 11 }} /><YAxis tick={{ fontSize: 10 }} tickFormatter={value => `${Math.round(Number(value) / 1_000_000)}tr`} /><Tooltip formatter={value => formatVND(Number(value))} /><Line type="monotone" dataKey="average" name="Bình quân" stroke="#8b5cf6" strokeWidth={2.5} dot={{ r: 3 }} /></LineChart></ResponsiveContainer></CardContent></Card>
+        </div>
+        <Card className="overflow-hidden border-border/60 shadow-xs">
+          <CardHeader className="border-b bg-muted/10 py-4">
+            <div className="flex items-center justify-between gap-3">
+              <div><CardTitle className="text-base">{isAdmin ? "Bảng lương cần quản trị viên xử lý" : `Các bảng lương trong ${periodRange.label.toLowerCase()}`}</CardTitle><CardDescription className="mt-1 text-xs">{isAdmin ? "Chỉ hiển thị bảng lương HR đã gửi duyệt và các bảng đã được duyệt." : "Mỗi dòng là một bảng lương tháng. Mở bảng để kiểm tra các phiếu nhân viên trước khi gửi duyệt."}</CardDescription></div>
+              <Button size="sm" onClick={() => setGenerateModalOpen(true)} className="gap-1.5 text-xs"><Calculator className="h-4 w-4" />Tạo bản nháp tháng</Button>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <div className="relative min-w-64 flex-1"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input value={batchKeyword} onChange={event => setBatchKeyword(event.target.value)} placeholder="Tìm theo kỳ hoặc mã bảng lương..." className="h-9 pl-9 text-sm" /></div>
+              <Select value={batchStatus} onValueChange={value => setBatchStatus(value as typeof batchStatus)}><SelectTrigger className="h-9 w-48 text-sm"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="ALL">Tất cả trạng thái</SelectItem><SelectItem value="DRAFT">Bản nháp</SelectItem><SelectItem value="PENDING">Chờ duyệt</SelectItem><SelectItem value="REJECTED">Bị từ chối</SelectItem><SelectItem value="APPROVED">Đã duyệt</SelectItem><SelectItem value="PAID">Đã thanh toán</SelectItem></SelectContent></Select>
+              {(batchKeyword || batchStatus !== "ALL") && <Button variant="ghost" size="sm" onClick={() => { setBatchKeyword(""); setBatchStatus("ALL"); }} className="h-9 gap-1 text-xs"><X className="h-4 w-4" />Xóa lọc</Button>}
+            </div>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader><TableRow><TableHead>Kỳ lương</TableHead><TableHead>Trạng thái bảng</TableHead><TableHead>Ngày gửi</TableHead><TableHead>Ngày duyệt</TableHead><TableHead className="text-right">Số phiếu</TableHead><TableHead className="text-right">Tổng thực nhận</TableHead><TableHead className="text-right">Thao tác nghiệp vụ</TableHead></TableRow></TableHeader>
+              <TableBody>
+                {loadingBatches ? <TableRow><TableCell colSpan={7} className="h-32 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" /></TableCell></TableRow>
+                : visiblePayrollBatches.length === 0 ? <TableRow><TableCell colSpan={7} className="h-40 text-center text-sm text-muted-foreground">{isAdmin ? "Không có bảng lương đang chờ duyệt hoặc đã duyệt trong kỳ này." : "Chưa có bảng lương thật trong kỳ đã chọn."}</TableCell></TableRow>
+                : visiblePayrollBatches.map(batch => <TableRow key={batch.id}>
+                  <TableCell><div className="font-bold">Tháng {batch.period.slice(5, 7)}/{batch.period.slice(0, 4)}</div><div className="text-[11px] text-muted-foreground">Mã bảng: PAYROLL-{batch.period}</div></TableCell>
+                  <TableCell>{getStatusBadge(batch.status)}</TableCell>
+                  <TableCell className="whitespace-nowrap text-xs text-muted-foreground">{formatDateTime(batch.submittedAt)}</TableCell>
+                  <TableCell className="whitespace-nowrap text-xs text-muted-foreground">{formatDateTime(batch.approvedAt)}</TableCell>
+                  <TableCell className="text-right font-semibold">{batch.slipCount}</TableCell>
+                  <TableCell className="text-right font-mono font-bold">{formatVND(batch.totalAmount)}</TableCell>
+                  <TableCell><div className="flex flex-col items-end gap-1.5"><div className="flex justify-end gap-1.5">
+                    <Button variant="outline" size="sm" onClick={() => openPayroll(batch)} className="h-8 gap-1 text-xs"><Eye className="h-3.5 w-3.5" />Xem chi tiết</Button>
+                    {batch.status === "DRAFT" && <><Button size="sm" onClick={() => submitPayroll(batch.period)} className="h-8 gap-1 text-xs"><Send className="h-3.5 w-3.5" />Gửi duyệt</Button>{isHr && batch.createdBy === String(auth.user?.id) && <Button variant="ghost" size="sm" onClick={() => setDraftToDelete(batch.period)} className="h-8 w-8 p-0 text-destructive" title="Xóa bản nháp của tôi"><Trash2 className="h-4 w-4" /></Button>}</>}
+                    {isHr && batch.status === "PENDING" && batch.createdBy === String(auth.user?.id) && <><Button variant="outline" size="sm" onClick={() => cancelPayrollSubmission(batch.period)} className="h-8 gap-1 text-xs"><RotateCcw className="h-3.5 w-3.5" />Hủy chờ duyệt</Button><Button variant="ghost" size="sm" onClick={() => setDraftToDelete(batch.period)} className="h-8 w-8 p-0 text-destructive" title="Xóa bảng đang chờ duyệt của tôi"><Trash2 className="h-4 w-4" /></Button></>}
+                    {isAdmin && batch.status === "PENDING" && <><Button variant="outline" size="sm" onClick={() => { setRejectingPeriod(batch.period); setRejectionReason(""); }} className="h-8 text-xs text-destructive">Từ chối</Button><Button size="sm" onClick={() => approvePayroll(batch.period)} className="h-8 gap-1 bg-blue-600 text-xs hover:bg-blue-700"><Check className="h-3.5 w-3.5" />Duyệt bảng lương</Button></>}
+                    {batch.status === "REJECTED" && <Button size="sm" onClick={() => resubmitPayroll(batch.period)} className="h-8 gap-1 text-xs"><Send className="h-3.5 w-3.5" />Gửi lại</Button>}
+                    {isAdmin && batch.status === "CONFIRMED" && <Button variant="outline" size="sm" onClick={() => handleExportTransferList(batch.period)} className="h-8 gap-1 text-xs"><DownloadCloud className="h-3.5 w-3.5" />Xuất chuyển khoản</Button>}
+                    {isAdmin && batch.status === "TRANSFER_EXPORTED" && <Button size="sm" onClick={() => markPayrollPaid(batch.period)} className="h-8 gap-1 bg-emerald-600 text-xs hover:bg-emerald-700"><CreditCard className="h-3.5 w-3.5" />Đánh dấu đã thanh toán</Button>}
+                    {isAdmin && <Button variant="ghost" size="sm" onClick={() => setApprovedToDelete(batch.period)} className="h-8 w-8 p-0 text-destructive" title="Xóa bảng lương"><Trash2 className="h-4 w-4" /></Button>}
+                  </div>{batch.status === "REJECTED" && batch.rejectionReason && <p className="max-w-80 text-right text-[11px] text-destructive">Lý do: {batch.rejectionReason}</p>}</div></TableCell>
+                </TableRow>)}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+        </div>
+      )}
+
+      {viewMode === "DETAIL" && <>
       {/* KHU VỰC 1: METRIC CARDS (5 Card Ngang Hàng) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {/* Card 1: Tổng chi lương kỳ này */}
         <Card className="p-4 rounded-xl border border-border/60 bg-card shadow-2xs hover:border-border transition-all">
           <div className="flex items-center justify-between text-muted-foreground mb-2">
@@ -440,7 +625,7 @@ export const SalaryManagement: React.FC = () => {
           )}
         </Card>
 
-        {/* Card 3: Đang chờ duyệt (WARNING AMBER CARD NỔI BẬT) */}
+        {false && <>{/* Card 3: Đang chờ duyệt (ẩn theo thiết kế chi tiết) */}
         <Card className="p-4 rounded-xl border border-amber-500/40 bg-amber-500/10 shadow-2xs hover:border-amber-500/60 transition-all">
           <div className="flex items-center justify-between text-amber-700 dark:text-amber-400 mb-2">
             <span className="text-xs font-bold uppercase tracking-wider">Đang chờ duyệt</span>
@@ -500,12 +685,13 @@ export const SalaryManagement: React.FC = () => {
             </div>
           )}
         </Card>
+        </>}
       </div>
 
       {/* KHU VỰC 2: CHARTS (2 Cột Donut + Bar Chart) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* Chart 1: Donut "Phân bổ theo trạng thái" (Col 5) */}
-        <Card className="lg:col-span-5 p-4 rounded-xl border border-border/60 bg-card shadow-2xs space-y-3">
+        {false && <Card className="lg:col-span-5 p-4 rounded-xl border border-border/60 bg-card shadow-2xs space-y-3">
           <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
             <Clock className="h-4 w-4 text-primary" /> Phân bổ theo trạng thái phiếu lương
           </h3>
@@ -548,12 +734,12 @@ export const SalaryManagement: React.FC = () => {
               </div>
             ))}
           </div>
-        </Card>
+        </Card>}
 
         {/* Chart 2: Bar "Tổng chi lương theo phòng ban" (Col 7) */}
-        <Card className="lg:col-span-7 p-4 rounded-xl border border-border/60 bg-card shadow-2xs space-y-3">
+        <Card className="lg:col-span-12 p-4 rounded-xl border border-border/60 bg-card shadow-2xs space-y-3">
           <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-            <Building2 className="h-4 w-4 text-blue-500" /> Tổng chi lương theo phòng ban (Kỳ {period})
+            <Building2 className="h-4 w-4 text-blue-500" /> Tổng chi lương theo phòng ban · {periodRange.label}
           </h3>
           <div className="h-[200px] w-full">
             {loadingSummary ? (
@@ -579,7 +765,7 @@ export const SalaryManagement: React.FC = () => {
       </div>
 
       {/* Chart Line Xu Hướng 6 Kỳ (Tùy chọn hiển thị nếu có dữ liệu) */}
-      {summaryData?.historicalTrend && summaryData.historicalTrend.length > 0 && (
+      {false && summaryData?.historicalTrend && summaryData.historicalTrend.length > 0 && (
         <Card className="p-4 rounded-xl border border-border/60 bg-card shadow-2xs space-y-3">
           <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
             <TrendingUp className="h-4 w-4 text-emerald-500" /> Xu hướng chi trả lương 6 kỳ gần nhất
@@ -604,7 +790,7 @@ export const SalaryManagement: React.FC = () => {
         <CardHeader className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 pb-4 border-b border-border/30 bg-card">
           <div>
             <CardTitle className="text-xl font-semibold tracking-tight font-heading flex items-center gap-2">
-              <span>Danh sách phiếu lương kỳ {period}</span>
+              <span>Danh sách phiếu lương · {periodRange.label}</span>
             </CardTitle>
             <CardDescription className="text-sm text-muted-foreground mt-0.5">
               Rà soát thông tin thu nhập, thưởng, khấu trừ và tiến độ thanh toán của nhân sự.
@@ -654,6 +840,7 @@ export const SalaryManagement: React.FC = () => {
                 <SelectItem value="DRAFT">Nháp (DRAFT)</SelectItem>
                 <SelectItem value="PENDING">Chờ duyệt (PENDING)</SelectItem>
                 <SelectItem value="CONFIRMED">Đã duyệt (CONFIRMED)</SelectItem>
+                <SelectItem value="TRANSFER_EXPORTED">Đã xuất chuyển khoản</SelectItem>
                 <SelectItem value="PAID">Đã thanh toán (PAID)</SelectItem>
               </SelectContent>
             </Select>
@@ -729,7 +916,7 @@ export const SalaryManagement: React.FC = () => {
         </form>
 
         {/* BULK ACTION TOOLBAR */}
-        {selectedIds.length > 0 && (
+        {isAdmin && selectedIds.length > 0 && (
           <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-primary/10 border-b border-primary/20 text-xs animate-in fade-in-50 duration-200">
             <div className="flex items-center gap-2 font-bold text-primary">
               <CheckCircle2 className="h-4 w-4" />
@@ -749,7 +936,8 @@ export const SalaryManagement: React.FC = () => {
 
               <Button
                 onClick={handleBulkApprove}
-                disabled={bulkActionLoading}
+                disabled={bulkActionLoading || !canApproveSelection}
+                title={!canApproveSelection ? "Chỉ phiếu Chờ duyệt mới được Admin duyệt" : undefined}
                 size="sm"
                 className="h-7 text-xs font-semibold gap-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white cursor-pointer shadow-xs"
               >
@@ -759,7 +947,8 @@ export const SalaryManagement: React.FC = () => {
 
               <Button
                 onClick={() => setConfirmBulkPayOpen(true)}
-                disabled={bulkActionLoading}
+                disabled={bulkActionLoading || !canPaySelection}
+                title={!canPaySelection ? "Phải xuất danh sách chuyển khoản trước khi xác nhận thanh toán" : undefined}
                 size="sm"
                 className="h-7 text-xs font-semibold gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer shadow-xs"
               >
@@ -788,6 +977,7 @@ export const SalaryManagement: React.FC = () => {
                     className="translate-y-0.5 border-border/30"
                   />
                 </TableHead>
+                <TableHead className="pb-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">Kỳ lương</TableHead>
                 <TableHead className="pb-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">
                   Nhân viên
                 </TableHead>
@@ -821,22 +1011,22 @@ export const SalaryManagement: React.FC = () => {
             <TableBody className="opacity-90">
               {salaries.length === 0 && !loadingList ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="py-16 text-center text-muted-foreground text-sm">
+                  <TableCell colSpan={11} className="py-16 text-center text-muted-foreground text-sm">
                     <div className="flex flex-col items-center justify-center gap-3">
                       <Calculator className="h-10 w-10 text-muted-foreground/40" />
                       <div className="space-y-1">
-                        <p className="font-semibold text-foreground">Kỳ lương {period} chưa được khởi tạo phiếu lương</p>
+                        <p className="font-semibold text-foreground">{periodRange.label} chưa có phiếu lương phù hợp</p>
                         <p className="text-xs text-muted-foreground">
                           Bấm nút <b>"Tạo bảng lương kỳ mới"</b> phía trên để tự động sinh phiếu lương DRAFT cho toàn bộ nhân sự.
                         </p>
                       </div>
-                      <Button
+                      {isHr && periodMode === "MONTH" && <Button
                         size="sm"
                         onClick={() => setGenerateModalOpen(true)}
                         className="mt-2 text-xs font-bold gap-1.5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground cursor-pointer"
                       >
-                        <Calculator className="h-4 w-4" /> Tạo bảng lương kỳ {period}
-                      </Button>
+                        <Calculator className="h-4 w-4" /> Tạo bảng lương tháng {period}
+                      </Button>}
                     </div>
                   </TableCell>
                 </TableRow>
@@ -863,6 +1053,8 @@ export const SalaryManagement: React.FC = () => {
                           className="translate-y-0.5 border-border/30"
                         />
                       </TableCell>
+
+                      <TableCell className="whitespace-nowrap font-semibold">{item.period}</TableCell>
 
                       {/* Cột Nhân Viên */}
                       <TableCell className="font-medium">
@@ -918,7 +1110,7 @@ export const SalaryManagement: React.FC = () => {
                       <TableCell className="text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1">
                           {isNegativeOrZero && (
-                            <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" title="Tổng lương bất thường" />
+                            <span title="Tổng lương bất thường"><AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" /></span>
                           )}
                           <span className="font-mono text-sm font-black text-primary">
                             {formatVND(item.totalSalary)}
@@ -956,7 +1148,7 @@ export const SalaryManagement: React.FC = () => {
         {/* PAGINATION FOOTER */}
         <CardFooter className="px-4 py-3 border-t border-border/30 bg-card flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
           <div className="text-muted-foreground">
-            Hiển thị <b>{salaries.length}</b> / <b>{totalElements}</b> phiếu lương kỳ này
+            Hiển thị <b>{salaries.length}</b> / <b>{totalElements}</b> phiếu lương trong {periodRange.label.toLowerCase()}
           </div>
 
           <div className="flex items-center gap-3">
@@ -1005,6 +1197,7 @@ export const SalaryManagement: React.FC = () => {
           </div>
         </CardFooter>
       </Card>
+      </>}
 
       {/* Modal Tạo Bảng Lương Kỳ Mới */}
       <GenerateSalaryModal
@@ -1015,6 +1208,7 @@ export const SalaryManagement: React.FC = () => {
           showBanner(msg);
           fetchSummary();
           fetchList();
+          fetchPayrollBatches();
         }}
       />
 
@@ -1028,6 +1222,9 @@ export const SalaryManagement: React.FC = () => {
           fetchList();
         }}
         onActionSuccess={(msg) => showBanner(msg)}
+        canApprove={isAdmin}
+        canMarkPaid={isAdmin}
+        canEdit={isHr || isAdmin}
       />
 
       {/* Dialog Xác Nhận Thanh Toán Hàng Loạt */}
@@ -1039,6 +1236,31 @@ export const SalaryManagement: React.FC = () => {
         variant="warning"
         confirmText="Xác nhận thanh toán"
         onConfirm={handleBulkMarkPaid}
+      />
+      <Dialog open={!!rejectingPeriod} onOpenChange={open => { if (!open) { setRejectingPeriod(null); setRejectionReason(""); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Từ chối bảng lương</DialogTitle><DialogDescription>Lý do sẽ được gửi cho HR qua email và thông báo trong hệ thống.</DialogDescription></DialogHeader>
+          <div className="space-y-2"><Label>Lý do từ chối <span className="text-destructive">*</span></Label><textarea value={rejectionReason} onChange={event => setRejectionReason(event.target.value)} maxLength={500} placeholder="Nêu rõ nội dung HR cần chỉnh sửa..." className="min-h-28 w-full rounded-lg border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20" /><p className="text-right text-[11px] text-muted-foreground">{rejectionReason.length}/500</p></div>
+          <DialogFooter><Button variant="outline" onClick={() => setRejectingPeriod(null)}>Hủy</Button><Button variant="destructive" disabled={rejectionReason.trim().length < 5} onClick={rejectPayroll}>Từ chối và thông báo HR</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <ConfirmDialog
+        open={!!draftToDelete}
+        onOpenChange={(open) => { if (!open) setDraftToDelete(null); }}
+        title="CHUYỂN BẢNG LƯƠNG VÀO THÙNG RÁC"
+        description={`Chuyển toàn bộ phiếu lương tháng ${draftToDelete || ""} do bạn tạo vào thùng rác?`}
+        variant="destructive"
+        confirmText="Chuyển vào thùng rác"
+        onConfirm={deleteDraftPayroll}
+      />
+      <ConfirmDialog
+        open={!!approvedToDelete}
+        onOpenChange={open => { if (!open) setApprovedToDelete(null); }}
+        title="CHUYỂN BẢNG LƯƠNG VÀO THÙNG RÁC"
+        description={`Chuyển toàn bộ phiếu thuộc bảng lương tháng ${approvedToDelete || ""} vào thùng rác? Admin có thể khôi phục hoặc xóa vĩnh viễn sau.`}
+        variant="destructive"
+        confirmText="Chuyển vào thùng rác"
+        onConfirm={deleteApprovedPayroll}
       />
     </div>
   );

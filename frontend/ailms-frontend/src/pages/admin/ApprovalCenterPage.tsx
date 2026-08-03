@@ -1,664 +1,307 @@
-import React, { useState, useEffect } from "react";
-import { useAuth } from "@/hooks/useAuth";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import httpClient from "@/api/httpClient";
+import { courseApi } from "@/api/courses/courseApi";
+import type { ApiResponse } from "@/types/base";
+import { useToast } from "@/hooks/useToast";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell,
-} from "@/components/ui/table";
-import { cn } from "@/lib/utils";
-import {
-  ShieldCheck,
-  CheckCircle2,
-  XCircle,
-  Clock,
-  Search,
-  RefreshCw,
-  User,
-  X,
-  AlertCircle,
-  ChevronLeft,
-  ChevronRight,
-} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { AlertTriangle, ArrowDownUp, CheckCircle2, ChevronLeft, ChevronRight, Clock3, Eye, FileCheck2, Loader2, RefreshCw, Search, Trash2, XCircle } from "lucide-react";
 
-export interface ApprovalRequest {
+type ApprovalStatus = "PENDING" | "CONFIRMED" | "REJECTED" | "CANCELLED";
+interface ApprovalItem {
   id: string;
-  objectType: "LEAVE_REQUEST" | "CLASS_TRANSFER_REQUEST" | "TEACHER_CHANGE_REQUEST" | "CONTRACT_EXPIRY";
-  objectId: string;
-  requesterId: string;
-  requesterName: string;
-  requesterEmail: string;
-  approverId: string;
-  approverName: string;
-  status: "PENDING" | "APPROVED" | "REJECTED";
-  createdAt: string;
-  metadata: Record<string, any>;
-  rejectReason?: string;
-  auditLogs?: { timestamp: string; action: string; actor: string }[];
+  targetType: string;
+  targetId: string;
+  approverId?: string;
+  approverName?: string;
+  requesterId?: string;
+  requesterName?: string;
+  requesterEmail?: string;
+  status: ApprovalStatus;
+  comment?: string;
+  createdAt?: string;
+  decidedAt?: string;
+  level?: number;
+  totalLevels?: number;
+  assignedToMe: boolean;
+  title?: string;
+  description?: string;
+  categoryName?: string;
+  suggestedPrice?: number;
 }
 
-const getPageNumbers = (currentPage: number, total: number) => {
-  const pages: (number | string)[] = [];
-  if (total <= 7) {
-    for (let i = 0; i < total; i++) pages.push(i);
-  } else {
-    pages.push(0);
-    if (currentPage > 2) {
-      pages.push("...");
-    }
-    const start = Math.max(1, currentPage - 1);
-    const end = Math.min(total - 2, currentPage + 1);
-    for (let i = start; i <= end; i++) {
-      pages.push(i);
-    }
-    if (currentPage < total - 3) {
-      pages.push("...");
-    }
-    pages.push(total - 1);
-  }
-  return pages;
+interface MineResponse { requested?: Record<string, unknown>[]; toApprove?: Record<string, unknown>[] }
+
+const TYPE_LABELS: Record<string, string> = {
+  CONTRACT: "Hợp đồng", SALARY: "Phiếu lương", TEACHING_PAYMENT: "Thanh toán buổi dạy", LEAVE_REQUEST: "Đơn nghỉ phép",
+  HALF_DAY_LEAVE: "Nghỉ nửa buổi", RESIGNATION: "Nghỉ việc", CLASS_TRANSFER_REQUEST: "Chuyển lớp",
+  TEACHER_CHANGE_REQUEST: "Đổi giáo viên", CLASS_TEACHER_LEAVE_REQUEST: "Giáo viên xin nghỉ dạy", PENDING_MATCHING: "Chờ ghép giáo viên", COURSE: "Duyệt khóa học",
 };
+const dateTime = (value?: string) => value ? new Date(value).toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" }) : "—";
+const normalize = (raw: Record<string, unknown>, assignedToMe: boolean): ApprovalItem => ({
+  id: String(raw.id), targetType: String(raw.targetType || "UNKNOWN"), targetId: String(raw.targetId),
+  approverId: raw.approverId == null ? undefined : String(raw.approverId), approverName: String(raw.approverName || "Chưa xác định"),
+  requesterId: raw.createdBy == null ? undefined : String(raw.createdBy), requesterName: String(raw.requesterName || "Chưa xác định"),
+  requesterEmail: raw.requesterEmail ? String(raw.requesterEmail) : undefined, status: String(raw.status || "PENDING") as ApprovalStatus,
+  comment: raw.comment ? String(raw.comment) : undefined, createdAt: raw.createdAt ? String(raw.createdAt) : undefined,
+  decidedAt: raw.decidedAt ? String(raw.decidedAt) : undefined, level: Number(raw.level || 1), totalLevels: Number(raw.totalLevels || 1), assignedToMe,
+});
 
 export const ApprovalCenterPage: React.FC = () => {
-  const { auth } = useAuth();
-  const currentUserId = auth.user?.id || "usr-1";
-
-  const [activeTab, setActiveTab] = useState<string>("ALL");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [rejectModalRequest, setRejectModalRequest] = useState<ApprovalRequest | null>(null);
+  const { success, error } = useToast();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const restoredView = (location.state as { approvalView?: { tab?: "PENDING" | "ALL"; search?: string; type?: string; status?: string; page?: number } } | null)?.approvalView;
+  const [items, setItems] = useState<ApprovalItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [tab, setTab] = useState<"PENDING" | "ALL">(restoredView?.tab || "PENDING");
+  const [search, setSearch] = useState(restoredView?.search || "");
+  const [type, setType] = useState(restoredView?.type || "ALL");
+  const [status, setStatus] = useState(restoredView?.status || "ALL");
+  const [dateSort, setDateSort] = useState<"DESC" | "ASC">("DESC");
+  const [page, setPage] = useState(restoredView?.page || 0);
+  const [detail, setDetail] = useState<ApprovalItem | null>(null);
+  const [approveTarget, setApproveTarget] = useState<ApprovalItem | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<ApprovalItem | null>(null);
   const [rejectReason, setRejectReason] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkApproveOpen, setBulkApproveOpen] = useState(false);
+  const [bulkRejectOpen, setBulkRejectOpen] = useState(false);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<ApprovalItem | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [targetDetails, setTargetDetails] = useState<Record<string, unknown> | null>(null);
+  const filtersMounted = useRef(false);
+  const pageSize = 10;
 
-  // Pagination
-  const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(10);
-  const [jumpPageInput, setJumpPageInput] = useState<string>("1");
-
+  const load = async () => {
+    setLoading(true); setLoadError("");
+    try {
+      const [response, pendingCourses] = await Promise.all([
+        httpClient.get<ApiResponse<MineResponse>>("/v1/approvals/mine"),
+        courseApi.searchCourses({ status: "PENDING", page: 0, size: 100, sortBy: "createdAt", sortDirection: "ASC" }),
+      ]);
+      const requested = (response.data.data?.requested || []).map(raw => normalize(raw, false));
+      const assigned = (response.data.data?.toApprove || []).map(raw => normalize(raw, true));
+      const unique = new Map<string, ApprovalItem>();
+      [...requested, ...assigned].forEach(item => unique.set(item.id, { ...unique.get(item.id), ...item }));
+      (pendingCourses.data?.data?.content || []).forEach((course: any) => unique.set(`COURSE-${String(course.id)}`, {
+        id: `COURSE-${String(course.id)}`, targetType: "COURSE", targetId: String(course.id), status: "PENDING",
+        requesterId: course.createdBy == null ? undefined : String(course.createdBy), requesterName: course.teacherName || course.authorName || "Người tạo khóa học",
+        approverName: "HR / Admin", createdAt: course.createdAt, level: 1, totalLevels: 1, assignedToMe: true,
+        title: course.name, description: course.description, categoryName: course.categoryName || course.category?.name,
+        suggestedPrice: Number(course.suggestedPrice || 0),
+      }));
+      const nextItems = [...unique.values()].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+      setItems(nextItems);
+      setSelectedIds([]);
+    } catch (cause: any) {
+      const message = cause?.response?.data?.message || "Không tải được dữ liệu phê duyệt.";
+      setLoadError(message); error(message);
+    } finally { setLoading(false); }
+  };
+  useEffect(() => { void load(); }, []);
   useEffect(() => {
-    setJumpPageInput(String(page + 1));
-  }, [page]);
-
-  const [requests, setRequests] = useState<ApprovalRequest[]>([
-    {
-      id: "app-101",
-      objectType: "LEAVE_REQUEST",
-      objectId: "lv-1",
-      requesterId: "usr-4",
-      requesterName: "Lê Minh Triết",
-      requesterEmail: "triet.lm@outlook.com",
-      approverId: "usr-1",
-      approverName: "Vũ Tiến Đạt (Admin)",
-      status: "PENDING",
-      createdAt: "2026-07-24T08:00:00Z",
-      metadata: {
-        startDate: "2026-07-28",
-        endDate: "2026-07-29",
-        reason: "Nghỉ phép cá nhân đi khám sức khỏe định kỳ",
-        days: 2,
-      },
-      auditLogs: [
-        { timestamp: "2026-07-24 08:00", action: "Tạo đơn xin nghỉ phép", actor: "Lê Minh Triết" },
-      ],
-    },
-    {
-      id: "app-102",
-      objectType: "CLASS_TRANSFER_REQUEST",
-      objectId: "enr-55",
-      requesterId: "usr-2",
-      requesterName: "Bùi Xuân Huấn",
-      requesterEmail: "huanrose@ailms.edu.vn",
-      approverId: "usr-1",
-      approverName: "Vũ Tiến Đạt (Admin)",
-      status: "PENDING",
-      createdAt: "2026-07-23T14:20:00Z",
-      metadata: {
-        courseName: "Cấu trúc dữ liệu & Giải thuật C++",
-        fromClass: "Lớp Nhóm C++ K19 (Thứ 2 - 19:30)",
-        toClass: "Lớp Nhóm C++ K20 (Thứ 7 - 09:00)",
-        reason: "Trùng lịch học ca tối ở đại học",
-      },
-      auditLogs: [
-        { timestamp: "2026-07-23 14:20", action: "Tạo yêu cầu chuyển lớp", actor: "Bùi Xuân Huấn" },
-      ],
-    },
-    {
-      id: "app-103",
-      objectType: "TEACHER_CHANGE_REQUEST",
-      objectId: "enr-88",
-      requesterId: "usr-3",
-      requesterName: "Nguyễn Hải Yến",
-      requesterEmail: "yen.nh@gmail.com",
-      approverId: "usr-1",
-      approverName: "Vũ Tiến Đạt (Admin)",
-      status: "APPROVED",
-      createdAt: "2026-07-22T09:10:00Z",
-      metadata: {
-        courseName: "Nhập môn Python AI Engineer (1 kèm 1)",
-        currentTeacher: "Trần Văn Nam",
-        reason: "Muốn học cùng gia sư có chuyên môn sâu hơn về Deep Learning",
-      },
-      auditLogs: [
-        { timestamp: "2026-07-22 09:10", action: "Tạo yêu cầu đổi gia sư 1-1", actor: "Nguyễn Hải Yến" },
-        { timestamp: "2026-07-22 10:15", action: "Đã phê duyệt & Đổi gia sư", actor: "Vũ Tiến Đạt" },
-      ],
-    },
-  ]);
-
-  const [actionMessage, setActionMessage] = useState<{ text: string; isError?: boolean } | null>(null);
-
-  const showBanner = (text: string, isError = false) => {
-    setActionMessage({ text, isError });
-    setTimeout(() => setActionMessage(null), 4000);
-  };
-
-  const handleApprove = (req: ApprovalRequest) => {
-    if (req.requesterId === currentUserId) {
-      showBanner("Bạn không thể tự phê duyệt yêu cầu do chính mình tạo ra.", true);
-      return;
+    if (!detail) { setTargetDetails(null); return; }
+    let active = true; setDetailLoading(true);
+    if (detail.targetType !== "COURSE") {
+      const endpoint: Record<string, string> = { CONTRACT: "/v1/employee-contracts", SALARY: "/v1/salaries", TEACHING_PAYMENT: "/v1/teaching-session-payments", LEAVE_REQUEST: "/v1/leave-requests" };
+      if (!endpoint[detail.targetType]) { setTargetDetails(null); setDetailLoading(false); return; }
+      httpClient.get<ApiResponse<Record<string, unknown>>>(`${endpoint[detail.targetType]}/${detail.targetId}`)
+        .then(response => active && setTargetDetails(response.data.data || null))
+        .catch((cause: any) => error(cause?.response?.data?.message || "Không tải được đối tượng cần duyệt."))
+        .finally(() => active && setDetailLoading(false));
+      return () => { active = false; };
     }
+    setTargetDetails(null);
+    courseApi.getCourseById(detail.targetId).then((courseResult) => {
+      if (!active) return;
+      const course: any = courseResult.data.data;
+      setDetail(current => current ? { ...current, title: course.name, description: course.description,
+        categoryName: course.categoryName || course.category?.name, suggestedPrice: Number(course.suggestedPrice || 0),
+        comment: course.rejectionReason || current.comment } : current);
+    }).catch((cause: any) => error(cause?.response?.data?.message || "Không tải được phiên bản khóa học cần duyệt."))
+      .finally(() => active && setDetailLoading(false));
+    return () => { active = false; };
+  }, [detail?.id]);
 
-    setRequests((prev) =>
-      prev.map((r) =>
-        r.id === req.id
-          ? {
-              ...r,
-              status: "APPROVED",
-              auditLogs: [
-                ...(r.auditLogs || []),
-                {
-                  timestamp: new Date().toLocaleString("vi-VN"),
-                  action: "Đã phê duyệt yêu cầu",
-                  actor: auth.user?.fullName || "Admin",
-                },
-              ],
-            }
-          : r
-      )
-    );
-    showBanner(`Đã phê duyệt yêu cầu ${req.id} thành công.`);
+  const filtered = useMemo(() => items.filter(item => {
+    if (tab === "PENDING" && (!item.assignedToMe || item.status !== "PENDING")) return false;
+    if (type !== "ALL" && item.targetType !== type) return false;
+    if (status !== "ALL" && item.status !== status) return false;
+    const key = search.trim().toLocaleLowerCase("vi");
+    return !key || [item.id, item.targetId, item.requesterName, item.requesterEmail, item.approverName, TYPE_LABELS[item.targetType]]
+      .some(value => value?.toLocaleLowerCase("vi").includes(key));
+  }).sort((a, b) => {
+    const delta = new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime();
+    return dateSort === "ASC" ? delta : -delta;
+  }), [items, tab, type, status, search, dateSort]);
+  const pages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const visible = filtered.slice(page * pageSize, page * pageSize + pageSize);
+  useEffect(() => {
+    if (!filtersMounted.current) { filtersMounted.current = true; return; }
+    setPage(0);
+  }, [tab, type, status, search, dateSort]);
+  const canSelectItem = (item: ApprovalItem) => (item.assignedToMe && item.status === "PENDING")
+    || (tab === "ALL" && item.status === "CONFIRMED" && !item.id.startsWith("COURSE-"));
+  const selectableVisible = visible.filter(canSelectItem);
+  const allVisibleSelected = selectableVisible.length > 0 && selectableVisible.every(item => selectedIds.includes(item.id));
+  const selectedItems = items.filter(item => selectedIds.includes(item.id) && item.status === "PENDING");
+  const selectedApprovedItems = items.filter(item => selectedIds.includes(item.id) && item.status === "CONFIRMED" && !item.id.startsWith("COURSE-"));
+  const displayTitle = (item: ApprovalItem) => item.title || TYPE_LABELS[item.targetType] || "Yêu cầu nghiệp vụ";
+  const summary = useMemo(() => ({
+    pending: items.filter(item => item.status === "PENDING").length,
+    approved: items.filter(item => item.status === "CONFIRMED").length,
+    rejected: items.filter(item => item.status === "REJECTED").length,
+  }), [items]);
+  const markItemsResolved = (ids: string[], nextStatus: "CONFIRMED" | "REJECTED", comment?: string) => {
+    const decidedAt = new Date().toISOString();
+    setItems(current => current.map(item => ids.includes(item.id)
+      ? { ...item, status: nextStatus, comment: comment || item.comment, decidedAt }
+      : item));
+    setSelectedIds(current => current.filter(id => !ids.includes(id)));
   };
 
-  const handleConfirmReject = () => {
-    if (!rejectReason.trim()) {
-      showBanner("Vui lòng nhập lý do từ chối.", true);
-      return;
+  const approveOne = async (item: ApprovalItem) => {
+    if (item.targetType === "COURSE") await courseApi.approveCourse(item.targetId, true);
+    else await httpClient.post(`/v1/approvals/${item.id}/approve`, { comment: "" });
+  };
+  const rejectOne = async (item: ApprovalItem, reason: string) => {
+    if (item.targetType === "COURSE") await courseApi.approveCourse(item.targetId, false, reason);
+    else await httpClient.post(`/v1/approvals/${item.id}/reject`, { comment: reason });
+  };
+
+  const approve = async () => {
+    if (!approveTarget) return; setBusy(true);
+    try {
+      await approveOne(approveTarget);
+      markItemsResolved([approveTarget.id], "CONFIRMED");
+      success("Phê duyệt thành công; người tạo đã nhận thông báo hệ thống."); setApproveTarget(null); setDetail(null); await load();
+    } catch (cause: any) { error(cause?.response?.data?.message || "Không thể phê duyệt yêu cầu."); }
+    finally { setBusy(false); }
+  };
+  const reject = async () => {
+    const reason = rejectReason.trim();
+    if (!rejectTarget || reason.length < 5) { error("Lý do từ chối phải có ít nhất 5 ký tự."); return; }
+    setBusy(true);
+    try {
+      await rejectOne(rejectTarget, reason);
+      markItemsResolved([rejectTarget.id], "REJECTED", reason);
+      success("Đã từ chối yêu cầu; người tạo đã nhận lý do qua thông báo hệ thống.");
+      setRejectTarget(null); setRejectReason(""); setDetail(null); await load();
+    } catch (cause: any) { error(cause?.response?.data?.message || "Không thể từ chối yêu cầu."); }
+    finally { setBusy(false); }
+  };
+
+  const bulkApprove = async () => {
+    if (!selectedItems.length) return; setBusy(true);
+    const results = await Promise.allSettled(selectedItems.map(approveOne));
+    const completed = results.filter(result => result.status === "fulfilled").length;
+    const failed = results.length - completed;
+    if (completed) success(`Đã duyệt thành công ${completed} yêu cầu.`);
+    const completedIds = results.flatMap((result, index) => result.status === "fulfilled" ? [selectedItems[index].id] : []);
+    if (completedIds.length) markItemsResolved(completedIds, "CONFIRMED");
+    if (failed) error(`${failed} yêu cầu không thể duyệt; dữ liệu đã được tải lại.`);
+    setBulkApproveOpen(false); await load(); setBusy(false);
+  };
+  const bulkReject = async () => {
+    const reason = rejectReason.trim();
+    if (!selectedItems.length || reason.length < 5) { error("Lý do từ chối phải có ít nhất 5 ký tự."); return; }
+    setBusy(true);
+    const results = await Promise.allSettled(selectedItems.map(item => rejectOne(item, reason)));
+    const completed = results.filter(result => result.status === "fulfilled").length;
+    const failed = results.length - completed;
+    if (completed) success(`Đã từ chối ${completed} yêu cầu và gửi thông báo cho người tạo.`);
+    const completedIds = results.flatMap((result, index) => result.status === "fulfilled" ? [selectedItems[index].id] : []);
+    if (completedIds.length) markItemsResolved(completedIds, "REJECTED", reason);
+    if (failed) error(`${failed} yêu cầu không thể từ chối; dữ liệu đã được tải lại.`);
+    setBulkRejectOpen(false); setRejectReason(""); await load(); setBusy(false);
+  };
+  const deleteApproved = async (targets: ApprovalItem[]) => {
+    if (!targets.length) return;
+    setBusy(true);
+    const results = await Promise.allSettled(targets.map(item => httpClient.delete(`/v1/approvals/${item.id}`)));
+    const deletedIds = results.flatMap((result, index) => result.status === "fulfilled" ? [targets[index].id] : []);
+    const failed = results.length - deletedIds.length;
+    if (deletedIds.length) {
+      setItems(current => current.filter(item => !deletedIds.includes(item.id)));
+      setSelectedIds(current => current.filter(id => !deletedIds.includes(id)));
+      success(`Đã xóa ${deletedIds.length} yêu cầu đã phê duyệt.`);
     }
-    if (!rejectModalRequest) return;
-
-    setSubmitting(true);
-    setTimeout(() => {
-      setRequests((prev) =>
-        prev.map((r) =>
-          r.id === rejectModalRequest.id
-            ? {
-                ...r,
-                status: "REJECTED",
-                rejectReason,
-                auditLogs: [
-                  ...(r.auditLogs || []),
-                  {
-                    timestamp: new Date().toLocaleString("vi-VN"),
-                    action: `Từ chối yêu cầu (Lý do: ${rejectReason})`,
-                    actor: auth.user?.fullName || "Admin",
-                  },
-                ],
-              }
-            : r
-        )
-      );
-
-      showBanner(`Đã từ chối yêu cầu ${rejectModalRequest.id}.`);
-      setRejectModalRequest(null);
-      setRejectReason("");
-      setSubmitting(false);
-    }, 500);
+    if (failed) error(`${failed} yêu cầu không thể xóa.`);
+    setDeleteTarget(null); setBulkDeleteOpen(false); setBusy(false);
   };
 
-  const renderSummaryText = (req: ApprovalRequest) => {
-    switch (req.objectType) {
-      case "LEAVE_REQUEST":
-        return `Nghỉ phép từ ${req.metadata.startDate} đến ${req.metadata.endDate} (${req.metadata.days} ngày). Lý do: ${req.metadata.reason}`;
-      case "CLASS_TRANSFER_REQUEST":
-        return `Đổi từ "${req.metadata.fromClass}" sang "${req.metadata.toClass}". Lý do: ${req.metadata.reason}`;
-      case "TEACHER_CHANGE_REQUEST":
-        return `Đổi gia sư khóa "${req.metadata.courseName}". Lý do: ${req.metadata.reason}`;
-      case "CONTRACT_EXPIRY":
-        return `Gia hạn hợp đồng / Chuyển chính thức nhân viên ${req.requesterName}`;
-      default:
-        return JSON.stringify(req.metadata);
-    }
-  };
+  const statusBadge = (value: ApprovalStatus) => value === "PENDING"
+    ? <Badge className="bg-amber-500/10 text-amber-700 hover:bg-amber-500/10"><Clock3 className="mr-1 h-3 w-3" />Chờ duyệt</Badge>
+    : value === "CONFIRMED" ? <Badge className="bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/10"><CheckCircle2 className="mr-1 h-3 w-3" />Đã duyệt</Badge>
+    : <Badge className="bg-rose-500/10 text-rose-700 hover:bg-rose-500/10"><XCircle className="mr-1 h-3 w-3" />{value === "REJECTED" ? "Từ chối" : "Đã hủy"}</Badge>;
 
-  const filteredRequests = requests.filter((req) => {
-    const matchesTab = activeTab === "ALL" || req.objectType === activeTab;
-    const matchesSearch =
-      req.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      req.requesterName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      req.requesterEmail.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesTab && matchesSearch;
-  });
-
-  const totalElements = filteredRequests.length;
-  const totalPages = Math.ceil(totalElements / pageSize);
-  const paginatedRequests = filteredRequests.slice(page * pageSize, (page + 1) * pageSize);
-
-  return (
-    <div className="mx-auto max-w-7xl px-6 py-8 space-y-6 animate-in fade-in duration-300">
-      {/* Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-extrabold text-foreground tracking-tight flex items-center gap-2">
-            <ShieldCheck className="h-6 w-6 text-primary" />
-            <span>Trung Tâm Phê Duyệt (Approval Center)</span>
-          </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Duyệt tập trung Đơn nghỉ phép, Yêu cầu đổi lớp, Đổi gia sư 1-1 và Hợp đồng nhân sự.
-          </p>
-        </div>
-        <Button onClick={() => setRequests([...requests])} variant="outline" size="sm" className="rounded-xl gap-1 text-xs font-bold">
-          <RefreshCw className="h-3.5 w-3.5" /> Làm mới
-        </Button>
-      </div>
-
-      {/* Main Approval Card */}
-      <Card className="border border-border/80 rounded-2xl overflow-hidden bg-card shadow-sm">
-        {/* Search & Toolbar */}
-        <div className="p-4 bg-muted/20 border-b border-border/30 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-12 gap-3 items-end">
-          <div className="flex flex-col gap-1 lg:col-span-6">
-            <Label className="text-[11px] font-bold text-muted-foreground">Từ khóa tìm kiếm</Label>
-            <div className="relative w-full">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
-              <Input
-                type="text"
-                placeholder="Tìm người gửi, email hoặc mã yêu cầu..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8 h-9 text-xs border border-border bg-background rounded-lg focus-visible:ring-2 focus-visible:ring-primary/20"
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1 lg:col-span-4">
-            <Label className="text-[11px] font-bold text-muted-foreground">Loại yêu cầu</Label>
-            <Select value={activeTab} onValueChange={(val) => { if (val) { setActiveTab(val); setPage(0); } }}>
-              <SelectTrigger className="h-9 text-xs bg-background border border-border rounded-lg font-semibold">
-                <SelectValue placeholder="Tất cả yêu cầu" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">Tất cả yêu cầu</SelectItem>
-                <SelectItem value="LEAVE_REQUEST">Đơn nghỉ phép</SelectItem>
-                <SelectItem value="CLASS_TRANSFER_REQUEST">Yêu cầu đổi lớp</SelectItem>
-                <SelectItem value="TEACHER_CHANGE_REQUEST">Duyệt đổi gia sư</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        {/* Requests Table */}
-        <CardContent className="p-0 relative">
-          <Table containerClassName="max-h-[calc(100vh-320px)] min-h-[350px] overflow-auto border-b border-border/20" className="-mt-3 pb-4">
-            <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur-md shadow-2xs border-b border-border/40">
-              <TableRow className="border-b border-border/30 bg-muted/20 hover:bg-muted/20">
-                <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pl-4">Người yêu cầu</TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Loại yêu cầu</TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Nội dung chi tiết</TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider text-center">Trạng thái</TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider text-right pr-4">Thao tác</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody className="opacity-90">
-              {paginatedRequests.length > 0 ? (
-                paginatedRequests.map((req) => {
-                  const isSelfCreated = req.requesterId === currentUserId;
-                  return (
-                    <TableRow key={req.id} className="hover:bg-foreground/10 transition-colors border-border/30">
-                      <TableCell className="pl-4">
-                        <div className="font-semibold text-xs text-foreground">{req.requesterName}</div>
-                        <div className="text-[10px] text-muted-foreground">{req.requesterEmail}</div>
-                      </TableCell>
-                      <TableCell>
-                        <span className="px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 text-[10px] font-extrabold uppercase">
-                          {req.objectType.replace(/_/g, " ")}
-                        </span>
-                      </TableCell>
-                      <TableCell className="max-w-xs">
-                        <p className="text-xs text-foreground font-medium truncate" title={renderSummaryText(req)}>
-                          {renderSummaryText(req)}
-                        </p>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {req.status === "APPROVED" && (
-                          <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 text-[10px] font-extrabold inline-flex items-center gap-1">
-                            <CheckCircle2 className="h-3 w-3" /> Đã duyệt
-                          </span>
-                        )}
-                        {req.status === "REJECTED" && (
-                          <span className="px-2.5 py-0.5 rounded-full bg-rose-500/10 text-rose-600 border border-rose-500/20 text-[10px] font-extrabold inline-flex items-center gap-1">
-                            <XCircle className="h-3 w-3" /> Đã từ chối
-                          </span>
-                        )}
-                        {req.status === "PENDING" && (
-                          <span className="px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 border border-amber-500/20 text-[10px] font-extrabold inline-flex items-center gap-1">
-                            <Clock className="h-3 w-3" /> Chờ duyệt
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right pr-4">
-                        {req.status === "PENDING" ? (
-                          <div className="flex items-center justify-end gap-1.5">
-                            <Button
-                              onClick={() => handleApprove(req)}
-                              disabled={isSelfCreated}
-                              size="sm"
-                              className="h-7 px-2.5 text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 rounded-lg gap-1"
-                              title={isSelfCreated ? "Không thể tự duyệt đơn của chính mình" : "Phê duyệt"}
-                            >
-                              <CheckCircle2 className="h-3.5 w-3.5" /> Duyệt
-                            </Button>
-                            <Button
-                              onClick={() => setRejectModalRequest(req)}
-                              disabled={isSelfCreated}
-                              size="sm"
-                              variant="destructive"
-                              className="h-7 px-2.5 text-xs font-semibold rounded-lg gap-1"
-                            >
-                              <XCircle className="h-3.5 w-3.5" /> Từ chối
-                            </Button>
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground text-xs font-medium">Hoàn tất</span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={5} className="py-12 text-center text-muted-foreground text-sm">
-                    Không có yêu cầu phê duyệt nào.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-
-        {/* Modern Table Footer */}
-        <div className="px-5 py-3 border-t border-border/40 bg-card/40 flex flex-col md:flex-row items-center justify-between gap-4 text-xs">
-          {/* Left: Total Results Summary */}
-          <div className="text-muted-foreground font-medium">
-            Showing <span className="font-semibold text-foreground">{totalElements === 0 ? 0 : page * pageSize + 1}</span> to{" "}
-            <span className="font-semibold text-foreground">{Math.min((page + 1) * pageSize, totalElements)}</span> of{" "}
-            <span className="font-semibold text-foreground">{totalElements}</span> results
-          </div>
-
-          <div className="flex flex-wrap items-center gap-5">
-            {/* Middle: Rows per page Select */}
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground font-medium">Rows per page:</span>
-              <Select
-                value={String(pageSize)}
-                onValueChange={(val) => {
-                  setPageSize(Number(val));
-                  setPage(0);
-                }}
-              >
-                <SelectTrigger className="h-8 w-16 text-xs bg-background border border-border/40 rounded-lg font-semibold">
-                  <SelectValue placeholder={String(pageSize)} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="10">10</SelectItem>
-                  <SelectItem value="20">20</SelectItem>
-                  <SelectItem value="50">50</SelectItem>
-                  <SelectItem value="100">100</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Go to Page Input */}
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                const pageNum = parseInt(jumpPageInput, 10);
-                if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
-                  setPage(pageNum - 1);
-                } else {
-                  setJumpPageInput(String(page + 1));
-                }
-              }}
-              className="flex items-center gap-1.5"
-            >
-              <span className="text-muted-foreground font-medium">Go to:</span>
-              <Input
-                type="number"
-                min={1}
-                max={totalPages || 1}
-                value={jumpPageInput}
-                onChange={(e) => setJumpPageInput(e.target.value)}
-                onBlur={() => {
-                  const pageNum = parseInt(jumpPageInput, 10);
-                  if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
-                    setPage(pageNum - 1);
-                  } else {
-                    setJumpPageInput(String(page + 1));
-                  }
-                }}
-                className="h-8 w-14 text-center text-xs font-semibold bg-background border border-border/40 rounded-lg px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                title="Nhập số trang và nhấn Enter"
-              />
-            </form>
-
-            {/* Right: Numbered Pagination Buttons */}
-            <div className="flex items-center gap-1">
-              <Button
-                disabled={page === 0}
-                onClick={() => setPage((prev) => prev - 1)}
-                variant="outline"
-                size="sm"
-                className="h-8 px-2.5 text-xs font-semibold gap-1 border-border/40 rounded-lg hover:bg-muted"
-              >
-                <ChevronLeft className="h-3.5 w-3.5" />
-                <span>Previous</span>
-              </Button>
-
-              {getPageNumbers(page, totalPages).map((p, pIdx) => {
-                if (p === "...") {
-                  return (
-                    <span key={`dots-${pIdx}`} className="px-2 text-muted-foreground font-bold pointer-events-none">
-                      ...
-                    </span>
-                  );
-                }
-                const pageNum = p as number;
-                const isCurrent = pageNum === page;
-                return (
-                  <Button
-                    key={pageNum}
-                    onClick={() => setPage(pageNum)}
-                    variant={isCurrent ? "default" : "outline"}
-                    size="sm"
-                    className={cn(
-                      "h-8 min-w-[32px] px-2 text-xs font-semibold rounded-lg transition-all",
-                      isCurrent
-                        ? "bg-primary text-primary-foreground shadow-xs"
-                        : "border-border/40 text-foreground hover:bg-muted/70"
-                    )}
-                  >
-                    {pageNum + 1}
-                  </Button>
-                );
-              })}
-
-              <Button
-                disabled={page >= totalPages - 1 || totalPages === 0}
-                onClick={() => setPage((prev) => prev + 1)}
-                variant="outline"
-                size="sm"
-                className="h-8 px-2.5 text-xs font-semibold gap-1 border-border/40 rounded-lg hover:bg-muted"
-              >
-                <span>Next</span>
-                <ChevronRight className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          </div>
-        </div>
-      </Card>
-
-      {/* Requests List */}
-      <div className="space-y-4">
-        {filteredRequests.map((req) => {
-          const isSelfCreated = req.requesterId === currentUserId;
-
-          return (
-            <Card key={req.id} className="border border-border/80 rounded-2xl bg-card shadow-sm p-5 space-y-4 hover:shadow-md transition-shadow">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/60 pb-3">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-sm">
-                    {req.requesterName.charAt(0)}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h4 className="font-bold text-foreground text-sm">{req.requesterName}</h4>
-                      <span className="px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 text-[10px] font-extrabold uppercase">
-                        {req.objectType.replace("_", " ")}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-muted-foreground">{req.requesterEmail} • Tạo lúc: {req.createdAt}</p>
-                  </div>
-                </div>
-
-                <div>
-                  {req.status === "APPROVED" && (
-                    <span className="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 text-xs font-extrabold flex items-center gap-1">
-                      <CheckCircle2 className="h-3.5 w-3.5" /> Đã duyệt
-                    </span>
-                  )}
-                  {req.status === "REJECTED" && (
-                    <span className="px-3 py-1 rounded-full bg-rose-500/10 text-rose-600 border border-rose-500/20 text-xs font-extrabold flex items-center gap-1">
-                      <XCircle className="h-3.5 w-3.5" /> Đã từ chối
-                    </span>
-                  )}
-                  {req.status === "PENDING" && (
-                    <span className="px-3 py-1 rounded-full bg-amber-500/10 text-amber-600 border border-amber-500/20 text-xs font-extrabold flex items-center gap-1">
-                      <Clock className="h-3.5 w-3.5" /> Chờ duyệt
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Summary Text */}
-              <div className="p-3.5 rounded-xl bg-muted/20 border border-border/60 text-xs text-foreground space-y-1">
-                <span className="text-[10px] uppercase font-bold text-muted-foreground block">
-                  Nội dung yêu cầu:
-                </span>
-                <p className="font-medium leading-relaxed">{renderSummaryText(req)}</p>
-                {req.rejectReason && (
-                  <p className="text-rose-600 font-bold pt-1">Lý do từ chối: {req.rejectReason}</p>
-                )}
-              </div>
-
-              {/* Audit Trail & Actions */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-1 text-xs">
-                <div className="text-[11px] text-muted-foreground flex items-center gap-2">
-                  <User className="h-3.5 w-3.5 text-primary" />
-                  <span>Người duyệt phân công: <strong className="text-foreground">{req.approverName}</strong></span>
-                </div>
-
-                {req.status === "PENDING" && (
-                  <div className="flex items-center gap-2">
-                    {isSelfCreated ? (
-                      <span className="text-[11px] text-amber-600 font-bold flex items-center gap-1">
-                        <AlertCircle className="h-3.5 w-3.5" /> Không thể tự duyệt yêu cầu của chính mình
-                      </span>
-                    ) : (
-                      <>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setRejectModalRequest(req)}
-                          className="rounded-xl border-rose-300 text-rose-600 hover:bg-rose-50 font-bold text-xs"
-                        >
-                          Từ chối
-                        </Button>
-                        <Button
-                          size="sm"
-                          onClick={() => handleApprove(req)}
-                          className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs"
-                        >
-                          Duyệt yêu cầu
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-            </Card>
-          );
-        })}
-      </div>
-
-      {/* REJECT REASON MODAL */}
-      {rejectModalRequest && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-in fade-in duration-200">
-          <div className="bg-card w-full max-w-md rounded-3xl border border-border shadow-2xl overflow-hidden flex flex-col">
-            <div className="p-5 border-b border-border flex items-center justify-between bg-muted/20">
-              <h3 className="font-bold text-foreground text-sm">Từ Chối Yêu Cầu</h3>
-              <button onClick={() => setRejectModalRequest(null)} className="p-1 rounded-lg hover:bg-muted text-muted-foreground">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="p-5 space-y-4 text-xs">
-              <p className="text-muted-foreground">
-                Nhập lý do từ chối yêu cầu của <strong className="text-foreground">{rejectModalRequest.requesterName}</strong>. Lý do này sẽ được gửi tới email của người gửi.
-              </p>
-              <Input
-                type="text"
-                placeholder="Nhập lý do từ chối..."
-                value={rejectReason}
-                onChange={(e) => setRejectReason(e.target.value)}
-                className="rounded-xl text-xs"
-                required
-              />
-
-              <div className="pt-2 flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setRejectModalRequest(null)} className="rounded-xl">
-                  Hủy
-                </Button>
-                <Button onClick={handleConfirmReject} disabled={submitting} className="rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold">
-                  {submitting ? "Đang xử lý..." : "Xác nhận Từ chối"}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TOAST BANNER NOTIFICATIONS */}
-      {actionMessage && (
-        <div
-          className={cn(
-            "fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300",
-            actionMessage.isError ? "bg-destructive" : "bg-emerald-600"
-          )}
-        >
-          <span className="text-sm font-semibold">{actionMessage.text}</span>
-        </div>
-      )}
-
+  return <div className="mx-auto max-w-375 space-y-5 p-6">
+    <div className="flex flex-wrap items-start justify-between gap-3"><div><h1 className="flex items-center gap-2 text-2xl font-bold"><FileCheck2 className="h-6 w-6 text-primary" />Hàng đợi yêu cầu xử lý</h1><p className="mt-1 text-xs text-muted-foreground">Một nơi duy nhất để HR/Admin xem, duyệt hoặc từ chối các yêu cầu nghiệp vụ.</p></div><Button variant="outline" onClick={() => void load()} disabled={loading}><RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />Làm mới</Button></div>
+    <div className="grid gap-3 sm:grid-cols-3">
+      <Card role="button" tabIndex={0} onClick={() => { setTab("PENDING"); setStatus("ALL"); }} className="cursor-pointer overflow-hidden border-amber-200/70 transition-all hover:-translate-y-0.5 hover:shadow-md"><CardContent className="flex items-center justify-between bg-linear-to-br from-amber-50 to-background p-5"><div><p className="text-xs font-semibold text-amber-800">Cần xử lý</p><p className="mt-1 text-3xl font-bold tracking-tight text-amber-600">{summary.pending}</p><p className="mt-1 text-[11px] text-muted-foreground">Yêu cầu đang chờ quyết định</p></div><div className="rounded-2xl bg-amber-100 p-3 text-amber-700"><Clock3 className="h-6 w-6" /></div></CardContent></Card>
+      <Card role="button" tabIndex={0} onClick={() => { setTab("ALL"); setStatus("CONFIRMED"); }} className="cursor-pointer overflow-hidden border-emerald-200/70 transition-all hover:-translate-y-0.5 hover:shadow-md"><CardContent className="flex items-center justify-between bg-linear-to-br from-emerald-50 to-background p-5"><div><p className="text-xs font-semibold text-emerald-800">Đã phê duyệt</p><p className="mt-1 text-3xl font-bold tracking-tight text-emerald-600">{summary.approved}</p><p className="mt-1 text-[11px] text-muted-foreground">Đã hoàn tất xử lý thành công</p></div><div className="rounded-2xl bg-emerald-100 p-3 text-emerald-700"><CheckCircle2 className="h-6 w-6" /></div></CardContent></Card>
+      <Card role="button" tabIndex={0} onClick={() => { setTab("ALL"); setStatus("REJECTED"); }} className="cursor-pointer overflow-hidden border-rose-200/70 transition-all hover:-translate-y-0.5 hover:shadow-md"><CardContent className="flex items-center justify-between bg-linear-to-br from-rose-50 to-background p-5"><div><p className="text-xs font-semibold text-rose-800">Đã từ chối</p><p className="mt-1 text-3xl font-bold tracking-tight text-rose-600">{summary.rejected}</p><p className="mt-1 text-[11px] text-muted-foreground">Yêu cầu không được chấp thuận</p></div><div className="rounded-2xl bg-rose-100 p-3 text-rose-700"><XCircle className="h-6 w-6" /></div></CardContent></Card>
     </div>
-  );
+    <Card><CardHeader className="pb-3"><div className="flex gap-5 border-b"><button className={`pb-3 text-sm font-bold ${tab === "PENDING" ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`} onClick={() => setTab("PENDING")}>Cần phê duyệt</button><button className={`pb-3 text-sm font-bold ${tab === "ALL" ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`} onClick={() => setTab("ALL")}>Tất cả yêu cầu liên quan</button></div></CardHeader><CardContent className="space-y-4">
+      <div className="grid gap-2 md:grid-cols-[1fr_210px_170px_190px]"><div className="relative"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-9" value={search} onChange={e => setSearch(e.target.value)} placeholder="Tên yêu cầu, đối tượng, người gửi..." /></div><Select value={type} onValueChange={setType}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="ALL">Tất cả loại</SelectItem>{Object.entries(TYPE_LABELS).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select><Select value={status} onValueChange={setStatus} disabled={tab === "PENDING"}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="ALL">Tất cả trạng thái</SelectItem><SelectItem value="PENDING">Chờ duyệt</SelectItem><SelectItem value="CONFIRMED">Đã duyệt</SelectItem><SelectItem value="REJECTED">Từ chối</SelectItem><SelectItem value="CANCELLED">Đã hủy</SelectItem></SelectContent></Select><Select value={dateSort} onValueChange={value => setDateSort(value as "DESC" | "ASC")}><SelectTrigger><ArrowDownUp className="mr-2 h-4 w-4 text-muted-foreground" /><SelectValue /></SelectTrigger><SelectContent><SelectItem value="DESC">Ngày gửi: Mới nhất</SelectItem><SelectItem value="ASC">Ngày gửi: Cũ nhất</SelectItem></SelectContent></Select></div>
+      {!loading && selectableVisible.length > 0 && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-muted/20 p-3"><label className="flex cursor-pointer items-center gap-2 text-xs font-semibold"><Checkbox checked={allVisibleSelected} onCheckedChange={checked => setSelectedIds(current => checked ? [...new Set([...current, ...selectableVisible.map(item => item.id)])] : current.filter(id => !selectableVisible.some(item => item.id === id)))} />Chọn các yêu cầu có thể xử lý trên trang</label><div className="flex flex-wrap items-center gap-2"><span className="text-xs text-muted-foreground">Đã chọn <strong className="text-foreground">{selectedItems.length + selectedApprovedItems.length}</strong></span>{selectedIds.length > 0 && <Button size="sm" variant="outline" onClick={() => setSelectedIds([])}>Bỏ chọn</Button>}{selectedItems.length > 0 && <><Button size="sm" variant="destructive" onClick={() => { setRejectReason(""); setBulkRejectOpen(true); }}>Từ chối {selectedItems.length} yêu cầu</Button>{tab === "PENDING" && <Button size="sm" onClick={() => setBulkApproveOpen(true)}><CheckCircle2 className="mr-1.5 h-4 w-4" />Duyệt hàng loạt</Button>}</>}{selectedApprovedItems.length > 0 && <Button size="sm" variant="destructive" onClick={() => setBulkDeleteOpen(true)}><Trash2 className="mr-1.5 h-4 w-4" />Xóa {selectedApprovedItems.length} yêu cầu đã duyệt</Button>}</div></div>}
+      {loading ? <div className="flex h-64 items-center justify-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" />Đang tải dữ liệu phê duyệt...</div> : loadError ? <div className="flex h-64 flex-col items-center justify-center gap-3 text-sm text-destructive"><AlertTriangle className="h-7 w-7" />{loadError}<Button variant="outline" onClick={() => void load()}>Thử lại</Button></div> : !visible.length ? <div className="flex h-64 flex-col items-center justify-center text-center"><FileCheck2 className="mb-3 h-10 w-10 text-muted-foreground/40" /><p className="font-semibold">Không có dữ liệu phê duyệt</p><p className="mt-1 text-xs text-muted-foreground">Không có yêu cầu phù hợp với bộ lọc hiện tại.</p></div> : tab === "PENDING" ? (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {visible.map(item => <Card key={item.id} className="group overflow-hidden border-border/70 transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md">
+            <CardContent className="p-0">
+              <div className="flex items-start gap-3 border-b bg-linear-to-r from-primary/6 to-transparent p-4">
+                {item.assignedToMe && <Checkbox className="mt-1" checked={selectedIds.includes(item.id)} onCheckedChange={checked => setSelectedIds(current => checked ? [...new Set([...current, item.id])] : current.filter(id => id !== item.id))} aria-label={`Chọn ${displayTitle(item)}`} />}
+                <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><Badge variant="outline" className="bg-background text-[10px]">{TYPE_LABELS[item.targetType] || item.targetType}</Badge>{item.categoryName && <span className="text-[11px] text-muted-foreground">{item.categoryName}</span>}</div><h3 className="mt-2 line-clamp-2 text-sm font-bold leading-5">{displayTitle(item)}</h3></div>
+                {statusBadge(item.status)}
+              </div>
+              <div className="space-y-3 p-4">
+                {item.description && <p className="line-clamp-2 min-h-8 text-xs leading-4 text-muted-foreground">{item.description}</p>}
+                <div className="grid grid-cols-2 gap-3 rounded-lg bg-muted/35 p-3 text-xs"><div><p className="text-[10px] uppercase tracking-wide text-muted-foreground">Người gửi</p><p className="mt-1 truncate font-semibold">{item.requesterName || "Chưa xác định"}</p></div><div><p className="text-[10px] uppercase tracking-wide text-muted-foreground">Thời gian gửi</p><p className="mt-1 font-semibold">{dateTime(item.createdAt)}</p></div></div>
+                <div className="flex flex-wrap items-center justify-end gap-2"><Button size="sm" variant="outline" onClick={() => setDetail(item)}><Eye className="mr-1.5 h-4 w-4" />Xem chi tiết</Button>{item.assignedToMe && <><Button size="sm" variant="outline" className="border-rose-200 text-rose-700 hover:bg-rose-50" onClick={() => { setRejectTarget(item); setRejectReason(""); }}>Từ chối</Button><Button size="sm" onClick={() => setApproveTarget(item)}><CheckCircle2 className="mr-1.5 h-4 w-4" />Phê duyệt</Button></>}</div>
+              </div>
+            </CardContent>
+          </Card>)}
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-2xl border bg-background shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-muted/20 px-4 py-3"><div><p className="text-sm font-bold">Lịch sử yêu cầu</p><p className="text-[11px] text-muted-foreground">Hiển thị {visible.length} trên tổng số {filtered.length} yêu cầu phù hợp</p></div>{status !== "ALL" && <Button size="sm" variant="ghost" onClick={() => setStatus("ALL")}><XCircle className="mr-1.5 h-4 w-4" />Bỏ lọc trạng thái</Button>}</div>
+          <div className="max-w-full overflow-x-auto"><Table>
+            <TableHeader className="sticky top-0 z-10 bg-slate-50/95 backdrop-blur"><TableRow className="hover:bg-transparent"><TableHead className="w-11"><Checkbox checked={allVisibleSelected} onCheckedChange={checked => setSelectedIds(current => checked ? [...new Set([...current, ...selectableVisible.map(item => item.id)])] : current.filter(id => !selectableVisible.some(item => item.id === id)))} aria-label="Chọn tất cả yêu cầu có thể xử lý" /></TableHead><TableHead className="min-w-70 font-bold text-slate-700">Nội dung yêu cầu</TableHead><TableHead className="min-w-47.5 font-bold text-slate-700">Người gửi</TableHead><TableHead className="min-w-32.5 font-bold text-slate-700">Ngày gửi</TableHead><TableHead className="min-w-30 font-bold text-slate-700">Trạng thái</TableHead><TableHead className="min-w-32.5 font-bold text-slate-700">Ngày xử lý</TableHead><TableHead className="min-w-37.5 font-bold text-slate-700">Người xử lý</TableHead><TableHead className="text-right font-bold text-slate-700">Thao tác</TableHead></TableRow></TableHeader>
+            <TableBody>{visible.map((item, index) => <TableRow key={item.id} className={`${index % 2 ? "bg-slate-50/35" : "bg-background"} transition-colors hover:bg-primary/4`}><TableCell>{canSelectItem(item) ? <Checkbox checked={selectedIds.includes(item.id)} onCheckedChange={checked => setSelectedIds(current => checked ? [...new Set([...current, item.id])] : current.filter(id => id !== item.id))} aria-label={`Chọn ${displayTitle(item)}`} /> : <Checkbox disabled aria-label="Yêu cầu không có thao tác hàng loạt phù hợp" />}</TableCell><TableCell><div className="flex items-start gap-3"><div className={`mt-0.5 h-9 w-1 shrink-0 rounded-full ${item.status === "PENDING" ? "bg-amber-400" : item.status === "CONFIRMED" ? "bg-emerald-500" : "bg-rose-500"}`} /><div><p className="line-clamp-1 font-semibold text-slate-900">{displayTitle(item)}</p><div className="mt-1.5 flex flex-wrap items-center gap-1.5"><Badge variant="outline" className="bg-white text-[10px]">{TYPE_LABELS[item.targetType] || item.targetType}</Badge>{item.categoryName && <span className="text-[11px] text-muted-foreground">{item.categoryName}</span>}</div></div></div></TableCell><TableCell><p className="font-medium text-slate-800">{item.requesterName || "Chưa xác định"}</p>{item.requesterEmail && <p className="mt-0.5 max-w-47.5 truncate text-[11px] text-muted-foreground">{item.requesterEmail}</p>}</TableCell><TableCell className="whitespace-nowrap text-xs text-slate-600">{dateTime(item.createdAt)}</TableCell><TableCell>{statusBadge(item.status)}</TableCell><TableCell className="whitespace-nowrap text-xs text-slate-600">{item.decidedAt ? dateTime(item.decidedAt) : <span className="text-muted-foreground">Chưa xử lý</span>}</TableCell><TableCell className="text-xs font-medium text-slate-700">{item.targetType === "COURSE" && !item.approverName ? "HR / Admin" : item.approverName || "—"}</TableCell><TableCell><div className="flex justify-end gap-1"><Button size="sm" variant="outline" className="h-8 shadow-none" onClick={() => setDetail(item)}><Eye className="mr-1.5 h-3.5 w-3.5" />Xem</Button>{item.status === "CONFIRMED" && !item.id.startsWith("COURSE-") && <Button size="icon" variant="ghost" className="h-8 w-8 text-rose-600 hover:bg-rose-50 hover:text-rose-700" onClick={() => setDeleteTarget(item)} title="Xóa yêu cầu đã phê duyệt"><Trash2 className="h-4 w-4" /></Button>}</div></TableCell></TableRow>)}</TableBody>
+          </Table></div>
+        </div>
+      )}
+      {!loading && filtered.length > pageSize && <div className="flex items-center justify-end gap-2"><Button size="icon" variant="outline" disabled={page === 0} onClick={() => setPage(p => p - 1)}><ChevronLeft className="h-4 w-4" /></Button><span className="text-xs">Trang {page + 1}/{pages}</span><Button size="icon" variant="outline" disabled={page >= pages - 1} onClick={() => setPage(p => p + 1)}><ChevronRight className="h-4 w-4" /></Button></div>}
+    </CardContent></Card>
+    <Dialog open={Boolean(detail)} onOpenChange={open => !open && setDetail(null)}><DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto"><DialogHeader><DialogTitle>{detail?.title || `Chi tiết ${TYPE_LABELS[detail?.targetType || ""] || "yêu cầu"}`}</DialogTitle><DialogDescription>Phiên bản dữ liệu thực tế được gửi lên để HR/Admin thẩm định.</DialogDescription></DialogHeader>{detail && <div className="space-y-4 text-sm">
+      <div className="flex items-center justify-between rounded-xl bg-muted/30 p-4"><div><p className="text-xs text-muted-foreground">Loại yêu cầu</p><p className="font-bold">{TYPE_LABELS[detail.targetType] || detail.targetType}</p></div>{statusBadge(detail.status)}</div>
+      {detailLoading ? <div className="flex h-36 items-center justify-center gap-2 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" />Đang tải thông tin khóa học...</div> : detail.targetType === "COURSE" && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-primary/5 p-4"><div><p className="font-bold">{detail.title || "Khóa học cần duyệt"}</p><p className="mt-1 text-xs text-muted-foreground">{detail.categoryName || "Chưa phân loại"} · Giá đề xuất {Number(detail.suggestedPrice || 0).toLocaleString("vi-VN")} đ</p></div><Button type="button" onClick={() => navigate(`/admin/courses/${detail.targetId}`, { state: { returnTo: `${location.pathname}${location.search}`, returnLabel: "Hàng đợi yêu cầu xử lý", approvalView: { tab, search, type, status, page } } })}><Eye className="mr-1.5 h-4 w-4" />Xem chi tiết khóa học</Button></div>}
+      {!detailLoading && targetDetails && <div className="rounded-xl border p-4"><p className="mb-3 text-xs font-bold uppercase text-muted-foreground">Phiên bản đối tượng cần duyệt</p><div className="grid gap-2 sm:grid-cols-2">{Object.entries(targetDetails).filter(([, value]) => value == null || ["string", "number", "boolean"].includes(typeof value)).slice(0, 18).map(([key, value]) => <div key={key} className="rounded-lg bg-muted/30 p-3"><p className="text-[10px] uppercase text-muted-foreground">{key.replace(/([A-Z])/g, " $1").trim()}</p><p className="mt-1 wrap-break-word font-semibold">{value == null || value === "" ? "Chưa cập nhật" : String(value)}</p></div>)}</div></div>}
+      <div className="grid gap-3 sm:grid-cols-2"><div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Người gửi</p><p className="font-bold">{detail.requesterName}</p><p className="text-xs text-muted-foreground">{detail.requesterEmail || "Chưa có email"}</p></div><div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Thời gian</p><p>Gửi: <strong>{dateTime(detail.createdAt)}</strong></p><p>Xử lý: <strong>{dateTime(detail.decidedAt)}</strong></p></div></div>
+      {detail.comment && <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4"><p className="text-xs font-bold text-muted-foreground">Ghi chú / lý do xử lý</p><p className="mt-1">{detail.comment}</p></div>}
+      <details className="rounded-lg border p-3 text-xs"><summary className="cursor-pointer font-semibold">Thông tin kỹ thuật</summary><div className="mt-2 space-y-1 font-mono text-muted-foreground"><p>Mã yêu cầu: {detail.id}</p><p>Mã đối tượng: {detail.targetId}</p><p>Người duyệt ID: {detail.approverId || "—"}</p></div></details>
+      <DialogFooter>{detail.assignedToMe && detail.status === "PENDING" && <><Button variant="destructive" onClick={() => { setRejectTarget(detail); setRejectReason(""); }}>Từ chối</Button><Button onClick={() => setApproveTarget(detail)}>Phê duyệt</Button></>}</DialogFooter>
+    </div>}</DialogContent></Dialog>
+    <Dialog open={Boolean(rejectTarget)} onOpenChange={open => { if (!open) { setRejectTarget(null); setRejectReason(""); } }}><DialogContent className="max-w-md"><DialogHeader><DialogTitle>Từ chối yêu cầu</DialogTitle><DialogDescription>Vui lòng nhập lý do rõ ràng. Nội dung này sẽ được gửi qua thông báo hệ thống cho người tạo.</DialogDescription></DialogHeader><Textarea value={rejectReason} onChange={e => setRejectReason(e.target.value)} placeholder="Nhập lý do từ chối (tối thiểu 5 ký tự)..." rows={5} maxLength={1000} /><p className="text-right text-xs text-muted-foreground">{rejectReason.trim().length}/1000</p><DialogFooter><Button variant="outline" onClick={() => setRejectTarget(null)} disabled={busy}>Hủy</Button><Button variant="destructive" onClick={() => void reject()} disabled={busy || rejectReason.trim().length < 5}>{busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Xác nhận từ chối</Button></DialogFooter></DialogContent></Dialog>
+    <Dialog open={bulkRejectOpen} onOpenChange={open => { setBulkRejectOpen(open); if (!open) setRejectReason(""); }}><DialogContent className="max-w-md"><DialogHeader><DialogTitle>Từ chối {selectedItems.length} yêu cầu</DialogTitle><DialogDescription>Lý do sẽ được gửi qua thông báo hệ thống tới từng người tạo yêu cầu.</DialogDescription></DialogHeader><Textarea value={rejectReason} onChange={e => setRejectReason(e.target.value)} placeholder="Nhập lý do từ chối chung (tối thiểu 5 ký tự)..." rows={5} maxLength={1000} /><p className="text-right text-xs text-muted-foreground">{rejectReason.trim().length}/1000</p><DialogFooter><Button variant="outline" onClick={() => setBulkRejectOpen(false)} disabled={busy}>Hủy</Button><Button variant="destructive" onClick={() => void bulkReject()} disabled={busy || rejectReason.trim().length < 5}>{busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Từ chối {selectedItems.length} yêu cầu</Button></DialogFooter></DialogContent></Dialog>
+    <ConfirmDialog open={Boolean(deleteTarget)} onOpenChange={open => !open && setDeleteTarget(null)} title="Xóa yêu cầu đã phê duyệt" description="Thao tác này chỉ xóa bản ghi lịch sử phê duyệt, không xóa đối tượng nghiệp vụ đã được duyệt." confirmText="Xóa yêu cầu" variant="destructive" loading={busy} onConfirm={() => deleteTarget ? deleteApproved([deleteTarget]) : undefined} />
+    <ConfirmDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen} title="Xóa hàng loạt yêu cầu đã phê duyệt" description={`Xác nhận xóa ${selectedApprovedItems.length} bản ghi lịch sử đã chọn? Các đối tượng nghiệp vụ gốc không bị xóa.`} confirmText={`Xóa ${selectedApprovedItems.length} yêu cầu`} variant="destructive" loading={busy} onConfirm={() => deleteApproved(selectedApprovedItems)} />
+    <ConfirmDialog open={bulkApproveOpen} onOpenChange={setBulkApproveOpen} title="Duyệt hàng loạt" description={`Xác nhận phê duyệt ${selectedItems.length} yêu cầu đã chọn? Mỗi nghiệp vụ sẽ được cập nhật và người tạo sẽ nhận thông báo hệ thống.`} confirmText={`Duyệt ${selectedItems.length} yêu cầu`} variant="default" loading={busy} onConfirm={bulkApprove} />
+    <ConfirmDialog open={Boolean(approveTarget)} onOpenChange={open => !open && setApproveTarget(null)} title="Phê duyệt yêu cầu" description={`Xác nhận phê duyệt ${TYPE_LABELS[approveTarget?.targetType || ""] || "yêu cầu"} #${approveTarget?.targetId || ""}? Trạng thái đối tượng sẽ được cập nhật theo quy trình.`} confirmText="Phê duyệt" variant="default" loading={busy} onConfirm={approve} />
+  </div>;
 };
+
+export default ApprovalCenterPage;

@@ -58,6 +58,7 @@ export const CategoryTeacherAssignPage: React.FC = () => {
   // Assign Dialog state
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [teacherSearchQuery, setTeacherSearchQuery] = useState("");
+  const [assignRoleFilter, setAssignRoleFilter] = useState<"ALL" | "TEACHER" | "TA">("ALL");
   const [selectedTeacherIds, setSelectedTeacherIds] = useState<string[]>([]);
 
   // Unassign Dialog state
@@ -273,9 +274,12 @@ export const CategoryTeacherAssignPage: React.FC = () => {
       })
       .filter((emp) => {
         const name = String(emp.fullName || emp.user?.fullName || emp.employeeCode || "").toLowerCase();
-        return name.includes(teacherSearchQuery.toLowerCase());
+        const employeeId = emp.id || emp.userId;
+        const isTA = isTeachingAssistant({ employeeId });
+        const matchesRole = assignRoleFilter === "ALL" || (assignRoleFilter === "TA" ? isTA : !isTA);
+        return matchesRole && name.includes(teacherSearchQuery.trim().toLowerCase());
       });
-  }, [employees, assignedTeachers, selectedCategory, teacherSearchQuery]);
+  }, [employees, assignedTeachers, selectedCategory, teacherSearchQuery, assignRoleFilter]);
 
   // Handle Multi Assign
   const handleExecuteAssign = async () => {
@@ -390,7 +394,7 @@ export const CategoryTeacherAssignPage: React.FC = () => {
             </div>
 
             {/* Category List */}
-            <div className="space-y-1.5 max-h-[600px] overflow-y-auto pr-1">
+            <div className="space-y-1.5 max-h-150 overflow-y-auto pr-1">
               {filteredCategories.map((cat) => {
                 const isSelected = selectedCategory?.id === cat.id;
                 const count = links.filter(
@@ -599,6 +603,15 @@ export const CategoryTeacherAssignPage: React.FC = () => {
                 onChange={(e) => setTeacherSearchQuery(e.target.value)}
                 className="pl-9 h-9 text-xs rounded-xl"
               />
+            </div>
+
+            <div className="grid grid-cols-3 gap-1 rounded-xl border bg-muted/30 p-1" aria-label="Lọc vai trò nhân sự có thể gán">
+              {([ ["ALL", "Tất cả"], ["TEACHER", "Teacher"], ["TA", "TA"] ] as const).map(([value, label]) => (
+                <button key={value} type="button" onClick={() => setAssignRoleFilter(value)}
+                  className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${assignRoleFilter === value ? "bg-background text-primary shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+                  {label}
+                </button>
+              ))}
             </div>
 
             <div className="max-h-72 overflow-y-auto space-y-2 pr-1 border border-border/40 rounded-xl p-2 bg-muted/20">
