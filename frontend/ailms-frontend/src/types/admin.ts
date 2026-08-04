@@ -51,6 +51,7 @@ export interface CourseResponse {
   description: string;
   level: string;
   status: string; // ACTIVE, INACTIVE, etc.
+  enrollmentCount?: number;
   createdAt: string;
   updatedAt: string | null;
 }

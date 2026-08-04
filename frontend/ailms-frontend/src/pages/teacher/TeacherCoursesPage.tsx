@@ -24,15 +24,15 @@ export const TeacherCoursesPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (id) {
+      navigate(`/teacher/courses/${id}/builder`, { replace: true });
+      return;
+    }
     teacherApi.getCourses().then((res) => {
       setCourses(res);
-      if (id) {
-        const found = res.find((c) => c.id === id);
-        if (found) setEditingCourse(found);
-      }
       setLoading(false);
     });
-  }, [id]);
+  }, [id, navigate]);
 
   const formatVND = (val: number) => {
     return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(val);
@@ -224,17 +224,17 @@ export const TeacherCoursesPage: React.FC = () => {
               </div>
             )}
 
-            <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 border-t border-border/40">
-              <span>{crs.totalLessons} bài học • {crs.totalStudents} học viên</span>
-              <Button
-                size="sm"
-                onClick={() => setEditingCourse(crs)}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold rounded-lg gap-1.5 cursor-pointer"
-              >
-                <Edit className="h-3.5 w-3.5" />
-                {crs.status === "REJECTED" ? "Sửa & Gửi duyệt lại" : "Soạn thảo nội dung"}
-              </Button>
-            </div>
+              <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 border-t border-border/40">
+                <span>{crs.totalLessons} bài học • {crs.totalStudents} học viên</span>
+                <Button
+                  size="sm"
+                  onClick={() => navigate(`/teacher/courses/${crs.id}/builder`)}
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold rounded-lg gap-1.5 cursor-pointer"
+                >
+                  <Edit className="h-3.5 w-3.5" />
+                  {crs.status === "REJECTED" ? "Sửa & Gửi duyệt lại" : "Soạn thảo nội dung (Course Builder)"}
+                </Button>
+              </div>
           </Card>
         ))}
       </div>

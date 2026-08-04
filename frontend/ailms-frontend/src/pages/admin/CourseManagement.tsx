@@ -38,6 +38,9 @@ import {
   AlertCircle,
   ChevronLeft,
   ChevronRight,
+  LayoutGrid,
+  List,
+  Users,
 } from "lucide-react";
 
 const getPageNumbers = (currentPage: number, total: number) => {
@@ -73,6 +76,9 @@ export const CourseManagement: React.FC = () => {
   // Data states
   const [courses, setCourses] = useState<CourseResponse[]>([]);
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
+
+  // View mode state
+  const [courseViewMode, setCourseViewMode] = useState<"grid" | "table">("grid");
 
   // Pagination states
   const [coursePage, setCoursePage] = useState(0);
@@ -277,7 +283,7 @@ export const CourseManagement: React.FC = () => {
     try {
       const res = await courseApi.deleteCourse(deleteCourseConfirm.id);
       if (res.data.success) {
-        showBanner("Xóa khóa học thành công!");
+        showBanner("Đã di chuyển khóa học vào thùng rác thành công!");
         fetchCourses();
       }
     } catch (err: any) {
@@ -406,15 +412,44 @@ export const CourseManagement: React.FC = () => {
                 </CardDescription>
               </div>
 
-              <Button
-                onClick={() => { setEditingCourse(null); setCourseModalOpen(true); }}
-                variant="default"
-                size="sm"
-                className="h-9 gap-1.5 bg-primary text-primary-foreground hover:bg-primary/95"
-              >
-                <Plus className="h-4 w-4" />
-                <span>Thêm khóa học</span>
-              </Button>
+              <div className="flex items-center gap-3">
+                <div className="flex bg-muted p-1 rounded-xl border border-border/40">
+                  <button
+                    onClick={() => setCourseViewMode("grid")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                      courseViewMode === "grid"
+                        ? "bg-card text-foreground shadow-xs"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                    title="Chế độ Lưới"
+                  >
+                    <LayoutGrid className="h-3.5 w-3.5" />
+                    <span>Lưới</span>
+                  </button>
+                  <button
+                    onClick={() => setCourseViewMode("table")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                      courseViewMode === "table"
+                        ? "bg-card text-foreground shadow-xs"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                    title="Chế độ Bảng"
+                  >
+                    <List className="h-3.5 w-3.5" />
+                    <span>Bảng</span>
+                  </button>
+                </div>
+
+                <Button
+                  onClick={() => { setEditingCourse(null); setCourseModalOpen(true); }}
+                  variant="default"
+                  size="sm"
+                  className="h-9 gap-1.5 bg-primary text-primary-foreground hover:bg-primary/95"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>Thêm khóa học</span>
+                </Button>
+              </div>
             </CardHeader>
 
             {/* Course Filters & Toolbar */}
@@ -484,116 +519,206 @@ export const CourseManagement: React.FC = () => {
               </div>
             </div>
 
-            {/* Courses Table */}
+            {/* Courses Content (Grid vs Table) */}
             <CardContent className="p-0 relative">
               {loading && (
                 <div className="absolute inset-0 bg-background/60 backdrop-blur-xs flex items-center justify-center z-20">
                   <Loader2 className="h-8 w-8 text-primary animate-spin" />
                 </div>
               )}
-              <Table containerClassName="max-h-[calc(100vh-320px)] min-h-[350px] overflow-auto border-b border-border/20" className="-mt-3 pb-4">
-                <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur-md shadow-2xs border-b border-border/40">
-                  <TableRow className="border-b border-border/30 bg-muted/20 hover:bg-muted/20">
-                    <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pl-4">Tên khóa học</TableHead>
-                    <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Danh mục</TableHead>
-                    <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Cấp độ</TableHead>
-                    <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Liên kết</TableHead>
-                    <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Trạng thái</TableHead>
-                    <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider text-right pr-4">Thao tác</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody className="opacity-90">
+
+              {courseViewMode === "grid" ? (
+                <div className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 min-h-[350px]">
                   {courses.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="py-12 text-center text-muted-foreground text-sm">
-                        Không tìm thấy khóa học nào.
-                      </TableCell>
-                    </TableRow>
+                    <div className="col-span-full py-16 text-center text-muted-foreground text-sm">
+                      Không tìm thấy khóa học nào.
+                    </div>
                   ) : (
                     courses.map((course, index) => (
-                      <TableRow key={course.id || index} className="hover:bg-foreground/10 transition-colors border-border/30">
-                        <TableCell className="pl-4">
-                          <div>
-                            <p className="font-semibold text-xs text-foreground">{course.name}</p>
-                            <p className="text-[10px] text-muted-foreground line-clamp-1 max-w-xs">{course.description}</p>
+                      <Card key={course.id || index} className="border-border shadow-xs hover:border-primary/40 transition-all flex flex-col justify-between overflow-hidden bg-card group">
+                        <CardHeader className="p-4 pb-2 space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] bg-primary/10 text-primary font-bold border border-primary/20 truncate">
+                              {course.categoryName}
+                            </span>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              course.level === "BEGINNER" ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" :
+                              course.level === "INTERMEDIATE" ? "bg-amber-500/10 text-amber-600 border border-amber-500/20" : "bg-rose-500/10 text-rose-600 border border-rose-500/20"
+                            }`}>
+                              {course.level}
+                            </span>
                           </div>
-                        </TableCell>
-                        <TableCell>
-                          <span className="px-2.5 py-0.5 rounded-full text-[10px] bg-muted text-muted-foreground font-semibold border border-border/40">
-                            {course.categoryName}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                            course.level === "BEGINNER" ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" :
-                            course.level === "INTERMEDIATE" ? "bg-amber-500/10 text-amber-600 border border-amber-500/20" : "bg-rose-500/10 text-rose-600 border border-rose-500/20"
-                          }`}>
-                            {course.level}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-xs">
-                          <a
-                            href={course.link}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-primary hover:underline font-semibold flex items-center gap-1 w-fit"
-                          >
-                            <span>Học liệu</span>
-                            <ExternalLink className="h-3 w-3" />
-                          </a>
-                        </TableCell>
-                        <TableCell>
-                          <button
-                            onClick={() => handleToggleCourseStatus(course)}
-                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold transition-all ${
-                              course.status === "ACTIVE" ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" : "bg-rose-500/10 text-rose-600 border border-rose-500/20"
-                            }`}
-                          >
-                            {course.status === "ACTIVE" ? "Hoạt động" : "Tạm ngưng"}
-                          </button>
-                        </TableCell>
-                        <TableCell className="text-right pr-4">
-                          <div className="flex items-center justify-end gap-1">
-                            <Button
-                              onClick={() => { setEditingCourse(course); setCourseModalOpen(true); }}
-                              variant="ghost"
-                              size="icon"
-                              title="Chỉnh sửa"
-                              className="h-7 w-7 text-muted-foreground hover:bg-muted"
+                          <CardTitle className="text-sm font-bold leading-snug line-clamp-2 group-hover:text-primary transition-colors">
+                            {course.name}
+                          </CardTitle>
+                          <CardDescription className="text-xs text-muted-foreground line-clamp-2">
+                            {course.description || "Chưa có mô tả chi tiết."}
+                          </CardDescription>
+                        </CardHeader>
+
+                        <CardContent className="p-4 pt-1 space-y-3">
+                          <div className="flex items-center justify-between text-xs pt-2 border-t border-border/40">
+                            <div className="flex items-center gap-1.5 font-semibold text-muted-foreground">
+                              <Users className="h-3.5 w-3.5 text-primary" />
+                              <span>({course.enrollmentCount || 0} người đăng ký)</span>
+                            </div>
+                            <a
+                              href={course.link}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-primary hover:underline font-semibold flex items-center gap-1 text-xs"
                             >
-                              <Edit className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button
-                              onClick={() => handleDeleteCourse(course.id, course.name)}
-                              variant="ghost"
-                              size="icon"
-                              title="Xóa"
-                              className="h-7 w-7 text-rose-600 hover:bg-rose-500/10"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
+                              <span>Học liệu</span>
+                              <ExternalLink className="h-3 w-3" />
+                            </a>
                           </div>
-                        </TableCell>
-                      </TableRow>
+
+                          <div className="flex items-center justify-between pt-2 border-t border-border/40">
+                            <button
+                              onClick={() => handleToggleCourseStatus(course)}
+                              className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold transition-all ${
+                                course.status === "ACTIVE" ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" : "bg-rose-500/10 text-rose-600 border border-rose-500/20"
+                              }`}
+                            >
+                              {course.status === "ACTIVE" ? "Hoạt động" : "Tạm ngưng"}
+                            </button>
+
+                            <div className="flex items-center gap-1">
+                              <Button
+                                onClick={() => { setEditingCourse(course); setCourseModalOpen(true); }}
+                                variant="ghost"
+                                size="icon"
+                                title="Chỉnh sửa"
+                                className="h-7 w-7 text-muted-foreground hover:bg-muted"
+                              >
+                                <Edit className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                onClick={() => handleDeleteCourse(course.id, course.name)}
+                                variant="ghost"
+                                size="icon"
+                                title="Xóa vào thùng rác"
+                                className="h-7 w-7 text-rose-600 hover:bg-rose-500/10"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
                     ))
                   )}
-                </TableBody>
-              </Table>
+                </div>
+              ) : (
+                <Table containerClassName="max-h-[calc(100vh-320px)] min-h-[350px] overflow-auto border-b border-border/20" className="-mt-3 pb-4">
+                  <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur-md shadow-2xs border-b border-border/40">
+                    <TableRow className="border-b border-border/30 bg-muted/20 hover:bg-muted/20">
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pl-4">Tên khóa học</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Danh mục</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Cấp độ</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Người đăng ký</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Liên kết</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Trạng thái</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider text-right pr-4">Thao tác</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody className="opacity-90">
+                    {courses.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="py-12 text-center text-muted-foreground text-sm">
+                          Không tìm thấy khóa học nào.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      courses.map((course, index) => (
+                        <TableRow key={course.id || index} className="hover:bg-foreground/10 transition-colors border-border/30">
+                          <TableCell className="pl-4">
+                            <div>
+                              <p className="font-semibold text-xs text-foreground">{course.name}</p>
+                              <p className="text-[10px] text-muted-foreground line-clamp-1 max-w-xs">{course.description}</p>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] bg-muted text-muted-foreground font-semibold border border-border/40">
+                              {course.categoryName}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                              course.level === "BEGINNER" ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" :
+                              course.level === "INTERMEDIATE" ? "bg-amber-500/10 text-amber-600 border border-amber-500/20" : "bg-rose-500/10 text-rose-600 border border-rose-500/20"
+                            }`}>
+                              {course.level}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1 text-xs font-semibold text-muted-foreground">
+                              <Users className="h-3.5 w-3.5 text-primary" />
+                              <span>({course.enrollmentCount || 0} người đăng ký)</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            <a
+                              href={course.link}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-primary hover:underline font-semibold flex items-center gap-1 w-fit"
+                            >
+                              <span>Học liệu</span>
+                              <ExternalLink className="h-3 w-3" />
+                            </a>
+                          </TableCell>
+                          <TableCell>
+                            <button
+                              onClick={() => handleToggleCourseStatus(course)}
+                              className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold transition-all ${
+                                course.status === "ACTIVE" ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" : "bg-rose-500/10 text-rose-600 border border-rose-500/20"
+                              }`}
+                            >
+                              {course.status === "ACTIVE" ? "Hoạt động" : "Tạm ngưng"}
+                            </button>
+                          </TableCell>
+                          <TableCell className="text-right pr-4">
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                onClick={() => { setEditingCourse(course); setCourseModalOpen(true); }}
+                                variant="ghost"
+                                size="icon"
+                                title="Chỉnh sửa"
+                                className="h-7 w-7 text-muted-foreground hover:bg-muted"
+                              >
+                                <Edit className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                onClick={() => handleDeleteCourse(course.id, course.name)}
+                                variant="ghost"
+                                size="icon"
+                                title="Xóa vào thùng rác"
+                                className="h-7 w-7 text-rose-600 hover:bg-rose-500/10"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
 
-            {/* Modern Table Footer */}
-            <div className="px-5 py-3 border-t border-border/40 bg-card/40 flex flex-col md:flex-row items-center justify-between gap-4 text-xs">
-              {/* Left: Total Results Summary */}
-              <div className="text-muted-foreground font-medium">
-                Showing <span className="font-semibold text-foreground">{courseTotalElements === 0 ? 0 : coursePage * coursePageSize + 1}</span> to{" "}
-                <span className="font-semibold text-foreground">{Math.min((coursePage + 1) * coursePageSize, courseTotalElements)}</span> of{" "}
-                <span className="font-semibold text-foreground">{courseTotalElements}</span> results
+            {/* Modern RoleManagement-style Table Footer */}
+            <div className="px-5 py-3 border-t border-border/40 bg-card flex flex-col md:flex-row items-center justify-between gap-4 text-sm font-medium">
+              <div className="text-muted-foreground">
+                Hiển thị <span className="font-semibold text-foreground">{courses.length === 0 ? 0 : coursePage * coursePageSize + 1}</span> đến{" "}
+                <span className="font-semibold text-foreground">{Math.min((coursePage + 1) * coursePageSize, courseTotalElements)}</span> trên{" "}
+                <span className="font-semibold text-foreground">{courseTotalElements}</span> bản ghi
               </div>
 
-              <div className="flex flex-wrap items-center gap-5">
-                {/* Middle: Rows per page Select */}
+              <div className="flex flex-wrap items-center gap-4">
                 <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground font-medium">Rows per page:</span>
+                  <span className="text-muted-foreground">Số dòng/trang:</span>
                   <Select
                     value={String(coursePageSize)}
                     onValueChange={(val) => {
@@ -601,7 +726,7 @@ export const CourseManagement: React.FC = () => {
                       setCoursePage(0);
                     }}
                   >
-                    <SelectTrigger className="h-8 w-16 text-xs bg-background border border-border/40 rounded-lg font-semibold">
+                    <SelectTrigger className="h-8 w-16 text-xs bg-background border border-border rounded-lg font-bold">
                       <SelectValue placeholder={String(coursePageSize)} />
                     </SelectTrigger>
                     <SelectContent>
@@ -613,7 +738,6 @@ export const CourseManagement: React.FC = () => {
                   </Select>
                 </div>
 
-                {/* Go to Page Input */}
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();
@@ -626,7 +750,7 @@ export const CourseManagement: React.FC = () => {
                   }}
                   className="flex items-center gap-1.5"
                 >
-                  <span className="text-muted-foreground font-medium">Go to:</span>
+                  <span className="text-muted-foreground">Tới trang:</span>
                   <Input
                     type="number"
                     min={1}
@@ -641,28 +765,25 @@ export const CourseManagement: React.FC = () => {
                         setCourseJumpPageInput(String(coursePage + 1));
                       }
                     }}
-                    className="h-8 w-14 text-center text-xs font-semibold bg-background border border-border/40 rounded-lg px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                    title="Nhập số trang và nhấn Enter"
+                    className="h-8 w-14 text-center text-xs font-bold bg-background border border-border rounded-lg"
                   />
                 </form>
 
-                {/* Right: Numbered Pagination Buttons */}
                 <div className="flex items-center gap-1">
                   <Button
                     disabled={coursePage === 0}
                     onClick={() => setCoursePage((prev) => prev - 1)}
                     variant="outline"
                     size="sm"
-                    className="h-8 px-2.5 text-xs font-semibold gap-1 border-border/40 rounded-lg hover:bg-muted"
+                    className="h-8 text-xs font-semibold rounded-lg cursor-pointer"
                   >
-                    <ChevronLeft className="h-3.5 w-3.5" />
-                    <span>Previous</span>
+                    <ChevronLeft className="h-3.5 w-3.5" /> Trước
                   </Button>
 
                   {getPageNumbers(coursePage, courseTotalPages).map((p, pIdx) => {
                     if (p === "...") {
                       return (
-                        <span key={`dots-${pIdx}`} className="px-2 text-muted-foreground font-bold pointer-events-none">
+                        <span key={`dots-${pIdx}`} className="px-1 text-muted-foreground font-bold">
                           ...
                         </span>
                       );
@@ -675,12 +796,7 @@ export const CourseManagement: React.FC = () => {
                         onClick={() => setCoursePage(pageNum)}
                         variant={isCurrent ? "default" : "outline"}
                         size="sm"
-                        className={cn(
-                          "h-8 min-w-[32px] px-2 text-xs font-semibold rounded-lg transition-all",
-                          isCurrent
-                            ? "bg-primary text-primary-foreground shadow-xs"
-                            : "border-border/40 text-foreground hover:bg-muted/70"
-                        )}
+                        className="h-8 w-8 text-xs font-semibold rounded-lg cursor-pointer"
                       >
                         {pageNum + 1}
                       </Button>
@@ -692,10 +808,9 @@ export const CourseManagement: React.FC = () => {
                     onClick={() => setCoursePage((prev) => prev + 1)}
                     variant="outline"
                     size="sm"
-                    className="h-8 px-2.5 text-xs font-semibold gap-1 border-border/40 rounded-lg hover:bg-muted"
+                    className="h-8 text-xs font-semibold rounded-lg cursor-pointer"
                   >
-                    <span>Next</span>
-                    <ChevronRight className="h-3.5 w-3.5" />
+                    Sau <ChevronRight className="h-3.5 w-3.5" />
                   </Button>
                 </div>
               </div>
@@ -826,19 +941,17 @@ export const CourseManagement: React.FC = () => {
               </Table>
             </CardContent>
 
-            {/* Modern Table Footer */}
-            <div className="px-5 py-3 border-t border-border/40 bg-card/40 flex flex-col md:flex-row items-center justify-between gap-4 text-xs">
-              {/* Left: Total Results Summary */}
-              <div className="text-muted-foreground font-medium">
-                Showing <span className="font-semibold text-foreground">{categoryTotalElements === 0 ? 0 : categoryPage * categoryPageSize + 1}</span> to{" "}
-                <span className="font-semibold text-foreground">{Math.min((categoryPage + 1) * categoryPageSize, categoryTotalElements)}</span> of{" "}
-                <span className="font-semibold text-foreground">{categoryTotalElements}</span> results
+            {/* Modern RoleManagement-style Table Footer */}
+            <div className="px-5 py-3 border-t border-border/40 bg-card flex flex-col md:flex-row items-center justify-between gap-4 text-sm font-medium">
+              <div className="text-muted-foreground">
+                Hiển thị <span className="font-semibold text-foreground">{categoryTotalElements === 0 ? 0 : categoryPage * categoryPageSize + 1}</span> đến{" "}
+                <span className="font-semibold text-foreground">{Math.min((categoryPage + 1) * categoryPageSize, categoryTotalElements)}</span> trên{" "}
+                <span className="font-semibold text-foreground">{categoryTotalElements}</span> bản ghi
               </div>
 
-              <div className="flex flex-wrap items-center gap-5">
-                {/* Middle: Rows per page Select */}
+              <div className="flex flex-wrap items-center gap-4">
                 <div className="flex items-center gap-2">
-                  <span className="text-muted-foreground font-medium">Rows per page:</span>
+                  <span className="text-muted-foreground">Số dòng/trang:</span>
                   <Select
                     value={String(categoryPageSize)}
                     onValueChange={(val) => {
@@ -846,7 +959,7 @@ export const CourseManagement: React.FC = () => {
                       setCategoryPage(0);
                     }}
                   >
-                    <SelectTrigger className="h-8 w-16 text-xs bg-background border border-border/40 rounded-lg font-semibold">
+                    <SelectTrigger className="h-8 w-16 text-xs bg-background border border-border rounded-lg font-bold">
                       <SelectValue placeholder={String(categoryPageSize)} />
                     </SelectTrigger>
                     <SelectContent>
@@ -858,7 +971,6 @@ export const CourseManagement: React.FC = () => {
                   </Select>
                 </div>
 
-                {/* Go to Page Input */}
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();
@@ -871,7 +983,7 @@ export const CourseManagement: React.FC = () => {
                   }}
                   className="flex items-center gap-1.5"
                 >
-                  <span className="text-muted-foreground font-medium">Go to:</span>
+                  <span className="text-muted-foreground">Tới trang:</span>
                   <Input
                     type="number"
                     min={1}
@@ -886,28 +998,25 @@ export const CourseManagement: React.FC = () => {
                         setCategoryJumpPageInput(String(categoryPage + 1));
                       }
                     }}
-                    className="h-8 w-14 text-center text-xs font-semibold bg-background border border-border/40 rounded-lg px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                    title="Nhập số trang và nhấn Enter"
+                    className="h-8 w-14 text-center text-xs font-bold bg-background border border-border rounded-lg"
                   />
                 </form>
 
-                {/* Right: Numbered Pagination Buttons */}
                 <div className="flex items-center gap-1">
                   <Button
                     disabled={categoryPage === 0}
                     onClick={() => setCategoryPage((prev) => prev - 1)}
                     variant="outline"
                     size="sm"
-                    className="h-8 px-2.5 text-xs font-semibold gap-1 border-border/40 rounded-lg hover:bg-muted"
+                    className="h-8 text-xs font-semibold rounded-lg cursor-pointer"
                   >
-                    <ChevronLeft className="h-3.5 w-3.5" />
-                    <span>Previous</span>
+                    <ChevronLeft className="h-3.5 w-3.5" /> Trước
                   </Button>
 
                   {getPageNumbers(categoryPage, categoryTotalPages).map((p, pIdx) => {
                     if (p === "...") {
                       return (
-                        <span key={`dots-${pIdx}`} className="px-2 text-muted-foreground font-bold pointer-events-none">
+                        <span key={`dots-${pIdx}`} className="px-1 text-muted-foreground font-bold">
                           ...
                         </span>
                       );
@@ -920,12 +1029,7 @@ export const CourseManagement: React.FC = () => {
                         onClick={() => setCategoryPage(pageNum)}
                         variant={isCurrent ? "default" : "outline"}
                         size="sm"
-                        className={cn(
-                          "h-8 min-w-[32px] px-2 text-xs font-semibold rounded-lg transition-all",
-                          isCurrent
-                            ? "bg-primary text-primary-foreground shadow-xs"
-                            : "border-border/40 text-foreground hover:bg-muted/70"
-                        )}
+                        className="h-8 w-8 text-xs font-semibold rounded-lg cursor-pointer"
                       >
                         {pageNum + 1}
                       </Button>
@@ -937,10 +1041,9 @@ export const CourseManagement: React.FC = () => {
                     onClick={() => setCategoryPage((prev) => prev + 1)}
                     variant="outline"
                     size="sm"
-                    className="h-8 px-2.5 text-xs font-semibold gap-1 border-border/40 rounded-lg hover:bg-muted"
+                    className="h-8 text-xs font-semibold rounded-lg cursor-pointer"
                   >
-                    <span>Next</span>
-                    <ChevronRight className="h-3.5 w-3.5" />
+                    Sau <ChevronRight className="h-3.5 w-3.5" />
                   </Button>
                 </div>
               </div>
@@ -1064,9 +1167,9 @@ export const CourseManagement: React.FC = () => {
       <ConfirmDialog
         open={Boolean(deleteCourseConfirm)}
         onOpenChange={(open) => { if (!open) setDeleteCourseConfirm(null); }}
-        title="Xác nhận xóa khóa học"
-        description={`Bạn có chắc chắn muốn xóa khóa học "${deleteCourseConfirm?.name}"? Thao tác không thể hoàn tác.`}
-        confirmText="Xóa khóa học"
+        title="Xác nhận chuyển khóa học vào thùng rác"
+        description={`Bạn có chắc chắn muốn xóa mềm khóa học "${deleteCourseConfirm?.name}"? Khóa học sẽ được di chuyển vào Thùng rác và có thể khôi phục bất cứ lúc nào.`}
+        confirmText="Đưa vào thùng rác"
         cancelText="Hủy bỏ"
         onConfirm={confirmDeleteCourseAction}
       />

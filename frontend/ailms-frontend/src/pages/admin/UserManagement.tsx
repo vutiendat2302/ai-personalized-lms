@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { userApi } from "@/api/users/userApi";
+import { employeeApi } from "@/api/employees/employeeApi";
 import { roleApi } from "@/api/roles/roleApi";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { departmentApi, type DepartmentResponse } from "@/api/departments/departmentApi";
@@ -459,7 +460,7 @@ export const UserManagement: React.FC = () => {
       if (stRes?.data?.success) setStudentCount(stRes.data.data);
 
       // 2. Employee Count
-      const empRes = await userApi.getEmployeeCount().catch(() => null);
+      const empRes = await employeeApi.getEmployeeCount().catch(() => null);
       if (empRes?.data?.success) setEmployeeCount(empRes.data.data);
 
       // 3. Stats by Role

@@ -40,11 +40,13 @@ export const CourseAdminDetailPage: React.FC = () => {
   const [lessonLoading, setLessonLoading] = useState(false);
   const [lessonError, setLessonError] = useState("");
   const [activeTab, setActiveTab] = useState<string>("packages");
-  const navigationState = location.state as { returnTo?: string; returnLabel?: string; studentId?: string; approvalView?: unknown } | null;
+  const navigationState = location.state as { returnTo?: string; returnLabel?: string; studentId?: string; approvalView?: unknown; catalogView?: unknown } | null;
 
   const handleBack = () => {
     navigate(navigationState?.returnTo || "/admin/courses", {
-      state: navigationState?.approvalView
+      state: navigationState?.catalogView
+        ? { catalogView: navigationState.catalogView }
+        : navigationState?.approvalView
         ? { approvalView: navigationState.approvalView }
         : navigationState?.studentId ? { studentId: navigationState.studentId } : null,
     });
@@ -211,18 +213,24 @@ export const CourseAdminDetailPage: React.FC = () => {
         <TabsContent value="curriculum" className="space-y-4">
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-amber-100 text-amber-700">
-                <Lock className="w-5 h-5" />
+              <div className="p-2 rounded-lg bg-blue-100 text-blue-700">
+                <BookOpen className="w-5 h-5" />
               </div>
               <div className="text-xs">
                 <p className="font-semibold text-slate-800">
-                  Chế độ xem Nội dung Đào tạo (Read-Only)
+                  Nội dung Đào tạo (Course Builder Studio)
                 </p>
                 <p className="text-slate-500">
-                  Nội dung chi tiết chương, bài học và bài tập do Giảng viên phụ trách biên soạn và quản lý.
+                  Quản lý chương học, bài học video, bài tập tự luận và các bài trắc nghiệm 3 cấp.
                 </p>
               </div>
             </div>
+            <Button
+              onClick={() => navigate(`/admin/courses/${course.id}/builder`)}
+              className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg px-4 py-2 cursor-pointer shadow-xs"
+            >
+              Mở Studio Soạn Thảo
+            </Button>
           </div>
 
           {/* Curriculum Chapters List */}

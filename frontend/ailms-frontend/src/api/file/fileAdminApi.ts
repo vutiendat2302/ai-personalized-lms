@@ -60,6 +60,15 @@ export const fileAdminApi = {
     return res.data.data;
   },
 
+  // Lấy URL xem trực tiếp (inline preview)
+  getPreviewUrl: async (fileKey: string) => {
+    const res = await httpClient.get<ApiResponse<string>>(
+      "/v1/files/preview",
+      { params: { fileKey } }
+    );
+    return res.data.data;
+  },
+
   // Archive hàng loạt
   bulkArchive: async (request: BulkFileActionRequest) => {
     const res = await httpClient.post<ApiResponse<void>>(

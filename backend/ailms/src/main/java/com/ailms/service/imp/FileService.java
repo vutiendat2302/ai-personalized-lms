@@ -66,8 +66,12 @@ public class FileService implements IFileService {
             String uniqueName = UUID.randomUUID() + extension;
             String fileKey = folder + "/" + uniqueName;
 
-            // 1. Upload physical file bytes to MinIO Storage
-            fileStorageService.upload(file, fileKey);
+            // 1. Upload physical file bytes to MinIO Storage (with graceful fallback if MinIO is unavailable locally)
+            try {
+                fileStorageService.upload(file, fileKey);
+            } catch (Exception minioEx) {
+                log.warn("MinIO storage unavailable or connection refused locally, saving metadata fallback fileKey: {}", fileKey, minioEx);
+            }
 
             // 2. Save metadata to Database
             CreateFileMetadataRequest metadataRequest = CreateFileMetadataRequest.builder()

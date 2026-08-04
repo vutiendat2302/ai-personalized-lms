@@ -193,19 +193,15 @@ public class CourseService implements ICourseService {
     @Transactional
     @Override
     public void delete(Long id) {
-        log.info("Deleting course with id: {}", id);
+        log.info("Soft deleting course with id: {}", id);
 
         CourseEntity entity = courseRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
 
-        try {
-            courseRepository.delete(entity);
-        } catch (Exception e) {
-            log.warn("Hard delete failed for course id {}, setting INACTIVE instead: {}", id, e.getMessage());
-            entity.setStatus(CourseStatusEnum.INACTIVE);
-            courseRepository.save(entity);
-        }
-        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "DELETE", "COURSE", id, null, null));
+        entity.setStatus(CourseStatusEnum.DELETED);
+        courseRepository.save(entity);
+
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "SOFT_DELETE", "COURSE", id, null, null));
     }
 
     @Transactional
@@ -216,10 +212,14 @@ public class CourseService implements ICourseService {
         CourseEntity entity = courseRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
 
-        entity.setViewCount((entity.getViewCount() != null ? entity.getViewCount() : 0) + 1);
-        CourseEntity savedEntity = courseRepository.save(entity);
+        try {
+            entity.setViewCount((entity.getViewCount() != null ? entity.getViewCount() : 0) + 1);
+            courseRepository.save(entity);
+        } catch (Exception e) {
+            log.warn("Could not update view count for course {}: {}", id, e.getMessage());
+        }
 
-        return courseMapper.toResponse(savedEntity);
+        return courseMapper.toResponse(entity);
     }
 
     @Override

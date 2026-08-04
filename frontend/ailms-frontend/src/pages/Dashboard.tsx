@@ -5,6 +5,7 @@ import { courseApi } from "@/api/courses/courseApi";
 import { degreeApi } from "@/api/degrees/degreeApi";
 import { adminApi } from "@/api/admin/adminApi";
 import { userApi } from "@/api/users/userApi";
+import { employeeApi } from "@/api/employees/employeeApi";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -363,7 +364,7 @@ export const Dashboard: React.FC = () => {
 
           const [stRes, empRes, roleRes, genderRes, statusRes, userPageRes] = await Promise.all([
             userApi.getStudentCount().catch(() => null),
-            userApi.getEmployeeCount().catch(() => null),
+            employeeApi.getEmployeeCount().catch(() => null),
             userApi.getStatsByRole().catch(() => null),
             userApi.getStatsByGender().catch(() => null),
             userApi.getStatsByStatus().catch(() => null),

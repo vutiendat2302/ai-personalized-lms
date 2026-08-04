@@ -15,7 +15,11 @@ public class CourseSpecification {
         }
 
         builder.likeAnyIfPresent(request.getKeyword(), "name");
-        builder.equalIfPresent("status", request.getStatus());
+        if (request.getStatus() != null) {
+            builder.equalIfPresent("status", request.getStatus());
+        } else {
+            builder.custom((root, query, cb) -> cb.notEqual(root.get("status"), com.ailms.entity.enums.CourseStatusEnum.DELETED));
+        }
         builder.equalIfPresent("categoryEntity.id", request.getCategoryId());
         builder.equalIfPresent("level", request.getLevel());
         builder.equalIfPresent("createdBy", request.getCreatedBy());

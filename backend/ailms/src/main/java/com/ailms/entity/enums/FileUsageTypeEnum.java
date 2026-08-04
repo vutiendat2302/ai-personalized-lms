@@ -10,5 +10,7 @@ public enum FileUsageTypeEnum {
     ASSIGNMENT,
     ASSIGNMENT_SUBMISSION,
     LESSON_RESOURCE,
+    LESSON_VIDEO,
+    COURSE_LESSON,
     OTHER
 }

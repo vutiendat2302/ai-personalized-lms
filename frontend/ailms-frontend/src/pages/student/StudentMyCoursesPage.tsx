@@ -30,16 +30,15 @@ export const StudentMyCoursesPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (id) {
+      navigate(`/learn/courses/${id}`, { replace: true });
+      return;
+    }
     studentApi.getCourses().then((res) => {
       setCourses(res);
-      if (id) {
-        studentApi.getCourseDetail(id).then((det) => {
-          setCourseDetail(det);
-        });
-      }
       setLoading(false);
     });
-  }, [id]);
+  }, [id, navigate]);
 
   if (loading) {
     return (
@@ -235,7 +234,7 @@ export const StudentMyCoursesPage: React.FC = () => {
                 ) : (
                   <Button
                     size="sm"
-                    onClick={() => navigate(`/student/courses/${crs.id}`)}
+                    onClick={() => navigate(`/learn/courses/${crs.id}`)}
                     className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold rounded-lg h-8 px-3 gap-1 cursor-pointer"
                   >
                     <Play className="h-3.5 w-3.5 fill-primary-foreground" />

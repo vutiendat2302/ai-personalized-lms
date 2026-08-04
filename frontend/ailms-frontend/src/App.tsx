@@ -64,6 +64,9 @@ import { TeacherAttendancePage } from "./pages/teacher/TeacherAttendancePage";
 import { TeacherInsightsPage } from "./pages/teacher/TeacherInsightsPage";
 import { TeacherEarningsPage } from "./pages/teacher/TeacherEarningsPage";
 import { TeacherLeaveRequestsPage } from "./pages/teacher/TeacherLeaveRequestsPage";
+import { CourseBuilderShell } from "./pages/teacher/courses/CourseBuilderShell";
+import { CourseGradingPage } from "./pages/teacher/courses/CourseGradingPage";
+import { StudentLearningPage } from "./pages/student/StudentLearningPage";
 
 // Student Portal Pages
 import { StudentDashboardPage } from "./pages/student/StudentDashboardPage";
@@ -268,7 +271,20 @@ function App() {
                 <Route path="/teacher/insights" element={<TeacherInsightsPage />} />
                 <Route path="/teacher/earnings" element={<TeacherEarningsPage />} />
                 <Route path="/teacher/leave-requests" element={<TeacherLeaveRequestsPage />} />
+                <Route path="/teacher/courses/:id/builder" element={<CourseBuilderShell />} />
+                <Route path="/teacher/courses/:id/submissions" element={<CourseGradingPage />} />
               </Route>
+            </Route>
+
+            {/* Course Builder for Admin */}
+            <Route element={<ProtectedRoute requiredPortal="MANAGEMENT" allowedRoles={[UserRole.ADMIN]} />}>
+              <Route path="/admin/courses/:id/builder" element={<CourseBuilderShell />} />
+            </Route>
+
+            {/* Student Learning Experience Fullscreen Page */}
+            <Route element={<ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.STUDENT, UserRole.TEACHER]} />}>
+              <Route path="/learn/courses/:courseId" element={<StudentLearningPage />} />
+              <Route path="/learn/courses/:courseId/lessons/:lessonId" element={<StudentLearningPage />} />
             </Route>
 
             {/* 3. STUDENT PORTAL (STUDENT & ADMIN) */}

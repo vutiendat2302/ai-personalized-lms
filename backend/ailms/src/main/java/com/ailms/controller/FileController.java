@@ -18,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpRange;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -25,13 +26,16 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.io.InputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 import com.ailms.entity.enums.FileUsageTypeEnum;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @RestController
 @RequestMapping("${api.prefix}/files")
 @RequiredArgsConstructor
@@ -59,22 +63,77 @@ public class FileController {
     }
 
     @GetMapping("/download")
-    public ResponseEntity<Resource> downloadFile(@RequestParam("fileKey") String fileKey) {
+    public ResponseEntity<?> downloadFile(
+            @RequestParam("fileKey") String fileKey,
+            @RequestHeader(value = "Range", required = false) String rangeHeader) {
         FileMetadataResponse metadata = fileMetadataService.getByFileKey(fileKey);
         if (metadata.getStatus() != BaseStatusEnum.ACTIVE) {
             throw new BusinessException("File is not active or has been deleted");
         }
 
-        InputStream stream = fileStorageService.download(fileKey);
-        InputStreamResource resource = new InputStreamResource(stream);
-
         String encodedFilename = URLEncoder.encode(metadata.getOriginalName(), StandardCharsets.UTF_8)
                 .replace("+", "%20");
 
+        String disposition = (metadata.getFileType() == FileTypeEnum.VIDEO || metadata.getFileType() == FileTypeEnum.IMAGE || metadata.getFileType() == FileTypeEnum.AUDIO || metadata.getFileType() == FileTypeEnum.DOCUMENT)
+                ? "inline"
+                : "attachment";
+        MediaType mediaType = MediaType.parseMediaType(metadata.getContentType() != null ? metadata.getContentType() : "application/octet-stream");
+        if (metadata.getOriginalName() != null && metadata.getOriginalName().toLowerCase().endsWith(".pdf")) {
+            mediaType = MediaType.APPLICATION_PDF;
+        }
+
+        if (metadata.getFileType() == FileTypeEnum.VIDEO && rangeHeader != null) {
+            long fileSize = metadata.getFileSize() != null ? metadata.getFileSize() : 0;
+            try {
+                List<HttpRange> ranges = HttpRange.parseRanges(rangeHeader);
+                if (!ranges.isEmpty()) {
+                    HttpRange range = ranges.get(0);
+                    long start = range.getRangeStart(fileSize);
+                    long end = range.getRangeEnd(fileSize);
+
+                    // 1. Validate Range Boundaries (Return HTTP 416 if invalid range requested)
+                    if (start < 0 || start >= fileSize || start > end) {
+                        return ResponseEntity.status(HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
+                                .header(HttpHeaders.CONTENT_RANGE, "bytes */" + fileSize)
+                                .build();
+                    }
+
+                    long rangeLength = end - start + 1;
+
+                    InputStream stream = fileStorageService.download(fileKey);
+
+                    // 2. Guaranteed safe skip loop for MinIO/network streams
+                    safeSkip(stream, start);
+
+                    // 3. Wrap stream in BoundedInputStream so stream terminates exactly at rangeLength (prevents Broken Pipe log spam)
+                    InputStream boundedStream = new BoundedInputStream(stream, rangeLength);
+                    InputStreamResource resource = new InputStreamResource(boundedStream);
+
+                    return ResponseEntity.status(HttpStatus.PARTIAL_CONTENT)
+                            .header(HttpHeaders.CONTENT_DISPOSITION, disposition + "; filename*=UTF-8''" + encodedFilename)
+                            .header(HttpHeaders.CONTENT_RANGE, "bytes " + start + "-" + end + "/" + fileSize)
+                            .header(HttpHeaders.ACCEPT_RANGES, "bytes")
+                            .contentType(mediaType)
+                            .contentLength(rangeLength)
+                            .body(resource);
+                }
+            } catch (IllegalArgumentException e) {
+                return ResponseEntity.status(HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
+                        .header(HttpHeaders.CONTENT_RANGE, "bytes */" + fileSize)
+                        .build();
+            } catch (Exception e) {
+                log.error("Error processing video range request for fileKey: {}", fileKey, e);
+            }
+        }
+
+        InputStream stream = fileStorageService.download(fileKey);
+        InputStreamResource resource = new InputStreamResource(stream);
+
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + encodedFilename)
-                .contentType(MediaType.parseMediaType(metadata.getContentType() != null ? metadata.getContentType() : "application/octet-stream"))
-                .contentLength(metadata.getFileSize())
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition + "; filename*=UTF-8''" + encodedFilename)
+                .header(HttpHeaders.ACCEPT_RANGES, "bytes")
+                .contentType(mediaType)
+                .contentLength(metadata.getFileSize() != null ? metadata.getFileSize() : 0)
                 .body(resource);
     }
 
@@ -207,5 +266,50 @@ public class FileController {
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"files_export.csv\"")
                 .contentType(MediaType.parseMediaType("text/csv"))
                 .body(csvBytes);
+    }
+
+    private static void safeSkip(InputStream stream, long targetBytes) throws IOException {
+        long skipped = 0;
+        while (skipped < targetBytes) {
+            long s = stream.skip(targetBytes - skipped);
+            if (s <= 0) {
+                if (stream.read() == -1) break;
+                skipped++;
+            } else {
+                skipped += s;
+            }
+        }
+    }
+
+    private static class BoundedInputStream extends InputStream {
+        private final InputStream delegate;
+        private long remaining;
+
+        public BoundedInputStream(InputStream delegate, long maxBytesToRead) {
+            this.delegate = delegate;
+            this.remaining = maxBytesToRead;
+        }
+
+        @Override
+        public int read() throws IOException {
+            if (remaining <= 0) return -1;
+            int result = delegate.read();
+            if (result != -1) remaining--;
+            return result;
+        }
+
+        @Override
+        public int read(byte[] b, int off, int len) throws IOException {
+            if (remaining <= 0) return -1;
+            int maxToRead = (int) Math.min(len, remaining);
+            int bytesRead = delegate.read(b, off, maxToRead);
+            if (bytesRead > 0) remaining -= bytesRead;
+            return bytesRead;
+        }
+
+        @Override
+        public void close() throws IOException {
+            delegate.close();
+        }
     }
 }
