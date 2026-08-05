@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useModalStore } from "@/store/useModalStore";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { LogOut, ChevronDown, Bell, Globe, Search, User, Settings, BookOpen, Users, Shield, Activity, Clock, Trash2, Sparkles, Target, ShoppingBag, Tag, BarChart, Loader2 } from "lucide-react";
+import { LogOut, ChevronDown, Bell, Globe, Search, User, Settings, BookOpen, Shield, Activity, Clock, Trash2, Sparkles, Target, ShoppingBag, BarChart, Loader2 } from "lucide-react";
 import { searchApi, type SearchHistoryResponse, type PopularSearchResponse, type SuggestionResponse } from "@/api/search/searchApi";
 import { StudentOnboardingModal } from "@/components/student/StudentOnboardingModal";
 import { studentApi } from "@/api/students/studentApi";
@@ -36,6 +36,10 @@ export const Header: React.FC = () => {
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [onboardingModalOpen, setOnboardingModalOpen] = useState(false);
   const [onboardingInitialStep, setOnboardingInitialStep] = useState(1);
+  const [hasGoal, setHasGoal] = useState<boolean>(() => {
+    if (!auth.user?.id) return false;
+    return localStorage.getItem(`hasGoal_${auth.user.id}`) === "true";
+  });
   const searchRef = useRef<HTMLDivElement>(null);
 
   const loadNotifications = async () => {
@@ -107,8 +111,10 @@ export const Header: React.FC = () => {
           const profile = res.data?.data;
           if (profile && profile.hasGoal === true) {
             localStorage.setItem(`hasGoal_${uId}`, "true");
+            setHasGoal(true);
           } else {
             localStorage.removeItem(`hasGoal_${uId}`);
+            setHasGoal(false);
             setOnboardingInitialStep(1); // First login starts at Step 1 (Profile & Guardian)
             setOnboardingModalOpen(true);
           }
@@ -116,9 +122,12 @@ export const Header: React.FC = () => {
         .catch(() => {
           // If student profile is missing (404), this is definitely first login -> open onboarding Step 1
           localStorage.removeItem(`hasGoal_${uId}`);
+          setHasGoal(false);
           setOnboardingInitialStep(1);
           setOnboardingModalOpen(true);
         });
+    } else {
+      setHasGoal(false);
     }
   }, [auth.accessToken, auth.user, isStudent]);
 
@@ -386,6 +395,20 @@ export const Header: React.FC = () => {
     })
   );
 
+  // Ẩn giỏ hàng cho toàn bộ nhóm nhân viên (Admin, HR, Teacher, TA)
+  const isEmployee = Boolean(
+    auth.user?.roles?.some((r: any) => {
+      const roleStr = (typeof r === "object" ? (r?.code || r?.name || "") : String(r)).toUpperCase();
+      return (
+        roleStr.includes("ADMIN") ||
+        roleStr.includes("HR") ||
+        roleStr.includes("TEACHER") ||
+        roleStr.includes("TA") ||
+        roleStr.includes("EMPLOYEE")
+      );
+    })
+  );
+
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border/40 bg-card/70 backdrop-blur-md transition-colors duration-200">
       <div className="mx-auto flex h-16 max-w-none w-full items-center justify-between px-6 lg:px-12">
@@ -587,8 +610,8 @@ export const Header: React.FC = () => {
               {/* Workspace Switcher dropdown for multi-role users */}
               <WorkspaceSwitcher />
 
-              {/* Goal Widget Button for Student */}
-              {isStudent && (
+              {/* Goal Widget Button for Student (Chỉ hiển thị khi Học viên CHƯA có goal) */}
+              {isStudent && !hasGoal && (
                 <button
                   onClick={() => {
                     const isCompleted = localStorage.getItem(`hasGoal_${auth.user?.id}`) === "true";
@@ -608,8 +631,8 @@ export const Header: React.FC = () => {
                 <Globe className="h-4.5 w-4.5" />
               </button>
 
-              {/* Shopping Cart Trigger (Hidden for Admin) */}
-              {!isAdmin && (
+              {/* Shopping Cart Trigger (Chỉ hiển thị cho Học Viên / Khách vãng lai, ẩn hoàn toàn đối với Nhân Viên & Admin) */}
+              {(!auth.accessToken || isStudent) && !isEmployee && (
                 <button
                   onClick={toggleCart}
                   className="p-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors relative"
@@ -713,32 +736,11 @@ export const Header: React.FC = () => {
                         <span>Thông tin cá nhân</span>
                       </button>
                       <button
-                        onClick={() => { setDropdownOpen(false); navigate("/admin/users"); }}
-                        className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
-                      >
-                        <Users className="h-4 w-4 text-primary" />
-                        <span>Quản lý người dùng</span>
-                      </button>
-                      <button
-                        onClick={() => { setDropdownOpen(false); navigate("/admin/hr"); }}
-                        className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
-                      >
-                        <Users className="h-4 w-4 text-primary" />
-                        <span>Quản lý nhân sự (HR)</span>
-                      </button>
-                      <button
                         onClick={() => { setDropdownOpen(false); navigate("/admin/approval-center"); }}
                         className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
                       >
                         <Shield className="h-4 w-4 text-primary" />
                         <span>Trung tâm phê duyệt</span>
-                      </button>
-                      <button
-                        onClick={() => { setDropdownOpen(false); navigate("/admin/category-teachers"); }}
-                        className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
-                      >
-                        <BookOpen className="h-4 w-4 text-primary" />
-                        <span>Phân công giảng viên</span>
                       </button>
                       <button
                         onClick={() => { setDropdownOpen(false); navigate("/analytics"); }}
@@ -747,41 +749,7 @@ export const Header: React.FC = () => {
                         <BarChart className="h-4 w-4 text-primary" />
                         <span>Báo cáo & Analytics</span>
                       </button>
-                      <button
-                        onClick={() => { setDropdownOpen(false); navigate("/admin/roles"); }}
-                        className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
-                      >
-                        <Shield className="h-4 w-4 text-primary" />
-                        <span>Quản lý vai trò</span>
-                      </button>
-                      <button
-                        onClick={() => { setDropdownOpen(false); navigate("/admin/permissions"); }}
-                        className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
-                      >
-                        <Settings className="h-4 w-4 text-primary" />
-                        <span>Quản lý quyền hạn</span>
-                      </button>
-                      <button
-                        onClick={() => { setDropdownOpen(false); navigate("/admin/courses"); }}
-                        className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
-                      >
-                        <BookOpen className="h-4 w-4 text-primary" />
-                        <span>Quản lý khóa học</span>
-                      </button>
-                      <button
-                        onClick={() => { setDropdownOpen(false); navigate("/admin/orders"); }}
-                        className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
-                      >
-                        <ShoppingBag className="h-4 w-4 text-primary" />
-                        <span>Quản lý đơn hàng</span>
-                      </button>
-                      <button
-                        onClick={() => { setDropdownOpen(false); navigate("/admin/coupons"); }}
-                        className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
-                      >
-                        <Tag className="h-4 w-4 text-primary" />
-                        <span>Quản lý mã giảm giá</span>
-                      </button>
+        
                       <button
                         onClick={() => { setDropdownOpen(false); navigate("/activity-log"); }}
                         className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
@@ -790,7 +758,26 @@ export const Header: React.FC = () => {
                         <span>Nhật ký hệ thống</span>
                       </button>
                     </>
-                  ) : (
+                  ) : isEmployee ? (
+                    // Teacher / HR Menu Items
+                      <>
+                        <button
+                          onClick={() => { setDropdownOpen(false); navigate("/profile"); }}
+                          className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
+                        >
+                          <User className="h-4 w-4 text-primary" />
+                          <span>Thông tin cá nhân</span>
+                        </button>
+                        <button
+                          onClick={() => { setDropdownOpen(false); navigate("/activity-log"); }}
+                          className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
+                        >
+                          <Activity className="h-4 w-4 text-primary" />
+                          <span>Lịch sử hoạt động</span>
+                        </button>
+                      </>
+                  ) :
+                  (
                     // Student Menu Items
                     <>
                       <button
@@ -830,7 +817,7 @@ export const Header: React.FC = () => {
                     className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
                   >
                     <Settings className="h-4 w-4 text-primary" />
-                    <span>Cài đặt (Đổi mật khẩu)</span>
+                  <span>Cài đặt (Đổi mật khẩu)</span>
                   </button>
 
                   <div className="border-t border-border/60 my-1 pt-1">
@@ -863,7 +850,12 @@ export const Header: React.FC = () => {
       <StudentOnboardingModal
         isOpen={onboardingModalOpen}
         initialStep={onboardingInitialStep}
-        onClose={() => setOnboardingModalOpen(false)}
+        onClose={() => {
+          setOnboardingModalOpen(false);
+          if (auth.user?.id) {
+            setHasGoal(localStorage.getItem(`hasGoal_${auth.user.id}`) === "true");
+          }
+        }}
       />
     </header>
   );

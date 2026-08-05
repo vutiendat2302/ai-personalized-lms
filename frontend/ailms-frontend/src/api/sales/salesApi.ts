@@ -138,6 +138,43 @@ export interface CoursePackageItem {
   sellingPrice: number;
   status: "ACTIVE" | "INACTIVE" | "OUT_OF_STOCK";
   features?: string[];
+  durationDays?: number;
+  includedTutorSessions?: number;
+  maxGroupSize?: number;
+  className?: string;
+}
+
+export interface CoursePackageDetail {
+  id: string;
+  name: string;
+  description?: string;
+  courseId: string;
+  courseName: string;
+  classId?: string;
+  className?: string;
+  deliveryMode: DeliveryModeEnum;
+  price: number;
+  originalPrice: number;
+  durationDays?: number;
+  includedTutorSessions?: number;
+  maxGroupSize?: number;
+  status: "ACTIVE" | "INACTIVE" | "OUT_OF_STOCK";
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CoursePackageFormPayload {
+  courseId: string;
+  classId?: string;
+  name: string;
+  description?: string;
+  deliveryMode: DeliveryModeEnum;
+  price: number;
+  originalPrice: number;
+  durationDays?: number;
+  includedTutorSessions?: number;
+  maxGroupSize?: number;
+  status: "ACTIVE" | "INACTIVE" | "OUT_OF_STOCK";
 }
 
 export interface EnrollmentPackageRecord {
@@ -150,20 +187,27 @@ export interface EnrollmentPackageRecord {
   expiresAt: string;
 }
 
+/** Backend trả về status là Byte: 0=IN_PROGRESS, 1=COMPLETED, 2=EXPIRED, 3=CANCELLED */
+export type EnrollmentStatusRaw = 0 | 1 | 2 | 3;
+
 export interface EnrollmentItem {
   id: string;
-  studentId: string;
+  userId: string;
   studentName: string;
   studentEmail: string;
   studentPhone: string;
   studentAvatar?: string;
   courseId: string;
   courseName: string;
+  classId?: string;
   className?: string;
-  status: "ACTIVE" | "EXPIRED" | "DROPPED";
+  /** status dạng string đã được chành là sau khi map từ byte */
+  status: "ACTIVE" | "EXPIRED" | "DROPPED" | "COMPLETED";
   enrolledAt: string;
+  /** expiresAt không có trong enrollment entity, đặt null/undefined nếu chưa có */
   expiresAt: string;
   completedAt?: string | null;
+  updatedAt?: string | null;
   packageTimeline: EnrollmentPackageRecord[];
 }
 
@@ -495,44 +539,6 @@ const MOCK_ORDERS: OrderDetail[] = [
   },
 ];
 
-const MOCK_COUPONS: CouponItem[] = [
-  {
-    id: "coup-1",
-    code: "AILMS20",
-    discountType: "PERCENT",
-    value: 20,
-    usedCount: 192,
-    maxUsage: 200,
-    validFrom: "2026-06-01T00:00:00Z",
-    validTo: "2026-08-15T23:59:59Z",
-    status: "ACTIVE",
-  },
-  {
-    id: "coup-2",
-    code: "SUMMER500K",
-    discountType: "FIXED",
-    value: 500000,
-    usedCount: 45,
-    maxUsage: 50,
-    validFrom: "2026-07-01T00:00:00Z",
-    validTo: "2026-08-05T23:59:59Z",
-    status: "ACTIVE",
-    applicableCourseId: "crs-101",
-    applicableCourseName: "Fullstack Web Pro 1-1",
-  },
-  {
-    id: "coup-3",
-    code: "WELCOME100K",
-    discountType: "FIXED",
-    value: 100000,
-    usedCount: 500,
-    maxUsage: 500,
-    validFrom: "2026-01-01T00:00:00Z",
-    validTo: "2026-12-31T23:59:59Z",
-    status: "EXPIRED",
-  },
-];
-
 const MOCK_COURSE_PACKAGES: CoursePackageItem[] = [
   {
     id: "pkg-1",
@@ -569,58 +575,45 @@ const MOCK_COURSE_PACKAGES: CoursePackageItem[] = [
   },
 ];
 
-const MOCK_ENROLLMENTS: EnrollmentItem[] = [
-  {
-    id: "enr-201",
-    studentId: "usr-102",
-    studentName: "Nguyễn Văn An",
-    studentEmail: "an.nguyen@gmail.com",
-    studentPhone: "0912345678",
-    studentAvatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150",
-    courseId: "crs-102",
-    courseName: "AI Application Specialist",
-    className: "Lớp AI-2026-K1",
-    status: "ACTIVE",
-    enrolledAt: new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString(),
-    expiresAt: new Date(Date.now() + 5 * 24 * 3600 * 1000).toISOString(), // Expiring in 5 days!
-    packageTimeline: [
-      {
-        id: "enr-pkg-1",
-        enrollmentId: "enr-201",
-        packageName: "Gói Lớp Hybrid 2026",
-        orderItemId: "item-2",
-        orderId: "ORD-7719B3",
-        activatedAt: new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString(),
-        expiresAt: new Date(Date.now() + 5 * 24 * 3600 * 1000).toISOString(),
-      },
-    ],
-  },
-  {
-    id: "enr-202",
-    studentId: "usr-105",
-    studentName: "Vũ Tiến Đạt",
-    studentEmail: "vutiendat@ailms.edu.vn",
-    studentPhone: "0988776655",
-    studentAvatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150",
-    courseId: "crs-101",
-    courseName: "Fullstack Web Pro 1-1",
-    className: "Lớp FS-2026-PRO",
-    status: "ACTIVE",
-    enrolledAt: new Date(Date.now() - 60 * 24 * 3600 * 1000).toISOString(),
-    expiresAt: new Date(Date.now() + 180 * 24 * 3600 * 1000).toISOString(),
-    packageTimeline: [
-      {
-        id: "enr-pkg-2",
-        enrollmentId: "enr-202",
-        packageName: "Gói Kèm 1-1 Chuyên Sâu Pro",
-        orderItemId: "item-100",
-        orderId: "ORD-100293",
-        activatedAt: new Date(Date.now() - 60 * 24 * 3600 * 1000).toISOString(),
-        expiresAt: new Date(Date.now() + 180 * 24 * 3600 * 1000).toISOString(),
-      },
-    ],
-  },
-];
+/** Map EnrollmentResponse từ backend sang EnrollmentItem cho FE.
+ * - status byte: 0=IN_PROGRESS→ACTIVE, 1=COMPLETED, 2=EXPIRED, 3=CANCELLED→DROPPED
+ * - expiresAt: backend chưa có field này, dùng completedAt hoặc fallback xa tương lai
+ */
+function mapEnrollmentFromBackend(raw: any): EnrollmentItem {
+  const statusMap: Record<number, EnrollmentItem["status"]> = {
+    0: "ACTIVE",
+    1: "COMPLETED",
+    2: "EXPIRED",
+    3: "DROPPED",
+  };
+  const status: EnrollmentItem["status"] =
+    typeof raw.status === "number" ? statusMap[raw.status] ?? "ACTIVE" : raw.status ?? "ACTIVE";
+
+  // Backend chưa có expiresAt trên enrollment entity - dùng updatedAt hoặc một năm tới
+  const expiresAt: string =
+    raw.expiresAt ||
+    raw.completedAt ||
+    new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString();
+
+  return {
+    id: String(raw.id),
+    userId: String(raw.userId ?? ""),
+    studentName: raw.studentName || raw.fullName || "—",
+    studentEmail: raw.studentEmail || raw.email || "—",
+    studentPhone: raw.studentPhone || raw.phone || "",
+    studentAvatar: raw.studentAvatar || raw.avatarUrl,
+    courseId: String(raw.courseId ?? ""),
+    courseName: raw.courseName || "—",
+    classId: raw.classId ? String(raw.classId) : undefined,
+    className: raw.className,
+    status,
+    enrolledAt: raw.enrolledAt || raw.createdAt || new Date().toISOString(),
+    expiresAt,
+    completedAt: raw.completedAt ?? null,
+    updatedAt: raw.updatedAt ?? null,
+    packageTimeline: Array.isArray(raw.packageTimeline) ? raw.packageTimeline : [],
+  };
+}
 
 const MOCK_PENDING_CARTS: PendingUserCart[] = [
   {
@@ -804,6 +797,34 @@ export const salesApi = {
     }
   },
 
+  getCoursePackageById: async (id: string): Promise<CoursePackageDetail | null> => {
+    try {
+      const res = await httpClient.get<ApiResponse<CoursePackageDetail>>(`/v1/course-packages/${id}`);
+      return res.data?.data || null;
+    } catch {
+      return null;
+    }
+  },
+
+  createCoursePackage: async (payload: CoursePackageFormPayload): Promise<CoursePackageDetail> => {
+    const res = await httpClient.post<ApiResponse<CoursePackageDetail>>("/v1/course-packages", payload);
+    return res.data.data;
+  },
+
+  updateCoursePackage: async (id: string, payload: CoursePackageFormPayload): Promise<CoursePackageDetail> => {
+    const res = await httpClient.put<ApiResponse<CoursePackageDetail>>(`/v1/course-packages/${id}`, payload);
+    return res.data.data;
+  },
+
+  deleteCoursePackage: async (id: string): Promise<boolean> => {
+    try {
+      await httpClient.delete(`/v1/course-packages/${id}`);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
   toggleCoursePackageStatus: async (id: string, status: "ACTIVE" | "INACTIVE"): Promise<boolean> => {
     try {
       await httpClient.patch(`/v1/course-packages/${id}/status`, { status });
@@ -816,19 +837,23 @@ export const salesApi = {
   // 3.7 Enrollments
   getEnrollments: async (): Promise<EnrollmentItem[]> => {
     try {
-      const res = await httpClient.get<ApiResponse<EnrollmentItem[]>>("/v1/enrollments");
-      return res.data?.data || MOCK_ENROLLMENTS;
+      const res = await httpClient.get<ApiResponse<any[]>>("/v1/enrollments");
+      const raw = res.data?.data;
+      if (!raw || !Array.isArray(raw)) return [];
+      return raw.map(mapEnrollmentFromBackend);
     } catch {
-      return MOCK_ENROLLMENTS;
+      return [];
     }
   },
 
   getEnrollmentById: async (id: string): Promise<EnrollmentItem | null> => {
     try {
-      const res = await httpClient.get<ApiResponse<EnrollmentItem>>(`/v1/enrollments/${id}`);
-      return res.data?.data || MOCK_ENROLLMENTS.find((e) => e.id === id) || MOCK_ENROLLMENTS[0];
+      const res = await httpClient.get<ApiResponse<any>>(`/v1/enrollments/${id}`);
+      const raw = res.data?.data;
+      if (!raw) return null;
+      return mapEnrollmentFromBackend(raw);
     } catch {
-      return MOCK_ENROLLMENTS.find((e) => e.id === id) || MOCK_ENROLLMENTS[0];
+      return null;
     }
   },
 

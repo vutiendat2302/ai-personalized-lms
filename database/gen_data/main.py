@@ -37,6 +37,7 @@ import learning_session
 import teacher_category
 import teacher_availability
 import course
+import course_teacher
 import course_sectiton
 import lesson
 import review
@@ -76,7 +77,8 @@ def main():
             study_goal.seed(cursor)
             teacher_category.seed(cursor)
             teacher_availability.seed(cursor)
-            course.seed(cursor) 
+            course.seed(cursor)
+            course_teacher.seed(cursor)
             course_sectiton.seed(cursor)
             lesson.seed(cursor)
             # Nhật ký cần course/section/lesson tồn tại để gắn đúng đối tượng học tập.

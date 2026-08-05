@@ -8,9 +8,14 @@ import com.ailms.exception.BusinessException;
 import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.repository.ClassMemberRepository;
 import com.ailms.repository.ClassRepository;
+import com.ailms.repository.DegreeRepository;
+import com.ailms.repository.EmployeeRepository;
 import com.ailms.repository.EnrollmentRepository;
+import com.ailms.repository.StudentProfileRepository;
 import com.ailms.repository.UserRepository;
 import com.ailms.event.AuditLogEvent;
+import com.ailms.response.MemberDetailResponse;
+import com.ailms.response.PageResponse;
 import com.ailms.service.IClassMemberService;
 import com.ailms.response.ClassMemberResponse;
 import com.ailms.service.lock.CapacityLockStrategy;
@@ -23,6 +28,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -35,6 +41,9 @@ public class ClassMemberService implements IClassMemberService {
     private final UserRepository userRepository;
     private final ClassMemberRepository classMemberRepository;
     private final EnrollmentRepository enrollmentRepository;
+    private final EmployeeRepository employeeRepository;
+    private final StudentProfileRepository studentProfileRepository;
+    private final DegreeRepository degreeRepository;
     private final ApplicationEventPublisher eventPublisher;
 
     @Qualifier("pessimisticLockStrategy")
@@ -57,17 +66,25 @@ public class ClassMemberService implements IClassMemberService {
     }
 
     private ClassMemberResponse toResponse(ClassMemberEntity entity) {
-        return ClassMemberResponse.builder()
+        Long userId = entity.getUserEntity().getId();
+        ClassMemberResponse.ClassMemberResponseBuilder builder = ClassMemberResponse.builder()
                 .classId(entity.getClassEntity().getId())
                 .className(entity.getClassEntity().getName())
-                .userId(entity.getUserEntity().getId())
+                .userId(userId)
                 .username(entity.getUserEntity().getUsername())
+                .fullName(entity.getUserEntity().getFullName())
+                .email(entity.getUserEntity().getEmail())
+                .avatarUrl(entity.getUserEntity().getAvatarUrl())
                 .roleInClass(entity.getRoleInClass())
                 .status(entity.getStatus())
                 .joinedAt(entity.getJoinedAt())
                 .waitlistedAt(entity.getWaitlistedAt())
-                .leftAt(entity.getLeftAt())
-                .build();
+                .leftAt(entity.getLeftAt());
+
+        studentProfileRepository.findById(userId).ifPresent(sp -> builder.studentCode(sp.getStudentCode()));
+        employeeRepository.findById(userId).ifPresent(emp -> builder.employeeCode(emp.getEmployeeCode()));
+
+        return builder.build();
     }
 
     @Override
@@ -82,7 +99,11 @@ public class ClassMemberService implements IClassMemberService {
                     .orElseThrow(() -> ResourceNotFoundException.of("User", userId));
 
             // Calculate current active members
-            long activeCount = classMemberRepository.countById_ClassIdAndStatus(classId, ClassMemberStatusEnum.ACTIVE);
+            long activeCount = classMemberRepository.countById_ClassIdAndStatusAndRoleInClass(
+                    classId,
+                    ClassMemberStatusEnum.ACTIVE,
+                    ClassMemberRole.STUDENT
+            );
 
             // Determine capacity limit
             // ONE_ON_ONE (type = 1) is limited to 1 member. Group class (type = 0) is limited to maxMembers.
@@ -94,7 +115,9 @@ public class ClassMemberService implements IClassMemberService {
             }
 
             ClassMemberStatusEnum newStatus;
-            if (activeCount < limit) {
+            if (role != ClassMemberRole.STUDENT) {
+                newStatus = ClassMemberStatusEnum.ACTIVE;
+            } else if (activeCount < limit) {
                 newStatus = ClassMemberStatusEnum.ACTIVE;
             } else {
                 newStatus = ClassMemberStatusEnum.WAITLISTED;
@@ -138,7 +161,9 @@ public class ClassMemberService implements IClassMemberService {
             ClassMemberEntity saved = classMemberRepository.save(member);
 
             // Sync enrollment status
-            syncEnrollmentOnJoin(userId, classEntity, newStatus);
+            if (role == ClassMemberRole.STUDENT) {
+                syncEnrollmentOnJoin(userId, classEntity, newStatus);
+            }
 
             // Write audit log
             eventPublisher.publishEvent(new AuditLogEvent(
@@ -176,7 +201,9 @@ public class ClassMemberService implements IClassMemberService {
         syncEnrollmentOnLeave(userId, member.getClassEntity().getCourseEntity().getId());
 
         // Publish event for waitlist promotion
-        eventPublisher.publishEvent(new ClassMemberLeftEvent(this, classId));
+        if (member.getRoleInClass() == ClassMemberRole.STUDENT) {
+            eventPublisher.publishEvent(new ClassMemberLeftEvent(this, classId));
+        }
 
         // Audit log
         eventPublisher.publishEvent(new AuditLogEvent(this, "LEAVE", "ClassMember", classId, oldStatus.toString(), ClassMemberStatusEnum.REMOVED.toString()));
@@ -263,16 +290,8 @@ public class ClassMemberService implements IClassMemberService {
             syncEnrollmentOnJoin(candidate.getId().getUserId(), classEntity, ClassMemberStatusEnum.ACTIVE);
 
             // Audit Log
-            eventPublisher.publishEvent(new AuditLogEvent(
-                    this,
-                    "PROMOTE",
-                    "ClassMember",
-                    classId,
-                    ClassMemberStatusEnum.WAITLISTED.toString(),
-                    ClassMemberStatusEnum.ACTIVE.toString()
-            ));
-
-            log.info("Successfully promoted user {} to ACTIVE in class {}", candidate.getId().getUserId(), classId);
+            eventPublisher.publishEvent(new AuditLogEvent(this, "PROMOTED_FROM_WAITLIST", "ClassMember", classId, ClassMemberStatusEnum.WAITLISTED.toString(), ClassMemberStatusEnum.ACTIVE.toString()));
+            log.info("User {} promoted from waitlist to ACTIVE in class {}", candidate.getId().getUserId(), classId);
         } finally {
             capacityLockStrategy.releaseLock(classId);
         }
@@ -313,5 +332,82 @@ public class ClassMemberService implements IClassMemberService {
             enrollment.setStatus((byte) 3); // DROPPED
             enrollmentRepository.save(enrollment);
         }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public MemberDetailResponse getMemberDetail(Long classId, Long userId) {
+        UserEntity user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
+
+        ClassMemberEntity member = classMemberRepository.findById_ClassIdAndId_UserId(classId, userId)
+                .orElse(null);
+
+        MemberDetailResponse.MemberDetailResponseBuilder builder = MemberDetailResponse.builder()
+                .userId(user.getId())
+                .fullName(user.getFullName() != null ? user.getFullName() : user.getUsername())
+                .username(user.getUsername())
+                .email(user.getEmail())
+                .phone(user.getPhone())
+                .avatarUrl(user.getAvatarUrl())
+                .roleInClass(member != null ? member.getRoleInClass().name() : "STUDENT")
+                .joinedAt(member != null ? member.getJoinedAt() : null)
+                .degrees(Collections.emptyList());
+
+        // Check if student
+        studentProfileRepository.findById(userId).ifPresent(sp -> {
+            builder.studentCode(sp.getStudentCode());
+        });
+
+        // Check if employee (teacher/TA)
+        employeeRepository.findById(userId).ifPresent(emp -> {
+            builder.employeeCode(emp.getEmployeeCode());
+            if (emp.getDepartment() != null) {
+                builder.departmentName(emp.getDepartment().getName());
+            }
+        });
+
+        return builder.build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<ClassMemberResponse> getMembersPage(Long classId, String keyword, String role, String status, int page, int size) {
+        List<ClassMemberEntity> allMembers = classMemberRepository.findById_ClassId(classId);
+
+        List<ClassMemberEntity> filtered = allMembers.stream().filter(m -> {
+            if (status != null && !status.isBlank() && !m.getStatus().name().equalsIgnoreCase(status)) {
+                return false;
+            }
+            if (role != null && !role.isBlank() && !m.getRoleInClass().name().equalsIgnoreCase(role)) {
+                return false;
+            }
+            if (keyword != null && !keyword.isBlank()) {
+                String kw = keyword.toLowerCase();
+                UserEntity u = m.getUserEntity();
+                String name = u != null ? (u.getFullName() != null ? u.getFullName().toLowerCase() : u.getUsername().toLowerCase()) : "";
+                String email = u != null && u.getEmail() != null ? u.getEmail().toLowerCase() : "";
+                return name.contains(kw) || email.contains(kw) || String.valueOf(m.getId().getUserId()).contains(kw);
+            }
+            return true;
+        }).toList();
+
+        int start = Math.min(page * size, filtered.size());
+        int end = Math.min(start + size, filtered.size());
+        List<ClassMemberResponse> pageContent = filtered.subList(start, end).stream()
+                .map(this::toResponse)
+                .toList();
+
+        int totalPages = (int) Math.ceil((double) filtered.size() / size);
+
+        return PageResponse.<ClassMemberResponse>builder()
+                .content(pageContent)
+                .pageNumber(page)
+                .pageSize(size)
+                .totalElements((long) filtered.size())
+                .totalPages(totalPages)
+                .first(page == 0)
+                .last(page >= totalPages - 1)
+                .build();
     }
 }

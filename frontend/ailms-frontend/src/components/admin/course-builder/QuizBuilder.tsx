@@ -7,7 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Save, HelpCircle, Clock, Award, Eye, X } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Save, HelpCircle, Clock, Award, Eye } from "lucide-react";
 import { QuestionBuilderManager, type QuestionItem } from "./QuestionBuilderManager";
 
 interface QuizBuilderProps {
@@ -33,24 +34,27 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({ quiz, onSave }) => {
       setPassScore(quiz.passScore || 8.0);
       setMaxAttempts(quiz.maxAttempts || 3);
       setShuffleQuestions(quiz.shuffleQuestions !== false);
-      if ((quiz as any).questions && Array.isArray((quiz as any).questions)) {
+      if ((quiz as any).questions && Array.isArray((quiz as any).questions) && (quiz as any).questions.length > 0) {
         setQuestions((quiz as any).questions);
-      } else {
+      } else if (quiz.description && quiz.description.trim().startsWith("[")) {
         try {
-          const parsed = JSON.parse(quiz.description || "[]");
-          if (Array.isArray(parsed)) setQuestions(parsed);
-        } catch (err) {
-          setQuestions([]);
+          const parsed = JSON.parse(quiz.description);
+          if (Array.isArray(parsed)) {
+            setQuestions(parsed);
+          }
+        } catch {
+          // Keep description fallback
         }
+      } else {
+        setQuestions([]);
       }
     }
   }, [quiz]);
 
   if (!quiz) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-8 text-muted-foreground">
-        <HelpCircle className="w-12 h-12 mb-2 stroke-[1.5]" />
-        <p className="text-sm font-medium">Chọn một bài Quiz từ danh sách để thiết lập</p>
+      <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
+        Chọn một bài kiểm tra Quiz từ danh sách bên trái để chỉnh sửa
       </div>
     );
   }
@@ -59,7 +63,9 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({ quiz, onSave }) => {
     e.preventDefault();
     onSave(quiz.id, {
       title,
-      description: questions.length > 0 ? JSON.stringify(questions) : description,
+      description: questions.length > 0
+        ? JSON.stringify(questions)
+        : (quiz.description && quiz.description.trim().startsWith("[") ? quiz.description : description),
       timeLimitMin,
       passScore,
       maxAttempts,
@@ -71,7 +77,7 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({ quiz, onSave }) => {
   const previewQuizObj: QuizResponseDTO = {
     id: quiz.id,
     code: quiz.code,
-    title: title || "Bài kiểm tra Quiz",
+    title: title || "Bài kiểm tra Quiz (Preview)",
     description: description,
     timeLimitMin: timeLimitMin,
     passScore: passScore,
@@ -82,61 +88,39 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({ quiz, onSave }) => {
 
   return (
     <Card className="flex-1 p-6 overflow-y-auto max-w-4xl mx-auto bg-card border-border/40 rounded-xl shadow-xs my-4 space-y-6 relative">
-      <div className="flex items-center justify-between border-b border-border/40 pb-4">
-        <div className="flex items-center gap-2">
-          <div className="p-2 bg-amber-100 text-amber-700 rounded-lg">
-            <HelpCircle className="w-5 h-5" />
-          </div>
-          <div>
-            <h2 className="text-lg font-bold text-foreground">Thiết lập & Soạn thảo Quiz Trắc nghiệm</h2>
-            <p className="text-xs text-muted-foreground">Mã Quiz: {quiz.code || quiz.id}</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setShowPreviewModal(true)}
-            className="h-9 text-xs font-bold gap-1.5 text-amber-900 bg-amber-50 border-amber-300 hover:bg-amber-100 cursor-pointer shadow-2xs"
-          >
-            <Eye className="w-4 h-4 text-amber-700" /> Xem trước Quiz (Preview)
-          </Button>
-
-          <Button
-            onClick={handleSubmit}
-            size="sm"
-            className="h-9 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs gap-2 cursor-pointer shadow-xs"
-          >
-            <Save className="w-4 h-4" /> Lưu cấu hình & Danh sách câu hỏi
-          </Button>
-        </div>
-      </div>
-
-      {/* Quiz Preview Modal */}
-      {showPreviewModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl max-w-4xl w-full max-h-[90vh] overflow-y-auto relative shadow-2xl border border-gray-200">
-            <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-3 flex items-center justify-between z-10">
-              <span className="text-xs font-bold uppercase tracking-wider text-amber-700 flex items-center gap-1.5">
-                <Eye className="w-4 h-4" /> Chế độ xem trước bài kiểm tra (Teacher Preview)
-              </span>
-              <button
-                onClick={() => setShowPreviewModal(false)}
-                className="p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded-full cursor-pointer transition"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-4">
-              <LearningQuizPlayer quiz={previewQuizObj} onComplete={() => setShowPreviewModal(false)} />
-            </div>
-          </div>
-        </div>
-      )}
-
       <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="flex items-center justify-between border-b border-border/40 pb-4">
+          <div className="flex items-center gap-2">
+            <div className="p-2 rounded-lg bg-amber-500/10 text-amber-600">
+              <HelpCircle className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-foreground">Soạn thảo Bài kiểm tra Quiz</h3>
+              <p className="text-xs text-muted-foreground">ID: {quiz.id} {quiz.code ? `• Mã: ${quiz.code}` : ""}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setShowPreviewModal(true)}
+              className="h-9 text-xs font-bold gap-1.5 text-amber-900 bg-amber-50 border-amber-300 hover:bg-amber-100 cursor-pointer shadow-2xs"
+            >
+              <Eye className="w-4 h-4 text-amber-700" /> Xem trước Quiz (Preview)
+            </Button>
+
+            <Button
+              type="submit"
+              size="sm"
+              className="h-9 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs gap-2 cursor-pointer shadow-xs"
+            >
+              <Save className="w-4 h-4" /> Lưu cấu hình & Danh sách câu hỏi
+            </Button>
+          </div>
+        </div>
+
         <div className="space-y-1">
           <Label className="text-xs font-bold">Tiêu đề bài kiểm tra</Label>
           <Input
@@ -145,24 +129,24 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({ quiz, onSave }) => {
             onChange={(e) => setTitle(e.target.value)}
             required
             className="h-9 text-sm"
-            placeholder="Nhập tiêu đề Quiz..."
+            placeholder="Nhập tiêu đề bài kiểm tra..."
           />
         </div>
 
         <div className="space-y-1">
-          <Label className="text-xs font-bold">Mô tả & Hướng dẫn làm bài</Label>
+          <Label className="text-xs font-bold">Mô tả / Hướng dẫn làm bài</Label>
           <Textarea
-            rows={3}
-            value={description}
+            value={description.startsWith("[") ? "" : description}
             onChange={(e) => setDescription(e.target.value)}
-            placeholder="Quy định làm bài..."
+            rows={2}
             className="text-xs"
+            placeholder="Ghi chú hướng dẫn cho học viên trước khi làm bài..."
           />
         </div>
 
         <div className="grid grid-cols-3 gap-4">
           <div className="space-y-1">
-            <Label className="text-xs font-bold">Thời gian giới hạn (Phút)</Label>
+            <Label className="text-xs font-bold">Thời gian làm bài (Phút)</Label>
             <div className="relative">
               <Input
                 type="number"
@@ -176,7 +160,7 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({ quiz, onSave }) => {
           </div>
 
           <div className="space-y-1">
-            <Label className="text-xs font-bold">Điểm đạt (Pass Score)</Label>
+            <Label className="text-xs font-bold">Điểm đạt tối thiểu (Thang điểm 10)</Label>
             <div className="relative">
               <Input
                 type="number"
@@ -219,6 +203,31 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({ quiz, onSave }) => {
           <QuestionBuilderManager questions={questions} onChange={setQuestions} />
         </div>
       </form>
+
+      {/* Interactive Quiz Preview Modal */}
+      <Dialog open={showPreviewModal} onOpenChange={setShowPreviewModal}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl bg-card border border-border/40 shadow-2xl p-6">
+          <DialogHeader className="border-b border-border/40 pb-3 flex items-center justify-between">
+            <div>
+              <DialogTitle className="text-base font-bold flex items-center gap-2">
+                <Eye className="w-4 h-4 text-amber-600" /> Xem trước Bài kiểm tra Quiz (Học viên UI)
+              </DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground">
+                Giao diện học viên trải nghiệm khi làm bài Quiz trực tiếp.
+              </DialogDescription>
+            </div>
+          </DialogHeader>
+
+          <div className="pt-2">
+            <LearningQuizPlayer
+              quiz={previewQuizObj}
+              onComplete={() => {
+                setShowPreviewModal(false);
+              }}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 };

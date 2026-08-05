@@ -50,6 +50,11 @@ public class ClassOnlineEntity extends BaseEntity {
     @Column(name = "meeting_url")
     private String meetingUrl;
 
+    /** Nền tảng phòng học trực tuyến được dùng cho buổi học. */
+    @Column(name = "meeting_provider")
+    @Builder.Default
+    private String meetingProvider = "GOOGLE_MEET";
+
     /** Ngày và giờ bắt đầu buổi học được lên lịch. */
     @Column(name = "scheduled_at")
     private LocalDateTime scheduledAt;
@@ -63,4 +68,24 @@ public class ClassOnlineEntity extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Builder.Default
     private BaseStatusEnum status = BaseStatusEnum.ACTIVE;
+
+    /** Link bản ghi/xem lại buổi học, nếu có. */
+    @Column(name = "record_url")
+    private String recordUrl;
+
+    /** Nội dung chính sau buổi học. */
+    @Column(name = "session_summary", columnDefinition = "TEXT")
+    private String sessionSummary;
+
+    /** Phản hồi/đánh giá của học viên sau buổi học. */
+    @Column(name = "student_feedback", columnDefinition = "TEXT")
+    private String studentFeedback;
+
+    /** Nhận xét của giảng viên sau buổi học. */
+    @Column(name = "teacher_notes", columnDefinition = "TEXT")
+    private String teacherNotes;
+
+    /** Ghi chú chuẩn bị cho buổi tiếp theo. */
+    @Column(name = "next_session_notes", columnDefinition = "TEXT")
+    private String nextSessionNotes;
 }

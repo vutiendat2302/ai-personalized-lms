@@ -3,6 +3,8 @@ package com.ailms.service;
 import com.ailms.entity.ClassMemberEntity;
 import com.ailms.entity.enums.ClassMemberRole;
 import com.ailms.response.ClassMemberResponse;
+import com.ailms.response.MemberDetailResponse;
+import com.ailms.response.PageResponse;
 
 import java.util.List;
 
@@ -59,4 +61,13 @@ public interface IClassMemberService {
     List<ClassMemberResponse> getByUserId(Long userId);
 
     List<ClassMemberResponse> getByClassId(Long classId);
+    /**
+     * Lấy thông tin chi tiết tổng hợp của thành viên trong lớp học.
+     */
+    MemberDetailResponse getMemberDetail(Long classId, Long userId);
+
+    /**
+     * Lấy danh sách thành viên trong lớp học có phân trang và lọc từ khóa.
+     */
+    PageResponse<ClassMemberResponse> getMembersPage(Long classId, String keyword, String role, String status, int page, int size);
 }

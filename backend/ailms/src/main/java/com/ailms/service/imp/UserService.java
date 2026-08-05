@@ -12,6 +12,9 @@ import org.springframework.context.ApplicationEventPublisher;
 import com.ailms.entity.*;
 import com.ailms.entity.enums.UserStatusEnum;
 import com.ailms.entity.enums.EmployeeStatusEnum;
+import com.ailms.entity.enums.FileTypeEnum;
+import com.ailms.entity.enums.FileUsageTypeEnum;
+import com.ailms.entity.enums.GuardianRelationship;
 import com.ailms.mapper.UserMapper;
 import com.ailms.mapper.GuardianMapper;
 import com.ailms.repository.*;
@@ -24,6 +27,8 @@ import com.ailms.exception.DuplicateResourceException;
 import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.exception.BusinessException;
 import com.ailms.security.JwtUtils;
+import com.ailms.service.IFileService;
+import com.ailms.service.IFileStorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -37,7 +42,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import com.ailms.security.CustomUserDetails;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 import jakarta.persistence.EntityManager;
+import java.io.InputStream;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Period;
@@ -48,7 +55,8 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class UserService implements IUserService {
+public class
+UserService implements IUserService {
 
     private final UserRepository userRepository;
     private final UserRoleRepository userRoleRepository;
@@ -64,6 +72,11 @@ public class UserService implements IUserService {
     private final GuardianRepository guardianRepository;
     private final GuardianMapper guardianMapper;
     private final EmployeeRepository employeeRepository;
+    private final StudentProfileRepository studentProfileRepository;
+    private final TeacherCategoryRepository teacherCategoryRepository;
+    private final DepartmentRepository departmentRepository;
+    private final IFileService fileService;
+    private final IFileStorageService fileStorageService;
     private final EntityManager entityManager;
 
     @Value("${app.frontend.set-password:http://localhost:5173/set-password}")
@@ -134,15 +147,133 @@ public class UserService implements IUserService {
     @Transactional
     @Override
     public UserResponse updateProfile(Long userId, UpdateProfileRequest request) {
+        return updateBasicProfile(userId, request);
+    }
+
+    @Transactional
+    @Override
+    public UserResponse updateBasicProfile(Long userId, UpdateProfileRequest request) {
         UserEntity user = userRepository.findById(userId)
                 .orElseThrow(() -> ResourceNotFoundException.of("User", userId));
 
         UserEntity oldUser = userMapper.cloneUser(user);
-        userMapper.updateUserProfile(user, request);
+        if (request.getFullName() != null) {
+            user.setFullName(trimToNull(request.getFullName()));
+        }
+        if (request.getPhone() != null) {
+            user.setPhone(request.getPhone());
+        }
+        if (request.getDateOfBirth() != null) {
+            user.setDateOfBirth(request.getDateOfBirth().atStartOfDay());
+        }
+        if (request.getGender() != null) {
+            user.setGender(request.getGender());
+        }
         user = userRepository.save(user);
 
-        eventPublisher.publishEvent(new AuditLogEvent(this, "update_profile", "user", userId, oldUser, user));
+        eventPublisher.publishEvent(new AuditLogEvent(this, "update_basic_profile", "user", userId, oldUser, user));
         return mapToUserResponse(user);
+    }
+
+    @Transactional
+    @Override
+    public UserResponse updateRoleProfile(Long userId, UpdateRoleProfileRequest request) {
+        UserEntity user = userRepository.findById(userId)
+                .orElseThrow(() -> ResourceNotFoundException.of("User", userId));
+        Set<String> roles = getRoleCodes(userId);
+        UserEntity oldUser = userMapper.cloneUser(user);
+
+        boolean isStaff = roles.stream().anyMatch(role -> Set.of("ADMIN", "HR", "TEACHER", "TA").contains(role));
+        if (roles.contains("STUDENT") && !isStaff) {
+            StudentProfileEntity profile = studentProfileRepository.findById(userId)
+                    .orElseGet(() -> StudentProfileEntity.builder()
+                            .userEntity(user)
+                            .studentCode(CodeGenerator.generate("ST", studentProfileRepository::existsByStudentCode))
+                            .hasGoal(false)
+                            .isMinor(false)
+                            .build());
+            profile.setEducationLevel(request.getEducationLevel());
+            profile.setSchoolName(request.getSchoolName());
+            profile.setGoal(request.getGoal());
+            profile.setDescription(request.getDescription());
+            if (request.getIsMinor() != null) {
+                profile.setIsMinor(request.getIsMinor());
+            }
+            if (request.getGoal() != null && !request.getGoal().isBlank()) {
+                profile.setHasGoal(true);
+            }
+            profile = studentProfileRepository.save(profile);
+            replaceGuardians(profile, request.getGuardians());
+        } else {
+            EmployeeEntity employee = employeeRepository.findById(userId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Employee profile not found for user: " + userId));
+
+            if (roles.contains("ADMIN")) {
+                if (request.getDepartmentId() != null) {
+                    employee.setDepartment(departmentRepository.findById(request.getDepartmentId())
+                            .orElseThrow(() -> ResourceNotFoundException.of("Department", request.getDepartmentId())));
+                }
+                employee.setPosition(request.getPosition());
+                if (request.getEmploymentTypeEnum() != null) {
+                    employee.setEmploymentTypeEnum(request.getEmploymentTypeEnum());
+                }
+                if (request.getStartDate() != null) {
+                    employee.setStartDate(request.getStartDate().atStartOfDay());
+                }
+            }
+            if (request.getAddress() != null) {
+                employee.setAddress(request.getAddress());
+            }
+            employeeRepository.save(employee);
+        }
+
+        UserResponse response = mapToUserResponse(user);
+        eventPublisher.publishEvent(new AuditLogEvent(this, "update_role_profile", "user", userId, oldUser, response));
+        return response;
+    }
+
+    @Transactional
+    @Override
+    public UserResponse uploadAvatar(Long userId, MultipartFile file) {
+        UserEntity user = userRepository.findById(userId)
+                .orElseThrow(() -> ResourceNotFoundException.of("User", userId));
+        validateAvatarFile(file);
+
+        UserEntity oldUser = userMapper.cloneUser(user);
+        FileMetadataResponse metadata = fileService.uploadFile(file, FileTypeEnum.IMAGE, FileUsageTypeEnum.AVATAR, userId, "UserEntity");
+        if (!fileStorageService.exists(metadata.getFileKey())) {
+            throw new BusinessException("Không thể lưu avatar lên MinIO. Vui lòng kiểm tra MinIO và thử lại.");
+        }
+        user.setAvatarUrl(metadata.getFileKey());
+        user = userRepository.save(user);
+
+        eventPublisher.publishEvent(new AuditLogEvent(this, "upload_avatar", "user", userId, oldUser, user));
+        return mapToUserResponse(user);
+    }
+
+    @Transactional
+    @Override
+    public UserResponse deleteAvatar(Long userId) {
+        UserEntity user = userRepository.findById(userId)
+                .orElseThrow(() -> ResourceNotFoundException.of("User", userId));
+        UserEntity oldUser = userMapper.cloneUser(user);
+        user.setAvatarUrl(null);
+        user = userRepository.save(user);
+
+        eventPublisher.publishEvent(new AuditLogEvent(this, "delete_avatar", "user", userId, oldUser, user));
+        return mapToUserResponse(user);
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public InputStream downloadAvatar(Long targetUserId) {
+        UserEntity user = userRepository.findById(targetUserId)
+                .orElseThrow(() -> ResourceNotFoundException.of("User", targetUserId));
+        String fileKey = normalizeAvatarFileKey(user.getAvatarUrl());
+        if (fileKey == null) {
+            throw new ResourceNotFoundException("Avatar not found for user: " + targetUserId);
+        }
+        return fileStorageService.download(fileKey);
     }
 
 
@@ -678,7 +809,158 @@ public class UserService implements IUserService {
                 .filter(ur -> ur.getExpiredAt() == null || ur.getExpiredAt().isAfter(LocalDateTime.now()))
                 .map(ur -> ur.getRoleEntity().getCode())
                 .collect(Collectors.toList()));
+        response.setAvatarUrl(toAvatarViewUrl(user));
+        response.setAttributes(buildProfileAttributes(user, response.getRoles()));
         return response;
+    }
+
+    private Set<String> getRoleCodes(Long userId) {
+        return userRoleRepository.findByUserEntity_Id(userId).stream()
+                .filter(ur -> ur.getExpiredAt() == null || ur.getExpiredAt().isAfter(LocalDateTime.now()))
+                .map(ur -> ur.getRoleEntity().getCode())
+                .filter(Objects::nonNull)
+                .map(code -> code.toUpperCase(Locale.ROOT).replace("ROLE_", ""))
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    private String buildProfileAttributes(UserEntity user, List<String> roles) {
+        Map<String, Object> attrs = new LinkedHashMap<>();
+        Set<String> roleCodes = roles == null ? Set.of() : roles.stream()
+                .filter(Objects::nonNull)
+                .map(code -> code.toUpperCase(Locale.ROOT).replace("ROLE_", ""))
+                .collect(Collectors.toSet());
+
+        boolean isStaff = roleCodes.stream().anyMatch(role -> Set.of("ADMIN", "HR", "TEACHER", "TA").contains(role));
+        if (roleCodes.contains("STUDENT") && !isStaff) {
+            studentProfileRepository.findById(user.getId()).ifPresent(profile -> {
+                attrs.put("studentCode", profile.getStudentCode());
+                attrs.put("educationLevel", profile.getEducationLevel());
+                attrs.put("schoolName", profile.getSchoolName());
+                attrs.put("goal", profile.getGoal());
+                attrs.put("description", profile.getDescription());
+                attrs.put("isMinor", profile.getIsMinor());
+                attrs.put("hasGoal", profile.getHasGoal());
+                attrs.put("currentStreak", profile.getCurrentStreak());
+                attrs.put("longestStreak", profile.getLongestStreak());
+                List<String> interests = profile.getStudentInterests() == null ? List.of() : profile.getStudentInterests().stream()
+                        .map(StudentInterestEntity::getInterest)
+                        .filter(Objects::nonNull)
+                        .map(InterestEntity::getName)
+                        .filter(name -> name != null && !name.isBlank())
+                        .toList();
+                if (!interests.isEmpty()) {
+                    attrs.put("interests", interests);
+                }
+                attrs.put("guardians", guardianRepository.findByStudentProfile_UserId(user.getId()).stream()
+                        .map(this::guardianToMap)
+                        .toList());
+            });
+        } else {
+            employeeRepository.findById(user.getId()).ifPresent(employee -> {
+                attrs.put("employeeCode", employee.getEmployeeCode());
+                attrs.put("departmentId", employee.getDepartment() != null ? employee.getDepartment().getId() : null);
+                attrs.put("departmentName", employee.getDepartment() != null ? employee.getDepartment().getName() : null);
+                attrs.put("position", employee.getPosition());
+                attrs.put("employmentTypeEnum", employee.getEmploymentTypeEnum() != null ? employee.getEmploymentTypeEnum().name() : null);
+                attrs.put("startDate", employee.getStartDate() != null ? employee.getStartDate().toLocalDate().toString() : null);
+                attrs.put("endDate", employee.getEndDate() != null ? employee.getEndDate().toLocalDate().toString() : null);
+                attrs.put("address", employee.getAddress());
+                attrs.put("status", employee.getStatus() != null ? employee.getStatus().name() : null);
+                if (employee.getPosition() != null && !employee.getPosition().isBlank()) {
+                    attrs.put("specialty", employee.getPosition());
+                }
+                if (teacherCategoryRepository != null && employee.getUserEntity() != null) {
+                    List<String> categories = teacherCategoryRepository.findByEmployee_UserId(employee.getUserEntity().getId()).stream()
+                            .map(TeacherCategoryEntity::getCategory)
+                            .filter(Objects::nonNull)
+                            .map(CategoryEntity::getName)
+                            .filter(name -> name != null && !name.isBlank())
+                            .toList();
+                    if (!categories.isEmpty()) {
+                        attrs.put("categories", categories);
+                    }
+                }
+            });
+        }
+
+        return SimpleJsonWriter.toJson(attrs);
+    }
+
+    private Map<String, Object> guardianToMap(GuardianEntity guardian) {
+        Map<String, Object> value = new LinkedHashMap<>();
+        value.put("id", guardian.getId());
+        value.put("fullName", guardian.getFullName());
+        value.put("relationship", guardian.getRelationship() != null ? guardian.getRelationship().name() : null);
+        value.put("phone", guardian.getPhone());
+        value.put("email", guardian.getEmail());
+        value.put("address", guardian.getAddress());
+        return value;
+    }
+
+    private void replaceGuardians(StudentProfileEntity profile, List<ProfileGuardianRequest> guardians) {
+        if (guardians == null) {
+            return;
+        }
+        guardianRepository.deleteByStudentProfile_UserId(profile.getUserId());
+        List<GuardianEntity> entities = new ArrayList<>();
+        for (ProfileGuardianRequest item : guardians) {
+            if (item == null || item.getFullName() == null || item.getFullName().isBlank()) {
+                continue;
+            }
+            GuardianEntity entity = new GuardianEntity();
+            entity.setStudentProfile(profile);
+            entity.setFullName(item.getFullName().trim());
+            entity.setRelationship(item.getRelationship() != null ? item.getRelationship() : GuardianRelationship.OTHER);
+            entity.setPhone(item.getPhone());
+            entity.setEmail(item.getEmail());
+            entity.setAddress(item.getAddress());
+            entities.add(entity);
+        }
+        guardianRepository.saveAll(entities);
+    }
+
+    private void validateAvatarFile(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new BusinessException("Avatar file is required.");
+        }
+        if (file.getSize() > 5 * 1024 * 1024) {
+            throw new BusinessException("Avatar file must not exceed 5MB.");
+        }
+        String contentType = file.getContentType();
+        if (contentType == null || !contentType.toLowerCase(Locale.ROOT).startsWith("image/")) {
+            throw new BusinessException("Avatar must be an image file.");
+        }
+    }
+
+    private String toAvatarViewUrl(UserEntity user) {
+        String avatarUrl = user.getAvatarUrl();
+        if (avatarUrl == null || avatarUrl.isBlank()) {
+            return null;
+        }
+        String value = avatarUrl.trim();
+        if (value.startsWith("http://") || value.startsWith("https://") || value.startsWith("/v1/users/")) {
+            return value;
+        }
+        return "/v1/users/" + user.getId() + "/avatar";
+    }
+
+    private String normalizeAvatarFileKey(String avatarUrl) {
+        if (avatarUrl == null || avatarUrl.isBlank()) {
+            return null;
+        }
+        String value = avatarUrl.trim();
+        if (value.startsWith("http://") || value.startsWith("https://") || value.startsWith("/v1/users/")) {
+            return null;
+        }
+        return value;
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     // lay id của user đang đăng nhập

@@ -6,6 +6,7 @@ ID giả hoặc tham chiếu cứng. Có thể chạy lại an toàn vì mỗi n
 """
 
 import random
+import uuid
 from datetime import datetime, timedelta, time
 from decimal import Decimal
 
@@ -19,6 +20,20 @@ DAY_SLOTS = [
     ((2, time(19, 0), time(21, 0)), (4, time(19, 0), time(21, 0))),
     ((6, time(8, 0), time(10, 0)), (7, time(8, 0), time(10, 0))),
 ]
+
+
+def _class_code_exists(cursor, code):
+    return _exists(cursor, "SELECT 1 FROM class WHERE code=%s LIMIT 1", (code,))
+
+
+def _generate_class_code(cursor):
+    yy_mm = datetime.now().strftime("%y%m")
+    for _ in range(10):
+        random_part = uuid.uuid4().hex[:6].upper()
+        candidate = f"LH-{yy_mm}-{random_part}"
+        if not _class_code_exists(cursor, candidate):
+            return candidate
+    raise RuntimeError("Tao ma code that bai LH sau 10 lan")
 
 
 def _fetch_all(cursor, query, params=()):
@@ -273,25 +288,31 @@ def seed(cursor):
             (price * Decimal("1.8")).quantize(Decimal("1")), 90,
         )
 
-        cursor.execute("SELECT id FROM class WHERE course_id=%s AND package_type='GROUP_CLASS' LIMIT 1", (course["id"],))
+        cursor.execute("SELECT id, code FROM class WHERE course_id=%s AND package_type='GROUP_CLASS' LIMIT 1", (course["id"],))
         existing = cursor.fetchone()
         if existing:
             class_id = existing["id"]
+            if not existing.get("code"):
+                cursor.execute(
+                    "UPDATE class SET code=%s, updated_at=%s, updated_by=%s WHERE id=%s",
+                    (_generate_class_code(cursor), datetime.now(), teacher_id, class_id),
+                )
         else:
             class_id = snowflake.next_id()
+            class_code = _generate_class_code(cursor)
             start_date = datetime.now() + timedelta(days=random.randint(-20, 20))
             end_date = start_date + timedelta(days=random.choice([60, 75, 90]))
             capacity = random.choice([10, 12, 15, 20])
             cursor.execute(
                 """
                 INSERT INTO class (
-                    id, course_id, category_id, name, package_type, type,
+                    id, code, course_id, category_id, name, package_type, type,
                     max_members, current_member_count, status, start_date, end_date,
                     created_at, updated_at, created_by, updated_by
-                ) VALUES (%s,%s,%s,%s,'GROUP_CLASS',0,%s,0,'ACTIVE',%s,%s,%s,%s,%s,%s)
+                ) VALUES (%s,%s,%s,%s,%s,'GROUP_CLASS',0,%s,0,'ACTIVE',%s,%s,%s,%s,%s,%s)
                 """,
                 (
-                    class_id, course["id"], course["category_id"],
+                    class_id, class_code, course["id"], course["category_id"],
                     f"{course['name'][:70]} - Lớp K{index + 1:02d}", capacity,
                     start_date, end_date, datetime.now(), datetime.now(), teacher_id, teacher_id,
                 ),

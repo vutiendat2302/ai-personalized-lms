@@ -1,7 +1,9 @@
 package com.ailms.request;
- 
-import com.fasterxml.jackson.annotation.JsonFormat;
+
+import com.ailms.entity.enums.BaseStatusEnum;
 import lombok.*;
+import org.springframework.format.annotation.DateTimeFormat;
+
 import java.time.LocalDateTime;
 
 @Getter
@@ -12,11 +14,20 @@ import java.time.LocalDateTime;
 @EqualsAndHashCode(callSuper = false)
 public class ClassOnlineSearchRequest extends BaseSearchRequest {
     private String keyword;
-    private Byte status;
+    private Long classId;
+    private BaseStatusEnum status;
 
-    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
+    private String lifecycleStatus;
+
+    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+    private LocalDateTime scheduledFrom;
+
+    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
+    private LocalDateTime scheduledTo;
+
+    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
     private LocalDateTime createdFrom;
 
-    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
+    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
     private LocalDateTime createdTo;
 }

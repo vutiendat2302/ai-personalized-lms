@@ -4,6 +4,8 @@ import com.ailms.entity.ClassMemberEntity;
 import com.ailms.entity.enums.ClassMemberRole;
 import com.ailms.response.ApiResponse;
 import com.ailms.response.ClassMemberResponse;
+import com.ailms.response.MemberDetailResponse;
+import com.ailms.response.PageResponse;
 import com.ailms.service.IClassMemberService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -67,12 +69,39 @@ public class ClassMemberController {
         ));
     }
 
+    @GetMapping("/{classId}/members/{userId}/detail")
+    public ResponseEntity<ApiResponse<MemberDetailResponse>> getMemberDetail(
+            @PathVariable Long classId,
+            @PathVariable Long userId) {
+        return ResponseEntity.ok(ApiResponse.of(
+                "Member detail retrieved successfully",
+                classMemberService.getMemberDetail(classId, userId)
+        ));
+    }
+
+    @GetMapping("/{classId}/members/page")
+    public ResponseEntity<ApiResponse<PageResponse<ClassMemberResponse>>> getMembersPage(
+            @PathVariable Long classId,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String role,
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return ResponseEntity.ok(ApiResponse.of(
+                "Class members paged retrieved successfully",
+                classMemberService.getMembersPage(classId, keyword, role, status, page, size)
+        ));
+    }
+
     private ClassMemberResponse mapToResponse(ClassMemberEntity entity) {
         return ClassMemberResponse.builder()
                 .classId(entity.getClassEntity().getId())
                 .className(entity.getClassEntity().getName())
                 .userId(entity.getUserEntity().getId())
                 .username(entity.getUserEntity().getUsername())
+                .fullName(entity.getUserEntity().getFullName())
+                .email(entity.getUserEntity().getEmail())
+                .avatarUrl(entity.getUserEntity().getAvatarUrl())
                 .roleInClass(entity.getRoleInClass())
                 .status(entity.getStatus())
                 .joinedAt(entity.getJoinedAt())

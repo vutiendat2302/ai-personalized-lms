@@ -11,4 +11,6 @@ import java.util.List;
 @Repository
 public interface QuestionRepository extends BaseRepository<QuestionEntity, Long> {
     List<QuestionEntity> findByQuizId(Long quizId);
+
+    void deleteByQuizId(Long quizId);
 }

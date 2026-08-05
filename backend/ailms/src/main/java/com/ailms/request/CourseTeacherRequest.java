@@ -21,4 +21,6 @@ public class CourseTeacherRequest {
     private LocalDateTime assignedAt;
 
     private Long assignedBy;
+
+    private com.ailms.entity.enums.CourseTeacherStatusEnum status;
 }

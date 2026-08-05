@@ -1,5 +1,6 @@
 package com.ailms.service.imp;
 
+import com.ailms.common.util.CodeGenerator;
 import com.ailms.entity.*;
 import com.ailms.entity.enums.*;
 import com.ailms.event.AuditLogEvent;
@@ -73,8 +74,9 @@ public class ClassManagementService implements IClassManagementService {
                 throw new BusinessException("Selected teacher is not assigned to course category: " + request.getCategoryId());
             }
 
-            if (teacherMatchingService.checkScheduleCollision(request.getTeacherEmployeeId(), request.getSchedules())) {
-                throw new BusinessException("Selected teacher has a schedule collision during requested time slots.");
+            String collisionDetail = teacherMatchingService.findScheduleCollisionDetail(request.getTeacherEmployeeId(), request.getSchedules());
+            if (collisionDetail != null) {
+                throw new BusinessException(collisionDetail);
             }
         }
 
@@ -82,6 +84,7 @@ public class ClassManagementService implements IClassManagementService {
                 .courseEntity(course)
                 .categoryEntity(category)
                 .name(request.getName())
+                .code(CodeGenerator.generate("LH", classRepository::existsByCode))
                 .packageType(DeliveryModeEnum.GROUP_CLASS)
                 .maxMembers(request.getMaxMembers())
                 .currentMemberCount(0)
@@ -123,7 +126,21 @@ public class ClassManagementService implements IClassManagementService {
         }
 
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CREATE_GROUP_CLASS", "CLASS", savedClass.getId(), null, savedClass));
-        return classMapper.toResponse(savedClass);
+        ClassResponse resp = classMapper.toResponse(savedClass);
+        if (resp != null) {
+            if (request.getTeacherEmployeeId() != null) {
+                employeeRepository.findById(request.getTeacherEmployeeId())
+                        .ifPresent(emp -> {
+                            if (emp.getUserEntity() != null) {
+                                String tName = emp.getUserEntity().getFullName() != null && !emp.getUserEntity().getFullName().isBlank()
+                                        ? emp.getUserEntity().getFullName()
+                                        : emp.getUserEntity().getUsername();
+                                resp.setTeacherName(tName);
+                            }
+                        });
+            }
+        }
+        return resp;
     }
 
     @Transactional
@@ -232,6 +249,7 @@ public class ClassManagementService implements IClassManagementService {
                         .courseEntity(pkg.getCourseEntity())
                         .categoryEntity(pkg.getCourseEntity().getCategoryEntity())
                         .name("1-1 Tutor: " + pkg.getCourseEntity().getName() + " (" + user.getUsername() + ")")
+                        .code(CodeGenerator.generate("LH", classRepository::existsByCode))
                         .packageType(DeliveryModeEnum.ONE_ON_ONE)
                         .maxMembers(1)
                         .currentMemberCount(1)

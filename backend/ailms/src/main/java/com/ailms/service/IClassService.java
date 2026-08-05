@@ -2,6 +2,7 @@ package com.ailms.service;
 
 import com.ailms.request.CreateClassRequest;
 import com.ailms.request.UpdateClassRequest;
+import com.ailms.request.UpdateClassScheduleSlotRequest;
 import com.ailms.response.PageResponse;
 import com.ailms.request.ClassSearchRequest;
 import com.ailms.response.ClassResponse;
@@ -46,6 +47,8 @@ public interface IClassService {
     List<ClassResponse> getByCourseId(Long courseId);
 
     List<ClassScheduleResponse> getSchedules(Long classId);
+
+    List<ClassScheduleResponse> updateSchedules(Long classId, List<UpdateClassScheduleSlotRequest> schedules);
 
     /**
      * Tạo mới bản ghi từ dữ liệu yêu cầu.

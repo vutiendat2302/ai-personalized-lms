@@ -18,8 +18,6 @@ import {
   RefreshCw,
   Eye,
   AlertTriangle,
-  Clock,
-  ExternalLink,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -139,14 +137,14 @@ export const SalesEnrollmentListPage: React.FC = () => {
                             enr.studentName.charAt(0)
                           )}
                         </div>
-                        <div className="truncate max-w-[160px]">
+                        <div className="truncate max-w-40">
                           <p className="text-xs font-bold text-foreground truncate">{enr.studentName}</p>
                           <p className="text-[11px] text-muted-foreground truncate">{enr.studentEmail}</p>
                         </div>
                       </div>
                     </TableCell>
 
-                    <TableCell className="font-semibold text-xs text-foreground max-w-[200px] truncate">
+                    <TableCell className="font-semibold text-xs text-foreground max-w-50 truncate">
                       {enr.courseName}
                     </TableCell>
 

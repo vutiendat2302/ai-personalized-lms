@@ -341,7 +341,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
 
             {/* TAB 2: NGƯỜI GIÁM HỘ (chỉ hiện khi is_minor = true) */}
             {student.isMinor && (
-              <TabsContent value="general" className="mt-6 space-y-4 border-t pt-5">
+              <div className="mt-6 space-y-4 border-t pt-5">
                 {guardians.length === 0 && (
                   <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-600 flex items-center justify-between">
                     <div className="flex items-center gap-2 text-xs font-extrabold">
@@ -401,11 +401,11 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                     </Card>
                   ))}
                 </div>
-              </TabsContent>
+              </div>
             )}
 
             {/* TAB 3: MỤC TIÊU HỌC TẬP (study_goal) */}
-            <TabsContent value="goals" className="mt-6 space-y-4 border-t pt-5">
+            <div className="mt-6 space-y-4 border-t pt-5">
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <h4 className="text-sm font-extrabold text-foreground">Danh sách Mục tiêu Học tập (Study Goals)</h4>
                 <div className="flex items-center gap-2">
@@ -449,10 +449,10 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                   </Card>
                 ))}
               </div>
-            </TabsContent>
+            </div>
 
             {/* TAB 4: SỞ THÍCH (interests) */}
-            <TabsContent value="general" className="mt-6 space-y-4 border-t pt-5">
+            <div className="mt-6 space-y-4 border-t pt-5">
               <h4 className="text-sm font-extrabold text-foreground">Thẻ Sở thích & Định hướng khóa học</h4>
               
               <div className="flex flex-wrap gap-2 pt-2">
@@ -461,7 +461,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                 ))}
                 {!detailLoading && interests.length === 0 && <p className="text-xs text-muted-foreground">Học viên chưa chọn lĩnh vực quan tâm.</p>}
               </div>
-            </TabsContent>
+            </div>
 
             {/* TAB 5: HOẠT ĐỘNG HỌC TẬP (Timeline & Active hours) */}
             <TabsContent value="activities" className="mt-0 space-y-4">

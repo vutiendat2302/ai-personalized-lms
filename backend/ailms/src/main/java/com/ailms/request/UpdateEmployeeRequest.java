@@ -60,7 +60,7 @@ public class UpdateEmployeeRequest {
     /**
      * Số điện thoại — sẽ được cập nhật sang UserEntity.phone
      */
-    @Pattern(regexp = "^$|^(\\+84|0)(3|5|7|8|9)[0-9]{8}$", message = "Invalid Vietnamese phone number")
+    @Pattern(regexp = "^$|^[0-9\\+\\(\\)\\s\\.-]{8,20}$", message = "Invalid Vietnamese phone number")
     private String phone;
 
     /**

@@ -20,12 +20,11 @@ import {
   AlertTriangle,
   ChevronRight,
 } from "lucide-react";
-import { MOCK_REQUESTS } from "@/types/adminCourseClass";
 import type { OperationalRequest } from "@/types/adminCourseClass";
 
 export const PendingRequestsQueuePage: React.FC = () => {
   const navigate = useNavigate();
-  const [requests, setRequests] = useState<OperationalRequest[]>(MOCK_REQUESTS);
+  const [requests, setRequests] = useState<OperationalRequest[]>([]);
   const [activeTab, setActiveTab] = useState<string>("transfer");
 
   // State for Orange Notification Toast after approving transfer when full
@@ -90,7 +89,7 @@ export const PendingRequestsQueuePage: React.FC = () => {
       {noticeMessage && (
         <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 flex items-start justify-between gap-3 text-xs text-amber-900 animate-in fade-in">
           <div className="flex items-center gap-2 font-semibold">
-            <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
             <span>{noticeMessage}</span>
           </div>
           <Button

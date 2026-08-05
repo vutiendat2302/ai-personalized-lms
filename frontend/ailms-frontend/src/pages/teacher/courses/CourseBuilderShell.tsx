@@ -7,9 +7,11 @@ import { LessonEditor } from "../../../components/admin/course-builder/LessonEdi
 import { QuizBuilder } from "../../../components/admin/course-builder/QuizBuilder";
 import { AssignmentBuilder } from "../../../components/admin/course-builder/AssignmentBuilder";
 import { PublishChecklist } from "../../../components/admin/course-builder/PublishChecklist";
-import { ArrowLeft, BookOpen, Layers, CheckCircle, PanelLeftClose, PanelLeftOpen, Eye } from "lucide-react";
+import { CoInstructorManagerModal } from "../../../components/admin/course-builder/CoInstructorManagerModal";
+import { ArrowLeft, BookOpen, Layers, CheckCircle, PanelLeftClose, PanelLeftOpen, Eye, Users, Undo2, Edit3, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/useToast";
+import { useAuth } from "@/hooks/useAuth";
 
 export const CourseBuilderShell: React.FC = () => {
   const toast = useToast();
@@ -155,38 +157,54 @@ export const CourseBuilderShell: React.FC = () => {
     try {
       await courseAuthoringApi.updateLesson(lessonId, updatedData);
 
-      // Create or update linked Quiz for this lesson
-      if (updatedData.quizData) {
+      // Create, update, or unlink Quiz for this lesson
+      if (updatedData.isQuizAttached && updatedData.quizData) {
         const qData = updatedData.quizData;
         const targetQuizId = updatedData.linkedQuizId || selectedItem?.data?.linkedQuiz?.id;
         if (targetQuizId) {
           await courseAuthoringApi.updateQuiz(targetQuizId, {
             ...qData,
-            lessonId: Number(lessonId),
+            lessonId: lessonId,
+            courseId: id,
           });
         } else {
           await courseAuthoringApi.createQuiz({
             ...qData,
-            lessonId: Number(lessonId),
+            lessonId: lessonId,
+            courseId: id,
           });
         }
+      } else if (updatedData.isQuizAttached === false && (updatedData.linkedQuizId || selectedItem?.data?.linkedQuiz?.id)) {
+        const targetQuizId = updatedData.linkedQuizId || selectedItem?.data?.linkedQuiz?.id;
+        await courseAuthoringApi.updateQuiz(targetQuizId, {
+          title: selectedItem?.data?.linkedQuiz?.title || "Quiz",
+          lessonId: null,
+        });
       }
 
-      // Create or update linked Assignment for this lesson
-      if (updatedData.assignmentData) {
+      // Create, update, or unlink Assignment for this lesson
+      if (updatedData.isAssignmentAttached && updatedData.assignmentData) {
         const aData = updatedData.assignmentData;
         const targetAssignmentId = updatedData.linkedAssignmentId || selectedItem?.data?.linkedAssignment?.id;
         if (targetAssignmentId) {
           await courseAuthoringApi.updateAssignment(targetAssignmentId, {
             ...aData,
-            lessonId: Number(lessonId),
+            lessonId: lessonId,
+            courseId: id,
           });
         } else {
           await courseAuthoringApi.createAssignment({
             ...aData,
-            lessonId: Number(lessonId),
+            lessonId: lessonId,
+            courseId: id,
           });
         }
+      } else if (updatedData.isAssignmentAttached === false && (updatedData.linkedAssignmentId || selectedItem?.data?.linkedAssignment?.id)) {
+        const targetAssignmentId = updatedData.linkedAssignmentId || selectedItem?.data?.linkedAssignment?.id;
+        await courseAuthoringApi.updateAssignment(targetAssignmentId, {
+          title: selectedItem?.data?.linkedAssignment?.title || "Assignment",
+          lessonId: null,
+        });
       }
 
       const freshCurriculum = await courseAuthoringApi.getCurriculum(id!);
@@ -211,7 +229,40 @@ export const CourseBuilderShell: React.FC = () => {
   const handleSaveQuiz = async (quizId: string, updatedData: any) => {
     try {
       await courseAuthoringApi.updateQuiz(quizId, updatedData);
-      fetchCurriculum();
+      const freshCurriculum = await courseAuthoringApi.getCurriculum(id!);
+      setCurriculum(freshCurriculum);
+
+      if (selectedItem && selectedItem.type === "quiz" && String(selectedItem.id) === String(quizId)) {
+        let foundQuiz: any = null;
+        for (const sec of freshCurriculum.sections || []) {
+          const foundChapterQuiz = sec.chapterQuizzes?.find((q: any) => String(q.id) === String(quizId));
+          if (foundChapterQuiz) {
+            foundQuiz = foundChapterQuiz;
+            break;
+          }
+          for (const l of sec.lessons || []) {
+            if (l.linkedQuiz && String(l.linkedQuiz.id) === String(quizId)) {
+              foundQuiz = l.linkedQuiz;
+              break;
+            }
+          }
+          if (foundQuiz) break;
+        }
+        if (!foundQuiz && freshCurriculum.finalExamQuizzes) {
+          foundQuiz = freshCurriculum.finalExamQuizzes.find((q: any) => String(q.id) === String(quizId));
+        }
+
+        if (foundQuiz) {
+          setSelectedItem({ type: "quiz", id: String(quizId), data: foundQuiz });
+        } else {
+          setSelectedItem({
+            type: "quiz",
+            id: String(quizId),
+            data: { ...selectedItem.data, ...updatedData, id: quizId },
+          });
+        }
+      }
+
       toast.success("Đã lưu Quiz thành công!");
     } catch (err) {
       toast.error("Không thể lưu Quiz.");
@@ -228,6 +279,14 @@ export const CourseBuilderShell: React.FC = () => {
     }
   };
 
+  const { auth } = useAuth();
+  const user = auth.user;
+  const isOwner = Boolean(
+    user?.id && curriculum?.createdBy && String(user.id) === String(curriculum.createdBy)
+  );
+
+  const [isInstructorModalOpen, setIsInstructorModalOpen] = useState(false);
+
   const handleSubmitForReview = async () => {
     if (!id) return;
     try {
@@ -237,6 +296,42 @@ export const CourseBuilderShell: React.FC = () => {
       fetchCurriculum();
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Gửi duyệt thất bại.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleCancelReview = async () => {
+    if (!id) return;
+    try {
+      setSubmitting(true);
+      await courseAuthoringApi.cancelReview(id);
+      toast.success("Đã hủy gửi phê duyệt! Khóa học quay về trạng thái Nháp (DRAFT).");
+      fetchCurriculum();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Hủy gửi duyệt thất bại.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleRequestEdit = async () => {
+    if (!id) return;
+    if (
+      !window.confirm(
+        "LƯU Ý: Chuyển khóa học ACTIVE sang Chế độ chỉnh sửa sẽ làm TẠM ẨN TẤT CẢ GÓI BÁN và lớp học công khai của khóa học này trên hệ thống cho đến khi được phê duyệt lại. Bạn có chắc chắn muốn thực hiện?"
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      await courseAuthoringApi.requestEdit(id);
+      toast.success("Đã chuyển khóa học sang Chế độ chỉnh sửa! Các gói bán đã được ẩn.");
+      fetchCurriculum();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Chuyển chế độ chỉnh sửa thất bại.");
     } finally {
       setSubmitting(false);
     }
@@ -293,12 +388,52 @@ export const CourseBuilderShell: React.FC = () => {
             type="button"
             variant="outline"
             size="sm"
+            onClick={() => setIsInstructorModalOpen(true)}
+            className="h-8 text-xs font-bold gap-1.5 border-gray-300 hover:bg-gray-100 cursor-pointer"
+            title="Mời và quản lý danh sách giảng viên phụ trách khóa học"
+          >
+            <Users className="w-3.5 h-3.5 text-primary" /> Giảng viên phụ trách
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
             onClick={handlePreviewCourse}
             className="h-8 text-xs font-bold gap-1.5 text-blue-700 bg-blue-50 border-blue-200 hover:bg-blue-100 cursor-pointer shadow-2xs"
             title="Mở giao diện học viên để xem trước bài giảng & bài tập"
           >
-            <Eye className="w-3.5 h-3.5 text-blue-600" /> Xem trước giao diện học (Preview)
+            <Eye className="w-3.5 h-3.5 text-blue-600" /> Xem trước giao diện (Preview)
           </Button>
+
+          {/* Status-specific action buttons */}
+          {curriculum?.status === "PENDING" && isOwner && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleCancelReview}
+              disabled={submitting}
+              className="h-8 text-xs font-bold gap-1 text-amber-800 bg-amber-50 border-amber-300 hover:bg-amber-100 cursor-pointer"
+              title="Rút khóa học về trạng thái Nháp DRAFT để chỉnh sửa nội dung"
+            >
+              <Undo2 className="w-3.5 h-3.5 text-amber-600" /> Hủy gửi duyệt
+            </Button>
+          )}
+
+          {curriculum?.status === "ACTIVE" && isOwner && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleRequestEdit}
+              disabled={submitting}
+              className="h-8 text-xs font-bold gap-1 text-purple-800 bg-purple-50 border-purple-300 hover:bg-purple-100 cursor-pointer"
+              title="Chuyển khóa học về Chế độ chỉnh sửa (Ẩn gói bán)"
+            >
+              <Edit3 className="w-3.5 h-3.5 text-purple-600" /> Chuyển sang Chế độ chỉnh sửa
+            </Button>
+          )}
 
           <div className="flex bg-gray-100 p-1 rounded-lg">
             <button
@@ -320,6 +455,41 @@ export const CourseBuilderShell: React.FC = () => {
           </div>
         </div>
       </header>
+
+      {/* Lock banner if PENDING or ACTIVE */}
+      {curriculum?.status === "PENDING" && (
+        <div className="bg-amber-500 text-white text-xs px-4 py-2 flex items-center justify-between font-medium shrink-0 shadow-inner">
+          <div className="flex items-center gap-2">
+            <Lock className="w-4 h-4 shrink-0" />
+            <span>Khóa học đang trong quá trình <b>Admin chờ duyệt (PENDING)</b>. Nội dung hiện đang khóa chỉnh sửa.</span>
+          </div>
+          {isOwner && (
+            <button
+              onClick={handleCancelReview}
+              className="underline hover:text-amber-100 text-xs font-bold cursor-pointer"
+            >
+              Hủy gửi duyệt ngay để tiếp tục chỉnh sửa
+            </button>
+          )}
+        </div>
+      )}
+
+      {curriculum?.status === "ACTIVE" && (
+        <div className="bg-emerald-600 text-white text-xs px-4 py-2 flex items-center justify-between font-medium shrink-0 shadow-inner">
+          <div className="flex items-center gap-2">
+            <CheckCircle className="w-4 h-4 shrink-0" />
+            <span>Khóa học <b>đã được duyệt & phát hành (ACTIVE)</b>. Nội dung đang phát hành cho học viên và không thể sửa trực tiếp.</span>
+          </div>
+          {isOwner && (
+            <button
+              onClick={handleRequestEdit}
+              className="underline hover:text-emerald-100 text-xs font-bold cursor-pointer"
+            >
+              Bấm vào đây để chuyển sang Chế độ chỉnh sửa (Sẽ tạm ẩn gói bán)
+            </button>
+          )}
+        </div>
+      )}
 
       {activeTab === "content" ? (
         <div className="flex-1 flex overflow-hidden">
@@ -361,9 +531,21 @@ export const CourseBuilderShell: React.FC = () => {
         <PublishChecklist
           curriculum={curriculum}
           onSubmitForReview={handleSubmitForReview}
+          onCancelReview={handleCancelReview}
+          onRequestEdit={handleRequestEdit}
           submitting={submitting}
+          isOwner={isOwner}
         />
       )}
+
+      {/* Co-Instructor Management Modal */}
+      <CoInstructorManagerModal
+        isOpen={isInstructorModalOpen}
+        onClose={() => setIsInstructorModalOpen(false)}
+        courseId={id || ""}
+        courseName={curriculum?.courseName || "Khóa học"}
+        isOwner={isOwner}
+      />
     </div>
   );
 };

@@ -2,6 +2,7 @@ package com.ailms.controller;
 
 import com.ailms.request.CreateClassRequest;
 import com.ailms.request.UpdateClassRequest;
+import com.ailms.request.UpdateClassScheduleSlotRequest;
 import com.ailms.response.PageResponse;
 import com.ailms.request.ClassSearchRequest;
 import com.ailms.response.ClassResponse;
@@ -60,6 +61,13 @@ public class ClassController {
     @GetMapping("/{id}/schedules")
     public ResponseEntity<ApiResponse<List<ClassScheduleResponse>>> getSchedules(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.of("Class schedules retrieved successfully", classService.getSchedules(id)));
+    }
+
+    @PutMapping("/{id}/schedules")
+    public ResponseEntity<ApiResponse<List<ClassScheduleResponse>>> updateSchedules(
+            @PathVariable Long id,
+            @RequestBody List<UpdateClassScheduleSlotRequest> schedules) {
+        return ResponseEntity.ok(ApiResponse.of("Class schedules updated successfully", classService.updateSchedules(id, schedules)));
     }
 
     @DeleteMapping("/{id}")

@@ -1,5 +1,6 @@
 package com.ailms.response;
 
+import com.ailms.entity.enums.CourseTeacherStatusEnum;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.*;
 
@@ -20,4 +21,6 @@ public class CourseTeacherResponse {
     private LocalDateTime assignedAt;
 
     private Long assignedBy;
+
+    private CourseTeacherStatusEnum status;
 }

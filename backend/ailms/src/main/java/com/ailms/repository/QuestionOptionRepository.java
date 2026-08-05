@@ -9,4 +9,6 @@ import java.util.List;
 @Repository
 public interface QuestionOptionRepository extends BaseRepository<QuestionOptionEntity, Long> {
     List<QuestionOptionEntity> findByQuestionId(Long questionId);
+
+    void deleteByQuestionId(Long questionId);
 }

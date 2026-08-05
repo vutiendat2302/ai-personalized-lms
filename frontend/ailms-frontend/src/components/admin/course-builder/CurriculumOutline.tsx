@@ -3,7 +3,6 @@ import type { CourseCurriculumResponse } from "../../../api/courses/courseAuthor
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
 import { Plus, Trash2, ChevronDown, ChevronRight, Video, FileText, HelpCircle, CheckSquare, Flag, BookOpen, MoveVertical, FolderPlus, Eye, EyeOff } from "lucide-react";
 
 interface CurriculumOutlineProps {
@@ -351,8 +350,8 @@ export const CurriculumOutline: React.FC<CurriculumOutlineProps> = ({
                         </Button>
                       </div>
 
-                      {/* Nested Quiz attached to this Lesson */}
-                      {lesson.linkedQuiz && (
+                      {/* Nested Quiz attached to this Lesson (only for Video/Text/PDF lessons) */}
+                      {lesson.linkedQuiz && lesson.contentType !== "QUIZ" && (
                         <div
                           onClick={(e) => {
                             e.stopPropagation();
@@ -365,12 +364,12 @@ export const CurriculumOutline: React.FC<CurriculumOutlineProps> = ({
                           }`}
                         >
                           <HelpCircle className="w-3 h-3 text-amber-600 shrink-0" />
-                          <span className="truncate flex-1">↳ Quiz: {lesson.linkedQuiz.title}</span>
+                          <span className="truncate flex-1">↳ Quiz đính kèm: {lesson.linkedQuiz.title}</span>
                         </div>
                       )}
 
-                      {/* Nested Assignment attached to this Lesson */}
-                      {lesson.linkedAssignment && (
+                      {/* Nested Assignment attached to this Lesson (only for Video/Text/PDF lessons) */}
+                      {lesson.linkedAssignment && lesson.contentType !== "ASSIGNMENT" && (
                         <div
                           onClick={(e) => {
                             e.stopPropagation();
@@ -383,7 +382,7 @@ export const CurriculumOutline: React.FC<CurriculumOutlineProps> = ({
                           }`}
                         >
                           <CheckSquare className="w-3 h-3 text-purple-600 shrink-0" />
-                          <span className="truncate flex-1">↳ Bài tập: {lesson.linkedAssignment.title}</span>
+                          <span className="truncate flex-1">↳ Bài tập đính kèm: {lesson.linkedAssignment.title}</span>
                         </div>
                       )}
                     </div>

@@ -125,11 +125,61 @@ public class CourseAuthoringController {
         return ResponseEntity.ok(ApiResponse.of("Cập nhật bài tập tự luận Assignment thành công", courseAuthoringService.updateAssignment(assignmentId, request)));
     }
 
-    // ────────────── WORKFLOW ──────────────
+    // ────────────── WORKFLOW & APPROVAL ──────────────
 
     @PostMapping("/courses/{courseId}/submit")
     public ResponseEntity<ApiResponse<CourseResponse>> submitForReview(@PathVariable Long courseId) {
         return ResponseEntity.ok(ApiResponse.of("Gửi duyệt khóa học thành công", courseAuthoringService.submitForReview(courseId)));
+    }
+
+    @PostMapping("/courses/{courseId}/cancel-review")
+    public ResponseEntity<ApiResponse<CourseResponse>> cancelReviewRequest(@PathVariable Long courseId) {
+        return ResponseEntity.ok(ApiResponse.of("Đã hủy yêu cầu gửi duyệt khóa học thành công", courseAuthoringService.cancelReviewRequest(courseId)));
+    }
+
+    @PostMapping("/courses/{courseId}/request-edit")
+    public ResponseEntity<ApiResponse<CourseResponse>> requestEditActiveCourse(@PathVariable Long courseId) {
+        return ResponseEntity.ok(ApiResponse.of("Đã chuyển khóa học sang Chế độ chỉnh sửa thành công", courseAuthoringService.requestEditActiveCourse(courseId)));
+    }
+
+    // ────────────── CO-INSTRUCTORS ──────────────
+
+    @GetMapping("/teachers/search")
+    public ResponseEntity<ApiResponse<List<TeacherOptionResponse>>> searchTeachers(@RequestParam(required = false) String query) {
+        return ResponseEntity.ok(ApiResponse.of("Tìm kiếm giảng viên thành công", courseAuthoringService.searchTeachers(query)));
+    }
+
+    @PostMapping("/courses/{courseId}/instructors/invite")
+    public ResponseEntity<ApiResponse<CourseInstructorResponse>> inviteInstructor(
+            @PathVariable Long courseId,
+            @Valid @RequestBody InviteInstructorRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.of("Đã gửi lời mời giảng viên phụ trách thành công", courseAuthoringService.inviteInstructor(courseId, request)));
+    }
+
+    @GetMapping("/courses/{courseId}/instructors")
+    public ResponseEntity<ApiResponse<List<CourseInstructorResponse>>> getCourseInstructors(@PathVariable Long courseId) {
+        return ResponseEntity.ok(ApiResponse.of("Lấy danh sách giảng viên phụ trách thành công", courseAuthoringService.getCourseInstructors(courseId)));
+    }
+
+    @DeleteMapping("/courses/{courseId}/instructors/{instructorId}")
+    public ResponseEntity<ApiResponse<Void>> removeInstructor(
+            @PathVariable Long courseId,
+            @PathVariable Long instructorId) {
+        courseAuthoringService.removeInstructor(courseId, instructorId);
+        return ResponseEntity.ok(ApiResponse.message("Đã xóa giảng viên phụ trách thành công"));
+    }
+
+    @PostMapping("/courses/instructors/invitations/{invitationId}/respond")
+    public ResponseEntity<ApiResponse<CourseInstructorResponse>> respondInvitation(
+            @PathVariable Long invitationId,
+            @RequestParam boolean accept) {
+        return ResponseEntity.ok(ApiResponse.of("Phản hồi lời mời thành công", courseAuthoringService.respondInvitation(invitationId, accept)));
+    }
+
+    @GetMapping("/courses/instructors/my-invitations")
+    public ResponseEntity<ApiResponse<List<CourseInstructorResponse>>> getMyInvitations() {
+        return ResponseEntity.ok(ApiResponse.of("Lấy danh sách lời mời thành công", courseAuthoringService.getMyInvitations()));
     }
 
     // ────────────── GRADING ──────────────

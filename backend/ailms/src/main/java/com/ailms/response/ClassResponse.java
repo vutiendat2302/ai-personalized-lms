@@ -17,6 +17,8 @@ public class ClassResponse {
 
     private Long id;
 
+    private String code;
+
     private Long courseId;
 
     private String courseName;
@@ -26,6 +28,8 @@ public class ClassResponse {
     private String categoryName;
 
     private String name;
+
+    private String teacherName;
 
     private Byte type;
 

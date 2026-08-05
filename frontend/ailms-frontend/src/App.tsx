@@ -37,6 +37,7 @@ import { CourseAdminDetailPage } from "./pages/admin/courses/CourseAdminDetailPa
 import { ClassManagementPage } from "./pages/admin/classes/ClassManagementPage";
 import { CreateGroupClassPage } from "./pages/admin/classes/CreateGroupClassPage";
 import { ClassDetailPage } from "./pages/admin/classes/ClassDetailPage";
+import { ClassSessionManagementPage } from "./pages/admin/ClassSessionManagementPage";
 import { TeacherMatchingRequestPage } from "./pages/admin/requests/TeacherMatchingRequestPage";
 
 // Sales & Revenue Module Pages
@@ -209,6 +210,7 @@ function App() {
                 <Route path="/admin/courses/:id" element={<CourseAdminDetailPage />} />
                 <Route path="/admin/classrooms" element={<ClassManagementPage />} />
                 <Route path="/admin/classes" element={<ClassManagementPage />} />
+                <Route path="/admin/sessions" element={<ClassSessionManagementPage />} />
                 <Route path="/admin/classes/create" element={<CreateGroupClassPage />} />
                 <Route path="/admin/classes/:id" element={<ClassDetailPage />} />
                 <Route path="/admin/pending-requests" element={<ApprovalCenterPage />} />

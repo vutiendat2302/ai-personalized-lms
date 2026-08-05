@@ -15,7 +15,7 @@ import java.util.Optional;
 
 @Repository
 public interface TeachingSessionPaymentRepository extends BaseRepository<TeachingSessionPaymentEntity, Long> {
-    Optional<TeachingSessionPaymentEntity> findByClassOnlineId(Long classOnlineId);
+    List<TeachingSessionPaymentEntity> findByClassOnlineIdOrderByUpdatedAtDescCreatedAtDescIdDesc(Long classOnlineId);
     Optional<TeachingSessionPaymentEntity> findByClassOnlineIdAndEmployee_UserId(Long classOnlineId, Long employeeId);
     List<TeachingSessionPaymentEntity> findByEmployee_UserId(Long userId);
     boolean existsByTeachingRate_Id(Long rateId);

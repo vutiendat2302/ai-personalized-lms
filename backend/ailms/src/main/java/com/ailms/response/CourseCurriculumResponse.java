@@ -17,6 +17,7 @@ public class CourseCurriculumResponse {
     private Long courseId;
     private String courseName;
     private String status;
+    private Long createdBy;
 
     private List<SectionCurriculumItem> sections;
     private List<QuizResponse> finalExamQuizzes;

@@ -101,6 +101,7 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
   const [uploadingPdf, setUploadingPdf] = useState(false);
 
   // Quiz Fields
+  const [quizTitle, setQuizTitle] = useState("");
   const [quizTimeLimitMin, setQuizTimeLimitMin] = useState(15);
   const [quizPassScore, setQuizPassScore] = useState(8.0);
   const [quizMaxAttempts, setQuizMaxAttempts] = useState(3);
@@ -109,9 +110,28 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
   const [showQuizPreview, setShowQuizPreview] = useState(false);
 
   // Assignment Fields
+  const [assignmentTitle, setAssignmentTitle] = useState("");
+  const [assignmentInstructions, setAssignmentInstructions] = useState("");
   const [assignmentMaxScore, setAssignmentMaxScore] = useState(10.0);
   const [assignmentDueDate, setAssignmentDueDate] = useState("");
   const [assignmentAllowLate, setAssignmentAllowLate] = useState(false);
+  const [assignmentSubmissionMode, setAssignmentSubmissionMode] = useState<"FILE_UPLOAD" | "BLOCK_EDITOR">("FILE_UPLOAD");
+
+  const formatVietnameseDate = (dateStr?: string) => {
+    if (!dateStr) return "";
+    try {
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return dateStr;
+      const day = String(date.getDate()).padStart(2, "0");
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const year = date.getFullYear();
+      const hours = String(date.getHours()).padStart(2, "0");
+      const minutes = String(date.getMinutes()).padStart(2, "0");
+      return `${day}/${month}/${year} ${hours}:${minutes}`;
+    } catch (e) {
+      return dateStr;
+    }
+  };
 
   // Automatic Video Duration Handler (90% of total duration)
   const handleVideoLoadedMetadata = (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
@@ -170,17 +190,74 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
         setResources([]);
       }
 
+      let extractedQuestions: QuestionItem[] = [];
+      const hasQuiz = Boolean(lesson.linkedQuiz);
+      setShowAttachQuizForm(hasQuiz);
+
       if (lesson.linkedQuiz) {
+        setQuizTitle(lesson.linkedQuiz.title || (lesson.name ? lesson.name + " - Quiz kiểm tra" : "Quiz đính kèm"));
         setQuizTimeLimitMin(lesson.linkedQuiz.timeLimitMin || 15);
         setQuizPassScore(lesson.linkedQuiz.passScore || 8.0);
         setQuizMaxAttempts(lesson.linkedQuiz.maxAttempts || 3);
         setQuizShuffleQuestions(lesson.linkedQuiz.shuffleQuestions ?? true);
+
+        if ((lesson.linkedQuiz as any).questions && Array.isArray((lesson.linkedQuiz as any).questions) && (lesson.linkedQuiz as any).questions.length > 0) {
+          extractedQuestions = (lesson.linkedQuiz as any).questions;
+        } else if (lesson.linkedQuiz.description && lesson.linkedQuiz.description.trim().startsWith("[")) {
+          try {
+            const parsed = JSON.parse(lesson.linkedQuiz.description);
+            if (Array.isArray(parsed)) extractedQuestions = parsed;
+          } catch (e) {}
+        }
+      } else {
+        setQuizTitle(lesson.name ? lesson.name + " - Quiz kiểm tra" : "Quiz đính kèm");
       }
 
+      if (extractedQuestions.length === 0 && lesson.description && lesson.description.trim().startsWith("[")) {
+        try {
+          const parsed = JSON.parse(lesson.description);
+          if (Array.isArray(parsed) && parsed.length > 0 && (parsed[0] as any)?.questionType) {
+            extractedQuestions = parsed;
+          }
+        } catch (e) {}
+      }
+
+      setQuestions(extractedQuestions);
+
+      const hasAssignment = Boolean(lesson.linkedAssignment);
+      setShowAttachAssignmentForm(hasAssignment);
+
       if (lesson.linkedAssignment) {
+        setAssignmentTitle(lesson.linkedAssignment.title || (lesson.name ? lesson.name + " - Bài tập tự luận" : "Bài tập tự luận đính kèm"));
         setAssignmentMaxScore(lesson.linkedAssignment.maxScore || 10.0);
         setAssignmentDueDate(lesson.linkedAssignment.dueDate ? lesson.linkedAssignment.dueDate.substring(0, 16) : "");
         setAssignmentAllowLate(lesson.linkedAssignment.allowLate || false);
+
+        if (lesson.linkedAssignment.description) {
+          if (lesson.linkedAssignment.description.trim().startsWith("{")) {
+            try {
+              const parsed = JSON.parse(lesson.linkedAssignment.description);
+              if (parsed.submissionMode) {
+              const mode = parsed.submissionMode;
+              if (mode === "BLOCK_EDITOR" || mode === "TEXT_ONLY") {
+                setAssignmentSubmissionMode("BLOCK_EDITOR");
+              } else {
+                setAssignmentSubmissionMode("FILE_UPLOAD");
+              }
+            }
+              setAssignmentInstructions(parsed.instructions || "");
+            } catch (e) {
+              setAssignmentInstructions(lesson.linkedAssignment.description);
+            }
+          } else {
+            setAssignmentInstructions(lesson.linkedAssignment.description);
+          }
+        }
+      } else {
+        setAssignmentTitle(lesson.name ? lesson.name + " - Bài tập tự luận" : "Bài tập tự luận đính kèm");
+        if (lesson.description && !lesson.description.trim().startsWith("[")) {
+          setAssignmentInstructions(lesson.description);
+        }
       }
 
       try {
@@ -232,6 +309,7 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
       const res = await fileAdminApi.uploadFile(file, "VIDEO", "LESSON_VIDEO");
       const fileUrl = (res as any).fileUrl || res.fileKey;
       setContentUrl(fileUrl);
+      setIsDirty(true);
       toast.success("Tải lên video thành công!");
     } catch (err: any) {
       toast.error("Tải lên video thất bại: " + (err.message || "Lỗi máy chủ"));
@@ -283,6 +361,7 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
         await courseAuthoringApi.deleteLessonResource(id);
       }
       setResources((prev) => prev.filter((r) => r.id !== id));
+      setIsDirty(true);
       toast.success("Đã xóa tài liệu đính kèm!");
     } catch (err: any) {
       toast.error("Xóa tài liệu thất bại.");
@@ -364,6 +443,9 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
     e.preventDefault();
     if (!lesson) return;
     const descriptionJson = JSON.stringify(blocks);
+    const isQuizAttached = contentType === "QUIZ" || showAttachQuizForm;
+    const isAssignmentAttached = contentType === "ASSIGNMENT" || showAttachAssignmentForm;
+
     onSave(lesson.id, {
       name,
       contentType,
@@ -373,18 +455,27 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
       previewType,
       linkedQuizId: lesson.linkedQuiz?.id,
       linkedAssignmentId: lesson.linkedAssignment?.id,
-      quizData: (contentType === "QUIZ" || showAttachQuizForm || lesson.linkedQuiz) ? {
-        title: lesson.linkedQuiz?.title || (name + " - Quiz kiểm tra"),
-        description: questions.length > 0 ? JSON.stringify(questions) : (contentUrl || "Bài kiểm tra trắc nghiệm theo bài học"),
+      isQuizAttached,
+      isAssignmentAttached,
+      quizData: isQuizAttached ? {
+        title: quizTitle || (name + " - Quiz kiểm tra"),
+        description: questions.length > 0
+          ? JSON.stringify(questions)
+          : (lesson.linkedQuiz?.description && lesson.linkedQuiz.description.trim().startsWith("[")
+              ? lesson.linkedQuiz.description
+              : (contentUrl || "Bài kiểm tra trắc nghiệm theo bài học")),
         questions: questions,
         timeLimitMin: quizTimeLimitMin,
         passScore: quizPassScore,
         maxAttempts: quizMaxAttempts,
         shuffleQuestions: quizShuffleQuestions,
       } : undefined,
-      assignmentData: (contentType === "ASSIGNMENT" || showAttachAssignmentForm || lesson.linkedAssignment) ? {
-        title: lesson.linkedAssignment?.title || (name + " - Bài tập tự luận"),
-        description: contentUrl || "Bài tập tự luận theo bài học",
+      assignmentData: isAssignmentAttached ? {
+        title: assignmentTitle || (name + " - Bài tập tự luận"),
+        description: JSON.stringify({
+          instructions: assignmentInstructions || contentUrl || "Bài tập tự luận theo bài học",
+          submissionMode: assignmentSubmissionMode,
+        }),
         maxScore: assignmentMaxScore,
         dueDate: assignmentDueDate || undefined,
         allowLate: assignmentAllowLate,
@@ -430,67 +521,66 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
 
   return (
     <Card
-      className={`flex-1 transition-all ${
+      className={`flex-1 relative transition-all duration-200 ${
         isFullscreen
           ? "fixed inset-0 z-50 p-8 bg-background max-w-none my-0 rounded-none overflow-y-auto border-0"
           : "p-6 max-w-5xl mx-auto bg-card border-border/40 rounded-xl shadow-xs my-4 overflow-y-auto"
       }`}
     >
-      {/* Top Action Header */}
-      <div className="flex items-center justify-between border-b border-border/40 pb-4 mb-6">
-        <div>
-          <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
-            Soạn thảo bài học
-            {isFullscreen && (
-              <Badge variant="secondary" className="text-[10px] font-bold bg-primary/10 text-primary">
-                Chế độ Toàn màn hình Focus
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Top Action Header */}
+        <div className="flex items-center justify-between border-b border-border/40 pb-4 mb-6">
+          <div>
+            <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+              Soạn thảo bài học
+              {isFullscreen && (
+                <Badge variant="secondary" className="text-[10px] font-bold bg-primary/10 text-primary">
+                  Chế độ Toàn màn hình Focus
+                </Badge>
+              )}
+            </h2>
+            <p className="text-xs text-muted-foreground">ID: {lesson.id}</p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {isDirty ? (
+              <Badge className="bg-amber-100 text-amber-900 border-amber-300 font-bold gap-1.5 text-[11px] py-1 px-3 shadow-2xs">
+                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                Có thay đổi chưa lưu
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-muted-foreground border-border/60 font-medium gap-1.5 text-[11px] py-1 px-3">
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                Đã đồng bộ tất cả
               </Badge>
             )}
-          </h2>
-          <p className="text-xs text-muted-foreground">ID: {lesson.id}</p>
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsFullscreen(!isFullscreen)}
+              className="h-9 text-xs font-bold gap-1.5 cursor-pointer"
+              title={isFullscreen ? "Thoát toàn màn hình (Esc)" : "Mở rộng toàn màn hình"}
+            >
+              {isFullscreen ? <Minimize2 className="w-4 h-4 text-primary" /> : <Maximize2 className="w-4 h-4 text-primary" />}
+              <span>{isFullscreen ? "Thu nhỏ (Esc)" : "Toàn màn hình"}</span>
+            </Button>
+
+            <Button
+              type="submit"
+              size="sm"
+              disabled={!isDirty}
+              className={`h-9 text-xs font-bold gap-1.5 transition cursor-pointer shadow-2xs ${
+                isDirty
+                  ? "bg-primary text-primary-foreground hover:bg-primary/90 shadow-md ring-2 ring-primary/20"
+                  : "bg-muted text-muted-foreground hover:bg-muted cursor-not-allowed opacity-50"
+              }`}
+            >
+              <Save className="w-4 h-4" /> {isDirty ? "Lưu thay đổi" : "Đã lưu tất cả"}
+            </Button>
+          </div>
         </div>
-
-        <div className="flex items-center gap-2">
-          {isDirty ? (
-            <Badge className="bg-amber-100 text-amber-900 border-amber-300 font-bold gap-1.5 text-[11px] py-1 px-3 shadow-2xs">
-              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-              Có thay đổi chưa lưu
-            </Badge>
-          ) : (
-            <Badge variant="outline" className="text-muted-foreground border-border/60 font-medium gap-1.5 text-[11px] py-1 px-3">
-              <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              Đã đồng bộ tất cả
-            </Badge>
-          )}
-
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setIsFullscreen(!isFullscreen)}
-            className="h-9 text-xs font-bold gap-1.5 cursor-pointer"
-            title={isFullscreen ? "Thoát toàn màn hình (Esc)" : "Mở rộng toàn màn hình"}
-          >
-            {isFullscreen ? <Minimize2 className="w-4 h-4 text-primary" /> : <Maximize2 className="w-4 h-4 text-primary" />}
-            <span>{isFullscreen ? "Thu nhỏ (Esc)" : "Toàn màn hình"}</span>
-          </Button>
-
-          <Button
-            onClick={handleSubmit}
-            size="sm"
-            disabled={!isDirty}
-            className={`h-9 text-xs font-bold gap-1.5 transition cursor-pointer shadow-2xs ${
-              isDirty
-                ? "bg-primary text-primary-foreground hover:bg-primary/90 shadow-md ring-2 ring-primary/20"
-                : "bg-muted text-muted-foreground hover:bg-muted cursor-not-allowed opacity-50"
-            }`}
-          >
-            <Save className="w-4 h-4" /> {isDirty ? "Lưu thay đổi" : "Đã lưu tất cả"}
-          </Button>
-        </div>
-      </div>
-
-      <form onSubmit={handleSubmit} className="space-y-6">
         {/* Lesson Basic Info */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-1">
@@ -518,18 +608,22 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
                   setContentUrl("");
                 }
                 setContentType(newType);
-                if (newType !== "VIDEO") {
+                if (newType === "PDF" || newType === "TEXT") {
                   setDurationMin(5);
+                } else if (newType === "QUIZ") {
+                  setDurationMin(quizTimeLimitMin || 15);
+                } else if (newType === "ASSIGNMENT") {
+                  setDurationMin(30);
                 }
                 setIsDirty(true);
               }}
-              className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm font-semibold outline-none"
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm font-semibold outline-none focus:ring-2 focus:ring-primary/20"
             >
-              <option value="VIDEO">Video bài giảng</option>
-              <option value="TEXT">Bài đọc Content Block (TipTap / BlockNote Style)</option>
-              <option value="PDF">Tài liệu PDF</option>
-              <option value="QUIZ">Bài kiểm tra Quiz (Lesson-level)</option>
-              <option value="ASSIGNMENT">Bài tập tự luận Assignment (Lesson-level)</option>
+              <option value="VIDEO">🎥 Video bài giảng</option>
+              <option value="TEXT">📖 Bài đọc Content Block (Text / Math / Code)</option>
+              <option value="PDF">📄 Tài liệu PDF / Word</option>
+              <option value="QUIZ">🎯 Bài kiểm tra Quiz</option>
+              <option value="ASSIGNMENT">📝 Bài tập tự luận Assignment</option>
             </select>
           </div>
         </div>
@@ -623,7 +717,10 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
                       type="button"
                       variant="ghost"
                       size="sm"
-                      onClick={() => setContentUrl("")}
+                      onClick={() => {
+                        setContentUrl("");
+                        setIsDirty(true);
+                      }}
                       className="h-6 text-[11px] text-destructive font-bold p-0 cursor-pointer"
                     >
                       Xóa link hiện tại
@@ -633,7 +730,10 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
                 <Input
                   type="text"
                   value={contentUrl}
-                  onChange={(e) => setContentUrl(e.target.value)}
+                  onChange={(e) => {
+                    setContentUrl(e.target.value);
+                    setIsDirty(true);
+                  }}
                   placeholder="Dán link YouTube (VD: https://youtu.be/...) hoặc link MP4..."
                   className="h-9 text-xs font-mono bg-background"
                 />
@@ -651,7 +751,10 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
                       type="button"
                       size="sm"
                       variant="outline"
-                      onClick={() => setContentUrl("")}
+                      onClick={() => {
+                        setContentUrl("");
+                        setIsDirty(true);
+                      }}
                       className="h-7 text-xs font-bold text-amber-900 border-amber-300 bg-white hover:bg-amber-100 shrink-0 cursor-pointer"
                     >
                       Xóa link hiện tại
@@ -689,7 +792,10 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
                       type="button"
                       variant="ghost"
                       size="sm"
-                      onClick={() => setContentUrl("")}
+                      onClick={() => {
+                        setContentUrl("");
+                        setIsDirty(true);
+                      }}
                       className="h-6 text-destructive font-bold cursor-pointer"
                     >
                       Xóa tệp / Chọn tệp khác
@@ -881,7 +987,7 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
                 </div>
 
                 {/* Blocks List */}
-                <div className="space-y-3 min-h-[250px]">
+                <div className="space-y-3 min-h-62.5">
                   {blocks.map((block, idx) => (
                     <div
                       key={block.id}
@@ -932,6 +1038,7 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
                               { label: "## H2", snippet: "## Tiêu đề phụ" },
                               { label: "**Bold**", snippet: "**văn bản in đậm**" },
                               { label: "*Italic*", snippet: "*văn bản in nghiêng*" },
+                              { label: "🔗 Link", snippet: "[Tên liên kết](https://...)" },
                               { label: "~~Strikethrough~~", snippet: "~~văn bản gạch ngang~~" },
                               { label: "• List", snippet: "- Mục 1\n- Mục 2" },
                               { label: "> Blockquote", snippet: "> Ghi chú..." },
@@ -988,7 +1095,7 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
                             ))}
                           </div>
                           {/* Live Rendered KaTeX Preview */}
-                          <div className="p-3 bg-amber-50/60 border border-amber-200 rounded-xl text-center flex items-center justify-center min-h-[50px] shadow-2xs">
+                          <div className="p-3 bg-amber-50/60 border border-amber-200 rounded-xl text-center flex items-center justify-center min-h-12.5 shadow-2xs">
                             {block.content ? (
                               <MathRenderer math={block.content} displayMode={true} />
                             ) : (
@@ -1130,7 +1237,10 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
                   type="button"
                   variant="ghost"
                   size="sm"
-                  onClick={() => setContentUrl("")}
+                  onClick={() => {
+                    setContentUrl("");
+                    setIsDirty(true);
+                  }}
                   className="h-6 text-xs font-bold text-destructive hover:bg-destructive/10 p-1 cursor-pointer"
                 >
                   Xóa tệp hiện tại / Thay tệp khác
@@ -1198,13 +1308,13 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
 
                     // PDF Viewer (using <PdfViewer /> with presigned URL)
                     if (lowerUrl.includes(".pdf") || lowerUrl.includes("pdf")) {
-                      return <PdfViewer fileKeyOrUrl={contentUrl} className="h-[650px]" />;
+                      return <PdfViewer fileKeyOrUrl={contentUrl} className="h-162.5" />;
                     }
 
                     // HTML Viewer
                     if (lowerUrl.includes(".html") || lowerUrl.includes(".htm")) {
                       return (
-                        <div className="w-full h-[600px] bg-white">
+                        <div className="w-full h-150 bg-white">
                           <iframe
                             src={docStreamUrl}
                             className="w-full h-full border-0"
@@ -1217,7 +1327,7 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
                     // Markdown Viewer
                     if (lowerUrl.includes(".md") || lowerUrl.includes(".markdown")) {
                       return (
-                        <div className="p-6 bg-background max-h-[600px] overflow-y-auto">
+                        <div className="p-6 bg-background max-h-150 overflow-y-auto">
                           <MarkdownRenderer content={contentUrl} />
                         </div>
                       );
@@ -1225,7 +1335,7 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
 
                     // Word / DOCX / Other Documents Viewer (via Office / Google Docs viewer or iframe)
                     return (
-                      <div className="w-full h-[650px] bg-gray-50 flex flex-col items-center justify-center p-6 text-center">
+                      <div className="w-full h-162.5 bg-gray-50 flex flex-col items-center justify-center p-6 text-center">
                         <iframe
                           src={`https://docs.google.com/viewer?url=${encodeURIComponent(docStreamUrl)}&embedded=true`}
                           className="w-full h-full border-0 rounded-xl"
@@ -1385,7 +1495,7 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
                   className="h-9 text-xs bg-background"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="space-y-1">
                   <Label className="text-xs font-bold">Thang điểm tối đa</Label>
                   <Input
@@ -1397,25 +1507,207 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs font-bold">Hạn nộp bài (DueDate)</Label>
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-bold">Hạn nộp bài (DueDate)</Label>
+                    {assignmentDueDate && (
+                      <span className="text-[11px] font-bold text-purple-700 font-mono">
+                        📅 {formatVietnameseDate(assignmentDueDate)}
+                      </span>
+                    )}
+                  </div>
                   <Input
                     type="datetime-local"
                     value={assignmentDueDate}
-                    onChange={(e) => setAssignmentDueDate(e.target.value)}
+                    onChange={(e) => {
+                      setAssignmentDueDate(e.target.value);
+                      setIsDirty(true);
+                    }}
                     className="h-9 text-xs bg-background"
                   />
                 </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-bold text-purple-950">Hình thức nộp bài yêu cầu</Label>
+                  <select
+                    value={assignmentSubmissionMode}
+                    onChange={(e) => {
+                      setAssignmentSubmissionMode(e.target.value as any);
+                      setIsDirty(true);
+                    }}
+                    className="w-full h-9 px-2 text-xs bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 font-medium"
+                  >
+                    <option value="FILE_UPLOAD">📁 1. Upload tệp đính kèm (File Upload)</option>
+                    <option value="BLOCK_EDITOR">✍️ 2. Soạn thảo Block trực tiếp (Multi-Block)</option>
+                  </select>
+                </div>
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs font-bold">Yêu cầu nộp bài (URL đính kèm / Hướng dẫn)</Label>
-                <Input
-                  type="text"
-                  value={contentUrl}
-                  onChange={(e) => setContentUrl(e.target.value)}
-                  placeholder="Link tài liệu đề bài (https://...)"
-                  className="h-9 text-xs bg-background"
-                />
-              </div>
+              {/* Dynamic Layout for Mode 1: FILE_UPLOAD */}
+              {assignmentSubmissionMode === "FILE_UPLOAD" && (
+                <div className="p-4 bg-purple-100/50 border border-purple-200 rounded-xl space-y-3">
+                  <div className="flex items-center gap-2 text-xs font-bold text-purple-900 uppercase">
+                    <UploadCloud className="w-4 h-4 text-purple-700" /> Cấu hình Hình thức 1: Tải tệp đính kèm (File Upload)
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold text-purple-950">📝 Nội dung Yêu cầu & Hướng dẫn Tải tệp nộp bài</Label>
+                    <Textarea
+                      rows={5}
+                      value={assignmentInstructions}
+                      onChange={(e) => {
+                        setAssignmentInstructions(e.target.value);
+                        setIsDirty(true);
+                      }}
+                      placeholder="Nhập hướng dẫn nộp tệp, quy định dung lượng tệp, định dạng cho phép (PDF, Word, Zip, Github Link)..."
+                      className="text-xs bg-background border-purple-200 focus:ring-2 focus:ring-purple-500 font-sans"
+                    />
+                  </div>
+
+                  <div className="space-y-1 pt-1">
+                    <Label className="text-xs font-bold text-gray-700">Link tệp / Đề bài mẫu đính kèm (URL - Tùy chọn)</Label>
+                    <Input
+                      type="text"
+                      value={contentUrl}
+                      onChange={(e) => {
+                        setContentUrl(e.target.value);
+                        setIsDirty(true);
+                      }}
+                      placeholder="Dán đường dẫn tệp đề bài mẫu nếu có (https://...)"
+                      className="h-9 text-xs bg-background"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Dynamic Layout for Mode 2: BLOCK_EDITOR */}
+              {assignmentSubmissionMode === "BLOCK_EDITOR" && (
+                <div className="p-4 bg-purple-100/50 border border-purple-200 rounded-xl space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-purple-200/80 pb-2 gap-2">
+                    <div className="flex items-center gap-2 text-xs font-bold text-purple-900 uppercase">
+                      <FileText className="w-4 h-4 text-purple-700" /> Cấu hình Hình thức 2: Trình Soạn thảo các Block Đề bài (Multi-Block)
+                    </div>
+                  </div>
+
+                  {/* Block Creation Menu Toolbar */}
+                  <div className="p-2.5 bg-background border border-purple-200 rounded-xl flex flex-wrap gap-1.5 items-center">
+                    <span className="text-[11px] font-bold text-purple-950 mr-1">+ Thêm Block Đề bài:</span>
+                    <Button type="button" variant="outline" size="sm" onClick={() => addBlock("paragraph")} className="h-7 text-xs font-semibold gap-1 cursor-pointer">
+                      <AlignLeft className="w-3.5 h-3.5 text-emerald-600" /> Văn bản (Markdown)
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => addBlock("math")} className="h-7 text-xs font-semibold gap-1 cursor-pointer">
+                      <Binary className="w-3.5 h-3.5 text-amber-600" /> Công thức Toán (LaTeX)
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => addBlock("code")} className="h-7 text-xs font-semibold gap-1 cursor-pointer">
+                      <Code className="w-3.5 h-3.5 text-purple-600" /> Mã nguồn (Code Snippet)
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => addBlock("image")} className="h-7 text-xs font-semibold gap-1 cursor-pointer">
+                      <Image className="w-3.5 h-3.5 text-rose-600" /> Hình ảnh (URL)
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => addBlock("callout")} className="h-7 text-xs font-semibold gap-1 cursor-pointer">
+                      <AlertCircle className="w-3.5 h-3.5 text-orange-600" /> Ghi chú lưu ý
+                    </Button>
+                  </div>
+
+                  {/* Blocks List */}
+                  <div className="space-y-3">
+                    {blocks.map((block, idx) => (
+                      <div
+                        key={block.id}
+                        className="group border border-purple-200/80 rounded-xl p-3 bg-background shadow-2xs transition relative"
+                      >
+                        <div className="flex items-center justify-between border-b border-border/40 pb-2 mb-2">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary" className="text-[10px] font-extrabold uppercase bg-purple-100 text-purple-900">
+                              Block Đề bài #{idx + 1}: {block.type}
+                            </Badge>
+                          </div>
+
+                          <div className="flex items-center gap-1">
+                            <Button type="button" variant="ghost" size="sm" onClick={() => moveBlock(idx, "up")} disabled={idx === 0} className="h-6 w-6 p-0 cursor-pointer">
+                              <ArrowUp className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button type="button" variant="ghost" size="sm" onClick={() => moveBlock(idx, "down")} disabled={idx === blocks.length - 1} className="h-6 w-6 p-0 cursor-pointer">
+                              <ArrowDown className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button type="button" variant="ghost" size="sm" onClick={() => deleteBlock(block.id)} className="h-6 w-6 p-0 text-destructive cursor-pointer">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+
+                        {(block.type === "paragraph" || block.type === "heading" || block.type === "markdown") && (
+                          <Textarea
+                            rows={3}
+                            value={block.content}
+                            onChange={(e) => updateBlock(block.id, { content: e.target.value })}
+                            placeholder="Nhập câu hỏi / nội dung đề bài bằng Markdown..."
+                            className="text-xs font-mono"
+                          />
+                        )}
+
+                        {block.type === "math" && (
+                          <div className="space-y-1.5">
+                            <Input
+                              type="text"
+                              value={block.content}
+                              onChange={(e) => updateBlock(block.id, { content: e.target.value })}
+                              placeholder="Nhập mã công thức toán LaTeX (ví dụ: E = mc^2)..."
+                              className="h-8 text-xs font-mono bg-amber-50/40 border-amber-300"
+                            />
+                            {block.content && (
+                              <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg text-center">
+                                <MathRenderer math={block.content} displayMode={true} />
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {block.type === "code" && (
+                          <Textarea
+                            rows={3}
+                            value={block.content}
+                            onChange={(e) => updateBlock(block.id, { content: e.target.value })}
+                            placeholder="Dán mã nguồn mẫu hoặc đề bài code..."
+                            className="text-xs font-mono bg-gray-900 text-emerald-400"
+                          />
+                        )}
+
+                        {block.type === "image" && (
+                          <Input
+                            type="text"
+                            value={block.content}
+                            onChange={(e) => updateBlock(block.id, { content: e.target.value })}
+                            placeholder="URL hình ảnh đề bài (https://...)"
+                            className="h-8 text-xs font-mono"
+                          />
+                        )}
+
+                        {block.type === "callout" && (
+                          <Textarea
+                            rows={2}
+                            value={block.content}
+                            onChange={(e) => updateBlock(block.id, { content: e.target.value })}
+                            placeholder="Ghi chú lưu ý cho học viên..."
+                            className="text-xs border-orange-300 bg-orange-50/50 text-orange-950 font-semibold"
+                          />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="space-y-1 pt-1">
+                    <Label className="text-xs font-bold text-purple-950">📝 Ghi chú tóm tắt chung (Tùy chọn)</Label>
+                    <Textarea
+                      rows={3}
+                      value={assignmentInstructions}
+                      onChange={(e) => {
+                        setAssignmentInstructions(e.target.value);
+                        setIsDirty(true);
+                      }}
+                      placeholder="Ghi chú tóm tắt hướng dẫn làm bài cho học viên..."
+                      className="text-xs bg-background border-purple-200 font-sans"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1511,44 +1803,44 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
               <div className="flex items-center gap-2">
                 <Button
                   type="button"
-                  variant={showAttachQuizForm || lesson?.linkedQuiz ? "default" : "outline"}
+                  variant={showAttachQuizForm ? "default" : "outline"}
                   size="sm"
                   onClick={() => {
                     setShowAttachQuizForm((prev) => !prev);
                     setIsDirty(true);
                   }}
                   className={`h-8 text-xs font-bold gap-1.5 cursor-pointer transition ${
-                    showAttachQuizForm || lesson?.linkedQuiz
+                    showAttachQuizForm
                       ? "bg-amber-600 hover:bg-amber-700 text-white shadow-2xs"
                       : "text-amber-800 border-amber-300 hover:bg-amber-50"
                   }`}
                 >
                   <HelpCircle className="w-3.5 h-3.5" />
-                  {showAttachQuizForm || lesson?.linkedQuiz ? "✓ Đã đính kèm Quiz" : "+ Đính kèm Quiz bài học"}
+                  {showAttachQuizForm ? "✓ Đã đính kèm Quiz" : "+ Đính kèm Quiz bài học"}
                 </Button>
 
                 <Button
                   type="button"
-                  variant={showAttachAssignmentForm || lesson?.linkedAssignment ? "default" : "outline"}
+                  variant={showAttachAssignmentForm ? "default" : "outline"}
                   size="sm"
                   onClick={() => {
                     setShowAttachAssignmentForm((prev) => !prev);
                     setIsDirty(true);
                   }}
                   className={`h-8 text-xs font-bold gap-1.5 cursor-pointer transition ${
-                    showAttachAssignmentForm || lesson?.linkedAssignment
+                    showAttachAssignmentForm
                       ? "bg-purple-600 hover:bg-purple-700 text-white shadow-2xs"
                       : "text-purple-800 border-purple-300 hover:bg-purple-50"
                   }`}
                 >
                   <CheckSquare className="w-3.5 h-3.5" />
-                  {showAttachAssignmentForm || lesson?.linkedAssignment ? "✓ Đã đính kèm Bài tập" : "+ Đính kèm Bài tập tự luận"}
+                  {showAttachAssignmentForm ? "✓ Đã đính kèm Bài tập" : "+ Đính kèm Bài tập tự luận"}
                 </Button>
               </div>
             </div>
 
             {/* Full-Width Quiz Attachment Section (100% width!) */}
-            {(showAttachQuizForm || lesson?.linkedQuiz) && (
+            {showAttachQuizForm && (
               <div className="w-full p-5 bg-amber-50/70 border border-amber-200 rounded-2xl space-y-4 shadow-2xs">
                 <div className="flex items-center justify-between border-b border-amber-200/80 pb-3">
                   <div className="flex items-center gap-2">
@@ -1572,6 +1864,20 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
                 </div>
 
                 <div className="space-y-4">
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold text-amber-950">Tên bài kiểm tra Quiz đính kèm</Label>
+                    <Input
+                      type="text"
+                      value={quizTitle}
+                      onChange={(e) => {
+                        setQuizTitle(e.target.value);
+                        setIsDirty(true);
+                      }}
+                      placeholder="Nhập tên bài Quiz..."
+                      className="h-9 text-xs bg-background"
+                    />
+                  </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div className="space-y-1">
                       <Label className="text-xs font-bold text-amber-950">Thời gian làm bài (Phút)</Label>
@@ -1630,7 +1936,7 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
             )}
 
             {/* Full-Width Assignment Attachment Section (100% width!) */}
-            {(showAttachAssignmentForm || lesson?.linkedAssignment) && (
+            {showAttachAssignmentForm && (
               <div className="w-full p-5 bg-purple-50/70 border border-purple-200 rounded-2xl space-y-4 shadow-2xs">
                 <div className="flex items-center justify-between border-b border-purple-200/80 pb-3">
                   <div className="flex items-center gap-2">
@@ -1654,7 +1960,21 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
                 </div>
 
                 <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold text-purple-950">Tên Bài tập tự luận đính kèm</Label>
+                    <Input
+                      type="text"
+                      value={assignmentTitle}
+                      onChange={(e) => {
+                        setAssignmentTitle(e.target.value);
+                        setIsDirty(true);
+                      }}
+                      placeholder="Nhập tên bài tập..."
+                      className="h-9 text-xs bg-background"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div className="space-y-1">
                       <Label className="text-xs font-bold text-purple-950">Thang điểm tối đa</Label>
                       <Input
@@ -1680,6 +2000,34 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
                         className="h-9 text-xs bg-background"
                       />
                     </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs font-bold text-purple-950">Hình thức nộp bài yêu cầu</Label>
+                      <select
+                        value={assignmentSubmissionMode}
+                        onChange={(e) => {
+                          setAssignmentSubmissionMode(e.target.value as any);
+                          setIsDirty(true);
+                        }}
+                        className="w-full h-9 px-2 text-xs bg-background border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 font-medium"
+                      >
+                        <option value="FILE_UPLOAD">📁 1. Upload tệp đính kèm (File Upload)</option>
+                        <option value="BLOCK_EDITOR">✍️ 2. Soạn thảo Block trực tiếp (Multi-Block)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold text-purple-950">📝 Nội dung Đề bài & Hướng dẫn tự luận chi tiết cho Học sinh</Label>
+                    <Textarea
+                      rows={5}
+                      value={assignmentInstructions}
+                      onChange={(e) => {
+                        setAssignmentInstructions(e.target.value);
+                        setIsDirty(true);
+                      }}
+                      placeholder="Nhập đề bài chi tiết, yêu cầu trình bày, các tiêu chí đánh giá cho học viên..."
+                      className="text-xs bg-background border-purple-200 focus:ring-2 focus:ring-purple-500 font-sans"
+                    />
                   </div>
                 </div>
               </div>

@@ -76,12 +76,12 @@ public class CoursePackageService implements ICoursePackageService {
         CourseEntity course = courseRepository.findById(request.getCourseId())
                 .orElseThrow(() -> ResourceNotFoundException.of("Course", request.getCourseId()));
         if (course.getStatus() != CourseStatusEnum.ACTIVE) {
-            throw new BusinessException("Chỉ khóa học ở trạng thái ACTIVE mới được tạo gói bán.");
+            throw new BusinessException("Khóa học đang ở trạng thái Ẩn/Chưa hoạt động. Không thể tạo hoặc mở bán bất kỳ gói học nào.");
         }
 
         CoursePackageEntity entity = coursePackageMapper.toEntity(request);
         entity.setCourseEntity(course);
-        entity.setClassEntity(resolveClass(request, course));
+        entity.setClassEntity(resolveClass(request, course, null));
 
         CoursePackageEntity saved = coursePackageRepository.save(entity);
         return coursePackageMapper.toResponse(saved);
@@ -96,9 +96,13 @@ public class CoursePackageService implements ICoursePackageService {
         CourseEntity course = courseRepository.findById(request.getCourseId())
                 .orElseThrow(() -> ResourceNotFoundException.of("Course", request.getCourseId()));
 
+        if (request.getStatus() == com.ailms.entity.enums.CoursePackageStatusEnum.ACTIVE && course.getStatus() != CourseStatusEnum.ACTIVE) {
+            throw new BusinessException("Khóa học đang ở trạng thái Ẩn/Chưa hoạt động. Không thể kích hoạt hoặc hiển thị bất kỳ gói học nào.");
+        }
+
         coursePackageMapper.updateFromRequest(request, existing);
         existing.setCourseEntity(course);
-        existing.setClassEntity(resolveClass(request, course));
+        existing.setClassEntity(resolveClass(request, course, id));
 
         CoursePackageEntity updated = coursePackageRepository.save(existing);
         return coursePackageMapper.toResponse(updated);
@@ -114,7 +118,7 @@ public class CoursePackageService implements ICoursePackageService {
         coursePackageRepository.deleteById(id);
     }
 
-    private ClassEntity resolveClass(CoursePackageRequest request, CourseEntity course) {
+    private ClassEntity resolveClass(CoursePackageRequest request, CourseEntity course, Long existingPackageId) {
         if (request.getDeliveryMode() != DeliveryModeEnum.GROUP_CLASS) {
             return null;
         }
@@ -126,6 +130,15 @@ public class CoursePackageService implements ICoursePackageService {
         if (classEntity.getCourseEntity() == null || !course.getId().equals(classEntity.getCourseEntity().getId())) {
             throw new BusinessException("Selected class does not belong to course " + course.getId());
         }
+
+        boolean isAlreadyAssigned = existingPackageId == null
+                ? coursePackageRepository.existsByClassEntity_Id(request.getClassId())
+                : coursePackageRepository.existsByClassEntity_IdAndIdNot(request.getClassId(), existingPackageId);
+
+        if (isAlreadyAssigned) {
+            throw new BusinessException("Lớp học nhóm này đã được gắn với một gói bán khác.");
+        }
+
         return classEntity;
     }
 }

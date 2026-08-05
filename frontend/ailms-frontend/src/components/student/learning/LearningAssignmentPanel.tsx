@@ -2,8 +2,32 @@ import React, { useState } from "react";
 import type { AssignmentResponseDTO } from "../../../api/courses/courseAuthoringApi";
 import { fileAdminApi } from "@/api/file/fileAdminApi";
 import { useToast } from "@/hooks/useToast";
-import { CheckSquare, Calendar, Send, CheckCircle2, UploadCloud, FileText, Loader2, Award, Clock } from "lucide-react";
+import { MathRenderer } from "@/components/common/MathRenderer";
+import { MarkdownRenderer } from "@/components/common/MarkdownRenderer";
+import { CodeBlockRenderer } from "@/components/common/CodeBlockRenderer";
+import {
+  CheckSquare,
+  Calendar,
+  Send,
+  CheckCircle2,
+  UploadCloud,
+  FileText,
+  Loader2,
+  Award,
+  Trash2,
+  AlignLeft,
+  Code,
+  Binary,
+  AlertCircle,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+
+export interface SubmissionBlock {
+  id: string;
+  type: "paragraph" | "code" | "math" | "callout" | "image";
+  content: string;
+}
 
 interface LearningAssignmentPanelProps {
   assignment: AssignmentResponseDTO;
@@ -15,10 +39,37 @@ export const LearningAssignmentPanel: React.FC<LearningAssignmentPanelProps> = (
   onComplete,
 }) => {
   const toast = useToast();
-  const [content, setContent] = useState("");
   const [fileUrl, setFileUrl] = useState("");
   const [uploading, setUploading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+
+  // Multi-block submission state for BLOCK_EDITOR mode
+  const [blocks, setBlocks] = useState<SubmissionBlock[]>([
+    { id: "b1", type: "paragraph", content: "" },
+  ]);
+
+  const addBlock = (type: SubmissionBlock["type"]) => {
+    const newBlock: SubmissionBlock = {
+      id: "b_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6),
+      type,
+      content: "",
+    };
+    setBlocks((prev) => [...prev, newBlock]);
+  };
+
+  const updateBlock = (id: string, newContent: string) => {
+    setBlocks((prev) =>
+      prev.map((b) => (b.id === id ? { ...b, content: newContent } : b))
+    );
+  };
+
+  const removeBlock = (id: string) => {
+    if (blocks.length <= 1) {
+      toast.error("Bài làm phải có ít nhất 1 block nội dung.");
+      return;
+    }
+    setBlocks((prev) => prev.filter((b) => b.id !== id));
+  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -37,23 +88,63 @@ export const LearningAssignmentPanel: React.FC<LearningAssignmentPanelProps> = (
     }
   };
 
+  const parseAssignmentMeta = () => {
+    if (!assignment.description) {
+      return {
+        instructions: "Thực hiện bài tập tự luận theo hướng dẫn của giảng viên.",
+        submissionMode: "FILE_UPLOAD" as "FILE_UPLOAD" | "BLOCK_EDITOR",
+      };
+    }
+    if (assignment.description.trim().startsWith("{")) {
+      try {
+        const parsed = JSON.parse(assignment.description);
+        const mode = parsed.submissionMode;
+        return {
+          instructions: parsed.instructions || "Thực hiện bài tập tự luận theo hướng dẫn của giảng viên.",
+          submissionMode: (mode === "BLOCK_EDITOR" || mode === "TEXT_ONLY" ? "BLOCK_EDITOR" : "FILE_UPLOAD") as "FILE_UPLOAD" | "BLOCK_EDITOR",
+        };
+      } catch (e) {}
+    }
+    return {
+      instructions: assignment.description,
+      submissionMode: "FILE_UPLOAD" as "FILE_UPLOAD" | "BLOCK_EDITOR",
+    };
+  };
+
+  const { instructions, submissionMode } = parseAssignmentMeta();
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!content.trim() && !fileUrl) {
-      toast.error("Vui lòng nhập bài làm hoặc tải tệp đính kèm.");
+    if (submissionMode === "FILE_UPLOAD" && !fileUrl) {
+      toast.error("Vui lòng chọn tệp bài làm hoặc dán đường dẫn đính kèm.");
       return;
+    }
+    if (submissionMode === "BLOCK_EDITOR") {
+      const hasContent = blocks.some((b) => b.content.trim().length > 0);
+      if (!hasContent) {
+        toast.error("Vui lòng soạn thảo ít nhất 1 block bài làm.");
+        return;
+      }
     }
     setSubmitted(true);
     toast.success("Đã gửi bài tập tự luận thành công!");
     onComplete();
   };
 
-  const getCleanDescription = () => {
-    if (!assignment.description) return "Thực hiện bài tập tự luận theo hướng dẫn của giảng viên.";
-    if (assignment.description.trim().startsWith("[") || assignment.description.trim().startsWith("{")) {
-      return "Thực hiện bài tập tự luận theo hướng dẫn của giảng viên.";
+  const formatVietnameseDate = (dateStr?: string) => {
+    if (!dateStr) return "Không giới hạn";
+    try {
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return dateStr.substring(0, 16);
+      const day = String(date.getDate()).padStart(2, "0");
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const year = date.getFullYear();
+      const hours = String(date.getHours()).padStart(2, "0");
+      const minutes = String(date.getMinutes()).padStart(2, "0");
+      return `${day}/${month}/${year} - ${hours}:${minutes}`;
+    } catch (e) {
+      return dateStr.substring(0, 16);
     }
-    return assignment.description;
   };
 
   return (
@@ -71,7 +162,7 @@ export const LearningAssignmentPanel: React.FC<LearningAssignmentPanelProps> = (
                 <Award className="w-3.5 h-3.5 text-purple-600" /> Điểm tối đa: <strong>{assignment.maxScore || 10.0} điểm</strong>
               </span>
               <span className="flex items-center gap-1 text-purple-700">
-                <Calendar className="w-3.5 h-3.5" /> Hạn nộp: <strong>{assignment.dueDate ? assignment.dueDate.substring(0, 16) : "Không giới hạn"}</strong>
+                <Calendar className="w-3.5 h-3.5" /> Hạn nộp: <strong>{formatVietnameseDate(assignment.dueDate)}</strong>
               </span>
             </div>
           </div>
@@ -84,7 +175,7 @@ export const LearningAssignmentPanel: React.FC<LearningAssignmentPanelProps> = (
             </Badge>
           ) : (
             <Badge variant="outline" className="text-purple-700 border-purple-300 font-bold px-3 py-1 text-xs">
-              ⌛ Chưa nộp bài
+              {submissionMode === "FILE_UPLOAD" ? "📁 Hình thức 1: Upload tệp đính kèm" : "✍️ Hình thức 2: Soạn thảo Block trực tiếp"}
             </Badge>
           )}
         </div>
@@ -96,7 +187,7 @@ export const LearningAssignmentPanel: React.FC<LearningAssignmentPanelProps> = (
           <FileText className="w-4 h-4 text-purple-700" /> Đề bài & Hướng dẫn tự luận:
         </h4>
         <p className="whitespace-pre-wrap text-xs text-gray-700 leading-relaxed font-sans">
-          {getCleanDescription()}
+          {instructions}
         </p>
       </div>
 
@@ -110,10 +201,27 @@ export const LearningAssignmentPanel: React.FC<LearningAssignmentPanelProps> = (
             </p>
           </div>
 
-          {content && (
-            <div className="p-4 bg-white border border-emerald-200 rounded-xl text-left max-w-2xl mx-auto space-y-1">
-              <span className="text-[11px] font-bold text-gray-500 uppercase">Nội dung đã gửi:</span>
-              <p className="text-xs font-mono whitespace-pre-wrap text-gray-800">{content}</p>
+          {submissionMode === "BLOCK_EDITOR" && (
+            <div className="p-4 bg-white border border-emerald-200 rounded-xl text-left max-w-3xl mx-auto space-y-3">
+              <span className="text-[11px] font-bold text-gray-500 uppercase block border-b pb-1">Các Block bài làm đã gửi:</span>
+              {blocks.map((b, idx) => (
+                <div key={b.id} className="p-2.5 bg-gray-50 rounded-lg text-xs space-y-1">
+                  <span className="text-[10px] font-bold uppercase text-purple-700">Block #{idx + 1} ({b.type}):</span>
+                  {b.type === "code" ? (
+                    <CodeBlockRenderer code={b.content} language="javascript" />
+                  ) : b.type === "math" ? (
+                    <MathRenderer math={b.content} displayMode={true} />
+                  ) : (
+                    <MarkdownRenderer content={b.content} />
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {fileUrl && (
+            <div className="p-3 bg-emerald-100/60 border border-emerald-200 rounded-xl max-w-2xl mx-auto text-xs font-mono font-bold text-emerald-900 flex items-center gap-2">
+              <UploadCloud className="w-4 h-4 text-emerald-700" /> Tệp đã nộp: {fileUrl}
             </div>
           )}
 
@@ -126,58 +234,148 @@ export const LearningAssignmentPanel: React.FC<LearningAssignmentPanelProps> = (
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-6 pt-2">
-          <div className="space-y-1.5">
-            <label className="block text-xs font-bold text-gray-800">
-              1. Nội dung câu trả lời / Bài làm tự luận (Văn bản / Mã nguồn)
-            </label>
-            <textarea
-              rows={8}
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder="Nhập câu trả lời chi tiết, đoạn văn luận hoặc mã nguồn bài làm của bạn..."
-              className="w-full p-4 text-xs font-mono border border-gray-300 rounded-2xl focus:ring-2 focus:ring-purple-500 focus:outline-none bg-white shadow-2xs"
-            />
-          </div>
+          {/* OPTION 1: FILE UPLOAD MODE */}
+          {submissionMode === "FILE_UPLOAD" && (
+            <div className="p-6 bg-purple-50/40 border border-purple-200/80 rounded-2xl space-y-4">
+              <h4 className="text-xs font-bold text-purple-950 uppercase tracking-wider flex items-center gap-1.5">
+                <UploadCloud className="w-4 h-4 text-purple-700" /> 1. Tải tệp bài làm lên (PDF, Word, Zip, v.v.):
+              </h4>
 
-          <div className="space-y-2">
-            <label className="block text-xs font-bold text-gray-800">
-              2. Tệp đính kèm bài làm (PDF, Word, Zip, Github Link)
-            </label>
-            
-            <div className="flex items-center gap-3">
-              <label className="px-4 py-2.5 bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 text-xs font-bold rounded-xl cursor-pointer flex items-center gap-2 transition shadow-2xs">
-                {uploading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin text-purple-700" /> Đang tải tệp bài làm lên...
-                  </>
-                ) : (
-                  <>
-                    <UploadCloud className="w-4 h-4 text-purple-700" /> Chọn tệp nộp bài từ máy tính
-                  </>
-                )}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                <label className="px-5 py-3 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl cursor-pointer flex items-center justify-center gap-2 transition shadow-xs shrink-0">
+                  {uploading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-white" /> Đang tải tệp bài làm lên...
+                    </>
+                  ) : (
+                    <>
+                      <UploadCloud className="w-4 h-4" /> Chọn tệp từ máy tính
+                    </>
+                  )}
+                  <input
+                    type="file"
+                    onChange={handleFileUpload}
+                    disabled={uploading}
+                    className="hidden"
+                  />
+                </label>
+
                 <input
-                  type="file"
-                  onChange={handleFileUpload}
-                  disabled={uploading}
-                  className="hidden"
+                  type="text"
+                  value={fileUrl}
+                  onChange={(e) => setFileUrl(e.target.value)}
+                  placeholder="Hoặc dán URL link tệp đính kèm (https://...)"
+                  className="flex-1 px-3.5 py-2.5 text-xs border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none bg-white font-mono"
                 />
-              </label>
+              </div>
 
-              <input
-                type="text"
-                value={fileUrl}
-                onChange={(e) => setFileUrl(e.target.value)}
-                placeholder="Hoặc dán URL link tệp đính kèm / Github repository..."
-                className="flex-1 px-3 py-2 text-xs border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none"
-              />
+              {fileUrl && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-mono font-bold text-emerald-800 flex items-center justify-between">
+                  <span className="truncate">✓ Đã đính kèm tệp: {fileUrl}</span>
+                  <button
+                    type="button"
+                    onClick={() => setFileUrl("")}
+                    className="text-rose-600 hover:underline text-xs shrink-0 ml-2"
+                  >
+                    Gỡ bỏ
+                  </button>
+                </div>
+              )}
             </div>
+          )}
 
-            {fileUrl && (
-              <p className="text-xs font-mono font-bold text-emerald-700 flex items-center gap-1.5 pt-1">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Tệp nộp bài: {fileUrl}
-              </p>
-            )}
-          </div>
+          {/* OPTION 2: MULTI-BLOCK EDITOR MODE */}
+          {submissionMode === "BLOCK_EDITOR" && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b pb-2">
+                <h4 className="text-xs font-bold text-purple-950 uppercase tracking-wider flex items-center gap-1.5">
+                  <FileText className="w-4 h-4 text-purple-700" /> 2. Soạn thảo các Block bài làm trực tiếp ({blocks.length} Blocks):
+                </h4>
+
+                <div className="flex items-center gap-1">
+                  <Button type="button" variant="outline" size="sm" onClick={() => addBlock("paragraph")} className="h-7 text-xs font-semibold gap-1">
+                    <AlignLeft className="w-3.5 h-3.5 text-emerald-600" /> + Block Văn bản
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => addBlock("code")} className="h-7 text-xs font-semibold gap-1">
+                    <Code className="w-3.5 h-3.5 text-purple-600" /> + Block Mã nguồn
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => addBlock("math")} className="h-7 text-xs font-semibold gap-1">
+                    <Binary className="w-3.5 h-3.5 text-amber-600" /> + Block Toán LaTeX
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => addBlock("callout")} className="h-7 text-xs font-semibold gap-1">
+                    <AlertCircle className="w-3.5 h-3.5 text-orange-600" /> + Block Ghi chú
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {blocks.map((block, idx) => (
+                  <div key={block.id} className="p-4 bg-gray-50/80 border border-gray-200 rounded-2xl space-y-2 shadow-2xs">
+                    <div className="flex items-center justify-between pb-1 border-b border-gray-200/60">
+                      <span className="text-xs font-bold uppercase text-purple-900">
+                        Block #{idx + 1}: {block.type === "paragraph" ? "Văn bản (Markdown)" : block.type === "code" ? "Mã nguồn (Code)" : block.type === "math" ? "Công thức Toán (LaTeX)" : "Ghi chú (Callout)"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeBlock(block.id)}
+                        className="text-rose-600 hover:text-rose-800 p-1 rounded-md hover:bg-rose-50 transition cursor-pointer"
+                        title="Xóa block này"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {block.type === "paragraph" && (
+                      <textarea
+                        rows={4}
+                        value={block.content}
+                        onChange={(e) => updateBlock(block.id, e.target.value)}
+                        placeholder="Nhập nội dung bài làm tự luận..."
+                        className="w-full p-3 text-xs border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none bg-white font-sans"
+                      />
+                    )}
+
+                    {block.type === "code" && (
+                      <textarea
+                        rows={4}
+                        value={block.content}
+                        onChange={(e) => updateBlock(block.id, e.target.value)}
+                        placeholder="Dán mã nguồn tại đây..."
+                        className="w-full p-3 text-xs font-mono bg-gray-900 text-emerald-400 rounded-xl focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                      />
+                    )}
+
+                    {block.type === "math" && (
+                      <div className="space-y-2">
+                        <textarea
+                          rows={2}
+                          value={block.content}
+                          onChange={(e) => updateBlock(block.id, e.target.value)}
+                          placeholder="Nhập công thức toán LaTeX (ví dụ: E = mc^2)..."
+                          className="w-full p-3 text-xs font-mono border border-amber-300 bg-amber-50/40 rounded-xl focus:ring-2 focus:ring-amber-500 focus:outline-none"
+                        />
+                        {block.content && (
+                          <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg text-center">
+                            <MathRenderer math={block.content} displayMode={true} />
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {block.type === "callout" && (
+                      <textarea
+                        rows={2}
+                        value={block.content}
+                        onChange={(e) => updateBlock(block.id, e.target.value)}
+                        placeholder="Ghi chú chú thích..."
+                        className="w-full p-3 text-xs border border-orange-300 bg-orange-50/50 text-orange-950 font-semibold rounded-xl focus:ring-2 focus:ring-orange-500 focus:outline-none"
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <button
             type="submit"

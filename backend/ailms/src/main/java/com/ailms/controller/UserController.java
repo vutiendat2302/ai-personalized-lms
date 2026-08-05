@@ -11,10 +11,14 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.core.io.InputStreamResource;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+import java.io.InputStream;
 import java.util.List;
 import java.util.Map;
 
@@ -80,6 +84,64 @@ public class UserController {
         Long userId = userDetails.getUser().getId();
         UserResponse response = userService.updateProfile(userId, request);
         return ResponseEntity.ok(ApiResponse.of("Profile updated successfully", response));
+    }
+
+    @PutMapping("/profile/basic")
+    public ResponseEntity<ApiResponse<UserResponse>> updateBasicProfile(
+            @Valid @RequestBody UpdateProfileRequest request,
+            Authentication authentication) {
+        CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
+        Long userId = userDetails.getUser().getId();
+        UserResponse response = userService.updateBasicProfile(userId, request);
+        return ResponseEntity.ok(ApiResponse.of("Basic profile updated successfully", response));
+    }
+
+    @PutMapping("/profile/role")
+    public ResponseEntity<ApiResponse<UserResponse>> updateRoleProfile(
+            @Valid @RequestBody UpdateRoleProfileRequest request,
+            Authentication authentication) {
+        CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
+        Long userId = userDetails.getUser().getId();
+        UserResponse response = userService.updateRoleProfile(userId, request);
+        return ResponseEntity.ok(ApiResponse.of("Role profile updated successfully", response));
+    }
+
+    @PatchMapping("/profile/employee/address")
+    public ResponseEntity<ApiResponse<UserResponse>> updateEmployeeAddress(
+            @RequestBody UpdateRoleProfileRequest request,
+            Authentication authentication) {
+        CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
+        Long userId = userDetails.getUser().getId();
+        UpdateRoleProfileRequest addressOnlyRequest = new UpdateRoleProfileRequest();
+        addressOnlyRequest.setAddress(request.getAddress());
+        UserResponse response = userService.updateRoleProfile(userId, addressOnlyRequest);
+        return ResponseEntity.ok(ApiResponse.of("Employee address updated successfully", response));
+    }
+
+    @PostMapping(value = "/profile/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<UserResponse>> uploadAvatar(
+            @RequestParam("file") MultipartFile file,
+            Authentication authentication) {
+        CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
+        Long userId = userDetails.getUser().getId();
+        UserResponse response = userService.uploadAvatar(userId, file);
+        return ResponseEntity.ok(ApiResponse.of("Avatar uploaded successfully", response));
+    }
+
+    @DeleteMapping("/profile/avatar")
+    public ResponseEntity<ApiResponse<UserResponse>> deleteAvatar(Authentication authentication) {
+        CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
+        Long userId = userDetails.getUser().getId();
+        UserResponse response = userService.deleteAvatar(userId);
+        return ResponseEntity.ok(ApiResponse.of("Avatar deleted successfully", response));
+    }
+
+    @GetMapping("/{id}/avatar")
+    public ResponseEntity<InputStreamResource> viewAvatar(@PathVariable Long id) {
+        InputStream stream = userService.downloadAvatar(id);
+        return ResponseEntity.ok()
+                .contentType(MediaType.IMAGE_JPEG)
+                .body(new InputStreamResource(stream));
     }
 
     @GetMapping

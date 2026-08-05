@@ -1,22 +1,32 @@
 package com.ailms.service.imp;
 
 import com.ailms.entity.*;
-import com.ailms.entity.enums.BaseStatusEnum;
-import com.ailms.entity.enums.CourseStatusEnum;
+import com.ailms.entity.enums.*;
 import com.ailms.exception.BusinessException;
 import com.ailms.exception.ResourceNotFoundException;
+import com.ailms.exception.UnauthorizedException;
 import com.ailms.mapper.*;
 import com.ailms.repository.*;
 import com.ailms.request.*;
 import com.ailms.response.*;
+import com.ailms.security.CustomUserDetails;
 import com.ailms.service.ICourseAuthoringService;
+import com.ailms.service.IEmailService;
+import com.ailms.service.INotificationService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -30,8 +40,15 @@ public class CourseAuthoringService implements ICourseAuthoringService {
     private final LessonRepository lessonRepository;
     private final LessonProgressRepository lessonProgressRepository;
     private final QuizRepository quizRepository;
+    private final QuestionRepository questionRepository;
+    private final QuestionOptionRepository questionOptionRepository;
     private final AssignmentRepository assignmentRepository;
     private final SubmissionRepository submissionRepository;
+    private final CourseInstructorRepository courseInstructorRepository;
+    private final UserRepository userRepository;
+    private final EmployeeRepository employeeRepository;
+    private final INotificationService notificationService;
+    private final IEmailService emailService;
     private final LessonMapper lessonMapper;
     private final CourseSectionMapper courseSectionMapper;
     private final QuizMapper quizMapper;
@@ -71,8 +88,9 @@ public class CourseAuthoringService implements ICourseAuthoringService {
                 .courseId(courseId)
                 .courseName(course.getName())
                 .status(course.getStatus() != null ? course.getStatus().name() : null)
+                .createdBy(course.getCreatedBy())
                 .sections(sectionItems)
-                .finalExamQuizzes(finalQuizzes.stream().map(quizMapper::toResponse).collect(Collectors.toList()))
+                .finalExamQuizzes(finalQuizzes.stream().map(this::mapQuizToResponse).collect(Collectors.toList()))
                 .finalExamAssignments(finalAssignments.stream().map(assignmentMapper::toResponse).collect(Collectors.toList()))
                 .totalLessons(totalLessons)
                 .totalDurationMin(totalDurationMin)
@@ -95,7 +113,7 @@ public class CourseAuthoringService implements ICourseAuthoringService {
                 .name(section.getName())
                 .orderIndex(section.getOrderIndex())
                 .status(section.getStatus() != null ? section.getStatus().name() : null)
-                .chapterQuizzes(chapterQuizzes.stream().map(quizMapper::toResponse).collect(Collectors.toList()))
+                .chapterQuizzes(chapterQuizzes.stream().map(this::mapQuizToResponse).collect(Collectors.toList()))
                 .chapterAssignments(chapterAssignments.stream().map(assignmentMapper::toResponse).collect(Collectors.toList()))
                 .lessons(lessonItems)
                 .build();
@@ -106,7 +124,7 @@ public class CourseAuthoringService implements ICourseAuthoringService {
         AssignmentResponse linkedAssignment = null;
 
         List<QuizEntity> quizzes = quizRepository.findByLessonId(lesson.getId());
-        if (!quizzes.isEmpty()) linkedQuiz = quizMapper.toResponse(quizzes.get(0));
+        if (!quizzes.isEmpty()) linkedQuiz = mapQuizToResponse(quizzes.get(0));
 
         List<AssignmentEntity> assignments = assignmentRepository.findByLessonId(lesson.getId());
         if (!assignments.isEmpty()) linkedAssignment = assignmentMapper.toResponse(assignments.get(0));
@@ -269,6 +287,86 @@ public class CourseAuthoringService implements ICourseAuthoringService {
         }
     }
 
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    private QuizResponse mapQuizToResponse(QuizEntity quiz) {
+        if (quiz == null) return null;
+        QuizResponse response = quizMapper.toResponse(quiz);
+        if (quiz.getDescription() != null && quiz.getDescription().trim().startsWith("[")) {
+            try {
+                Object parsed = objectMapper.readValue(quiz.getDescription(), Object.class);
+                response.setQuestions(parsed);
+            } catch (Exception e) {
+                log.warn("Could not parse quiz description JSON for quiz id {}", quiz.getId());
+            }
+        }
+        return response;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void saveQuizQuestionsToDb(Long quizId, String description) {
+        if (quizId == null || description == null || !description.trim().startsWith("[")) {
+            return;
+        }
+        try {
+            List<Map<String, Object>> qList = objectMapper.readValue(description, List.class);
+            if (qList == null || qList.isEmpty()) return;
+
+            List<QuestionEntity> oldQuestions = questionRepository.findByQuizId(quizId);
+            for (QuestionEntity oldQ : oldQuestions) {
+                questionOptionRepository.deleteByQuestionId(oldQ.getId());
+            }
+            questionRepository.deleteByQuizId(quizId);
+
+            int qOrder = 0;
+            for (Map<String, Object> qMap : qList) {
+                String content = (String) qMap.getOrDefault("content", "");
+                String qTypeStr = (String) qMap.getOrDefault("questionType", "SINGLE_CHOICE");
+                byte qType = 1;
+                switch (qTypeStr) {
+                    case "MULTIPLE_CHOICE": qType = 2; break;
+                    case "TRUE_FALSE": qType = 3; break;
+                    case "SHORT_ANSWER": qType = 4; break;
+                    case "ESSAY": qType = 4; break;
+                    case "MATCHING": qType = 5; break;
+                    default: qType = 1;
+                }
+                Double pointsVal = qMap.get("points") != null ? Double.parseDouble(qMap.get("points").toString()) : 1.0;
+                String explanation = (String) qMap.getOrDefault("explanation", "");
+
+                QuestionEntity qEntity = QuestionEntity.builder()
+                        .quizId(quizId)
+                        .content(content)
+                        .questionType(qType)
+                        .points(BigDecimal.valueOf(pointsVal))
+                        .orderIndex(qOrder++)
+                        .explanation(explanation)
+                        .status((byte) 1)
+                        .build();
+                QuestionEntity savedQ = questionRepository.save(qEntity);
+
+                List<Map<String, Object>> options = (List<Map<String, Object>>) qMap.get("options");
+                if (options != null) {
+                    int optOrder = 0;
+                    for (Map<String, Object> optMap : options) {
+                        String optContent = (String) optMap.getOrDefault("content", "");
+                        Boolean isCorrect = Boolean.TRUE.equals(optMap.get("isCorrect"));
+
+                        QuestionOptionEntity optEntity = QuestionOptionEntity.builder()
+                                .questionId(savedQ.getId())
+                                .content(optContent)
+                                .isCorrect(isCorrect)
+                                .orderIndex(optOrder++)
+                                .build();
+                        questionOptionRepository.save(optEntity);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Could not sync quiz questions to relational DB tables for quizId {}: {}", quizId, e.getMessage());
+        }
+    }
+
     @Override
     @Transactional
     public QuizResponse createQuiz(QuizRequest request) {
@@ -276,7 +374,9 @@ public class CourseAuthoringService implements ICourseAuthoringService {
                 request.getCourseId(), request.getSectionId(), request.getLessonId());
         QuizEntity quiz = quizMapper.toEntity(request);
         if (quiz.getStatus() == null) quiz.setStatus((byte) 0);
-        return quizMapper.toResponse(quizRepository.save(quiz));
+        QuizEntity saved = quizRepository.save(quiz);
+        saveQuizQuestionsToDb(saved.getId(), request.getDescription());
+        return mapQuizToResponse(saved);
     }
 
     @Override
@@ -286,13 +386,18 @@ public class CourseAuthoringService implements ICourseAuthoringService {
         QuizEntity quiz = quizRepository.findById(quizId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Quiz", quizId));
         quizMapper.updateFromRequest(request, quiz);
-        return quizMapper.toResponse(quizRepository.save(quiz));
+        QuizEntity saved = quizRepository.save(quiz);
+        saveQuizQuestionsToDb(saved.getId(), request.getDescription());
+        return mapQuizToResponse(saved);
     }
 
     @Override
     @Transactional
     public AssignmentResponse createAssignment(CreateAssignmentRequest request) {
         log.info("Creating assignment");
+        if (request.getMaxScore() == null) {
+            request.setMaxScore(BigDecimal.valueOf(10.0));
+        }
         AssignmentEntity assignment = assignmentMapper.toEntity(request);
         if (assignment.getStatus() == null) assignment.setStatus(BaseStatusEnum.DRAFT);
         return assignmentMapper.toResponse(assignmentRepository.save(assignment));
@@ -308,12 +413,43 @@ public class CourseAuthoringService implements ICourseAuthoringService {
         return assignmentMapper.toResponse(assignmentRepository.save(assignment));
     }
 
+    private Long getCurrentUserId() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.isAuthenticated() && !(authentication instanceof AnonymousAuthenticationToken)) {
+            Object principal = authentication.getPrincipal();
+            if (principal instanceof CustomUserDetails userDetails) {
+                return userDetails.getUser().getId();
+            }
+        }
+        return null;
+    }
+
+    private void verifyCourseOwner(CourseEntity course, Long currentUserId) {
+        if (course == null) return;
+        if (currentUserId == null) {
+            throw new UnauthorizedException("Vui lòng đăng nhập để thực hiện thao tác này.");
+        }
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getAuthorities() != null) {
+            boolean isAdmin = auth.getAuthorities().stream()
+                    .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN") || a.getAuthority().equals("ROLE_MANAGER"));
+            if (isAdmin) return;
+        }
+
+        if (course.getCreatedBy() != null && !course.getCreatedBy().equals(currentUserId)) {
+            throw new BusinessException("Chỉ người tạo khóa học mới có quyền thực hiện thao tác này.");
+        }
+    }
+
     @Override
     @Transactional
     public CourseResponse submitForReview(Long courseId) {
         log.info("Submitting courseId {} for review", courseId);
         CourseEntity course = courseRepository.findById(courseId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Course", courseId));
+
+        Long currentUserId = getCurrentUserId();
+        verifyCourseOwner(course, currentUserId);
 
         CourseStatusEnum currentStatus = course.getStatus();
         if (currentStatus != CourseStatusEnum.DRAFT && currentStatus != CourseStatusEnum.REJECTED) {
@@ -331,6 +467,287 @@ public class CourseAuthoringService implements ICourseAuthoringService {
 
         course.setStatus(CourseStatusEnum.PENDING);
         return courseMapper.toResponse(courseRepository.save(course));
+    }
+
+    @Override
+    @Transactional
+    public CourseResponse cancelReviewRequest(Long courseId) {
+        log.info("Canceling review request for courseId: {}", courseId);
+        CourseEntity course = courseRepository.findById(courseId)
+                .orElseThrow(() -> ResourceNotFoundException.of("Course", courseId));
+
+        Long currentUserId = getCurrentUserId();
+        verifyCourseOwner(course, currentUserId);
+
+        if (course.getStatus() != CourseStatusEnum.PENDING) {
+            throw new BusinessException("Chỉ có thể hủy gửi duyệt khi khóa học đang ở trạng thái PENDING.");
+        }
+
+        course.setStatus(CourseStatusEnum.DRAFT);
+        return courseMapper.toResponse(courseRepository.save(course));
+    }
+
+    @Override
+    @Transactional
+    public CourseResponse requestEditActiveCourse(Long courseId) {
+        log.info("Switching ACTIVE courseId {} to DRAFT edit mode", courseId);
+        CourseEntity course = courseRepository.findById(courseId)
+                .orElseThrow(() -> ResourceNotFoundException.of("Course", courseId));
+
+        Long currentUserId = getCurrentUserId();
+        verifyCourseOwner(course, currentUserId);
+
+        if (course.getStatus() != CourseStatusEnum.ACTIVE) {
+            throw new BusinessException("Chỉ khóa học đang ở trạng thái ACTIVE mới có thể chuyển sang Chế độ chỉnh sửa.");
+        }
+
+        course.setStatus(CourseStatusEnum.DRAFT);
+        return courseMapper.toResponse(courseRepository.save(course));
+    }
+
+    @Override
+    @Transactional
+    public CourseInstructorResponse inviteInstructor(Long courseId, InviteInstructorRequest request) {
+        log.info("Inviting instructor for courseId {}", courseId);
+        CourseEntity course = courseRepository.findById(courseId)
+                .orElseThrow(() -> ResourceNotFoundException.of("Course", courseId));
+
+        Long currentUserId = getCurrentUserId();
+        verifyCourseOwner(course, currentUserId);
+
+        UserEntity invitedUser = null;
+        if (request.getInstructorId() != null) {
+            invitedUser = userRepository.findById(request.getInstructorId())
+                    .orElseThrow(() -> new BusinessException("Không tìm thấy tài khoản giảng viên với ID: " + request.getInstructorId()));
+        } else if (request.getEmail() != null && !request.getEmail().isBlank()) {
+            invitedUser = userRepository.findByEmail(request.getEmail().trim())
+                    .orElseThrow(() -> new BusinessException("Không tìm thấy tài khoản giảng viên với email: " + request.getEmail()));
+        } else {
+            throw new BusinessException("Vui lòng chọn giảng viên hoặc nhập địa chỉ email hợp lệ.");
+        }
+
+        if (invitedUser.getId().equals(currentUserId) || (course.getCreatedBy() != null && course.getCreatedBy().equals(invitedUser.getId()))) {
+            throw new BusinessException("Người tạo khóa học mặc định đã là giảng viên chính.");
+        }
+
+        if (courseInstructorRepository.existsByCourseIdAndInstructorId(courseId, invitedUser.getId())) {
+            throw new BusinessException("Giảng viên này đã được mời hoặc đang thuộc danh sách phụ trách khóa học.");
+        }
+
+        CourseInstructorEntity invitation = CourseInstructorEntity.builder()
+                .courseId(courseId)
+                .instructorId(invitedUser.getId())
+                .status(CourseInstructorStatusEnum.PENDING)
+                .invitedBy(currentUserId != null ? currentUserId : 1L)
+                .invitedAt(LocalDateTime.now())
+                .build();
+        CourseInstructorEntity saved = courseInstructorRepository.save(invitation);
+
+        try {
+            notificationService.createSystemNotification(
+                    invitedUser,
+                    NotificationTypeEnum.GENERAL,
+                    "Lời mời phụ trách khóa học: " + course.getName(),
+                    "Bạn đã nhận được lời mời tham gia phụ trách khóa học '" + course.getName() + "'. Vui lòng bấm để xem và đồng ý.",
+                    courseId,
+                    "/teacher/courses/" + courseId + "/builder"
+            );
+        } catch (Exception e) {
+            log.warn("Could not send system notification for invitation: {}", e.getMessage());
+        }
+
+        if (invitedUser.getEmail() != null && !invitedUser.getEmail().isBlank()) {
+            try {
+                emailService.sendInviteEmail(invitedUser.getEmail(), "http://localhost:3000/teacher/courses/" + courseId + "/builder");
+            } catch (Exception e) {
+                log.warn("Could not send email for invitation: {}", e.getMessage());
+            }
+        }
+
+        UserEntity inviter = currentUserId != null ? userRepository.findById(currentUserId).orElse(null) : null;
+        return CourseInstructorResponse.builder()
+                .id(String.valueOf(saved.getId()))
+                .courseId(String.valueOf(course.getId()))
+                .courseName(course.getName())
+                .instructorId(String.valueOf(invitedUser.getId()))
+                .instructorName(invitedUser.getFullName() != null ? invitedUser.getFullName() : invitedUser.getEmail())
+                .instructorEmail(invitedUser.getEmail())
+                .instructorAvatar(invitedUser.getAvatarUrl())
+                .status(saved.getStatus().name())
+                .invitedBy(String.valueOf(currentUserId))
+                .invitedByName(inviter != null ? inviter.getFullName() : "Người tạo khóa học")
+                .invitedAt(saved.getInvitedAt())
+                .acceptedAt(saved.getAcceptedAt())
+                .isOwner(false)
+                .build();
+    }
+
+    @Override
+    public List<TeacherOptionResponse> searchTeachers(String query) {
+        log.info("Searching teachers with query: {}", query);
+        String q = query != null ? query.trim().toLowerCase() : "";
+
+        List<UserEntity> users = userRepository.findByStatus(UserStatusEnum.ACTIVE);
+        List<TeacherOptionResponse> result = new ArrayList<>();
+
+        for (UserEntity u : users) {
+            EmployeeEntity emp = employeeRepository.findById(u.getId()).orElse(null);
+            String empCode = emp != null && emp.getEmployeeCode() != null ? emp.getEmployeeCode() : "GV" + u.getId();
+            String deptName = emp != null && emp.getDepartment() != null ? emp.getDepartment().getName() : "Khoa / Trung tâm Đào Tạo";
+            String fullName = u.getFullName() != null ? u.getFullName() : u.getEmail();
+
+            boolean matches = q.isBlank()
+                    || fullName.toLowerCase().contains(q)
+                    || empCode.toLowerCase().contains(q)
+                    || deptName.toLowerCase().contains(q)
+                    || (u.getEmail() != null && u.getEmail().toLowerCase().contains(q));
+
+            if (matches) {
+                result.add(TeacherOptionResponse.builder()
+                        .id(String.valueOf(u.getId()))
+                        .fullName(fullName)
+                        .employeeCode(empCode)
+                        .departmentName(deptName)
+                        .email(u.getEmail())
+                        .avatarUrl(u.getAvatarUrl())
+                        .build());
+            }
+        }
+        return result;
+    }
+
+    @Override
+    public List<CourseInstructorResponse> getCourseInstructors(Long courseId) {
+        CourseEntity course = courseRepository.findById(courseId)
+                .orElseThrow(() -> ResourceNotFoundException.of("Course", courseId));
+
+        List<CourseInstructorResponse> result = new ArrayList<>();
+
+        if (course.getCreatedBy() != null) {
+            userRepository.findById(course.getCreatedBy()).ifPresent(owner -> {
+                result.add(CourseInstructorResponse.builder()
+                        .id("owner_" + owner.getId())
+                        .courseId(String.valueOf(course.getId()))
+                        .courseName(course.getName())
+                        .instructorId(String.valueOf(owner.getId()))
+                        .instructorName(owner.getFullName() != null ? owner.getFullName() : owner.getEmail())
+                        .instructorEmail(owner.getEmail())
+                        .instructorAvatar(owner.getAvatarUrl())
+                        .status("ACCEPTED")
+                        .invitedBy(String.valueOf(owner.getId()))
+                        .invitedByName("Chủ sở hữu")
+                        .invitedAt(course.getCreatedAt())
+                        .acceptedAt(course.getCreatedAt())
+                        .isOwner(true)
+                        .build());
+            });
+        }
+
+        List<CourseInstructorEntity> coInstructors = courseInstructorRepository.findByCourseId(courseId);
+        for (CourseInstructorEntity ci : coInstructors) {
+            userRepository.findById(ci.getInstructorId()).ifPresent(inst -> {
+                UserEntity inviter = ci.getInvitedBy() != null ? userRepository.findById(ci.getInvitedBy()).orElse(null) : null;
+                result.add(CourseInstructorResponse.builder()
+                        .id(String.valueOf(ci.getId()))
+                        .courseId(String.valueOf(course.getId()))
+                        .courseName(course.getName())
+                        .instructorId(String.valueOf(inst.getId()))
+                        .instructorName(inst.getFullName() != null ? inst.getFullName() : inst.getEmail())
+                        .instructorEmail(inst.getEmail())
+                        .instructorAvatar(inst.getAvatarUrl())
+                        .status(ci.getStatus().name())
+                        .invitedBy(String.valueOf(ci.getInvitedBy()))
+                        .invitedByName(inviter != null ? inviter.getFullName() : "Người tạo khóa học")
+                        .invitedAt(ci.getInvitedAt())
+                        .acceptedAt(ci.getAcceptedAt())
+                        .isOwner(false)
+                        .build());
+            });
+        }
+
+        return result;
+    }
+
+    @Override
+    @Transactional
+    public void removeInstructor(Long courseId, Long instructorId) {
+        log.info("Removing instructorId {} from courseId {}", instructorId, courseId);
+        CourseEntity course = courseRepository.findById(courseId)
+                .orElseThrow(() -> ResourceNotFoundException.of("Course", courseId));
+
+        Long currentUserId = getCurrentUserId();
+        verifyCourseOwner(course, currentUserId);
+
+        if (course.getCreatedBy() != null && course.getCreatedBy().equals(instructorId)) {
+            throw new BusinessException("Không thể xóa người tạo/chủ sở hữu khóa học.");
+        }
+
+        courseInstructorRepository.deleteByCourseIdAndInstructorId(courseId, instructorId);
+    }
+
+    @Override
+    @Transactional
+    public CourseInstructorResponse respondInvitation(Long invitationId, boolean accept) {
+        CourseInstructorEntity ci = courseInstructorRepository.findById(invitationId)
+                .orElseThrow(() -> ResourceNotFoundException.of("CourseInstructor", invitationId));
+
+        Long currentUserId = getCurrentUserId();
+        if (currentUserId != null && !ci.getInstructorId().equals(currentUserId)) {
+            throw new BusinessException("Bạn không có quyền phản hồi lời mời này.");
+        }
+
+        if (accept) {
+            ci.setStatus(CourseInstructorStatusEnum.ACCEPTED);
+            ci.setAcceptedAt(LocalDateTime.now());
+        } else {
+            ci.setStatus(CourseInstructorStatusEnum.REJECTED);
+        }
+        CourseInstructorEntity saved = courseInstructorRepository.save(ci);
+        CourseEntity course = courseRepository.findById(saved.getCourseId()).orElse(null);
+        UserEntity inst = userRepository.findById(saved.getInstructorId()).orElse(null);
+
+        return CourseInstructorResponse.builder()
+                .id(String.valueOf(saved.getId()))
+                .courseId(String.valueOf(saved.getCourseId()))
+                .courseName(course != null ? course.getName() : "")
+                .instructorId(String.valueOf(saved.getInstructorId()))
+                .instructorName(inst != null ? inst.getFullName() : "")
+                .instructorEmail(inst != null ? inst.getEmail() : "")
+                .status(saved.getStatus().name())
+                .invitedAt(saved.getInvitedAt())
+                .acceptedAt(saved.getAcceptedAt())
+                .isOwner(false)
+                .build();
+    }
+
+    @Override
+    public List<CourseInstructorResponse> getMyInvitations() {
+        Long currentUserId = getCurrentUserId();
+        if (currentUserId == null) return List.of();
+
+        List<CourseInstructorEntity> list = courseInstructorRepository.findByInstructorIdAndStatus(
+                currentUserId, CourseInstructorStatusEnum.PENDING);
+        List<CourseInstructorResponse> result = new ArrayList<>();
+        for (CourseInstructorEntity ci : list) {
+            CourseEntity course = courseRepository.findById(ci.getCourseId()).orElse(null);
+            UserEntity inst = userRepository.findById(ci.getInstructorId()).orElse(null);
+            UserEntity inviter = ci.getInvitedBy() != null ? userRepository.findById(ci.getInvitedBy()).orElse(null) : null;
+
+            result.add(CourseInstructorResponse.builder()
+                    .id(String.valueOf(ci.getId()))
+                    .courseId(String.valueOf(ci.getCourseId()))
+                    .courseName(course != null ? course.getName() : "")
+                    .instructorId(String.valueOf(ci.getInstructorId()))
+                    .instructorName(inst != null ? inst.getFullName() : "")
+                    .instructorEmail(inst != null ? inst.getEmail() : "")
+                    .status(ci.getStatus().name())
+                    .invitedBy(String.valueOf(ci.getInvitedBy()))
+                    .invitedByName(inviter != null ? inviter.getFullName() : "Người tạo khóa học")
+                    .invitedAt(ci.getInvitedAt())
+                    .isOwner(false)
+                    .build());
+        }
+        return result;
     }
 
     @Override

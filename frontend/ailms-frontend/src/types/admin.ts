@@ -245,3 +245,59 @@ export interface UpdateCategoryRequest {
   status?: string;
 }
 
+export interface ClassOnlineResponse {
+  id: string;
+  classId: string;
+  className?: string;
+  classCode?: string;
+  teacherId: string;
+  teacherName?: string;
+  title: string;
+  meetingUrl: string;
+  meetingProvider?: string;
+  scheduledAt: string;
+  durationMin: number;
+  status: string; // ACTIVE, INACTIVE, UPCOMING, COMPLETED, CANCELLED
+  lifecycleStatus?: string;
+  sessionCode?: string;
+  teachingRatePerHour?: number;
+  actualDurationMin?: number;
+  remuneration?: number;
+  paymentStatus?: string;
+  recordUrl?: string;
+  sessionSummary?: string;
+  studentFeedback?: string;
+  teacherNotes?: string;
+  nextSessionNotes?: string;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+export interface CreateClassOnlinePayload {
+  classId: string;
+  teacherId: string;
+  title: string;
+  meetingUrl?: string;
+  meetingProvider?: string;
+  scheduledAt: string;
+  durationMin?: number;
+  recordUrl?: string;
+  sessionSummary?: string;
+  studentFeedback?: string;
+  teacherNotes?: string;
+  nextSessionNotes?: string;
+}
+
+export interface UpdateClassOnlinePayload {
+  title?: string;
+  meetingUrl?: string;
+  meetingProvider?: string;
+  scheduledAt?: string;
+  durationMin?: number;
+  status?: string;
+  recordUrl?: string;
+  sessionSummary?: string;
+  studentFeedback?: string;
+  teacherNotes?: string;
+  nextSessionNotes?: string;
+}

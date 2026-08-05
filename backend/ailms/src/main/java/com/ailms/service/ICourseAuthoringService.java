@@ -76,9 +76,49 @@ public interface ICourseAuthoringService {
     AssignmentResponse updateAssignment(Long assignmentId, AssignmentRequest request);
 
     /**
-     * Gửi duyệt khóa học (DRAFT/REJECTED -> PENDING).
+     * Gửi duyệt khóa học (DRAFT/REJECTED -> PENDING). Chỉ dành cho người tạo khóa học.
      */
     CourseResponse submitForReview(Long courseId);
+
+    /**
+     * Hủy yêu cầu gửi duyệt khóa học (PENDING -> DRAFT). Chỉ dành cho người tạo khóa học.
+     */
+    CourseResponse cancelReviewRequest(Long courseId);
+
+    /**
+     * Chuyển khóa học ACTIVE về chế độ chỉnh sửa (ACTIVE -> DRAFT & tự động ẩn các gói bán). Chỉ dành cho người tạo khóa học.
+     */
+    CourseResponse requestEditActiveCourse(Long courseId);
+
+    /**
+     * Mời giảng viên phụ trách khóa học (qua Email hoặc trực tiếp chọn từ danh sách hệ thống).
+     */
+    CourseInstructorResponse inviteInstructor(Long courseId, InviteInstructorRequest request);
+
+    /**
+     * Tìm kiếm giảng viên trong hệ thống (Hỗ trợ tìm theo Tên, Mã nhân viên, Phòng ban, Email).
+     */
+    List<TeacherOptionResponse> searchTeachers(String query);
+
+    /**
+     * Lấy danh sách giảng viên phụ trách của khóa học.
+     */
+    List<CourseInstructorResponse> getCourseInstructors(Long courseId);
+
+    /**
+     * Xóa giảng viên phụ trách khỏi khóa học. Chỉ dành cho người tạo khóa học.
+     */
+    void removeInstructor(Long courseId, Long instructorId);
+
+    /**
+     * Giảng viên phản hồi lời mời phụ trách khóa học (Đồng ý / Từ chối).
+     */
+    CourseInstructorResponse respondInvitation(Long invitationId, boolean accept);
+
+    /**
+     * Lấy danh sách lời mời phụ trách khóa học của giảng viên đang đăng nhập.
+     */
+    List<CourseInstructorResponse> getMyInvitations();
 
     /**
      * Lấy danh sách bài nộp Assignment để chấm.

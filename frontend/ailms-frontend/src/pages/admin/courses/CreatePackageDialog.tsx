@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, BookOpen, Users, User, Layers, Plus, Loader2 } from "lucide-react";
+import { AlertCircle, BookOpen, Users, User, Layers, Plus, Loader2, Save } from "lucide-react";
 import type { DeliveryMode, CoursePackage } from "@/types/adminCourseClass";
 import { adminCourseClassApi } from "@/api/courses/adminCourseClassApi";
 
@@ -23,6 +23,8 @@ interface CreatePackageDialogProps {
   courseName: string;
   courseStatus: string;
   onPackageCreated: (newPkg: CoursePackage) => void;
+  editingPackage?: CoursePackage | null;
+  initialSelectedClassId?: string;
 }
 
 export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
@@ -32,32 +34,73 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
   courseName,
   courseStatus,
   onPackageCreated,
+  editingPackage,
+  initialSelectedClassId,
 }) => {
   const navigate = useNavigate();
+  const isEdit = Boolean(editingPackage);
 
   const [deliveryMode, setDeliveryMode] = useState<DeliveryMode>("GROUP_CLASS");
   const [packageName, setPackageName] = useState("");
-  const [price, setPrice] = useState<number>(3500000);
-  const [durationDays, setDurationDays] = useState<number>(60);
-  const [selectedClassId, setSelectedClassId] = useState<string>("");
+  const [price, setPrice] = useState("");
+  const [durationDays, setDurationDays] = useState("60");
+  const [selectedClassId, setSelectedClassId] = useState<string>(initialSelectedClassId || "");
   const [classes, setClasses] = useState<any[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  // Pre-fill form when opening in edit mode
+  useEffect(() => {
+    if (open && editingPackage) {
+      setDeliveryMode((editingPackage.deliveryMode as DeliveryMode) || "GROUP_CLASS");
+      setPackageName(editingPackage.name || "");
+      setPrice(editingPackage.price != null ? String(editingPackage.price) : "");
+      setDurationDays(editingPackage.durationDays != null ? String(editingPackage.durationDays) : "60");
+      setSelectedClassId(editingPackage.attachedClassId || "");
+    } else if (open && !editingPackage) {
+      // Reset for create mode
+      setDeliveryMode("GROUP_CLASS");
+      setPackageName("");
+      setPrice("");
+      setDurationDays("60");
+      setSelectedClassId(initialSelectedClassId || "");
+    }
+  }, [open, editingPackage, initialSelectedClassId]);
+
+  const [existingPackages, setExistingPackages] = useState<CoursePackage[]>([]);
+
   useEffect(() => {
     if (!open) return;
-    adminCourseClassApi.getClassesByCourse(courseId)
-      .then(setClasses)
-      .catch((err) => setError(err?.response?.data?.message || "Không thể tải lớp học của khóa học"));
-  }, [open, courseId]);
+    Promise.all([
+      adminCourseClassApi.getClassesByCourse(courseId),
+      adminCourseClassApi.getPackagesByCourse(courseId),
+    ])
+      .then(([clsList, pkgList]) => {
+        setClasses(clsList);
+        setExistingPackages(pkgList || []);
+        if (initialSelectedClassId) {
+          setSelectedClassId(initialSelectedClassId);
+        }
+      })
+      .catch((err) => setError(err?.response?.data?.message || "Không thể tải dữ liệu lớp học của khóa học"));
+  }, [open, courseId, initialSelectedClassId]);
 
   // Get ready classes for this course
   const readyClasses = classes.filter((c) => c.status === "ACTIVE" && c.packageType === "GROUP_CLASS");
 
+  // Check if a class is already attached to an existing package (other than the editing one)
+  const getAttachedPackage = (classId: string) => {
+    return existingPackages.find(
+      (p) => p.id !== editingPackage?.id && (String(p.attachedClassId || (p as any).classId) === String(classId))
+    );
+  };
+
+  const availableClasses = readyClasses.filter((c) => !getAttachedPackage(String(c.id)));
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (courseStatus !== "ACTIVE") {
+    if (!isEdit && courseStatus !== "ACTIVE") {
       setError("Không thể tạo gói bán: khóa học phải ở trạng thái Đang hoạt động (ACTIVE).");
       return;
     }
@@ -66,38 +109,69 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
       setError("Tên gói bán phải có từ 3 đến 150 ký tự.");
       return;
     }
-    if (!Number.isFinite(price) || price <= 0) {
+    const numPrice = Number(price);
+    const numDuration = Number(durationDays);
+
+    if (!Number.isFinite(numPrice) || numPrice <= 0) {
       setError("Giá bán phải lớn hơn 0.");
       return;
     }
-    if (!Number.isInteger(durationDays) || durationDays <= 0 || durationDays > 3650) {
+    if (!Number.isInteger(numDuration) || numDuration <= 0 || numDuration > 3650) {
       setError("Thời hạn truy cập phải là số nguyên từ 1 đến 3.650 ngày.");
       return;
     }
 
-    if (deliveryMode === "GROUP_CLASS" && readyClasses.length === 0) {
-      setError("Cần có ít nhất một lớp ACTIVE phù hợp trước khi tạo gói lớp nhóm.");
+    if (!isEdit && deliveryMode === "GROUP_CLASS" && availableClasses.length === 0) {
+      setError("Tất cả các lớp học nhóm hiện tại đều đã được gán gói bán. Vui lòng tạo lớp học mới.");
       return;
     }
 
     const selectedClass = readyClasses.find((c) => String(c.id) === selectedClassId);
 
-    if (deliveryMode === "GROUP_CLASS" && !selectedClassId) {
+    if (deliveryMode === "GROUP_CLASS" && !selectedClassId && !isEdit) {
       setError("Vui lòng chọn lớp học nhóm.");
       return;
     }
+
+    if (deliveryMode === "GROUP_CLASS" && selectedClassId) {
+      const attached = getAttachedPackage(selectedClassId);
+      if (attached) {
+        setError(`Lớp học này đã được gán cho gói bán "${attached.name}". Vui lòng chọn lớp học khác hoặc tạo lớp mới.`);
+        return;
+      }
+    }
     setSubmitting(true); setError("");
     try {
-      const saved = await adminCourseClassApi.createPackage({
-        courseId, classId: deliveryMode === "GROUP_CLASS" ? selectedClassId : null,
-        name: normalizedName, deliveryMode, price, originalPrice: price, durationDays, status: "ACTIVE",
-      });
+      let saved: any;
+      if (isEdit && editingPackage) {
+        saved = await adminCourseClassApi.updatePackage(editingPackage.id, {
+          courseId,
+          classId: deliveryMode === "GROUP_CLASS" ? selectedClassId || null : null,
+          name: normalizedName,
+          deliveryMode,
+          price: numPrice,
+          originalPrice: (editingPackage as any).originalPrice ?? numPrice,
+          durationDays: numDuration,
+          status: editingPackage.active ? "ACTIVE" : "INACTIVE",
+        });
+      } else {
+        saved = await adminCourseClassApi.createPackage({
+          courseId,
+          classId: deliveryMode === "GROUP_CLASS" ? selectedClassId : null,
+          name: normalizedName,
+          deliveryMode,
+          price: numPrice,
+          originalPrice: numPrice,
+          durationDays: numDuration,
+          status: "ACTIVE",
+        });
+      }
       onPackageCreated({ ...saved, id: String(saved.id), courseId: String(saved.courseId), active: saved.status === "ACTIVE",
         attachedClassId: saved.classId ? String(saved.classId) : undefined, attachedClassName: saved.className,
         attachedClassCapacity: selectedClass ? { current: selectedClass.currentMemberCount || 0, max: selectedClass.maxMembers || 0 } : undefined,
       } as CoursePackage);
       onOpenChange(false);
-    } catch (err: any) { setError(err?.response?.data?.message || "Không thể tạo gói bán"); }
+    } catch (err: any) { setError(err?.response?.data?.message || (isEdit ? "Không thể cập nhật gói bán" : "Không thể tạo gói bán")); }
     finally { setSubmitting(false); }
   };
 
@@ -106,7 +180,7 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
       <DialogContent className="max-w-xl p-6 sm:p-8">
         <DialogHeader className="space-y-1 text-left">
           <DialogTitle className="text-xl font-bold text-slate-900">
-            Tạo Gói Bán Khóa Học Mới
+            {isEdit ? "Chỉnh sửa Gói Bán" : "Tạo Gói Bán Khóa Học Mới"}
           </DialogTitle>
           <DialogDescription className="text-slate-500 text-sm">
             Khóa học: <span className="font-semibold text-slate-700">{courseName}</span>
@@ -220,8 +294,9 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
               <Label className="text-sm font-medium text-slate-700">Giá Bán (VNĐ) *</Label>
               <Input
                 type="number"
+                placeholder="VD: 3500000"
                 value={price}
-                onChange={(e) => setPrice(Number(e.target.value))}
+                onChange={(e) => setPrice(e.target.value)}
                 required
                 className="h-10"
               />
@@ -231,8 +306,9 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
               <Label className="text-sm font-medium text-slate-700">Thời Hạn Truy Cập (Ngày) *</Label>
               <Input
                 type="number"
+                placeholder="VD: 60"
                 value={durationDays}
-                onChange={(e) => setDurationDays(Number(e.target.value))}
+                onChange={(e) => setDurationDays(e.target.value)}
                 required
                 className="h-10"
               />
@@ -242,9 +318,30 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
           {/* Special Logic for GROUP_CLASS */}
           {deliveryMode === "GROUP_CLASS" && (
             <div className="space-y-3 pt-2 border-t border-slate-100">
-              <Label className="text-sm font-semibold text-slate-800">
-                2. Chọn Lớp Học Nhóm (Yêu cầu Trạng thái READY) *
-              </Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-semibold text-slate-800">
+                  2. Chọn Lớp Học Nhóm (Yêu cầu Trạng thái READY) *
+                </Label>
+                <Button
+                  type="button"
+                  variant="link"
+                  className="p-0 h-auto text-xs font-bold text-blue-600 underline cursor-pointer"
+                  onClick={() => {
+                    onOpenChange(false);
+                    navigate("/admin/classes/create", {
+                      state: {
+                        courseId,
+                        courseName,
+                        returnUrl: `/admin/courses/${courseId}`,
+                        packageMode: deliveryMode,
+                        packageId: editingPackage?.id,
+                      },
+                    });
+                  }}
+                >
+                  [+ Tạo Lớp Học Mới Ngay]
+                </Button>
+              </div>
 
               {readyClasses.length === 0 ? (
                 <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-3">
@@ -256,40 +353,71 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
                     <p>
                       Bạn phải tạo 1 lớp học mới ở trạng thái Sẵn Sàng trước khi tạo gói bán nhóm.
                     </p>
-                    <Button
-                      type="button"
-                      variant="link"
-                      className="p-0 h-auto text-xs font-bold text-amber-900 underline mt-1"
-                      onClick={() => {
-                        onOpenChange(false);
-                        navigate("/admin/classes/create");
-                      }}
-                    >
-                      [+ Tạo Lớp Học Mới Ngay]
-                    </Button>
                   </div>
                 </div>
               ) : (
-                <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
-                  {readyClasses.map((cls) => (
-                    <div
-                      key={cls.id}
-                      className={`p-3 rounded-lg border cursor-pointer flex items-center justify-between text-xs transition-all ${
-                        selectedClassId === String(cls.id)
-                          ? "border-blue-600 bg-blue-50 font-medium"
-                          : "border-slate-200 hover:bg-slate-50"
-                      }`}
-                      onClick={() => setSelectedClassId(String(cls.id))}
-                    >
-                      <div>
-                        <span className="font-semibold text-slate-900">{cls.name}</span>
-                        <span className="text-slate-500 ml-2">(ID: {cls.id})</span>
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                  {readyClasses.map((cls) => {
+                    const attachedPkg = getAttachedPackage(String(cls.id));
+                    const isAttached = Boolean(attachedPkg);
+                    const isSelected = selectedClassId === String(cls.id);
+                    const classCode = cls.code || `LH-${cls.id}`;
+                    const teacherDisplayName = cls.teacherName || cls.teacher?.name || "Chưa phân công";
+
+                    return (
+                      <div
+                        key={cls.id}
+                        onClick={() => {
+                          if (isAttached) return;
+                          setSelectedClassId(String(cls.id));
+                        }}
+                        className={`p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs transition-all ${
+                          isAttached
+                            ? "bg-slate-100/70 border-slate-200 opacity-60 cursor-not-allowed"
+                            : isSelected
+                            ? "border-blue-600 bg-blue-50/80 font-medium cursor-pointer shadow-sm ring-1 ring-blue-500/30"
+                            : "border-slate-200 hover:bg-slate-50 cursor-pointer"
+                        }`}
+                      >
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-slate-900 text-sm">{cls.name}</span>
+                            <Badge variant="outline" className="text-[10px] bg-slate-50 text-slate-600 border-slate-200 font-mono">
+                              Mã lớp: {classCode}
+                            </Badge>
+                          </div>
+
+                          <div className="flex items-center gap-3 text-[11px] text-slate-600 flex-wrap">
+                            <span className="flex items-center gap-1 font-semibold text-blue-700 bg-blue-50/80 px-2 py-0.5 rounded-md border border-blue-100">
+                              👨‍🏫 Giảng viên: {teacherDisplayName}
+                            </span>
+                            {cls.startDate && (
+                              <span className="text-slate-500">
+                                📅 {new Date(cls.startDate).toLocaleDateString("vi-VN")} - {new Date(cls.endDate || cls.startDate).toLocaleDateString("vi-VN")}
+                              </span>
+                            )}
+                          </div>
+
+                          {isAttached && (
+                            <p className="text-[11px] text-amber-700 font-medium pt-0.5">
+                              🔒 Đã gán gói bán: <span className="font-semibold">{attachedPkg?.name}</span>
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
+                          <Badge variant="outline" className="bg-white text-xs font-semibold px-2.5 py-1">
+                            Sĩ số: {cls.currentMemberCount || 0}/{cls.maxMembers || 0}
+                          </Badge>
+                          {isAttached && (
+                            <Badge className="bg-amber-100 text-amber-800 border-amber-200 text-[10px] px-2 py-0.5">
+                              Đã có gói
+                            </Badge>
+                          )}
+                        </div>
                       </div>
-                      <Badge variant="outline" className="bg-white">
-                        Sĩ số: {cls.currentMemberCount || 0}/{cls.maxMembers || 0}
-                      </Badge>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -307,13 +435,20 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
               type="submit"
               disabled={
                 !packageName ||
-                courseStatus !== "ACTIVE" ||
+                (!isEdit && courseStatus !== "ACTIVE") ||
                 submitting ||
-                (deliveryMode === "GROUP_CLASS" && (!selectedClassId || readyClasses.length === 0))
+                (!isEdit && deliveryMode === "GROUP_CLASS" && (!selectedClassId || readyClasses.length === 0))
               }
               className="bg-blue-600 hover:bg-blue-700 text-white font-medium"
             >
-              {submitting ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Plus className="w-4 h-4 mr-1.5" />} Tạo Gói Bán
+              {submitting ? (
+                <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />
+              ) : isEdit ? (
+                <Save className="w-4 h-4 mr-1.5" />
+              ) : (
+                <Plus className="w-4 h-4 mr-1.5" />
+              )}
+              {isEdit ? "Lưu thay đổi" : "Tạo Gói Bán"}
             </Button>
           </DialogFooter>
         </form>

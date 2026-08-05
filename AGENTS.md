@@ -9,6 +9,7 @@ AI Personalized LMS là hệ thống quản lý học tập gồm các thành ph
 - `ai-service`: Service AI riêng biệt sử dụng Python 3.12 và FastAPI, đảm nhiệm Prompt Engine, tích hợp AI Provider (Gemini), RAG Engine, Embedding và Vector Database (Qdrant). Không truy cập trực tiếp MySQL nghiệp vụ; chỉ giao tiếp nội bộ với `backend/ailms`.
 - `database`: Các script tạo dữ liệu, di chuyển dữ liệu và sửa dữ liệu.
 - `docker-compose.yml`: Cấu hình chạy ứng dụng và hạ tầng trên môi trường cục bộ.
+- Không dùng dữ liệu fake, mock, giả ở FE, chỉ lấy data thật ở BE, ko có data thì thông báo không có data. 
 
 ## Quy tắc làm việc chung
 

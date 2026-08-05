@@ -162,29 +162,66 @@ export const CourseCatalogPage: React.FC = () => {
     setLoading(true);
     setError("");
     try {
-      const [courseRows, categoryRows, packageRows, employeeRows] = await Promise.all([
+      const [courseRows, categoryRows, packageRows, employeeRows, teacherAssignments] = await Promise.all([
         adminCourseClassApi.getCourses(),
         adminCourseClassApi.getCategories(),
         adminCourseClassApi.getPackages(),
         adminCourseClassApi.getEmployees(),
+        adminCourseClassApi.getAllCourseTeachers(),
       ]);
-      const employeeById = new Map(employeeRows.map((item: any) => [String(item.id || item.userId), item]));
+      const employeeById = new Map<string, any>();
+      (employeeRows || []).forEach((item: any) => {
+        if (item.id != null) employeeById.set(String(item.id), item);
+        if (item.userId != null) employeeById.set(String(item.userId), item);
+      });
+
+      // Group teacher assignments by courseId
+      const teachersByCourse = new Map<string, any[]>();
+      (teacherAssignments || []).forEach((assignment: any) => {
+        const cid = String(assignment.courseId);
+        if (!teachersByCourse.has(cid)) teachersByCourse.set(cid, []);
+        teachersByCourse.get(cid)!.push(assignment);
+      });
+
       setCategories(categoryRows);
       setEmployees(employeeRows);
       setCourses(courseRows.map((course: any) => {
-        const owner = employeeById.get(String(course.createdBy));
         const packages = packageRows.filter((item: any) => String(item.courseId) === String(course.id));
+        const activeAssignments = (teachersByCourse.get(String(course.id)) || []).filter(
+          (assignment: any) => assignment.status === "ACTIVE" || assignment.status === "ACCEPTED"
+        );
+
+        const mappedTeachers = activeAssignments.map((assignment: any, index: number) => {
+          const emp = employeeById.get(String(assignment.userId));
+          const isPrimary = index === 0;
+          return {
+            id: String(assignment.userId),
+            name: emp?.fullName || emp?.username || `Giảng viên #${assignment.userId}`,
+            avatar: emp?.avatarUrl && emp.avatarUrl.trim() !== "" ? emp.avatarUrl : DEFAULT_AVATAR,
+            category: isPrimary ? "Giảng viên chính" : "Đồng phụ trách",
+            isPrimary,
+            status: assignment.status || "ACTIVE",
+          };
+        });
+
         return {
           ...course,
           id: String(course.id),
           categoryId: String(course.categoryId),
-          status: course.status === "PENDING" ? "PENDING_APPROVAL" : course.status,
+          status: course.status as CourseStatus,
           level: course.level === "BEGINNER" ? "BASIC" : course.level,
-          teachers: owner ? [{ id: String(owner.id || owner.userId), name: owner.fullName, avatar: owner.avatarUrl && owner.avatarUrl.trim() !== "" ? owner.avatarUrl : DEFAULT_AVATAR, category: course.categoryName }] : [],
+          teachers: mappedTeachers,
           rating: Number(course.avgRating || 0),
           reviewCount: Number(course.reviewCount || 0),
           enrollmentCount: Number(course.enrollmentCount || 0),
-          packages: packages.map((item: any) => ({ ...item, id: String(item.id), courseId: String(item.courseId), active: item.status === "ACTIVE", attachedClassId: item.classId ? String(item.classId) : undefined, attachedClassName: item.className })),
+          packages: packages.map((item: any) => ({
+            ...item,
+            id: String(item.id),
+            courseId: String(item.courseId),
+            active: course.status === "ACTIVE" && item.status === "ACTIVE",
+            attachedClassId: item.classId ? String(item.classId) : undefined,
+            attachedClassName: item.className,
+          })),
           packagesCount: packages.length,
           referencePrice: Number(course.suggestedPrice || 0),
         } as CourseExtended;
@@ -238,6 +275,7 @@ export const CourseCatalogPage: React.FC = () => {
     const categoryId = data.get("categoryId") as string;
     const description = (data.get("description") as string || "").trim();
     const level = data.get("level") as string;
+    const status = data.get("status") as string | null;
 
     if (!name) {
       showBanner("Tên khóa học không được để trống", true);
@@ -254,6 +292,10 @@ export const CourseCatalogPage: React.FC = () => {
       if (editingCourse) {
         const res = await courseApi.updateCourse(editingCourse.id, { categoryId, name, link: editingCourse.link || autoLink, description, level });
         if (res.data.success) {
+          // Cập nhật status (ẩn/hiện) nếu có thay đổi
+          if (status && status !== editingCourse.status) {
+            await courseApi.updateCourseStatus(editingCourse.id, status);
+          }
           showBanner("Cập nhật khóa học thành công!");
           loadData();
         }
@@ -471,7 +513,7 @@ export const CourseCatalogPage: React.FC = () => {
             ● Đang Hoạt Động
           </Badge>
         );
-      case "PENDING_APPROVAL":
+      case "PENDING":
         return (
           <Badge className="bg-amber-500/10 text-amber-600 border-amber-500/20 font-medium">
             ● Chờ Duyệt
@@ -483,12 +525,28 @@ export const CourseCatalogPage: React.FC = () => {
             ● Từ Chối
           </Badge>
         );
-      case "DRAFT":
       case "INACTIVE":
+        return (
+          <Badge className="bg-slate-500/10 text-slate-600 border-slate-500/20 font-medium">
+            ● Ẩn / Lưu trữ
+          </Badge>
+        );
+      case "DRAFT":
+        return (
+          <Badge className="bg-blue-500/10 text-blue-600 border-blue-500/20 font-medium">
+            ● Nháp
+          </Badge>
+        );
+      case "DELETED":
+        return (
+          <Badge className="bg-zinc-500/10 text-zinc-500 border-zinc-400/20 font-medium">
+            ● Đã Xóa
+          </Badge>
+        );
       default:
         return (
           <Badge className="bg-slate-500/10 text-slate-600 border-slate-500/20 font-medium">
-            ● Nháp / Tạm Ẩn
+            ● {status}
           </Badge>
         );
     }
@@ -595,10 +653,11 @@ export const CourseCatalogPage: React.FC = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">Tất cả trạng thái</SelectItem>
-                <SelectItem value="ACTIVE">Đang hoạt động (ACTIVE)</SelectItem>
-                <SelectItem value="PENDING_APPROVAL">Chờ duyệt (PENDING)</SelectItem>
-                <SelectItem value="REJECTED">Từ chối (REJECTED)</SelectItem>
-                <SelectItem value="DRAFT">Nháp (DRAFT)</SelectItem>
+                <SelectItem value="ACTIVE">● Đang hoạt động (ACTIVE)</SelectItem>
+                <SelectItem value="PENDING">● Chờ duyệt (PENDING)</SelectItem>
+                <SelectItem value="REJECTED">● Từ chối (REJECTED)</SelectItem>
+                <SelectItem value="DRAFT">● Nháp (DRAFT)</SelectItem>
+                <SelectItem value="INACTIVE">● Ẩn / Lưu trữ (INACTIVE)</SelectItem>
               </SelectContent>
             </Select>
 
@@ -769,24 +828,32 @@ export const CourseCatalogPage: React.FC = () => {
                     </span>
                   </div>
 
-                  {/* Teachers Avatar Group */}
-                  <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs text-slate-500">
-                    <span>Giảng viên:</span>
-                    <div className="flex items-center -space-x-2">
-                      {course.teachers.length > 0 ? (
-                        course.teachers.map((t) => (
-                          <img
-                            key={t.id}
-                            src={t.avatar && t.avatar.trim() !== "" ? t.avatar : DEFAULT_AVATAR}
-                            alt={t.name}
-                            title={t.name}
-                            className="w-6 h-6 rounded-full border-2 border-white object-cover"
-                          />
-                        ))
-                      ) : (
-                        <span className="text-slate-400 italic">Chưa phân công</span>
-                      )}
-                    </div>
+                  {/* Instructor name text */}
+                  <div className="flex items-center gap-2 pt-2 border-t border-slate-100 text-xs text-slate-500">
+                    <span className="shrink-0">Giảng viên:</span>
+                    {course.teachers.length > 0 ? (
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <div className="flex items-center -space-x-1.5 shrink-0">
+                          {course.teachers.slice(0, 2).map((t) => (
+                            <img
+                              key={t.id}
+                              src={t.avatar && t.avatar.trim() !== "" ? t.avatar : DEFAULT_AVATAR}
+                              alt={t.name}
+                              title={t.name}
+                              className="w-5 h-5 rounded-full border border-white object-cover"
+                            />
+                          ))}
+                        </div>
+                        <span className="font-semibold text-slate-700 truncate">
+                          {course.teachers[0].name}
+                          {course.teachers.length > 1 && (
+                            <span className="text-slate-400 font-normal"> +{course.teachers.length - 1}</span>
+                          )}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-slate-400 italic">Chưa phân công</span>
+                    )}
                   </div>
                 </CardContent>
               </div>
@@ -861,7 +928,7 @@ export const CourseCatalogPage: React.FC = () => {
               <TableRow className="border-border/30">
                 {/* Sortable Header: Tên Khóa Học */}
                 <TableHead
-                  className="w-[280px] cursor-pointer select-none text-xs font-semibold uppercase tracking-wider group"
+                  className="w-70 cursor-pointer select-none text-xs font-semibold uppercase tracking-wider group"
                   onClick={() => handleSort("name")}
                 >
                   <div className="flex items-center gap-1.5">
@@ -941,7 +1008,7 @@ export const CourseCatalogPage: React.FC = () => {
                   >
                     <TableCell className="font-semibold text-foreground">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded bg-slate-100 overflow-hidden flex-shrink-0 border border-border/20">
+                        <div className="w-10 h-10 rounded bg-slate-100 overflow-hidden shrink-0 border border-border/20">
                           <img
                             src={course.coverImage && course.coverImage.trim() !== "" ? course.coverImage : DEFAULT_COVER}
                             alt=""
@@ -1166,6 +1233,21 @@ export const CourseCatalogPage: React.FC = () => {
               {editingCourse ? "Cập nhật khóa học" : "Tạo khóa học mới"}
             </h3>
 
+            {/* Creator info (only shown when editing) */}
+            {editingCourse && editingCourse.teachers && editingCourse.teachers.length > 0 && (
+              <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-lg bg-slate-50 border border-slate-200">
+                <img
+                  src={editingCourse.teachers[0].avatar && editingCourse.teachers[0].avatar.trim() !== "" ? editingCourse.teachers[0].avatar : DEFAULT_AVATAR}
+                  alt={editingCourse.teachers[0].name}
+                  className="w-8 h-8 rounded-full object-cover border border-slate-300"
+                />
+                <div className="text-xs">
+                  <p className="text-slate-500">Người tạo khóa học</p>
+                  <p className="font-bold text-slate-800">{editingCourse.teachers[0].name}</p>
+                </div>
+              </div>
+            )}
+
             <form onSubmit={handleSaveCourse} className="space-y-4">
               <div className="space-y-1">
                 <Label className="text-xs font-semibold">Tên khóa học</Label>
@@ -1192,6 +1274,25 @@ export const CourseCatalogPage: React.FC = () => {
                 </div>
               </div>
 
+              {/* Status field – only available when EDITING an existing course */}
+              {editingCourse && (
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold">Trạng thái khóa học</Label>
+                  <select
+                    name="status"
+                    defaultValue={editingCourse.status || "DRAFT"}
+                    className="flex h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none font-semibold"
+                  >
+                    <option value="ACTIVE">✅ Đang hoạt động (ACTIVE)</option>
+                    <option value="INACTIVE">🔒 Ẩn khóa học / Lưu trữ (INACTIVE)</option>
+                    <option value="DRAFT">📝 Nháp (DRAFT)</option>
+                    <option value="PENDING">⏳ Gửi chờ duyệt (PENDING)</option>
+                    <option value="REJECTED">❌ Từ chối (REJECTED)</option>
+                  </select>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Chọn &quot;INACTIVE&quot; để tạm ẩn khóa học khỏi học viên, &quot;DRAFT&quot; để tiếp tục soạn thảo</p>
+                </div>
+              )}
+
               <div className="space-y-1">
                 <Label className="text-xs font-semibold">Mô tả khóa học</Label>
                 <textarea
@@ -1199,7 +1300,7 @@ export const CourseCatalogPage: React.FC = () => {
                   defaultValue={editingCourse?.description || ""}
                   placeholder="E.g. Giới thiệu tổng quan về khóa học, giáo án chi tiết và lộ trình học tập..."
                   required
-                  className="flex min-h-[80px] w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                  className="flex min-h-20 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
                 />
               </div>
 

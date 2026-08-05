@@ -6,6 +6,9 @@ import com.ailms.response.UserResponse;
 import com.ailms.response.PageResponse;
 import com.ailms.response.MonthlyUserCountResponse;
 import com.ailms.response.UserDetailResponse;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.InputStream;
 import java.util.List;
 import java.util.Map;
 
@@ -122,6 +125,16 @@ public interface IUserService {
      * @return đối tượng chứa thông tin chi tiết kết quả
      */
     UserResponse updateProfile(Long userId, UpdateProfileRequest request);
+
+    UserResponse updateBasicProfile(Long userId, UpdateProfileRequest request);
+
+    UserResponse updateRoleProfile(Long userId, UpdateRoleProfileRequest request);
+
+    UserResponse uploadAvatar(Long userId, MultipartFile file);
+
+    UserResponse deleteAvatar(Long userId);
+
+    InputStream downloadAvatar(Long targetUserId);
 
     /**
      * Xác thực mã OTP để hoàn thành đổi email mới.

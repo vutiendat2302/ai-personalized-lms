@@ -50,6 +50,10 @@ public class ClassEntity extends BaseEntity {
     @Column(name = "name")
     private String name;
 
+    /** Mã code chính thức của lớp học (VD: CLASS_JAVA_01, LH_ENG_101). */
+    @Column(name = "code", length = 50, unique = true)
+    private String code;
+
     /** Hình thức đào tạo lớp học (ONE_ON_ONE, GROUP_CLASS, HYBRID). */
     @Column(name = "package_type")
     @Enumerated(EnumType.STRING)

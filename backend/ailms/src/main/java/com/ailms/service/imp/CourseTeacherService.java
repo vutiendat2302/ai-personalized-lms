@@ -37,6 +37,7 @@ public class CourseTeacherService implements ICourseTeacherService {
     private final CourseRepository courseRepository;
     private final UserRepository userRepository;
     private final CourseTeacherMapper courseTeacherMapper;
+    private final com.ailms.service.INotificationService notificationService;
 
     private static final String RESOURCE_NAME = "CourseTeacher";
 
@@ -57,6 +58,14 @@ public class CourseTeacherService implements ICourseTeacherService {
         return courseTeacherMapper.toResponseList(courseTeacherRepository.findByCourseEntity_Id(courseId));
     }
 
+    public List<CourseTeacherResponse> getByCourseId(Long courseId, com.ailms.entity.enums.CourseTeacherStatusEnum status) {
+        log.info("Getting teachers by course id: {} and status: {}", courseId, status);
+        if (status == null) {
+            return getByCourseId(courseId);
+        }
+        return courseTeacherMapper.toResponseList(courseTeacherRepository.findByCourseEntity_IdAndStatus(courseId, status));
+    }
+
     public List<CourseTeacherResponse> getByUserId(Long userId) {
         log.info("Getting course teachers by user id: {}", userId);
         return courseTeacherMapper.toResponseList(courseTeacherRepository.findByUserEntity_Id(userId));
@@ -73,10 +82,45 @@ public class CourseTeacherService implements ICourseTeacherService {
 
         CourseTeacherEntity entity = courseTeacherMapper.toEntity(request);
         entity.setId(id);
+        if (request.getStatus() == null) {
+            entity.setStatus(com.ailms.entity.enums.CourseTeacherStatusEnum.PENDING);
+        } else {
+            entity.setStatus(request.getStatus());
+        }
         applyRelations(entity, request);
 
         CourseTeacherEntity saved = courseTeacherRepository.save(entity);
+
+        try {
+            UserEntity user = saved.getUserEntity();
+            CourseEntity course = saved.getCourseEntity();
+            if (user != null && course != null) {
+                notificationService.createSystemNotification(
+                        user,
+                        com.ailms.entity.enums.NotificationTypeEnum.ADMIN_ANNOUNCEMENT,
+                        "Lời mời phụ trách khóa học",
+                        "Bạn nhận được lời mời tham gia phụ trách khóa học '" + course.getName() + "'.",
+                        course.getId(),
+                        "/admin/courses/" + course.getId()
+                );
+            }
+        } catch (Exception e) {
+            log.warn("Could not send course teacher notification", e);
+        }
+
         return courseTeacherMapper.toResponse(saved);
+    }
+
+    @Transactional
+    public CourseTeacherResponse updateStatus(Long courseId, Long userId, com.ailms.request.CourseTeacherStatusRequest request) {
+        log.info("Updating course teacher status for course: {}, user: {}, status: {}", courseId, userId, request.getStatus());
+        CourseTeacherId id = new CourseTeacherId(courseId, userId);
+        CourseTeacherEntity existing = courseTeacherRepository.findById(id)
+                .orElseThrow(() -> notFound(courseId, userId));
+
+        existing.setStatus(request.getStatus());
+        CourseTeacherEntity updated = courseTeacherRepository.save(existing);
+        return courseTeacherMapper.toResponse(updated);
     }
 
     @Transactional

@@ -1,10 +1,8 @@
 package com.ailms.entity;
 
+import com.ailms.entity.enums.CourseTeacherStatusEnum;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 import lombok.experimental.SuperBuilder;
 
 import java.time.LocalDateTime;
@@ -46,4 +44,10 @@ public class CourseTeacherEntity {
     /** ID của Admin thực hiện phân công giảng viên. */
     @Column(name = "assigned_by")
     private Long assignedBy;
+
+    /** Trạng thái phân công giảng viên (PENDING, ACTIVE, REJECTED, INACTIVE). */
+    @Column(name = "status", length = 50)
+    @Enumerated(EnumType.STRING)
+    @Builder.Default
+    private CourseTeacherStatusEnum status = CourseTeacherStatusEnum.ACTIVE;
 }

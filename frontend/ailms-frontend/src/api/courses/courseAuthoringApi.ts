@@ -70,6 +70,7 @@ export interface CourseCurriculumResponse {
   courseId: string;
   courseName: string;
   status?: string;
+  createdBy?: string;
   sections?: SectionCurriculumItem[];
   finalExamQuizzes?: QuizResponseDTO[];
   finalExamAssignments?: AssignmentResponseDTO[];
@@ -102,7 +103,7 @@ export const courseAuthoringApi = {
   addSection: async (courseId: string, name: string) => {
     const res = await httpClient.post<ApiResponse<any>>(`/v1/authoring/courses/${courseId}/sections`, {
       name,
-      courseId: Number(courseId)
+      courseId: courseId
     });
     return res.data.data;
   },
@@ -111,7 +112,7 @@ export const courseAuthoringApi = {
     const res = await httpClient.put<ApiResponse<any>>(`/v1/authoring/sections/${sectionId}`, {
       name,
       status: status || "ACTIVE",
-      courseId: courseId ? Number(courseId) : 1
+      courseId: courseId || undefined
     });
     return res.data.data;
   },
@@ -168,6 +169,46 @@ export const courseAuthoringApi = {
 
   submitForReview: async (courseId: string) => {
     const res = await httpClient.post<ApiResponse<any>>(`/v1/authoring/courses/${courseId}/submit`);
+    return res.data.data;
+  },
+
+  cancelReview: async (courseId: string) => {
+    const res = await httpClient.post<ApiResponse<any>>(`/v1/authoring/courses/${courseId}/cancel-review`);
+    return res.data.data;
+  },
+
+  requestEdit: async (courseId: string) => {
+    const res = await httpClient.post<ApiResponse<any>>(`/v1/authoring/courses/${courseId}/request-edit`);
+    return res.data.data;
+  },
+
+  searchTeachers: async (query?: string) => {
+    const res = await httpClient.get<ApiResponse<any[]>>(`/v1/authoring/teachers/search?query=${encodeURIComponent(query || "")}`);
+    return res.data.data;
+  },
+
+  inviteInstructor: async (courseId: string, payload: { email?: string; instructorId?: string }) => {
+    const res = await httpClient.post<ApiResponse<any>>(`/v1/authoring/courses/${courseId}/instructors/invite`, payload);
+    return res.data.data;
+  },
+
+  getCourseInstructors: async (courseId: string) => {
+    const res = await httpClient.get<ApiResponse<any[]>>(`/v1/authoring/courses/${courseId}/instructors`);
+    return res.data.data;
+  },
+
+  removeInstructor: async (courseId: string, instructorId: string) => {
+    const res = await httpClient.delete<ApiResponse<any>>(`/v1/authoring/courses/${courseId}/instructors/${instructorId}`);
+    return res.data;
+  },
+
+  respondInvitation: async (invitationId: string, accept: boolean) => {
+    const res = await httpClient.post<ApiResponse<any>>(`/v1/authoring/courses/instructors/invitations/${invitationId}/respond?accept=${accept}`);
+    return res.data.data;
+  },
+
+  getMyInvitations: async () => {
+    const res = await httpClient.get<ApiResponse<any[]>>("/v1/authoring/courses/instructors/my-invitations");
     return res.data.data;
   },
 

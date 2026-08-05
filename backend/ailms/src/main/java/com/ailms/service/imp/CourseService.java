@@ -50,6 +50,9 @@ public class CourseService implements ICourseService {
     private final ApplicationEventPublisher applicationEventPublisher;
     private final EnrollmentRepository enrollmentRepository;
     private final ApprovalRequestRepository approvalRequestRepository;
+    private final UserRoleRepository userRoleRepository;
+    private final CourseTeacherRepository courseTeacherRepository;
+    private final CoursePackageRepository coursePackageRepository;
 
     private static final String RESOURCE_NAME = "Course";
 
@@ -77,6 +80,11 @@ public class CourseService implements ICourseService {
         CourseEntity entity = prepareCourse(request, category, CourseStatusEnum.DRAFT);
 
         CourseEntity savedEntity = courseRepository.save(entity);
+        Long creatorId = savedEntity.getCreatedBy();
+        if (creatorId != null && userRoleRepository.hasActiveTeacherRole(creatorId, LocalDateTime.now())) {
+            assignCreatorAsCourseTeacher(savedEntity, creatorId);
+        }
+        
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CREATE", "COURSE", savedEntity.getId(), null, savedEntity));
         return courseMapper.toResponse(savedEntity);
     }
@@ -102,8 +110,29 @@ public class CourseService implements ICourseService {
         entity.setCreatedBy(teacherUserId);
 
         CourseEntity savedEntity = courseRepository.save(entity);
+        if (userRoleRepository.hasActiveTeacherRole(teacherUserId, LocalDateTime.now())) {
+            assignCreatorAsCourseTeacher(savedEntity, teacherUserId);
+        }
+
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CREATE_BY_TEACHER", "COURSE", savedEntity.getId(), null, savedEntity));
         return courseMapper.toResponse(savedEntity);
+    }
+
+    private void assignCreatorAsCourseTeacher(CourseEntity course, Long userId) {
+        if (userId == null) return;
+        userRepository.findById(userId).ifPresent(user -> {
+            CourseTeacherId teacherId = new CourseTeacherId(course.getId(), user.getId());
+            if (!courseTeacherRepository.existsById(teacherId)) {
+                CourseTeacherEntity courseTeacher = CourseTeacherEntity.builder()
+                        .id(teacherId)
+                        .courseEntity(course)
+                        .userEntity(user)
+                        .assignedAt(LocalDateTime.now())
+                        .assignedBy(userId)
+                        .build();
+                courseTeacherRepository.save(courseTeacher);
+            }
+        });
     }
 
     @Transactional
@@ -118,6 +147,7 @@ public class CourseService implements ICourseService {
         existingEntity.setLink(resolveLink(request.getLink(), request.getName()));
 
         CourseEntity updatedEntity = courseRepository.save(existingEntity);
+        deactivatePackagesIfCourseNotActive(updatedEntity);
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "UPDATE", "COURSE", id, null, updatedEntity));
         return courseMapper.toResponse(updatedEntity);
     }
@@ -133,6 +163,12 @@ public class CourseService implements ICourseService {
         existingEntity.setStatus(request.getStatus());
 
         CourseEntity updatedEntity = courseRepository.save(existingEntity);
+        deactivatePackagesIfCourseNotActive(updatedEntity);
+        notifyAssignedTeachers(
+                updatedEntity,
+                "Cập nhật trạng thái khóa học",
+                "Khóa học '" + updatedEntity.getName() + "' đã được chuyển sang trạng thái: " + getCourseStatusLabel(updatedEntity.getStatus())
+        );
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "UPDATE_STATUS", "COURSE", id, null, updatedEntity));
         return courseMapper.toResponse(updatedEntity);
     }
@@ -159,6 +195,7 @@ public class CourseService implements ICourseService {
         }
 
         CourseEntity saved = courseRepository.save(course);
+        deactivatePackagesIfCourseNotActive(saved);
         ApprovalRequestEntity approvalHistory = ApprovalRequestEntity.builder()
                 .targetType("COURSE")
                 .targetId(saved.getId())
@@ -174,18 +211,14 @@ public class CourseService implements ICourseService {
                 .createdAt(saved.getCreatedAt() != null ? saved.getCreatedAt() : LocalDateTime.now())
                 .build();
         approvalRequestRepository.save(approvalHistory);
-        if (saved.getCreatedBy() != null) {
-            userRepository.findById(saved.getCreatedBy()).ifPresent(creator -> notificationService.createSystemNotification(
-                    creator,
-                    NotificationTypeEnum.GENERAL,
-                    Boolean.TRUE.equals(request.getApprove()) ? "Khóa học đã được phê duyệt" : "Khóa học đã bị từ chối",
-                    Boolean.TRUE.equals(request.getApprove())
-                            ? "Khóa học “" + saved.getName() + "” đã được phê duyệt và kích hoạt."
-                            : "Khóa học “" + saved.getName() + "” bị từ chối. Lý do: " + saved.getRejectionReason(),
-                    saved.getId(),
-                    "/teacher/courses"
-            ));
-        }
+
+        boolean isApproved = Boolean.TRUE.equals(request.getApprove());
+        String title = isApproved ? "Khóa học đã được phê duyệt" : "Khóa học đã bị từ chối";
+        String content = isApproved
+                ? "Khóa học “" + saved.getName() + "” đã được phê duyệt và kích hoạt."
+                : "Khóa học “" + saved.getName() + "” bị từ chối. Lý do: " + saved.getRejectionReason();
+        notifyAssignedTeachers(saved, title, content);
+
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "APPROVE_COURSE", "COURSE", id, null, saved));
         return courseMapper.toResponse(saved);
     }
@@ -199,9 +232,78 @@ public class CourseService implements ICourseService {
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
 
         entity.setStatus(CourseStatusEnum.DELETED);
-        courseRepository.save(entity);
+        CourseEntity saved = courseRepository.save(entity);
+        deactivatePackagesIfCourseNotActive(saved);
+
+        notifyAssignedTeachers(
+                saved,
+                "Khóa học đã bị xóa/lưu trữ",
+                "Khóa học '" + saved.getName() + "' đã bị chuyển sang trạng thái ngưng sử dụng."
+        );
 
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "SOFT_DELETE", "COURSE", id, null, null));
+    }
+
+    private void notifyAssignedTeachers(CourseEntity course, String title, String content) {
+        if (course == null || course.getId() == null) return;
+        try {
+            List<CourseTeacherEntity> teachers = courseTeacherRepository.findByCourseEntity_Id(course.getId());
+            java.util.Set<Long> notifiedUserIds = new java.util.HashSet<>();
+
+            for (CourseTeacherEntity ct : teachers) {
+                if (ct.getUserEntity() != null && ct.getUserEntity().getId() != null) {
+                    Long uid = ct.getUserEntity().getId();
+                    if (!notifiedUserIds.contains(uid)) {
+                        notifiedUserIds.add(uid);
+                        notificationService.createSystemNotification(
+                                ct.getUserEntity(),
+                                NotificationTypeEnum.GENERAL,
+                                title,
+                                content,
+                                course.getId(),
+                                "/teacher/courses"
+                        );
+                    }
+                }
+            }
+
+            if (course.getCreatedBy() != null && !notifiedUserIds.contains(course.getCreatedBy())) {
+                notifiedUserIds.add(course.getCreatedBy());
+                userRepository.findById(course.getCreatedBy()).ifPresent(creator ->
+                        notificationService.createSystemNotification(
+                                creator,
+                                NotificationTypeEnum.GENERAL,
+                                title,
+                                content,
+                                course.getId(),
+                                "/teacher/courses"
+                        )
+                );
+            }
+        } catch (Exception e) {
+            log.warn("Could not send system notification to course teachers for course {}", course.getId(), e);
+        }
+    }
+
+    private String getCourseStatusLabel(CourseStatusEnum status) {
+        if (status == null) return "Chưa xác định";
+        switch (status) {
+            case ACTIVE: return "Đang hoạt động (ACTIVE)";
+            case PENDING: return "Chờ duyệt (PENDING)";
+            case DRAFT: return "Bản nháp (DRAFT)";
+            case REJECTED: return "Từ chối (REJECTED)";
+            case INACTIVE: return "Đã ẩn / Lưu trữ (INACTIVE)";
+            case DELETED: return "Đã xóa (DELETED)";
+            default: return status.name();
+        }
+    }
+
+    private void deactivatePackagesIfCourseNotActive(CourseEntity course) {
+        if (course == null || course.getId() == null) return;
+        if (course.getStatus() != CourseStatusEnum.ACTIVE) {
+            log.info("Course {} status is {}, deactivating all its course packages", course.getId(), course.getStatus());
+            coursePackageRepository.deactivateAllByCourseId(course.getId());
+        }
     }
 
     @Transactional
