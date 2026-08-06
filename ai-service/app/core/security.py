@@ -2,7 +2,7 @@ from typing import Optional
 from fastapi import Header, HTTPException, status
 from app.core.config import settings
 
-
+# Xác thực nội bộ với spring boot 
 async def verify_internal_token(x_internal_token: Optional[str] = Header(None, alias="X-Internal-Token")):
     """
     Xác thực token bảo mật giao tiếp nội bộ giữa Spring Boot Backend và AI Service.

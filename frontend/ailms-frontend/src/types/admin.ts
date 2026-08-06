@@ -83,6 +83,7 @@ export interface CreateUserRequest {
   phone?: string;
   gender?: number;
   dateOfBirth?: string;
+  roleIds?: string[];
 }
 
 export interface UpdateUserRequest {

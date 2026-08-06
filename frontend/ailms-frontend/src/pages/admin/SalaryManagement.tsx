@@ -765,14 +765,14 @@ export const SalaryManagement: React.FC = () => {
       </div>
 
       {/* Chart Line Xu Hướng 6 Kỳ (Tùy chọn hiển thị nếu có dữ liệu) */}
-      {false && summaryData?.historicalTrend && summaryData.historicalTrend.length > 0 && (
+      {false && (summaryData?.historicalTrend?.length ?? 0) > 0 && (
         <Card className="p-4 rounded-xl border border-border/60 bg-card shadow-2xs space-y-3">
           <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
             <TrendingUp className="h-4 w-4 text-emerald-500" /> Xu hướng chi trả lương 6 kỳ gần nhất
           </h3>
           <div className="h-[160px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={summaryData.historicalTrend} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
+              <LineChart data={summaryData?.historicalTrend ?? []} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(150,150,150,0.15)" />
                 <XAxis dataKey="periodLabel" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 10 }} axisLine={false} tickLine={false} />

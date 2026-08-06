@@ -126,6 +126,7 @@ export interface CouponItem {
   status: "ACTIVE" | "EXPIRED" | "DISABLED";
   applicableCourseId?: string | null;
   applicableCourseName?: string;
+  minOrderAmount?: number;
 }
 
 export interface CoursePackageItem {

@@ -2,6 +2,7 @@ import httpClient from "@/api/httpClient";
 import type { ApiResponse } from "@/types/base";
 import type { AtRiskStudentData } from "@/components/teacher/StudentRiskRow";
 import type { SubmissionItem } from "@/components/teacher/GradingQueueItem";
+export type { SubmissionItem };
 
 export interface TeacherDashboardMetrics {
   unreviewedSessionsCount: number;

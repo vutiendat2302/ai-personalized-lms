@@ -1,9 +1,9 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
+# Đọc biến môi trường 
 class Settings(BaseSettings):
     GEMINI_API_KEY: str = ""
-    GEMINI_MODEL: str = "gemini-3.6-flash"
+    GEMINI_MODEL: str = "gemini-3.5-flash-lite"
     INTERNAL_SECRET: str = "dev_internal_secret_123"
 
     model_config = SettingsConfigDict(

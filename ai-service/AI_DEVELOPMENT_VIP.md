@@ -57,11 +57,11 @@
 
 | Việc | Model | Ghi chú |
 |---|---|---|
-| Sinh mô tả khóa học / learning outcomes | Gemini 2.5 Flash | generate() thường |
-| Tóm tắt tài liệu (PDF/DOCX/Image/Video) → markdown draft | Gemini 2.5 Flash | multimodal, xem mục 6 |
-| Sinh câu hỏi Quiz từ nội dung Lesson | Gemini 2.5 Flash | structured output (Pydantic) |
+| Sinh mô tả khóa học / learning outcomes | Gemini 3.5 Flash | generate() thường |
+| Tóm tắt tài liệu (PDF/DOCX/Image/Video) → markdown draft | Gemini 3.5 Flash | multimodal, xem mục 6 |
+| Sinh câu hỏi Quiz từ nội dung Lesson | Gemini 3.5  Flash | structured output (Pydantic) |
 | Gợi ý rubric chấm điểm Assignment | Gemini 2.5 Flash | structured output |
-| AI Assistant chat (hỏi-đáp) | Gemini 2.5 Flash | **streaming** — Gemini hỗ trợ stream response, thay thế vai trò trước đây của Groq |
+| AI Assistant chat (hỏi-đáp) | Gemini 3.5 Flash | **streaming** — Gemini hỗ trợ stream response, thay thế vai trò trước đây của Groq |
 | Embedding cho RAG | Gemini `text-embedding-004` | dùng chung 1 provider, không cần thêm model riêng |
 
 **Groq và OpenRouter:** tạm thời **không kích hoạt**. Kiến trúc vẫn giữ `base_provider.py` làm interface chung nên khi cần bật lại Groq (tốc độ chat) hoặc thêm OpenRouter (fallback) chỉ cần thêm implementation mới, không đổi luồng gọi ở Spring Boot hay router.

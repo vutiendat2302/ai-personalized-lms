@@ -54,7 +54,7 @@ export const fileAdminApi = {
 
   // Lấy presigned URL tải file
   getDownloadUrl: async (id: string | number) => {
-    const res = await httpClient.get<ApiResponse<String>>(
+    const res = await httpClient.get<ApiResponse<string>>(
       `/v1/files/admin/${id}/download-url`
     );
     return res.data.data;

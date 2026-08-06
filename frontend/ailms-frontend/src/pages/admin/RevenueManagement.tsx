@@ -185,6 +185,7 @@ export const RevenueManagement: React.FC = () => {
     .reduce((acc, cur) => acc + cur.amount, 0);
 
   const completedTxCount = transactions.filter((tx) => tx.status === "COMPLETED").length;
+  const avgOrderValue = completedTxCount > 0 ? totalCompletedRevenue / completedTxCount : 0;
   const [actionMessage, setActionMessage] = useState<{ text: string; isError?: boolean } | null>(null);
 
   const showBanner = (text: string, isError = false) => {

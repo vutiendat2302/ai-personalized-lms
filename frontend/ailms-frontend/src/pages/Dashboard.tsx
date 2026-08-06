@@ -514,7 +514,7 @@ export const Dashboard: React.FC = () => {
     localStorage.setItem("mock_db_permissions", JSON.stringify(newPerms));
   };
 
-  const showBanner = (msg: string) => {
+  const showBanner = (msg: string, _isError = false) => {
     setSuccessBanner(msg);
     setTimeout(() => setSuccessBanner(""), 3000);
   };

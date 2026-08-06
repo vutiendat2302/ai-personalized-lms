@@ -1,3 +1,0 @@
-@echo off
-echo Starting AI Service on http://127.0.0.1:8000 ...
-.\.venv\Scripts\uvicorn app.main:app --reload --port 8000

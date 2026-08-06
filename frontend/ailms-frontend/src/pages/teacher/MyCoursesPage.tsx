@@ -293,17 +293,16 @@ export function MyCoursesPage() {
 
                     {/* Card Action */}
                     <div className="p-4 pt-2 border-t border-border/40">
-                      <Button
-                        asChild
-                        variant={isRejected ? "default" : "outline"}
-                        className={`w-full text-xs font-bold rounded-xl h-9 ${
-                          isRejected ? "bg-red-600 hover:bg-red-700 text-white" : ""
-                        }`}
-                      >
-                        <Link to={`/courses/${course.id}`}>
+                      <Link to={`/courses/${course.id}`} className="block w-full">
+                        <Button
+                          variant={isRejected ? "default" : "outline"}
+                          className={`w-full text-xs font-bold rounded-xl h-9 ${
+                            isRejected ? "bg-red-600 hover:bg-red-700 text-white" : ""
+                          }`}
+                        >
                           {isRejected ? "Sửa & Gửi lại" : "Xem khóa học"}
-                        </Link>
-                      </Button>
+                        </Button>
+                      </Link>
                     </div>
                   </div>
                 );
