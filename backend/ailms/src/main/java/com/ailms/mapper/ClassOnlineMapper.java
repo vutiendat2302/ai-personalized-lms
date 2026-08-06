@@ -17,7 +17,7 @@ public interface ClassOnlineMapper {
     @Mapping(target = "teacherId", source = "teacherEntity.id")
     @Mapping(target = "teacherName", source = "teacherEntity.fullName")
     @Mapping(target = "lifecycleStatus", ignore = true)
-    @Mapping(target = "sessionCode", ignore = true)
+    @Mapping(target = "sessionCode", source = "code")
     @Mapping(target = "teachingRatePerHour", ignore = true)
     @Mapping(target = "actualDurationMin", ignore = true)
     @Mapping(target = "remuneration", ignore = true)
@@ -27,6 +27,7 @@ public interface ClassOnlineMapper {
     List<ClassOnlineResponse> toResponseList(List<ClassOnlineEntity> list);
 
     @Mapping(target = "id", ignore = true)
+    @Mapping(target = "code", ignore = true)
     @Mapping(target = "classEntity", ignore = true)
     @Mapping(target = "status", ignore = true)
     @Mapping(target = "teacherEntity", ignore = true)
@@ -38,6 +39,7 @@ public interface ClassOnlineMapper {
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     @Mapping(target = "id", ignore = true)
+    @Mapping(target = "code", ignore = true)
     @Mapping(target = "classEntity", ignore = true)
     @Mapping(target = "teacherEntity", ignore = true)
     @Mapping(target = "status", ignore = true)

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import type { QuizResponseDTO } from "../../../api/courses/courseAuthoringApi";
 import type { QuestionItem } from "@/components/admin/course-builder/QuestionBuilderManager";
-import { HelpCircle, Clock, Award, CheckCircle, AlertCircle, Sparkles, RefreshCw, AlertTriangle } from "lucide-react";
+import { HelpCircle, Clock, Award, CheckCircle, AlertCircle, Sparkles, RefreshCw, AlertTriangle, Eye, EyeOff } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 interface LearningQuizPlayerProps {
@@ -12,6 +12,7 @@ interface LearningQuizPlayerProps {
 export const LearningQuizPlayer: React.FC<LearningQuizPlayerProps> = ({ quiz, onComplete }) => {
   const [started, setStarted] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [showAnswerKey, setShowAnswerKey] = useState(false);
   const [questions, setQuestions] = useState<QuestionItem[]>([]);
   const [studentAnswers, setStudentAnswers] = useState<Record<string, any>>({});
   const [score, setScore] = useState<number>(0);
@@ -182,6 +183,20 @@ export const LearningQuizPlayer: React.FC<LearningQuizPlayerProps> = ({ quiz, on
         </div>
 
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowAnswerKey(!showAnswerKey)}
+            className={`px-3.5 py-1.5 font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer transition shadow-2xs ${
+              showAnswerKey
+                ? "bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-700"
+                : "bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300"
+            }`}
+            title="Bật/Tắt chế độ xem đáp án đúng và lời giải chi tiết"
+          >
+            {showAnswerKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+            <span>{showAnswerKey ? "Ẩn đáp án" : "Xem đáp án (Answer Key)"}</span>
+          </button>
+
           <Badge className="bg-amber-100 text-amber-900 border-amber-300 font-bold px-3.5 py-1 text-xs">
             Yêu cầu đạt: {quiz.passScore || 8.0} / 10.0 điểm
           </Badge>
@@ -251,6 +266,26 @@ export const LearningQuizPlayer: React.FC<LearningQuizPlayerProps> = ({ quiz, on
                   <span>Câu {qIdx + 1}: {q.content}</span>
                   <Badge variant="outline" className="text-[10px] font-bold">Points: {q.points || 1.0}</Badge>
                 </div>
+
+                {/* Show correct answers for each question in submission review */}
+                {Array.isArray(q.options) && q.options.length > 0 && (
+                  <div className="space-y-1 pl-2 pt-1">
+                    {q.options.map((opt, oIdx) => (
+                      <div
+                        key={oIdx}
+                        className={`p-2 rounded-lg text-xs border flex items-center justify-between ${
+                          opt.isCorrect
+                            ? "bg-emerald-500/10 border-emerald-400 font-bold text-emerald-800"
+                            : "bg-white border-gray-200 text-gray-600"
+                        }`}
+                      >
+                        <span>{opt.content}</span>
+                        {opt.isCorrect && <Badge className="bg-emerald-600 text-white text-[9px]">Đáp án đúng</Badge>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {q.explanation && (
                   <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-[11px] flex items-start gap-1.5">
                     <Sparkles className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
@@ -325,24 +360,34 @@ export const LearningQuizPlayer: React.FC<LearningQuizPlayerProps> = ({ quiz, on
                   <div className="space-y-2 pt-1">
                     {(q.options || []).map((opt, optIdx) => {
                       const isSelected = studentAnswers[q.id] === optIdx;
+                      const isCorrectOpt = opt.isCorrect;
                       return (
                         <label
                           key={optIdx}
                           onClick={() => handleSelectOption(q.id, optIdx, false)}
-                          className={`flex items-center gap-3 p-3 rounded-xl border text-xs cursor-pointer transition ${
-                            isSelected
+                          className={`flex items-center justify-between p-3 rounded-xl border text-xs cursor-pointer transition ${
+                            showAnswerKey && isCorrectOpt
+                              ? "bg-emerald-50 border-emerald-400 font-bold text-emerald-950 shadow-2xs"
+                              : isSelected
                               ? "bg-amber-50 border-amber-400 font-bold text-amber-950 shadow-2xs"
                               : "bg-white border-gray-200 hover:bg-gray-100 text-gray-700"
                           }`}
                         >
-                          <input
-                            type="radio"
-                            name={`q_${q.id}`}
-                            checked={isSelected}
-                            onChange={() => {}}
-                            className="w-4 h-4 text-amber-600 accent-amber-600 cursor-pointer"
-                          />
-                          <span>{opt.content}</span>
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="radio"
+                              name={`q_${q.id}`}
+                              checked={isSelected}
+                              onChange={() => {}}
+                              className="w-4 h-4 text-amber-600 accent-amber-600 cursor-pointer"
+                            />
+                            <span>{opt.content}</span>
+                          </div>
+                          {showAnswerKey && isCorrectOpt && (
+                            <Badge className="bg-emerald-600 text-white text-[9px] font-bold">
+                              ✓ Đáp án đúng
+                            </Badge>
+                          )}
                         </label>
                       );
                     })}
@@ -355,23 +400,33 @@ export const LearningQuizPlayer: React.FC<LearningQuizPlayerProps> = ({ quiz, on
                     {(q.options || []).map((opt, optIdx) => {
                       const currentSelected: number[] = studentAnswers[q.id] || [];
                       const isChecked = currentSelected.includes(optIdx);
+                      const isCorrectOpt = opt.isCorrect;
                       return (
                         <label
                           key={optIdx}
                           onClick={() => handleSelectOption(q.id, optIdx, true)}
-                          className={`flex items-center gap-3 p-3 rounded-xl border text-xs cursor-pointer transition ${
-                            isChecked
+                          className={`flex items-center justify-between p-3 rounded-xl border text-xs cursor-pointer transition ${
+                            showAnswerKey && isCorrectOpt
+                              ? "bg-emerald-50 border-emerald-400 font-bold text-emerald-950 shadow-2xs"
+                              : isChecked
                               ? "bg-indigo-50 border-indigo-400 font-bold text-indigo-950 shadow-2xs"
                               : "bg-white border-gray-200 hover:bg-gray-100 text-gray-700"
                           }`}
                         >
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={() => {}}
-                            className="w-4 h-4 text-indigo-600 accent-indigo-600 cursor-pointer"
-                          />
-                          <span>{opt.content}</span>
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => {}}
+                              className="w-4 h-4 text-indigo-600 accent-indigo-600 cursor-pointer"
+                            />
+                            <span>{opt.content}</span>
+                          </div>
+                          {showAnswerKey && isCorrectOpt && (
+                            <Badge className="bg-emerald-600 text-white text-[9px] font-bold">
+                              ✓ Đáp án đúng
+                            </Badge>
+                          )}
                         </label>
                       );
                     })}
@@ -411,6 +466,19 @@ export const LearningQuizPlayer: React.FC<LearningQuizPlayerProps> = ({ quiz, on
                         );
                       })}
                     </div>
+
+                    {showAnswerKey && (
+                      <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-950 text-xs space-y-1">
+                        <p className="font-bold">Các cặp ghép nối chính xác:</p>
+                        <ul className="list-disc pl-4 space-y-0.5 text-[11px]">
+                          {(q.options || []).map((opt, idx) => (
+                            <li key={idx}>
+                              <strong>{opt.content}</strong> ➔ <span className="text-emerald-700 font-semibold">{opt.matchingPair || opt.content}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -424,6 +492,11 @@ export const LearningQuizPlayer: React.FC<LearningQuizPlayerProps> = ({ quiz, on
                       placeholder="Nhập từ khóa đáp án đúng của bạn..."
                       className="w-full h-10 px-3.5 border border-gray-300 rounded-xl text-xs font-semibold bg-white outline-none focus:ring-2 focus:ring-amber-500"
                     />
+                    {showAnswerKey && (
+                      <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-950 text-xs font-medium">
+                        <strong>Từ khóa đáp án đúng:</strong> {q.options && q.options[0]?.content ? q.options[0].content : "Từ khóa chuẩn"}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -437,6 +510,17 @@ export const LearningQuizPlayer: React.FC<LearningQuizPlayerProps> = ({ quiz, on
                       placeholder="Nhập bài làm tự luận của bạn tại đây..."
                       className="w-full p-3.5 border border-gray-300 rounded-xl text-xs bg-white outline-none focus:ring-2 focus:ring-amber-500 font-sans"
                     />
+                  </div>
+                )}
+
+                {/* EXPLANATION NOTE WHEN SHOW ANSWER KEY IS ACTIVE */}
+                {showAnswerKey && q.explanation && (
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs font-medium space-y-1">
+                    <div className="flex items-center gap-1.5 font-bold text-amber-950">
+                      <Sparkles className="w-4 h-4 text-amber-600" />
+                      <span>Lời giải chi tiết từ giảng viên:</span>
+                    </div>
+                    <p className="text-[11px] leading-relaxed">{q.explanation}</p>
                   </div>
                 )}
               </div>

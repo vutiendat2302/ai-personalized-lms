@@ -148,6 +148,58 @@ export interface LeaveRequestRecord {
   createdAt: string;
 }
 
+const toTimeText = (date: Date) =>
+  date.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", hour12: false });
+
+const toDateText = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const toTeacherDayOfWeek = (date: Date) => (date.getDay() + 6) % 7;
+
+const toSessionStatus = (session: any): OnlineClassSession["status"] => {
+  const lifecycle = String(session.lifecycleStatus || session.status || "").toUpperCase();
+  if (lifecycle === "CANCELLED" || lifecycle === "INACTIVE" || lifecycle === "DELETE" || lifecycle === "DELETED") {
+    return "CANCELLED";
+  }
+  if (lifecycle === "COMPLETED") {
+    return session.teacherNotes && String(session.teacherNotes).trim() ? "REVIEWED" : "UNREVIEWED";
+  }
+  return "SCHEDULED";
+};
+
+const mapClassOnlineToTeacherSession = (session: any, classRow: any): OnlineClassSession => {
+  const start = new Date(session.scheduledAt);
+  const durationMin = Number(session.durationMin || 60);
+  const end = new Date(start.getTime() + durationMin * 60_000);
+  const status = toSessionStatus(session);
+  const reviewDeadlineSeconds = Math.max(
+    0,
+    Math.floor((start.getTime() + durationMin * 60_000 + 24 * 60 * 60_000 - Date.now()) / 1000)
+  );
+
+  return {
+    id: String(session.id),
+    classId: String(session.classId || classRow.id),
+    className: session.className || classRow.name || classRow.className || `Lớp #${session.classId || classRow.id}`,
+    courseName: classRow.courseName || session.classCode || "",
+    title: session.title || "Buổi học online",
+    startTime: toTimeText(start),
+    endTime: toTimeText(end),
+    startHour: start.getHours() + start.getMinutes() / 60,
+    endHour: end.getHours() + end.getMinutes() / 60,
+    dateStr: toDateText(start),
+    dayOfWeek: toTeacherDayOfWeek(start),
+    roomUrl: session.meetingUrl || "https://meet.google.com/new",
+    status,
+    secondsLeftToReview: status === "UNREVIEWED" ? reviewDeadlineSeconds : undefined,
+    reviewNote: session.teacherNotes,
+  };
+};
+
 // MOCK DATA FALLBACKS
 const MOCK_TEACHER_METRICS: TeacherDashboardMetrics = {
   unreviewedSessionsCount: 2,
@@ -474,95 +526,30 @@ export const teacherApi = {
   },
 
   getOnlineSessions: async (): Promise<OnlineClassSession[]> => {
-    return [
-      {
-        id: "sess-101",
-        classId: "cls-1",
-        className: "Lớp Fullstack Web FS-2026-K1",
-        courseName: "Fullstack Web Pro 1-1",
-        title: "Buổi 12: Thực hành JWT Filter Spring Security",
-        startTime: "19:00",
-        endTime: "21:00",
-        startHour: 19,
-        endHour: 21,
-        dateStr: "2026-08-03",
-        dayOfWeek: 0, // Mon
-        roomUrl: "https://meet.jit.si/ailms-fs2026",
-        status: "SCHEDULED",
-      },
-      {
-        id: "sess-102",
-        classId: "cls-2",
-        className: "Lớp AI-Specialist-K2",
-        courseName: "AI Application Specialist",
-        title: "Buổi 5: Fine-tuning LLM với LoRA",
-        startTime: "20:00",
-        endTime: "21:30",
-        startHour: 20,
-        endHour: 21.5,
-        dateStr: "2026-08-04",
-        dayOfWeek: 1, // Tue
-        roomUrl: "https://meet.jit.si/ailms-ai2026",
-        status: "SCHEDULED",
-      },
-      {
-        id: "sess-103",
-        classId: "cls-3",
-        className: "Lớp React-Advanced-K9",
-        courseName: "Frontend React & Next.js",
-        title: "Buổi 8: Server Actions & React Server Components",
-        startTime: "19:00",
-        endTime: "21:00",
-        startHour: 19,
-        endHour: 21,
-        dateStr: "2026-08-02",
-        dayOfWeek: 6, // Sun
-        roomUrl: "https://meet.jit.si/ailms-react9",
-        status: "UNREVIEWED",
-        secondsLeftToReview: 18 * 3600 + 15 * 60,
-      },
-      {
-        id: "sess-104",
-        classId: "cls-1",
-        className: "Lớp Fullstack Web FS-2026-K1",
-        courseName: "Fullstack Web Pro 1-1",
-        title: "Buổi 13: Cấu hình Microservices Eureka & API Gateway",
-        startTime: "19:00",
-        endTime: "21:00",
-        startHour: 19,
-        endHour: 21,
-        dateStr: "2026-08-06",
-        dayOfWeek: 3, // Thu
-        roomUrl: "https://meet.jit.si/ailms-fs2026",
-        status: "SCHEDULED",
-      },
-      {
-        id: "sess-105",
-        classId: "cls-2",
-        className: "Lớp AI 1-1 Kèm Chuyên Sâu",
-        courseName: "AI Application Specialist",
-        title: "Buổi 6: Review Code & Chữa bài tập LangChain",
-        startTime: "10:00",
-        endTime: "11:30",
-        startHour: 10,
-        endHour: 11.5,
-        dateStr: "2026-08-08",
-        dayOfWeek: 5, // Sat
-        roomUrl: "https://meet.jit.si/ailms-ai2026",
-        status: "SCHEDULED",
-      },
-    ];
-  },
-
-  submitSessionReview: async (sessionId: string, attendanceData: any, note: string): Promise<boolean> => {
-    try {
-      await httpClient.post(`/v1/teacher/sessions/${sessionId}/review`, { attendanceData, note });
-      return true;
-    } catch {
-      return true;
+    const classRes = await httpClient.get<ApiResponse<any[]>>("/v1/classes/teaching/me");
+    const classes = classRes.data?.data || [];
+    const sessionsByClass = await Promise.all(
+      classes.map(async (classRow: any) => {
+        const res = await httpClient.get<ApiResponse<any[]>>(`/v1/class-online/class/${classRow.id}`);
+        return (res.data?.data || []).map((session: any) => mapClassOnlineToTeacherSession(session, classRow));
+      })
+    );
+    const allSessions = sessionsByClass.flat();
+    const uniqueMap = new Map<string, OnlineClassSession>();
+    for (const session of allSessions) {
+      const key = session.id ? String(session.id) : `${session.classId}_${session.dateStr}_${session.startTime}_${session.title}`;
+      if (!uniqueMap.has(key)) {
+        uniqueMap.set(key, session);
+      }
     }
+    return Array.from(uniqueMap.values())
+      .sort((a, b) => `${a.dateStr} ${a.startTime}`.localeCompare(`${b.dateStr} ${b.startTime}`));
   },
 
+  submitSessionReview: async (sessionId: string, _attendanceData: any, note: string): Promise<boolean> => {
+    await httpClient.put(`/v1/class-online/${sessionId}`, { teacherNotes: note });
+    return true;
+  },
   getCourses: async (): Promise<TeacherCourseItem[]> => {
     try {
       const res = await httpClient.get<ApiResponse<TeacherCourseItem[]>>("/v1/teacher/courses");
@@ -646,7 +633,7 @@ export const teacherApi = {
     }));
   },
 
-  sendStudentReminder: async (studentId: string): Promise<boolean> => {
+  sendStudentReminder: async (_studentId: string): Promise<boolean> => {
     return true;
   },
 
@@ -669,7 +656,7 @@ export const teacherApi = {
     };
   },
 
-  cancelLeaveRequest: async (id: string): Promise<boolean> => {
+  cancelLeaveRequest: async (_id: string): Promise<boolean> => {
     return true;
   },
 };

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -64,6 +65,11 @@ export const ClassDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  const { auth } = useAuth();
+  const isTeacherRoute = location.pathname.startsWith("/teacher");
+  const userRoles = (auth.user?.roles || []).map((role) => String(role).toUpperCase());
+  const isAdminOrHR = userRoles.some((role) => role.includes("ADMIN") || role.includes("HR")) && !isTeacherRoute;
+  const backPath = isAdminOrHR ? "/admin/classrooms" : "/teacher/classes";
 
   const [cls, setCls] = useState<Classroom | null>(null);
   const [loading, setLoading] = useState(true);
@@ -115,7 +121,7 @@ export const ClassDetailPage: React.FC = () => {
           sortDirection: sessionSortDirection,
         }),
         adminCourseClassApi.getClassSchedules(id),
-        adminCourseClassApi.getEmployees(),
+        isAdminOrHR ? adminCourseClassApi.getEmployees() : Promise.resolve([]),
         adminCourseClassApi.getClassEnrollments(id),
         adminCourseClassApi.getTeachingRates(),
         adminCourseClassApi.getTeachingPayments(),
@@ -123,6 +129,18 @@ export const ClassDetailPage: React.FC = () => {
 
       const employeeById = new Map(employees.map((employee: any) => [String(employee.id || employee.userId), employee]));
       const staffMembers = memberRows.filter((member: any) => member.status === "ACTIVE" && (member.roleInClass === "TEACHER" || member.roleInClass === "TA"));
+      if (!isAdminOrHR) {
+        const currentUserId = String(auth.user?.id || "");
+        const currentUsername = String(auth.user?.username || "").toLowerCase();
+        const canView = staffMembers.some((member: any) => {
+          const memberUserId = String(member.userId || "");
+          const memberUsername = String(member.username || "").toLowerCase();
+          return (currentUserId && memberUserId === currentUserId) || (currentUsername && memberUsername === currentUsername);
+        });
+        if (!canView) {
+          throw new Error("Bạn không có quyền xem lớp học này");
+        }
+      }
 
       const teacherMember = staffMembers.find((member: any) => member.roleInClass === "TEACHER");
       const teacherEmployee = teacherMember ? employeeById.get(String(teacherMember.userId)) : null;
@@ -134,7 +152,19 @@ export const ClassDetailPage: React.FC = () => {
         category: row.categoryName || row.categoryEntity?.name || "",
       } : { id: "", name: "Chưa phân công", email: "", avatar: "", category: "" };
 
-      const activeTeachingRate = rates.find((item: any) => item.status === "ACTIVE") || null;
+      const now = new Date();
+      const activeTeachingRate = rates
+        .filter((item: any) => String(item.status || "").toUpperCase() === "ACTIVE")
+        .filter((item: any) => !teacherMember || String(item.employeeId) === String(teacherMember.userId))
+        .filter((item: any) => !item.classId || String(item.classId) === String(row.id))
+        .filter((item: any) => !item.effectiveFrom || new Date(item.effectiveFrom) <= now)
+        .filter((item: any) => !item.effectiveTo || new Date(item.effectiveTo) >= now)
+        .sort((a: any, b: any) => {
+          const aClassScore = a.classId && String(a.classId) === String(row.id) ? 1 : 0;
+          const bClassScore = b.classId && String(b.classId) === String(row.id) ? 1 : 0;
+          if (aClassScore !== bClassScore) return bClassScore - aClassScore;
+          return new Date(b.effectiveFrom || 0).getTime() - new Date(a.effectiveFrom || 0).getTime();
+        })[0] || null;
       setActiveRate(activeTeachingRate);
 
       const dayNameMap: Record<number | string, ClassScheduleSlot["dayOfWeek"]> = {
@@ -242,7 +272,7 @@ export const ClassDetailPage: React.FC = () => {
       setSessionsTotalElements(Number(sessionPageRows?.totalElements || 0));
       setSessionsTotalPages(Math.max(1, Number(sessionPageRows?.totalPages || 1)));
     } catch (err: any) {
-      setError(err?.response?.data?.message || "Không thể tải chi tiết lớp học");
+      setError(err?.response?.data?.message || err?.message || "Không thể tải chi tiết lớp học");
     } finally {
       setLoading(false);
     }
@@ -250,7 +280,7 @@ export const ClassDetailPage: React.FC = () => {
 
   useEffect(() => {
     loadClass();
-  }, [id, membersPage, membersSize, sessionsPage, sessionsSize, sessionSearchKeyword, sessionStatusFilter, sessionSortDirection]);
+  }, [id, membersPage, membersSize, sessionsPage, sessionsSize, sessionSearchKeyword, sessionStatusFilter, sessionSortDirection, isAdminOrHR, auth.user?.id, auth.user?.username]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -302,7 +332,7 @@ export const ClassDetailPage: React.FC = () => {
   if (error || !cls) {
     return (
       <div className="p-8 space-y-4">
-        <Button variant="ghost" onClick={() => navigate("/admin/classrooms")}>
+        <Button variant="ghost" onClick={() => navigate(backPath)}>
           <ArrowLeft className="w-4 h-4 mr-2" /> Quay lại
         </Button>
         <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-700 flex items-center gap-2">
@@ -320,7 +350,7 @@ export const ClassDetailPage: React.FC = () => {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => navigate("/admin/classrooms")}
+            onClick={() => navigate(backPath)}
             className="rounded-xl border-slate-200"
           >
             <ArrowLeft className="w-4 h-4 mr-1" /> Quay lại
@@ -353,6 +383,7 @@ export const ClassDetailPage: React.FC = () => {
         </div>
 
         {/* Header Action Buttons */}
+        {isAdminOrHR && (
         <div className="flex items-center gap-2">
           <Button
             onClick={() => setChangeTeacherOpen(true)}
@@ -392,6 +423,7 @@ export const ClassDetailPage: React.FC = () => {
             </Button>
           )}
         </div>
+        )}
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -567,6 +599,7 @@ export const ClassDetailPage: React.FC = () => {
                             >
                               <Eye className="h-3.5 w-3.5" /> Xem Chi Tiết
                             </Button>
+                            {isAdminOrHR && (
                             <Button
                               variant="ghost"
                               size="sm"
@@ -575,6 +608,7 @@ export const ClassDetailPage: React.FC = () => {
                             >
                               <UserMinus className="w-3.5 h-3.5 mr-1" /> Xóa
                             </Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -720,9 +754,11 @@ export const ClassDetailPage: React.FC = () => {
         <TabsContent value="schedule" className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-slate-900 text-base">Khung Lịch Học Tuần Cố Định</h3>
+            {isAdminOrHR && (
             <Button variant="outline" size="sm" onClick={() => setEditScheduleOpen(true)}>
               <Edit className="w-3.5 h-3.5 mr-1.5" /> Sửa Khung Lịch
             </Button>
+            )}
           </div>
 
           <div className="grid grid-cols-7 gap-2 text-center">
@@ -959,6 +995,7 @@ export const ClassDetailPage: React.FC = () => {
       )}
 
       {/* Remove student confirmation dialog */}
+      {isAdminOrHR && (
       <Dialog
         open={Boolean(studentToRemove)}
         onOpenChange={(open) => !open && setStudentToRemove(null)}
@@ -989,9 +1026,10 @@ export const ClassDetailPage: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      )}
 
       {/* Change Teacher Modal */}
-      {cls && changeTeacherOpen && (
+      {isAdminOrHR && cls && changeTeacherOpen && (
         <ChangeTeacherModal
           open={changeTeacherOpen}
           onClose={() => setChangeTeacherOpen(false)}
@@ -1003,7 +1041,7 @@ export const ClassDetailPage: React.FC = () => {
       )}
 
       {/* Edit Schedule Modal */}
-      {cls && editScheduleOpen && (
+      {isAdminOrHR && cls && editScheduleOpen && (
         <EditScheduleModal
           open={editScheduleOpen}
           onClose={() => setEditScheduleOpen(false)}

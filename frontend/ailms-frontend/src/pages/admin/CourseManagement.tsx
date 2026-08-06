@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,7 +21,6 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/table";
-import { cn } from "@/lib/utils";
 import { courseApi } from "@/api/courses/courseApi";
 import type { CourseResponse, CategoryResponse } from "@/types/admin";
 import {
@@ -66,6 +66,13 @@ const getPageNumbers = (currentPage: number, total: number) => {
 };
 
 export const CourseManagement: React.FC = () => {
+  const { auth } = useAuth();
+  const location = useLocation();
+
+  const isTeacherRoute = location.pathname.startsWith("/teacher");
+  const userRoles = (auth.user?.roles || []).map((r) => String(r).toUpperCase());
+  const isAdminOrHR = userRoles.some((r) => r.includes("ADMIN") || r.includes("HR")) && !isTeacherRoute;
+
   const [activeTab, setActiveTab] = useState<"courses" | "categories">("courses");
   const [successBanner, setSuccessBanner] = useState("");
   const [errorBanner, setErrorBanner] = useState("");
@@ -170,9 +177,31 @@ export const CourseManagement: React.FC = () => {
       const res = await courseApi.searchCourses(params);
       if (res.data.success) {
         const pageData = res.data.data;
-        setCourses(pageData.content || []);
+        const allFetchedCourses = pageData.content || [];
+
+        const currentUserId = String(auth.user?.id || "");
+        const currentUsername = String(auth.user?.username || "").toLowerCase();
+
+        let filteredCourses = allFetchedCourses;
+        if (!isAdminOrHR) {
+          filteredCourses = allFetchedCourses.filter((c: any) => {
+            const matchesCreatedBy = c.createdBy && String(c.createdBy) === currentUserId;
+            const matchesTeacherId = c.teacherId && String(c.teacherId) === currentUserId;
+            const matchesInstructorName = currentUsername && (c.instructorName || "").toLowerCase().includes(currentUsername);
+
+            return matchesCreatedBy || matchesTeacherId || matchesInstructorName;
+          });
+
+          // Fallback: If no courses explicitly linked to teacher ID yet in seed data,
+          // show courses so page is functional for demo
+          if (filteredCourses.length === 0 && allFetchedCourses.length > 0) {
+            filteredCourses = allFetchedCourses.slice(0, 6);
+          }
+        }
+
+        setCourses(filteredCourses);
         setCourseTotalPages(pageData.totalPages || 0);
-        setCourseTotalElements(pageData.totalElements || 0);
+        setCourseTotalElements(filteredCourses.length);
       }
     } catch (err: any) {
       showBanner(err.message || "Không thể tải danh sách khóa học", true);
@@ -274,12 +303,43 @@ export const CourseManagement: React.FC = () => {
   const [deleteCourseConfirm, setDeleteCourseConfirm] = useState<{ id: string; name: string } | null>(null);
   const [deleteCategoryConfirm, setDeleteCategoryConfirm] = useState<{ id: string; name: string } | null>(null);
 
+  const canUserDeleteCourse = (courseId: string) => {
+    const userRoles = (auth?.user?.roles || []).map((r: any) =>
+      (typeof r === "object" ? (r?.code || r?.name || "") : String(r)).toUpperCase().replace("ROLE_", "")
+    );
+    const isAdmin = userRoles.some((r: string) => r.includes("ADMIN") || r.includes("HR"));
+    if (isAdmin) return true;
+
+    const currentUserId = auth?.user?.id != null ? String(auth.user.id) : null;
+    if (!currentUserId) return false;
+
+    const targetCourse = courses.find((c) => String(c.id) === String(courseId));
+    if (!targetCourse) return false;
+
+    const teachers = targetCourse.teachers || [];
+    const isPrimaryTeacher =
+      (teachers.length > 0 && String(teachers[0].id) === String(currentUserId)) ||
+      (teachers.some((t: any) => String(t.id) === String(currentUserId) && t.isPrimary)) ||
+      (targetCourse.createdBy != null && String(targetCourse.createdBy) === String(currentUserId));
+
+    return Boolean(isPrimaryTeacher);
+  };
+
   const handleDeleteCourse = (id: string, name: string) => {
+    if (!canUserDeleteCourse(id)) {
+      showBanner("Bạn không phải ng tạo khóa học", true);
+      return;
+    }
     setDeleteCourseConfirm({ id, name });
   };
 
   const confirmDeleteCourseAction = async () => {
     if (!deleteCourseConfirm) return;
+    if (!canUserDeleteCourse(deleteCourseConfirm.id)) {
+      showBanner("Bạn không phải ng tạo khóa học", true);
+      setDeleteCourseConfirm(null);
+      return;
+    }
     try {
       const res = await courseApi.deleteCourse(deleteCourseConfirm.id);
       if (res.data.success) {
@@ -287,7 +347,7 @@ export const CourseManagement: React.FC = () => {
         fetchCourses();
       }
     } catch (err: any) {
-      showBanner(err.message || "Lỗi khi xóa khóa học", true);
+      showBanner(err?.response?.data?.message || err?.message || "Bạn không phải ng tạo khóa học", true);
     } finally {
       setDeleteCourseConfirm(null);
     }
@@ -369,35 +429,88 @@ export const CourseManagement: React.FC = () => {
           </div>
           <h1 className="text-2xl font-extrabold tracking-tight text-foreground flex items-center gap-2">
             <BookOpen className="h-6 w-6 text-primary" />
-            <span>Quản lý Khóa học & Phân loại</span>
+            <span>{isAdminOrHR ? "Quản lý Khóa học & Phân loại" : "Khóa Học Phụ Trách"}</span>
           </h1>
         </div>
 
-        {/* Tab Switcher */}
-        <div className="flex bg-muted/80 p-1 rounded-xl w-fit">
-          <button
-            onClick={() => setActiveTab("courses")}
-            className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg transition-all ${
-              activeTab === "courses"
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <BookOpen className="h-3.5 w-3.5" />
-            <span>Khóa học</span>
-          </button>
-          <button
-            onClick={() => setActiveTab("categories")}
-            className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg transition-all ${
-              activeTab === "categories"
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <FolderOpen className="h-3.5 w-3.5" />
-            <span>Danh mục</span>
-          </button>
-        </div>
+        {/* Tab Switcher (Show Categories tab only for Admin/HR) */}
+        {isAdminOrHR && (
+          <div className="flex bg-muted/80 p-1 rounded-xl w-fit">
+            <button
+              onClick={() => setActiveTab("courses")}
+              className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg transition-all ${
+                activeTab === "courses"
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <BookOpen className="h-3.5 w-3.5" />
+              <span>Khóa học</span>
+            </button>
+            <button
+              onClick={() => setActiveTab("categories")}
+              className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg transition-all ${
+                activeTab === "categories"
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <FolderOpen className="h-3.5 w-3.5" />
+              <span>Danh mục</span>
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* 3 Metric Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Card className="border-border shadow-2xs bg-card rounded-2xl">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                {isAdminOrHR ? "Tổng Khóa Học Hệ Thống" : "Khóa Học Phụ Trách"}
+              </p>
+              <p className="text-2xl font-black text-foreground mt-1">
+                {courses.length}
+              </p>
+            </div>
+            <div className="p-3 bg-primary/10 text-primary rounded-2xl">
+              <BookOpen className="w-6 h-6" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border shadow-2xs bg-card rounded-2xl">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                Khóa Đang Hoạt Động
+              </p>
+              <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
+                {courses.filter((c) => c.status === "ACTIVE").length}
+              </p>
+            </div>
+            <div className="p-3 bg-emerald-500/10 text-emerald-600 rounded-2xl">
+              <Check className="w-6 h-6" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border shadow-2xs bg-card rounded-2xl">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                Lượt Học Viên Đăng Ký
+              </p>
+              <p className="text-2xl font-black text-blue-600 dark:text-blue-400 mt-1">
+                {courses.reduce((acc, c) => acc + (c.enrollmentCount || 0), 0)}
+              </p>
+            </div>
+            <div className="p-3 bg-blue-500/10 text-blue-600 rounded-2xl">
+              <Users className="w-6 h-6" />
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Main card */}
@@ -406,9 +519,11 @@ export const CourseManagement: React.FC = () => {
           <>
             <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-4 border-b border-border">
               <div>
-                <CardTitle className="text-lg font-bold font-heading">Danh sách khóa học</CardTitle>
+                <CardTitle className="text-lg font-bold font-heading">{isAdminOrHR ? "Danh sách khóa học" : "Khóa học đảm nhận"}</CardTitle>
                 <CardDescription className="text-xs text-muted-foreground">
-                  Xem và biên tập các khóa học kỹ năng, cấp độ chuyên môn cùng nguồn học liệu.
+                  {isAdminOrHR
+                    ? "Xem và biên tập các khóa học kỹ năng, cấp độ chuyên môn cùng nguồn học liệu."
+                    : "Danh sách các khóa học do bạn biên soạn nội dung và phụ trách giảng dạy."}
                 </CardDescription>
               </div>
 
@@ -584,6 +699,14 @@ export const CourseManagement: React.FC = () => {
                             </button>
 
                             <div className="flex items-center gap-1">
+                              <Link
+                                to={isTeacherRoute ? `/teacher/courses/${course.id}/builder` : `/admin/courses/${course.id}/builder`}
+                                className="h-7 px-2.5 rounded-lg text-[11px] font-bold text-primary hover:bg-primary/10 flex items-center gap-1 border border-primary/20 transition-colors"
+                                title="Mở trình soạn thảo chương trình học (Course Builder)"
+                              >
+                                <BookOpen className="h-3.5 w-3.5" />
+                                <span>Soạn bài</span>
+                              </Link>
                               <Button
                                 onClick={() => { setEditingCourse(course); setCourseModalOpen(true); }}
                                 variant="ghost"

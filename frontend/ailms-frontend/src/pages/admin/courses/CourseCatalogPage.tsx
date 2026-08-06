@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -49,6 +49,7 @@ import {
 import type { CourseExtended, CourseStatus } from "@/types/adminCourseClass";
 import { adminCourseClassApi } from "@/api/courses/adminCourseClassApi";
 import { courseApi } from "@/api/courses/courseApi";
+import { useAuth } from "@/hooks/useAuth";
 
 const DEFAULT_AVATAR = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80";
 const DEFAULT_COVER = "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=600&q=80";
@@ -79,18 +80,44 @@ const getPageNumbers = (currentPage: number, total: number) => {
 export const CourseCatalogPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const { auth } = useAuth();
+
+  const isTeacherRoute = location.pathname.startsWith("/teacher");
+  const baseRoute = isTeacherRoute ? "/teacher/courses" : "/admin/courses";
+  const sessionKey = isTeacherRoute ? "teacher_course_catalog_state" : "admin_course_catalog_state";
+  const currentUserId = auth?.user?.id != null ? String(auth.user.id) : null;
+
+  const userRolesList = useMemo(() => {
+    return (auth?.user?.roles || []).map((r: any) =>
+      (typeof r === "object" ? (r?.code || r?.name || "") : String(r)).toUpperCase().replace("ROLE_", "")
+    );
+  }, [auth?.user?.roles]);
+
+  const isAdminUser = useMemo(() => {
+    return userRolesList.some((r: string) => r.includes("ADMIN") || r.includes("HR"));
+  }, [userRolesList]);
 
   // Restore saved view & filter state if returning from detail page or sessionStorage
   const initialSavedState = useMemo(() => {
     const fromLoc = (location.state as any)?.catalogView;
     if (fromLoc) return fromLoc;
     try {
-      const fromSession = sessionStorage.getItem("admin_course_catalog_state");
+      const fromSession = sessionStorage.getItem(sessionKey);
       return fromSession ? JSON.parse(fromSession) : null;
     } catch {
       return null;
     }
-  }, [location.state]);
+  }, [location.state, sessionKey]);
+
+  const initialPage = useMemo(() => {
+    const pParam = searchParams.get("page");
+    if (pParam) {
+      const parsed = parseInt(pParam, 10);
+      if (!isNaN(parsed) && parsed >= 1) return parsed - 1;
+    }
+    return initialSavedState?.page ?? 0;
+  }, [searchParams, initialSavedState]);
 
   const [courses, setCourses] = useState<CourseExtended[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
@@ -98,7 +125,7 @@ export const CourseCatalogPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const [page, setPage] = useState<number>(initialSavedState?.page ?? 0);
+  const [page, setPage] = useState<number>(initialPage);
   const [pageSize, setPageSize] = useState<number>(initialSavedState?.pageSize ?? 9);
   const [viewMode, setViewMode] = useState<"grid" | "table">(initialSavedState?.viewMode ?? "grid");
 
@@ -122,7 +149,7 @@ export const CourseCatalogPage: React.FC = () => {
     initialSavedState?.sortRules ?? [{ field: "createdAt", dir: "DESC" }]
   );
 
-  // Sync state to sessionStorage whenever filters or view change
+   // Sync state to sessionStorage whenever filters or view change
   useEffect(() => {
     const currentState = {
       viewMode,
@@ -138,7 +165,7 @@ export const CourseCatalogPage: React.FC = () => {
       sortRules,
     };
     try {
-      sessionStorage.setItem("admin_course_catalog_state", JSON.stringify(currentState));
+      sessionStorage.setItem(sessionKey, JSON.stringify(currentState));
     } catch (e) {
       console.warn("Could not save catalog state to sessionStorage", e);
     }
@@ -162,13 +189,23 @@ export const CourseCatalogPage: React.FC = () => {
     setLoading(true);
     setError("");
     try {
-      const [courseRows, categoryRows, packageRows, employeeRows, teacherAssignments] = await Promise.all([
+      const promises: [Promise<any[]>, Promise<any[]>, Promise<any[]>, Promise<any[]>, Promise<any[]>] = [
         adminCourseClassApi.getCourses(),
-        adminCourseClassApi.getCategories(),
+        isTeacherRoute ? adminCourseClassApi.getMyTeacherCategories() : adminCourseClassApi.getCategories(),
         adminCourseClassApi.getPackages(),
-        adminCourseClassApi.getEmployees(),
+        isTeacherRoute ? Promise.resolve([]) : adminCourseClassApi.getEmployees(),
         adminCourseClassApi.getAllCourseTeachers(),
-      ]);
+      ];
+
+      const [courseRows, rawCategoryRows, packageRows, employeeRows, teacherAssignments] = await Promise.all(promises);
+
+      const categoryRows = isTeacherRoute
+        ? (rawCategoryRows || []).map((c: any) => ({
+            id: String(c.categoryId || c.id),
+            name: c.categoryName || c.name || "Danh mục",
+          }))
+        : (rawCategoryRows || []);
+
       const employeeById = new Map<string, any>();
       (employeeRows || []).forEach((item: any) => {
         if (item.id != null) employeeById.set(String(item.id), item);
@@ -183,9 +220,23 @@ export const CourseCatalogPage: React.FC = () => {
         teachersByCourse.get(cid)!.push(assignment);
       });
 
+      const allowedCatIds = new Set(categoryRows.map((c: any) => String(c.id)));
+
+      let visibleCourseRows = (courseRows || []).filter((c: any) => c.status !== "DELETED");
+      if (isTeacherRoute) {
+        visibleCourseRows = visibleCourseRows.filter((course: any) => {
+          const inMyCat = allowedCatIds.has(String(course.categoryId));
+          const assignments = teachersByCourse.get(String(course.id)) || [];
+          const hasMyAssignment = assignments.some(
+            (a: any) => String(a.userId) === String(currentUserId) && (a.status === "ACTIVE" || a.status === "ACCEPTED")
+          );
+          return inMyCat && hasMyAssignment;
+        });
+      }
+
       setCategories(categoryRows);
       setEmployees(employeeRows);
-      setCourses(courseRows.map((course: any) => {
+      setCourses(visibleCourseRows.map((course: any) => {
         const packages = packageRows.filter((item: any) => String(item.courseId) === String(course.id));
         const activeAssignments = (teachersByCourse.get(String(course.id)) || []).filter(
           (assignment: any) => assignment.status === "ACTIVE" || assignment.status === "ACCEPTED"
@@ -194,10 +245,24 @@ export const CourseCatalogPage: React.FC = () => {
         const mappedTeachers = activeAssignments.map((assignment: any, index: number) => {
           const emp = employeeById.get(String(assignment.userId));
           const isPrimary = index === 0;
+          const teacherName =
+            assignment.teacherName ||
+            assignment.fullName ||
+            assignment.teacherUsername ||
+            assignment.username ||
+            emp?.fullName ||
+            emp?.username ||
+            `Giảng viên #${assignment.userId}`;
+          const teacherAvatar =
+            assignment.teacherAvatar ||
+            assignment.avatarUrl ||
+            emp?.avatarUrl ||
+            "";
+
           return {
             id: String(assignment.userId),
-            name: emp?.fullName || emp?.username || `Giảng viên #${assignment.userId}`,
-            avatar: emp?.avatarUrl && emp.avatarUrl.trim() !== "" ? emp.avatarUrl : DEFAULT_AVATAR,
+            name: teacherName,
+            avatar: teacherAvatar && teacherAvatar.trim() !== "" ? teacherAvatar : DEFAULT_AVATAR,
             category: isPrimary ? "Giảng viên chính" : "Đồng phụ trách",
             isPrimary,
             status: assignment.status || "ACTIVE",
@@ -233,11 +298,27 @@ export const CourseCatalogPage: React.FC = () => {
     }
   };
 
+
   useEffect(() => {
     void loadData();
   }, []);
 
+  useEffect(() => {
+    if (!loading && initialSavedState?.scrollY != null) {
+      const targetY = Number(initialSavedState.scrollY);
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: targetY, behavior: "instant" as ScrollBehavior });
+      });
+      const timer = setTimeout(() => {
+        window.scrollTo({ top: targetY, behavior: "instant" as ScrollBehavior });
+      }, 80);
+      return () => clearTimeout(timer);
+    }
+  }, [loading, initialSavedState]);
+
+
   const handleNavigateToDetail = (courseId: string) => {
+    const currentScrollY = window.scrollY || document.documentElement.scrollTop || 0;
     const currentState = {
       viewMode,
       page,
@@ -250,9 +331,27 @@ export const CourseCatalogPage: React.FC = () => {
       filterStartDate,
       filterEndDate,
       sortRules,
+      scrollY: currentScrollY,
     };
-    navigate(`/admin/courses/${courseId}`, {
-      state: { returnTo: "/admin/courses", catalogView: currentState },
+    try {
+      sessionStorage.setItem(sessionKey, JSON.stringify(currentState));
+    } catch (e) {
+      console.warn("Could not save catalog state", e);
+    }
+
+    const params = new URLSearchParams();
+    if (page > 0) params.set("page", String(page + 1));
+    if (pageSize !== 9) params.set("pageSize", String(pageSize));
+    if (searchTerm) params.set("search", searchTerm);
+    if (selectedCategory !== "ALL") params.set("category", selectedCategory);
+    if (selectedStatus !== "ALL") params.set("status", selectedStatus);
+    if (selectedTeacher !== "ALL") params.set("teacher", selectedTeacher);
+    if (selectedDeliveryMode !== "ALL") params.set("delivery", selectedDeliveryMode);
+
+    const returnUrl = `${baseRoute}${params.toString() ? `?${params.toString()}` : ""}`;
+
+    navigate(`${baseRoute}/${courseId}`, {
+      state: { returnTo: returnUrl, catalogView: currentState },
     });
   };
 
@@ -292,8 +391,8 @@ export const CourseCatalogPage: React.FC = () => {
       if (editingCourse) {
         const res = await courseApi.updateCourse(editingCourse.id, { categoryId, name, link: editingCourse.link || autoLink, description, level });
         if (res.data.success) {
-          // Cập nhật status (ẩn/hiện) nếu có thay đổi
-          if (status && status !== editingCourse.status) {
+          // Chỉ Admin/HR mới có quyền thay đổi trạng thái khóa học
+          if (isAdminUser && status && status !== editingCourse.status) {
             await courseApi.updateCourseStatus(editingCourse.id, status);
           }
           showBanner("Cập nhật khóa học thành công!");
@@ -314,8 +413,31 @@ export const CourseCatalogPage: React.FC = () => {
     }
   };
 
+  const canUserDeleteCourse = (course: CourseExtended) => {
+    const userRoles = (auth?.user?.roles || []).map((r: any) =>
+      (typeof r === "object" ? (r?.code || r?.name || "") : String(r)).toUpperCase().replace("ROLE_", "")
+    );
+    const isAdmin = userRoles.some((r: string) => r.includes("ADMIN") || r.includes("HR"));
+    if (isAdmin) return true;
+
+    if (!currentUserId) return false;
+
+    const isPrimaryTeacher =
+      (course.teachers && course.teachers.length > 0 && String(course.teachers[0].id) === String(currentUserId)) ||
+      (course.teachers && course.teachers.some((t) => String(t.id) === String(currentUserId) && t.isPrimary)) ||
+      (course.createdBy != null && String(course.createdBy) === String(currentUserId));
+
+    return Boolean(isPrimaryTeacher);
+  };
+
   const confirmDeleteCourseAction = async () => {
     if (!deleteCourseConfirm) return;
+    const targetCourse = courses.find((c) => String(c.id) === String(deleteCourseConfirm.id));
+    if (targetCourse && !canUserDeleteCourse(targetCourse)) {
+      showBanner("Bạn không phải ng tạo khóa học", true);
+      setDeleteCourseConfirm(null);
+      return;
+    }
     try {
       const res = await courseApi.deleteCourse(deleteCourseConfirm.id);
       if (res.data.success) {
@@ -323,7 +445,7 @@ export const CourseCatalogPage: React.FC = () => {
         loadData();
       }
     } catch (err: any) {
-      showBanner(err.message || "Lỗi khi xóa khóa học", true);
+      showBanner(err?.response?.data?.message || err?.message || "Bạn không phải ng tạo khóa học", true);
     } finally {
       setDeleteCourseConfirm(null);
     }
@@ -411,8 +533,10 @@ export const CourseCatalogPage: React.FC = () => {
   );
 
   useEffect(() => {
-    if (page >= totalPages && totalPages > 0) setPage(totalPages - 1);
-  }, [page, totalPages]);
+    if (!loading && courses.length > 0 && page >= totalPages && totalPages > 0) {
+      setPage(totalPages - 1);
+    }
+  }, [loading, courses.length, page, totalPages]);
 
   // Multi-column sort toggle handler (RoleManagement pattern)
   const handleSort = (field: SortField) => {
@@ -661,19 +785,21 @@ export const CourseCatalogPage: React.FC = () => {
               </SelectContent>
             </Select>
 
-            {/* Teacher Filter */}
-            <Select value={selectedTeacher} onValueChange={(val) => { setSelectedTeacher(val); setPage(0); }}>
-              <SelectTrigger className="bg-white h-9 text-sm">
-                <SelectValue placeholder="Giảng viên" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">Tất cả giảng viên</SelectItem>
-                {employees.filter((employee) => {
-                  const text = [employee.position, ...(employee.roles || [])].join(" ").toUpperCase();
-                  return text.includes("TEACHER") || text.includes("ROLE_TA") || text.includes("TRỢ GIẢNG");
-                }).map((employee) => <SelectItem key={employee.id || employee.userId} value={String(employee.id || employee.userId)}>{employee.fullName}</SelectItem>)}
-              </SelectContent>
-            </Select>
+             {/* Teacher Filter */}
+            {!isTeacherRoute && (
+              <Select value={selectedTeacher} onValueChange={(val) => { setSelectedTeacher(val); setPage(0); }}>
+                <SelectTrigger className="bg-white h-9 text-sm">
+                  <SelectValue placeholder="Giảng viên" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">Tất cả giảng viên</SelectItem>
+                  {employees.filter((employee) => {
+                    const text = [employee.position, ...(employee.roles || [])].join(" ").toUpperCase();
+                    return text.includes("TEACHER") || text.includes("ROLE_TA") || text.includes("TRỢ GIẢNG");
+                  }).map((employee) => <SelectItem key={employee.id || employee.userId} value={String(employee.id || employee.userId)}>{employee.fullName}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            )}
 
             {/* Delivery Mode Filter */}
             <Select value={selectedDeliveryMode} onValueChange={(val) => { setSelectedDeliveryMode(val); setPage(0); }}>
@@ -872,7 +998,7 @@ export const CourseCatalogPage: React.FC = () => {
                     title="Soạn thảo chương & bài học (Course Builder Studio)"
                     onClick={(e) => {
                       e.stopPropagation();
-                      navigate(`/admin/courses/${course.id}/builder`);
+                      navigate(`${baseRoute}/${course.id}/builder`);
                     }}
                   >
                     <BookOpen className="w-3.5 h-3.5 mr-1" />
@@ -900,6 +1026,10 @@ export const CourseCatalogPage: React.FC = () => {
                     title="Chuyển vào thùng rác"
                     onClick={(e) => {
                       e.stopPropagation();
+                      if (!canUserDeleteCourse(course)) {
+                        showBanner("Bạn không phải ng tạo khóa học", true);
+                        return;
+                      }
                       setDeleteCourseConfirm({ id: String(course.id), name: course.name });
                     }}
                   >
@@ -1075,7 +1205,7 @@ export const CourseCatalogPage: React.FC = () => {
                           title="Soạn thảo chương & bài học (Course Builder Studio)"
                           onClick={(e) => {
                             e.stopPropagation();
-                            navigate(`/admin/courses/${course.id}/builder`);
+                            navigate(`${baseRoute}/${course.id}/builder`);
                           }}
                         >
                           <BookOpen className="w-4 h-4" />
@@ -1109,6 +1239,10 @@ export const CourseCatalogPage: React.FC = () => {
                           title="Chuyển vào thùng rác"
                           onClick={(e) => {
                             e.stopPropagation();
+                            if (!canUserDeleteCourse(course)) {
+                              showBanner("Bạn không phải ng tạo khóa học", true);
+                              return;
+                            }
                             setDeleteCourseConfirm({ id: String(course.id), name: course.name });
                           }}
                         >
@@ -1274,8 +1408,8 @@ export const CourseCatalogPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Status field – only available when EDITING an existing course */}
-              {editingCourse && (
+              {/* Status field – ONLY available for Admin when EDITING an existing course */}
+              {editingCourse && isAdminUser && (
                 <div className="space-y-1">
                   <Label className="text-xs font-semibold">Trạng thái khóa học</Label>
                   <select

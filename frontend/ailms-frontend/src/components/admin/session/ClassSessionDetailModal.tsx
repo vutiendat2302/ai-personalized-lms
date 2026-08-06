@@ -62,7 +62,7 @@ export const ClassSessionDetailModal: React.FC<ClassSessionDetailModalProps> = (
   };
 
   const handleCopyReview = () => {
-    const reviewStr = `Đánh giá: ${session.studentFeedback || "Học viên nhiệt tình học"}\nNhận xét: ${session.teacherNotes || "Học viên tập trung, đã hoàn thành bài tập."}`;
+    const reviewStr = `Đánh giá: ${formatOptionalText(session.studentFeedback)}\nNhận xét: ${formatOptionalText(session.teacherNotes)}`;
     navigator.clipboard.writeText(reviewStr);
     setCopiedReview(true);
     setTimeout(() => setCopiedReview(false), 2000);
@@ -73,7 +73,12 @@ export const ClassSessionDetailModal: React.FC<ClassSessionDetailModalProps> = (
     return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(val);
   };
 
+  const formatOptionalText = (val?: string) => {
+    return val && val.trim() ? val : "Chưa có dữ liệu";
+  };
+
   const lifecycleStatus = session.lifecycleStatus || session.status;
+  const displaySessionCode = session.sessionCode || `BH${session.id}`;
 
   const renderStatusBadge = (statusStr: string) => {
     const st = (statusStr || "").toUpperCase();
@@ -137,7 +142,7 @@ export const ClassSessionDetailModal: React.FC<ClassSessionDetailModalProps> = (
                 </div>
 
                 <DialogDescription className="text-xs text-muted-foreground mt-1 flex items-center gap-4 flex-wrap">
-                  <span>Mã buổi học: <strong className="text-foreground font-mono">BH{session.sessionCode || session.id}</strong></span>
+                  <span>Mã buổi học: <strong className="text-foreground font-mono">{displaySessionCode}</strong></span>
                   <span>Lớp: <strong className="text-primary">{session.className || session.classCode || `#${session.classId}`}</strong></span>
                   <span>Gia sư/Mentor: <strong className="text-foreground">{session.teacherName || `#${session.teacherId}`}</strong></span>
                 </DialogDescription>
@@ -183,7 +188,7 @@ export const ClassSessionDetailModal: React.FC<ClassSessionDetailModalProps> = (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 text-xs">
               <div className="flex justify-between py-1 border-b border-border/30">
                 <span className="font-bold text-muted-foreground">Mã buổi học:</span>
-                <span className="font-mono font-extrabold text-foreground">BH{session.sessionCode || session.id}</span>
+                <span className="font-mono font-extrabold text-foreground">{displaySessionCode}</span>
               </div>
 
               <div className="flex justify-between py-1 border-b border-border/30">
@@ -273,7 +278,7 @@ export const ClassSessionDetailModal: React.FC<ClassSessionDetailModalProps> = (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3 text-xs">
               <div className="flex justify-between py-1 border-b border-border/30">
                 <span className="font-bold text-muted-foreground">Nội dung buổi học:</span>
-                <span className="font-bold text-foreground">{session.sessionSummary || "Chữa bài tập chuyên đề & Thực hành"}</span>
+                <span className="font-bold text-foreground">{formatOptionalText(session.sessionSummary)}</span>
               </div>
 
               <div className="flex justify-between py-1 border-b border-border/30">
@@ -283,12 +288,12 @@ export const ClassSessionDetailModal: React.FC<ClassSessionDetailModalProps> = (
 
               <div className="flex justify-between py-1 border-b border-border/30">
                 <span className="font-bold text-muted-foreground">Đánh giá về buổi học:</span>
-                <span className="font-bold text-foreground">{session.studentFeedback || "Học viên nhiệt tình học tập, tương tác tốt"}</span>
+                <span className="font-bold text-foreground">{formatOptionalText(session.studentFeedback)}</span>
               </div>
 
               <div className="flex justify-between py-1 border-b border-border/30">
                 <span className="font-bold text-muted-foreground">Nhận xét về phiên học:</span>
-                <span className="font-bold text-foreground">{session.teacherNotes || "Học viên tập trung, đã chuẩn bị bài trước ở nhà."}</span>
+                <span className="font-bold text-foreground">{formatOptionalText(session.teacherNotes)}</span>
               </div>
 
               <div className="flex justify-between py-1 border-b border-border/30 md:col-span-2">

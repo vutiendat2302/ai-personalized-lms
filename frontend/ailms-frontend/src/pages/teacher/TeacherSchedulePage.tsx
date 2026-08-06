@@ -35,13 +35,13 @@ export const TeacherSchedulePage: React.FC = () => {
   const [sessionNote, setSessionNote] = useState("");
 
   const daysOfWeekLabels = [
-    { dayIdx: 0, label: "Thứ 2", dateStr: "03/08" },
-    { dayIdx: 1, label: "Thứ 3", dateStr: "04/08" },
-    { dayIdx: 2, label: "Thứ 4", dateStr: "05/08" },
-    { dayIdx: 3, label: "Thứ 5", dateStr: "06/08" },
-    { dayIdx: 4, label: "Thứ 6", dateStr: "07/08" },
-    { dayIdx: 5, label: "Thứ 7", dateStr: "08/08" },
-    { dayIdx: 6, label: "Chủ Nhật", dateStr: "09/08" },
+    { dayIdx: 0, label: "Thứ 2", dateStr: "03/08", isoDate: "2026-08-03" },
+    { dayIdx: 1, label: "Thứ 3", dateStr: "04/08", isoDate: "2026-08-04" },
+    { dayIdx: 2, label: "Thứ 4", dateStr: "05/08", isoDate: "2026-08-05" },
+    { dayIdx: 3, label: "Thứ 5", dateStr: "06/08", isoDate: "2026-08-06" },
+    { dayIdx: 4, label: "Thứ 6", dateStr: "07/08", isoDate: "2026-08-07" },
+    { dayIdx: 5, label: "Thứ 7", dateStr: "08/08", isoDate: "2026-08-08" },
+    { dayIdx: 6, label: "Chủ Nhật", dateStr: "09/08", isoDate: "2026-08-09" },
   ];
 
   const timeSlots = ["08:00", "10:00", "14:00", "16:00", "19:00", "20:00"];
@@ -53,9 +53,25 @@ export const TeacherSchedulePage: React.FC = () => {
     });
   }, []);
 
-  const filteredSessions = sessions.filter(
-    (s) => classFilter === "ALL" || s.classId === classFilter
-  );
+  const availableClasses = React.useMemo(() => {
+    const map = new Map<string, string>();
+    sessions.forEach((s) => {
+      if (s.classId && s.className) {
+        map.set(s.classId, s.className);
+      }
+    });
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  }, [sessions]);
+
+  const filteredSessions = sessions.filter((s, index, self) => {
+    if (classFilter !== "ALL" && s.classId !== classFilter) return false;
+    const firstIndex = self.findIndex(
+      (item) =>
+        (item.id && s.id && item.id === s.id) ||
+        (item.classId === s.classId && item.dateStr === s.dateStr && item.startTime === s.startTime && item.title === s.title)
+    );
+    return firstIndex === index;
+  });
 
   const handleOpenReview = (sess: OnlineClassSession) => {
     setSelectedSession(sess);
@@ -159,9 +175,11 @@ export const TeacherSchedulePage: React.FC = () => {
             className="bg-background border border-border rounded-xl px-3 py-1.5 text-xs text-foreground w-full sm:w-60"
           >
             <option value="ALL">Tất cả các lớp</option>
-            <option value="cls-1">Lớp Fullstack Web FS-2026-K1</option>
-            <option value="cls-2">Lớp AI Specialist K2</option>
-            <option value="cls-3">Lớp React Advanced K9</option>
+            {availableClasses.map((cls) => (
+              <option key={cls.id} value={cls.id}>
+                {cls.name}
+              </option>
+            ))}
           </select>
         </div>
       </Card>
@@ -183,7 +201,17 @@ export const TeacherSchedulePage: React.FC = () => {
             {/* Week Grid Slots */}
             <div className="grid grid-cols-7 gap-2 pt-3 min-h-[420px]">
               {daysOfWeekLabels.map((d) => {
-                const daySessions = filteredSessions.filter((s) => s.dayOfWeek === d.dayIdx);
+                const daySessionsRaw = filteredSessions.filter((s) => {
+                  if (s.dateStr) {
+                    const formattedDate = s.dateStr.includes("-")
+                      ? s.dateStr.split("-").slice(1).reverse().join("/")
+                      : s.dateStr;
+                    return formattedDate === d.dateStr || s.dateStr === d.isoDate;
+                  }
+                  return s.dayOfWeek === d.dayIdx;
+                });
+
+                const daySessions = daySessionsRaw;
                 return (
                   <div key={d.dayIdx} className="bg-muted/30 border border-border/40 rounded-xl p-2 space-y-2 min-h-[380px]">
                     {daySessions.length === 0 ? (
@@ -261,7 +289,8 @@ export const TeacherSchedulePage: React.FC = () => {
             {Array.from({ length: 31 }).map((_, idx) => {
               const dayNum = idx + 1;
               const dateString = `2026-08-${dayNum < 10 ? "0" + dayNum : dayNum}`;
-              const daySessions = filteredSessions.filter((s) => s.dateStr === dateString);
+              const daySessionsRaw = filteredSessions.filter((s) => s.dateStr === dateString);
+              const daySessions = daySessionsRaw;
 
               return (
                 <div

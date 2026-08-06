@@ -54,6 +54,8 @@ export interface CourseResponse {
   enrollmentCount?: number;
   createdAt: string;
   updatedAt: string | null;
+  createdBy?: string | number;
+  teachers?: any[];
 }
 
 export interface CategoryResponse {
@@ -111,7 +113,7 @@ export interface BulkDeleteRequest {
 
 export interface BulkAssignRoleRequest {
   userIds: string[];
-  roleId: string; 
+  roleId: string;
 }
 
 export interface AssignRolesRequest {

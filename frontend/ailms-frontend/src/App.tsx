@@ -58,6 +58,7 @@ import { TeacherDashboardPage } from "./pages/teacher/TeacherDashboardPage";
 import { TeacherClassesPage } from "./pages/teacher/TeacherClassesPage";
 import { TeacherSchedulePage } from "./pages/teacher/TeacherSchedulePage";
 import { TeacherCoursesPage } from "./pages/teacher/TeacherCoursesPage";
+import { TeacherCourseDetailPage } from "./pages/teacher/courses/TeacherCourseDetailPage";
 import { TeacherSuggestedClassesPage } from "./pages/teacher/TeacherSuggestedClassesPage";
 import { TeacherGradingAssignmentsPage } from "./pages/teacher/TeacherGradingAssignmentsPage";
 import { TeacherGradingQuizzesPage } from "./pages/teacher/TeacherGradingQuizzesPage";
@@ -265,6 +266,7 @@ function App() {
                 <Route path="/teacher/classes/:id" element={<TeacherClassesPage />} />
                 <Route path="/teacher/schedule" element={<TeacherSchedulePage />} />
                 <Route path="/teacher/courses" element={<TeacherCoursesPage />} />
+                <Route path="/teacher/courses/:id" element={<TeacherCourseDetailPage />} />
                 <Route path="/teacher/courses/:id/edit" element={<TeacherCoursesPage />} />
                 <Route path="/teacher/suggested-classes" element={<TeacherSuggestedClassesPage />} />
                 <Route path="/teacher/grading/assignments" element={<TeacherGradingAssignmentsPage />} />

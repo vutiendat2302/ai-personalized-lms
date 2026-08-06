@@ -5,12 +5,14 @@ import com.ailms.request.CreateTeacherCategoryRequest;
 import com.ailms.request.UpdateTeacherCategoryRequest;
 import com.ailms.response.ApiResponse;
 import com.ailms.response.TeacherCategoryResponse;
+import com.ailms.security.CustomUserDetails;
 import com.ailms.service.ITeacherCategoryService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -18,18 +20,19 @@ import java.util.List;
 @RestController
 @RequestMapping("${api.prefix}/teacher_categories")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_HR')")
 public class TeacherCategoryController {
 
     private final ITeacherCategoryService teacherCategoryService;
 
     @PostMapping("/teacher-categories")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_HR')")
     public ResponseEntity<ApiResponse<TeacherCategoryResponse>> create(@Valid @RequestBody CreateTeacherCategoryRequest request) {
         TeacherCategoryResponse response = teacherCategoryService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of("Teacher category association created successfully", response));
     }
 
     @PostMapping("/categories/{id}/teachers")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_HR')")
     public ResponseEntity<ApiResponse<TeacherCategoryResponse>> assignTeacherToCategory(
             @PathVariable Long id,
             @Valid @RequestBody AssignTeacherRequest request,
@@ -39,6 +42,7 @@ public class TeacherCategoryController {
     }
 
     @DeleteMapping("/categories/{id}/teachers/{employeeId}")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_HR')")
     public ResponseEntity<ApiResponse<Void>> unassignTeacherFromCategory(
             @PathVariable Long id,
             @PathVariable Long employeeId) {
@@ -47,24 +51,36 @@ public class TeacherCategoryController {
     }
 
     @GetMapping("/teacher-categories")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_HR')")
     public ResponseEntity<ApiResponse<List<TeacherCategoryResponse>>> getAll() {
         List<TeacherCategoryResponse> response = teacherCategoryService.getAll();
         return ResponseEntity.ok(ApiResponse.of("Teacher categories retrieved successfully", response));
     }
 
     @GetMapping("/teacher-categories/employee/{employeeId}")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_HR')")
     public ResponseEntity<ApiResponse<List<TeacherCategoryResponse>>> getByEmployeeId(@PathVariable Long employeeId) {
         List<TeacherCategoryResponse> response = teacherCategoryService.getByEmployeeId(employeeId);
         return ResponseEntity.ok(ApiResponse.of("Teacher categories retrieved successfully", response));
     }
 
+    @GetMapping("/teacher-categories/me")
+    @PreAuthorize("hasAnyAuthority('ROLE_TEACHER', 'ROLE_TA', 'ROLE_ADMIN', 'ROLE_HR')")
+    public ResponseEntity<ApiResponse<List<TeacherCategoryResponse>>> getMine(
+            @AuthenticationPrincipal CustomUserDetails currentUser) {
+        List<TeacherCategoryResponse> response = teacherCategoryService.getByEmployeeId(currentUser.getUser().getId());
+        return ResponseEntity.ok(ApiResponse.of("Teacher categories retrieved successfully", response));
+    }
+
     @DeleteMapping("/teacher-categories/{id}")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_HR')")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         teacherCategoryService.delete(id);
         return ResponseEntity.ok(ApiResponse.message("Teacher category association deleted successfully"));
     }
 
     @PutMapping("{id}")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_HR')")
     public ResponseEntity<ApiResponse<Void>> update(@PathVariable Long id, @RequestBody UpdateTeacherCategoryRequest request) {
         teacherCategoryService.update(id, request);
         return ResponseEntity.ok(ApiResponse.message("Update success"));

@@ -17,6 +17,12 @@ public class CourseTeacherResponse {
 
     private Long userId;
 
+    private String teacherName;
+
+    private String teacherUsername;
+
+    private String teacherAvatar;
+
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime assignedAt;
 

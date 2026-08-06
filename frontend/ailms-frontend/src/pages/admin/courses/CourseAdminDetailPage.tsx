@@ -56,13 +56,17 @@ export const CourseAdminDetailPage: React.FC = () => {
   const navigationState = location.state as { returnTo?: string; returnLabel?: string; studentId?: string; approvalView?: unknown; catalogView?: unknown } | null;
 
   const handleBack = () => {
-    navigate(navigationState?.returnTo || "/admin/courses", {
-      state: navigationState?.catalogView
-        ? { catalogView: navigationState.catalogView }
-        : navigationState?.approvalView
-        ? { approvalView: navigationState.approvalView }
-        : navigationState?.studentId ? { studentId: navigationState.studentId } : null,
-    });
+    if (navigationState?.catalogView || navigationState?.returnTo) {
+      navigate(navigationState.returnTo || "/admin/courses", {
+        state: { catalogView: navigationState.catalogView },
+      });
+    } else if (navigationState?.approvalView) {
+      navigate("/admin/courses/approvals", { state: { approvalView: navigationState.approvalView } });
+    } else if (navigationState?.studentId) {
+      navigate(`/admin/students/${navigationState.studentId}`);
+    } else {
+      navigate(-1);
+    }
   };
 
   useEffect(() => {

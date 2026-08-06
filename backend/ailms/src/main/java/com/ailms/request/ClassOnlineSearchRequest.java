@@ -12,11 +12,9 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 @EqualsAndHashCode(callSuper = false)
-public class ClassOnlineSearchRequest extends BaseSearchRequest {
+public class ClassOnlineSearchRequest extends CommonSearchRequest<BaseStatusEnum> {
     private String keyword;
     private Long classId;
-    private BaseStatusEnum status;
-
     private String lifecycleStatus;
 
     @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
@@ -24,10 +22,4 @@ public class ClassOnlineSearchRequest extends BaseSearchRequest {
 
     @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
     private LocalDateTime scheduledTo;
-
-    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
-    private LocalDateTime createdFrom;
-
-    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)
-    private LocalDateTime createdTo;
 }

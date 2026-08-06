@@ -88,9 +88,9 @@ export const StudentLayout: React.FC = () => {
     <div className="flex min-h-[calc(100vh-4rem)] w-full bg-background text-foreground">
       {/* Student Sidebar matching Admin & Teacher style */}
       <aside
-        className={`${
+        className={`sticky top-16 h-[calc(100vh-4rem)] ${
           isCollapsed ? "w-16" : "w-64"
-        } shrink-0 border-r border-border/50 bg-card transition-all duration-200 ease-in-out hidden md:flex flex-col justify-between select-none`}
+        } shrink-0 border-r border-border/50 bg-card transition-all duration-300 ease-in-out hidden md:flex flex-col justify-between select-none overflow-hidden`}
       >
         <div className="flex flex-col h-full">
           {/* Header bar with toggle */}
@@ -171,94 +171,10 @@ export const StudentLayout: React.FC = () => {
         </div>
       </aside>
 
-      {/* Main Content & Top Header */}
-      <div className="flex-1 flex flex-col min-w-0">
-        <header className="h-14 border-b border-border/50 bg-card/80 backdrop-blur-md px-6 flex items-center justify-between sticky top-0 z-30">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-muted-foreground">Khung học tập:</span>
-            <span className="px-2.5 py-0.5 text-xs font-bold bg-primary/10 text-primary rounded-full">
-              Học viên Cá nhân
-            </span>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {/* Bell Notification */}
-            <div className="relative">
-              <button
-                onClick={() => setShowNotifications(!showNotifications)}
-                className="p-2 rounded-xl bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground transition relative cursor-pointer"
-              >
-                <Bell className="w-4 h-4" />
-                <span className="absolute -top-1 -right-1 h-4 w-4 bg-rose-500 text-white text-[9px] font-black rounded-full flex items-center justify-center">
-                  2
-                </span>
-              </button>
-
-              {showNotifications && (
-                <div className="absolute right-0 mt-2 w-80 bg-popover border border-border shadow-xl rounded-xl p-3 z-50 animate-in fade-in slide-in-from-top-2">
-                  <div className="flex items-center justify-between border-b border-border/50 pb-2 mb-2 px-1">
-                    <h3 className="text-xs font-bold text-foreground">Thông báo học tập</h3>
-                    <span className="text-[10px] font-semibold text-primary">2 chưa đọc</span>
-                  </div>
-                  <div className="space-y-2 max-h-64 overflow-y-auto">
-                    {notifications.map((n) => (
-                      <div
-                        key={n.id}
-                        className="p-2.5 rounded-lg border border-primary/20 bg-primary/5 text-xs transition cursor-pointer"
-                      >
-                        <p className="font-bold text-primary text-[11px]">{n.title}</p>
-                        <p className="text-[11px] leading-relaxed mt-0.5">{n.text}</p>
-                        <span className="text-[9px] text-muted-foreground mt-1 block">{n.time}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Profile Dropdown */}
-            <div className="relative">
-              <button
-                onClick={() => setShowUserMenu(!showUserMenu)}
-                className="flex items-center gap-2 p-1.5 rounded-xl border border-border/50 bg-background hover:bg-muted transition cursor-pointer"
-              >
-                <div className="h-7 w-7 rounded-lg bg-primary text-primary-foreground flex items-center justify-center font-bold text-xs">
-                  {user?.fullName?.charAt(0) || "H"}
-                </div>
-                <span className="text-xs font-bold text-foreground hidden sm:inline">{user?.fullName || "Học viên"}</span>
-                <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
-              </button>
-
-              {showUserMenu && (
-                <div className="absolute right-0 mt-2 w-48 bg-popover border border-border shadow-xl rounded-xl p-1 z-50 animate-in fade-in slide-in-from-top-2">
-                  <button
-                    onClick={() => navigate("/dashboard")}
-                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-foreground hover:bg-muted transition cursor-pointer"
-                  >
-                    <UserIcon className="w-4 h-4 text-primary" />
-                    <span>Trang cá nhân</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      logout();
-                      navigate("/");
-                    }}
-                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
-                  >
-                    <LogOut className="w-4 h-4 text-rose-600" />
-                    <span>Đăng xuất</span>
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </header>
-
-        {/* Main Area */}
-        <main className="flex-1 p-6 md:p-8 w-full min-w-0 overflow-x-clip bg-background">
-          <Outlet />
-        </main>
-      </div>
+      {/* Main Content */}
+      <main className="flex-1 p-6 md:p-8 w-full min-w-0 overflow-x-clip bg-background">
+        <Outlet />
+      </main>
     </div>
   );
 };

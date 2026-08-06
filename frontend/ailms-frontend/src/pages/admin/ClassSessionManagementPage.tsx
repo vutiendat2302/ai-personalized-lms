@@ -114,9 +114,11 @@ const getSessionLifecycleStatus = (session: ClassOnlineResponse) => {
 };
 
 const sortSessions = (items: ClassOnlineResponse[], rules: Array<{ field: string; dir: "ASC" | "DESC" }>) => {
-  const activeRules = rules.length > 0 ? rules : [{ field: "scheduledAt", dir: "DESC" as const }];
+  if (rules.length === 0) {
+    return items;
+  }
   return [...items].sort((a, b) => {
-    for (const rule of activeRules) {
+    for (const rule of rules) {
       const dir = rule.dir === "ASC" ? 1 : -1;
       const aVal =
         rule.field === "className" ? a.className || a.classCode || "" :
@@ -168,9 +170,7 @@ export const ClassSessionManagementPage: React.FC = () => {
   const [groupByField, setGroupByField] = useState<"date" | "status" | "teacher" | "class">("date");
 
   // Multi-column sorting
-  const [sortRules, setSortRules] = useState<Array<{ field: string; dir: "ASC" | "DESC" }>>([
-    { field: "scheduledAt", dir: "DESC" },
-  ]);
+  const [sortRules, setSortRules] = useState<Array<{ field: string; dir: "ASC" | "DESC" }>>([]);
 
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
@@ -350,7 +350,7 @@ export const ClassSessionManagementPage: React.FC = () => {
     setFilterStatus("ALL");
     setQuickDateFilter("THIS_MONTH");
     setGroupByField("date");
-    setSortRules([{ field: "scheduledAt", dir: "DESC" }]);
+    setSortRules([]);
     setPage(0);
   };
 
@@ -497,7 +497,7 @@ export const ClassSessionManagementPage: React.FC = () => {
           return updated;
         } else {
           const updated = prevRules.filter((r) => r.field !== field);
-          return updated.length === 0 ? [{ field: "scheduledAt", dir: "DESC" }] : updated;
+          return updated;
         }
       }
     });
@@ -982,7 +982,6 @@ export const ClassSessionManagementPage: React.FC = () => {
 
                       <TableHead className="font-extrabold text-xs">Mã Buổi Học</TableHead>
                       <TableHead className="font-extrabold text-xs">Portal Link</TableHead>
-                      <TableHead className="font-extrabold text-xs">Nền tảng</TableHead>
                       <TableHead onClick={() => handleSort("className")} className="cursor-pointer group font-extrabold text-xs">
                         <div className="flex items-center gap-1">
                           <span>Môn Học / Lớp</span>
@@ -1001,7 +1000,6 @@ export const ClassSessionManagementPage: React.FC = () => {
                           {renderSortIcon("status")}
                         </div>
                       </TableHead>
-                      <TableHead className="font-extrabold text-xs text-center">Bản ghi</TableHead>
                       <TableHead onClick={() => handleSort("scheduledAt")} className="cursor-pointer group font-extrabold text-xs">
                         <div className="flex items-center gap-1">
                           <span>Ngày Giờ Bắt Đầu</span>
@@ -1017,7 +1015,7 @@ export const ClassSessionManagementPage: React.FC = () => {
                   <TableBody>
                     {loading ? (
                       <TableRow>
-                        <TableCell colSpan={12} className="h-48 text-center">
+                        <TableCell colSpan={10} className="h-48 text-center">
                           <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
                             <Loader2 className="h-7 w-7 animate-spin text-primary" />
                             <span className="text-xs font-bold">Đang tải danh sách buổi học...</span>
@@ -1026,7 +1024,7 @@ export const ClassSessionManagementPage: React.FC = () => {
                       </TableRow>
                     ) : sessions.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={12} className="h-48 text-center">
+                        <TableCell colSpan={10} className="h-48 text-center">
                           <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
                             <Video className="h-10 w-10 text-muted-foreground/40" />
                             <span className="text-xs font-extrabold text-foreground">Không tìm thấy buổi học nào.</span>
@@ -1039,12 +1037,14 @@ export const ClassSessionManagementPage: React.FC = () => {
                         <React.Fragment key={group.groupKey}>
                           {/* Group Header Row */}
                           <TableRow className="bg-primary/5 hover:bg-primary/5 border-y border-primary/20">
-                            <TableCell colSpan={12} className="py-2 px-4 font-black text-xs text-primary flex items-center gap-2">
-                              <Layers className="h-3.5 w-3.5" />
-                              <span className="capitalize">{group.groupDisplay}</span>
-                              <Badge variant="outline" className="text-[10px] font-bold border-primary/30 text-primary bg-background">
-                                {group.items.length} buổi học
-                              </Badge>
+                            <TableCell colSpan={10} className="py-2.5 px-4">
+                              <div className="flex items-center gap-2 font-black text-xs text-primary w-full">
+                                <Layers className="h-3.5 w-3.5" />
+                                <span className="capitalize">{group.groupDisplay}</span>
+                                <Badge variant="outline" className="text-[10px] font-bold border-primary/30 text-primary bg-background">
+                                  {group.items.length} buổi học
+                                </Badge>
+                              </div>
                             </TableCell>
                           </TableRow>
 
@@ -1073,7 +1073,7 @@ export const ClassSessionManagementPage: React.FC = () => {
 
                                 {/* Mã Buổi Học */}
                                 <TableCell className="font-mono font-bold text-foreground">
-                                  BH{s.sessionCode || s.id}
+                                  {s.sessionCode || `BH${s.id}`}
                                 </TableCell>
 
                                 {/* Portal link */}
@@ -1091,11 +1091,6 @@ export const ClassSessionManagementPage: React.FC = () => {
                                   ) : (
                                     <span className="text-muted-foreground italic text-[11px]">link</span>
                                   )}
-                                </TableCell>
-
-                                {/* Nền tảng họp */}
-                                <TableCell className="font-mono text-muted-foreground">
-                                  {s.meetingProvider || "GOOGLE_MEET"}
                                 </TableCell>
 
                                 {/* Môn Học / Lớp */}
@@ -1135,15 +1130,6 @@ export const ClassSessionManagementPage: React.FC = () => {
                                       </SelectContent>
                                     </Select>
                                   </div>
-                                </TableCell>
-
-                                {/* Bản ghi */}
-                                <TableCell className="text-center">
-                                  {s.recordUrl ? (
-                                    <Check className="h-4 w-4 text-emerald-600 mx-auto" />
-                                  ) : (
-                                    <Checkbox disabled checked={false} className="mx-auto opacity-40" />
-                                  )}
                                 </TableCell>
 
                                 {/* Ngày Giờ Bắt Đầu */}
@@ -1275,7 +1261,7 @@ export const ClassSessionManagementPage: React.FC = () => {
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
               {editingSession
-                ? `Cập nhật thông tin buổi học BH${editingSession.sessionCode || editingSession.id}`
+                ? `Cập nhật thông tin buổi học ${editingSession.sessionCode || `BH${editingSession.id}`}`
                 : "Điền đầy đủ thông tin để tạo mới lịch học trực tuyến cho lớp."}
             </DialogDescription>
           </DialogHeader>

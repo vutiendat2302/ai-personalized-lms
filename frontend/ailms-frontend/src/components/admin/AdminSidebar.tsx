@@ -17,7 +17,6 @@ import {
   CheckSquare,
   GraduationCap,
   HelpCircle,
-  FileCode2,
   BarChart3,
   Activity,
   ChevronRight,
@@ -93,8 +92,7 @@ export const AdminSidebar: React.FC = () => {
         { label: "Kiểm duyệt đánh giá", path: "/admin/reviews/moderation", icon: MessageSquareWarning },
         { label: "Quản lý lớp học", path: "/admin/classrooms", icon: Video },
         { label: "Quản lý buổi học", path: "/admin/sessions", icon: Video },
-        { label: "Quản lý Quizz", path: "/admin/quizzes", icon: HelpCircle },
-        { label: "Quản lý Assignment", path: "/admin/assignments", icon: FileCode2 },
+        { label: "Quản lý tài liệu", path: "/admin/quizzes", icon: HelpCircle },
       ],
     },
 

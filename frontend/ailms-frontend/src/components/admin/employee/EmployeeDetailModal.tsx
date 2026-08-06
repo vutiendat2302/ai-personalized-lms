@@ -67,6 +67,11 @@ import { departmentApi, type DepartmentResponse } from "@/api/departments/depart
 import { NewContractWizardModal } from "@/components/admin/contract/NewContractWizardModal";
 import { DetailAuditLogModal } from "@/components/admin/audit/DetailAuditLogModal";
 
+const formatCurrency = (amount?: number | null): string => {
+  if (amount === undefined || amount === null || isNaN(Number(amount))) return "0";
+  return Number(amount).toLocaleString("vi-VN");
+};
+
 interface EmployeeDetailModalProps {
   open: boolean;
   onClose: () => void;
@@ -1446,7 +1451,7 @@ const EmployeeDetailModalContent: React.FC<EmployeeDetailContentProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {metricCard("Kỳ lương", salaries.length, "Tổng số phiếu lương", "text-blue-600")}
                 {metricCard("Đã thanh toán", salaries.filter(item => item.status === "PAID").length, "Kỳ đã hoàn tất", "text-emerald-600")}
-                {metricCard("Thực lãnh gần nhất", salaries.length ? `${salaries[0].netSalary.toLocaleString("vi-VN")}đ` : "—", "Theo dữ liệu mới nhất", "text-violet-600")}
+                {metricCard("Thực lãnh gần nhất", (salaries.length && salaries[0]?.netSalary != null) ? `${formatCurrency(salaries[0].netSalary)}đ` : "—", "Theo dữ liệu mới nhất", "text-violet-600")}
               </div>
 
               <Table className="border border-border/50 rounded-xl overflow-hidden text-xs">
@@ -1466,11 +1471,11 @@ const EmployeeDetailModalContent: React.FC<EmployeeDetailContentProps> = ({
                   {salaries.map(sal => (
                     <TableRow key={sal.id} className="cursor-pointer hover:bg-muted/30" onClick={() => setSelectedSalaryPeriod(sal)}>
                       <TableCell className="font-mono font-bold text-primary">{sal.period}</TableCell>
-                      <TableCell>{sal.grossSalary.toLocaleString()} đ</TableCell>
-                      <TableCell>{sal.insuranceDeduction.toLocaleString()} đ</TableCell>
-                      <TableCell>{sal.taxDeduction.toLocaleString()} đ</TableCell>
-                      <TableCell className="text-red-500">{sal.penaltyDeduction.toLocaleString()} đ</TableCell>
-                      <TableCell className="font-extrabold text-emerald-600">{sal.netSalary.toLocaleString()} đ</TableCell>
+                      <TableCell>{formatCurrency(sal?.grossSalary)} đ</TableCell>
+                      <TableCell>{formatCurrency(sal?.insuranceDeduction)} đ</TableCell>
+                      <TableCell>{formatCurrency(sal?.taxDeduction)} đ</TableCell>
+                      <TableCell className="text-red-500">{formatCurrency(sal?.penaltyDeduction)} đ</TableCell>
+                      <TableCell className="font-extrabold text-emerald-600">{formatCurrency(sal?.netSalary)} đ</TableCell>
                       <TableCell>
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                           sal.status === "PAID" ? "bg-emerald-500 text-white" : "bg-amber-500/10 text-amber-600"
@@ -1487,11 +1492,11 @@ const EmployeeDetailModalContent: React.FC<EmployeeDetailContentProps> = ({
                 <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/20 space-y-2">
                   <h4 className="text-xs font-extrabold text-emerald-700">Chi tiết breakdown kỳ lương {selectedSalaryPeriod.period} (Luồng 5.7)</h4>
                   <div className="grid grid-cols-3 gap-2 text-xs">
-                    <div>Gross: <strong>{selectedSalaryPeriod.grossSalary.toLocaleString()} đ</strong></div>
-                    <div>BHXH (10.5%): <strong>{selectedSalaryPeriod.insuranceDeduction.toLocaleString()} đ</strong></div>
-                    <div>Thuế TNCN: <strong>{selectedSalaryPeriod.taxDeduction.toLocaleString()} đ</strong></div>
-                    <div>Khấu trừ: <strong>{selectedSalaryPeriod.penaltyDeduction.toLocaleString()} đ</strong></div>
-                    <div className="col-span-2 text-emerald-600 font-extrabold">Thực nhận Net: {selectedSalaryPeriod.netSalary.toLocaleString()} đ</div>
+                    <div>Gross: <strong>{formatCurrency(selectedSalaryPeriod?.grossSalary)} đ</strong></div>
+                    <div>BHXH (10.5%): <strong>{formatCurrency(selectedSalaryPeriod?.insuranceDeduction)} đ</strong></div>
+                    <div>Thuế TNCN: <strong>{formatCurrency(selectedSalaryPeriod?.taxDeduction)} đ</strong></div>
+                    <div>Khấu trừ: <strong>{formatCurrency(selectedSalaryPeriod?.penaltyDeduction)} đ</strong></div>
+                    <div className="col-span-2 text-emerald-600 font-extrabold">Thực nhận Net: {formatCurrency(selectedSalaryPeriod?.netSalary)} đ</div>
                   </div>
                 </div>
               )}

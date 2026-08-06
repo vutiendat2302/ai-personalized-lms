@@ -10,9 +10,12 @@ import com.ailms.response.ClassScheduleResponse;
 
 
 import com.ailms.response.ApiResponse;
+import com.ailms.security.CustomUserDetails;
 import com.ailms.service.IClassService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -50,6 +53,15 @@ public class ClassController {
     public ResponseEntity<ApiResponse<List<ClassResponse>>> getAll() {
         List<ClassResponse> response = classService.getAll();
         return ResponseEntity.ok(ApiResponse.of("Classes retrieved successfully", response));
+    }
+
+    @GetMapping("/teaching/me")
+    @PreAuthorize("hasAnyAuthority('ROLE_TEACHER', 'ROLE_TA', 'ROLE_ADMIN')")
+    public ResponseEntity<ApiResponse<List<ClassResponse>>> getMyTeachingClasses(
+            @AuthenticationPrincipal CustomUserDetails currentUser) {
+        Long userId = currentUser.getUser().getId();
+        List<ClassResponse> response = classService.getTeachingClassesByUserId(userId);
+        return ResponseEntity.ok(ApiResponse.of("Teaching classes retrieved successfully", response));
     }
 
     @GetMapping("/course/{courseId}")

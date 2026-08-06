@@ -26,6 +26,10 @@ def _class_code_exists(cursor, code):
     return _exists(cursor, "SELECT 1 FROM class WHERE code=%s LIMIT 1", (code,))
 
 
+def _class_online_code_exists(cursor, code):
+    return _exists(cursor, "SELECT 1 FROM class_online WHERE code=%s LIMIT 1", (code,))
+
+
 def _generate_class_code(cursor):
     yy_mm = datetime.now().strftime("%y%m")
     for _ in range(10):
@@ -34,6 +38,27 @@ def _generate_class_code(cursor):
         if not _class_code_exists(cursor, candidate):
             return candidate
     raise RuntimeError("Tao ma code that bai LH sau 10 lan")
+
+
+def _generate_class_online_code(cursor):
+    yy_mm = datetime.now().strftime("%y%m")
+    for _ in range(10):
+        random_part = uuid.uuid4().hex[:6].upper()
+        candidate = f"BH-{yy_mm}-{random_part}"
+        if not _class_online_code_exists(cursor, candidate):
+            return candidate
+    raise RuntimeError("Tao ma code that bai BH sau 10 lan")
+
+
+def _backfill_class_online_codes(cursor):
+    cursor.execute("SELECT id FROM class_online WHERE code IS NULL OR TRIM(code) = ''")
+    rows = cursor.fetchall()
+    for row in rows:
+        cursor.execute(
+            "UPDATE class_online SET code=%s, updated_at=%s WHERE id=%s",
+            (_generate_class_online_code(cursor), datetime.now(), row["id"]),
+        )
+    return len(rows)
 
 
 def _fetch_all(cursor, query, params=()):
@@ -188,14 +213,14 @@ def _seed_online_sessions(cursor, class_id, teacher_id, slots, start_date, actor
             cursor.execute(
                 """
                 INSERT INTO class_online (
-                    id, class_id, teacher_id, title, meeting_url, scheduled_at,
+                    id, code, class_id, teacher_id, title, meeting_url, meeting_provider, scheduled_at,
                     duration_min, status, created_at, updated_at, created_by, updated_by
-                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 """,
                 (
-                    snowflake.next_id(), class_id, teacher_id,
+                    snowflake.next_id(), _generate_class_online_code(cursor), class_id, teacher_id,
                     f"Buổi học trực tuyến - {target.strftime('%d/%m/%Y')}",
-                    f"https://meet.example.test/class-{class_id}", scheduled_at,
+                    f"https://meet.google.com/ailms-{class_id}", "GOOGLE_MEET", scheduled_at,
                     duration, status, datetime.now(), datetime.now(), actor_id, actor_id,
                 ),
             )
@@ -259,6 +284,7 @@ def seed(cursor):
         "enrollments": 0, "members": 0, "schedules": 0, "sessions": 0,
     }
     stats["course_teachers"] = assigned_course_teachers
+    stats["online_codes_backfilled"] = _backfill_class_online_codes(cursor)
     student_ids = [row["user_id"] for row in students]
 
     for index, course in enumerate(courses):

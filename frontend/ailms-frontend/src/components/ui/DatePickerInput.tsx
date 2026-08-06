@@ -119,6 +119,7 @@ export interface DatePickerInputProps {
   placeholder?: string;
   className?: string;
   disabled?: boolean;
+  readOnly?: boolean;
   clearable?: boolean;
   minYear?: number;
   maxYear?: number;
@@ -131,6 +132,7 @@ export const DatePickerInput: React.FC<DatePickerInputProps> = ({
   placeholder = "dd/mm/yyyy",
   className,
   disabled = false,
+  readOnly = false,
   clearable = true,
   minYear = 1950,
   maxYear = 2050,
@@ -208,7 +210,7 @@ export const DatePickerInput: React.FC<DatePickerInputProps> = ({
 
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger
-          disabled={disabled}
+          disabled={disabled || readOnly}
           nativeButton={false}
           render={
             <div className="relative w-full">
@@ -216,6 +218,7 @@ export const DatePickerInput: React.FC<DatePickerInputProps> = ({
               <Input
                 type="text"
                 disabled={disabled}
+                readOnly={readOnly}
                 placeholder={placeholder}
                 value={inputText}
                 onChange={handleInputChange}
@@ -223,10 +226,11 @@ export const DatePickerInput: React.FC<DatePickerInputProps> = ({
                 className={cn(
                   "pl-8 pr-7 h-9 text-sm border border-border/30 bg-background rounded-lg focus-visible:ring-2 focus-visible:ring-primary/20 placeholder:opacity-50 font-medium",
                   isError && "border-destructive text-destructive focus-visible:ring-destructive/30",
+                  readOnly && "bg-muted/40 font-semibold cursor-text select-text",
                   className
                 )}
               />
-              {clearable && inputText && !disabled && (
+              {clearable && inputText && !disabled && !readOnly && (
                 <button
                   type="button"
                   onClick={handleClear}

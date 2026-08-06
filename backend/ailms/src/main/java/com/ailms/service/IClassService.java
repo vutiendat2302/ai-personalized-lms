@@ -30,6 +30,8 @@ public interface IClassService {
      */
     List<ClassResponse> getAll();
 
+    List<ClassResponse> getTeachingClassesByUserId(Long userId);
+
     /**
      * Lấy thông tin chi tiết của bản ghi theo ID.
      *

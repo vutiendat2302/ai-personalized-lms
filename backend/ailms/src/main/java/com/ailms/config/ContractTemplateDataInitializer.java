@@ -236,7 +236,6 @@ public class ContractTemplateDataInitializer implements CommandLineRunner {
         upsertTemplate(ContractTypeEnum.FIXED_TERM, FIXED_TERM_NAME, FIXED_TERM_HTML, List.of());
         upsertTemplate(ContractTypeEnum.INDEFINITE, INDEFINITE_NAME, INDEFINITE_HTML, List.of());
         deactivateLegacySeasonalSeed();
-        log.info("Three distinct Vietnamese labor templates version {} are ready", LEGAL_TEMPLATE_VERSION);
     }
 
     /** Tạo mới hoặc nâng cấp mẫu hệ thống mà không nhân bản các mẫu cũ. */

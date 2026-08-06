@@ -420,8 +420,8 @@ export const Header: React.FC = () => {
 
         {/* Center: Global Search Bar & Navigation */}
         <div className="flex-1 flex items-center justify-center max-w-4xl mx-4 sm:mx-8 md:mx-12 gap-4">
-          {/* Courses Dropdown (Only for Authenticated Student/User - Hidden for Admin) */}
-          {auth.accessToken && auth.user && !isAdmin && (
+          {/* Courses Dropdown (Only for Authenticated Student/User - Hidden for Employee/Staff) */}
+          {auth.accessToken && auth.user && !isEmployee && (
             <div className="relative shrink-0 hidden md:block">
               <button 
                 onClick={() => navigate("/dashboard")}

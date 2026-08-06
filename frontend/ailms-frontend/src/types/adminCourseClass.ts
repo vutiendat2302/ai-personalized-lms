@@ -49,6 +49,7 @@ export interface CourseExtended {
   referencePrice: number;
   createdAt: string;
   updatedAt?: string;
+  createdBy?: string | number;
 }
 
 export interface ClassScheduleSlot {

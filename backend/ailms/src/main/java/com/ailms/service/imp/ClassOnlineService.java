@@ -1,4 +1,6 @@
 package com.ailms.service.imp;
+
+import com.ailms.common.util.CodeGenerator;
 import com.ailms.repository.specification.ClassOnlineSpecification;
 import com.ailms.request.ClassOnlineSearchRequest;
 import com.ailms.request.UpdateClassOnlineRequest;
@@ -25,13 +27,17 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import com.ailms.response.PageResponse;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Duration;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Comparator;
@@ -46,6 +52,7 @@ public class ClassOnlineService implements IClassOnlineService {
 
     private static final String DEFAULT_MEETING_PROVIDER = "GOOGLE_MEET";
     private static final String DEFAULT_GOOGLE_MEET_URL = "https://meet.google.com/new";
+    private static final String SESSION_CODE_PREFIX = "BH";
 
     private final ClassOnlineRepository classOnlineRepository;
     private final ClassRepository classRepository;
@@ -83,6 +90,7 @@ public class ClassOnlineService implements IClassOnlineService {
         log.info("Creating online class for class: {}", request.getClassId());
         ClassOnlineEntity entity = classOnlineMapper.toEntity(request);
         applyRelations(entity, request);
+        entity.setCode(CodeGenerator.generate(SESSION_CODE_PREFIX, classOnlineRepository::existsByCode));
         applyMeetingDefaults(entity);
 
         ClassOnlineEntity saved = classOnlineRepository.save(entity);
@@ -126,12 +134,18 @@ public class ClassOnlineService implements IClassOnlineService {
     public PageResponse<ClassOnlineResponse> search(ClassOnlineSearchRequest request) {
         log.info("Searching ClassOnline via specification");
         validateSearchRange(request);
-        Specification<ClassOnlineEntity> spec = ClassOnlineSpecification.filterAndSearch(request);
-        Pageable pageable = request.toPageable();
+        boolean useDefaultScheduleOrder = useDefaultScheduleOrder(request);
+        Specification<ClassOnlineEntity> spec = ClassOnlineSpecification.filterAndSearch(request, useDefaultScheduleOrder);
+        Pageable pageable = toClassOnlinePageable(request, useDefaultScheduleOrder);
         if (hasLifecycleFilter(request)) {
             List<ClassOnlineEntity> filtered = filterByLifecycle(
-                    classOnlineRepository.findAll(spec, pageable.getSort()),
+                    classOnlineRepository.findAll(spec, Sort.unsorted()),
                     request.getLifecycleStatus());
+            if (useDefaultScheduleOrder) {
+                filtered = filtered.stream()
+                        .sorted(defaultScheduleComparator())
+                        .toList();
+            }
             int start = Math.min(pageable.getPageNumber() * pageable.getPageSize(), filtered.size());
             int end = Math.min(start + pageable.getPageSize(), filtered.size());
             List<ClassOnlineResponse> content = enrichResponses(filtered.subList(start, end));
@@ -148,6 +162,21 @@ public class ClassOnlineService implements IClassOnlineService {
         }
         Page<ClassOnlineEntity> page = classOnlineRepository.findAll(spec, pageable);
         return PageResponse.from(page.map(this::enrichResponse));
+    }
+
+    private Pageable toClassOnlinePageable(ClassOnlineSearchRequest request, boolean useDefaultScheduleOrder) {
+        Pageable pageable = request.toPageable();
+        if (!useDefaultScheduleOrder) {
+            return pageable;
+        }
+        return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), Sort.unsorted());
+    }
+
+    private boolean useDefaultScheduleOrder(ClassOnlineSearchRequest request) {
+        if (request == null || request.getSort() == null || request.getSort().isEmpty()) {
+            return true;
+        }
+        return request.getSort().size() == 1 && "id:desc".equalsIgnoreCase(request.getSort().get(0));
     }
 
     @Override
@@ -239,7 +268,12 @@ public class ClassOnlineService implements IClassOnlineService {
 
     private ClassOnlineResponse enrichResponse(ClassOnlineEntity entity) {
         ClassOnlineResponse response = classOnlineMapper.toResponse(entity);
-        response.setLifecycleStatus(resolveLifecycleStatus(entity));
+        String lifecycleStatus = resolveLifecycleStatus(entity);
+        response.setLifecycleStatus(lifecycleStatus);
+
+        if (!"COMPLETED".equals(lifecycleStatus)) {
+            return response;
+        }
 
         findDisplayPayment(entity.getId()).ifPresentOrElse(payment -> {
             response.setTeachingRatePerHour(payment.getRateApplied());
@@ -258,6 +292,9 @@ public class ClassOnlineService implements IClassOnlineService {
         if (entity.getTeacherEntity() == null || entity.getClassEntity() == null || entity.getScheduledAt() == null) {
             return;
         }
+        if (!"COMPLETED".equals(resolveLifecycleStatus(entity)) || !hasTeacherCompletionNote(entity)) {
+            return;
+        }
 
         teachingRateRepository.findByEmployeeEntity_UserId(entity.getTeacherEntity().getId()).stream()
                 .filter(rate -> rate.getClassEntity() != null && rate.getClassEntity().getId().equals(entity.getClassEntity().getId()))
@@ -271,6 +308,10 @@ public class ClassOnlineService implements IClassOnlineService {
                     response.setActualDurationMin(durationMin);
                     response.setRemuneration(calculateAmount(rate, durationMin));
                 });
+    }
+
+    private boolean hasTeacherCompletionNote(ClassOnlineEntity entity) {
+        return entity.getTeacherNotes() != null && !entity.getTeacherNotes().isBlank();
     }
 
     private BigDecimal calculateAmount(TeachingRateEntity rate, int durationMin) {
@@ -314,6 +355,36 @@ public class ClassOnlineService implements IClassOnlineService {
         return sessions.stream()
                 .filter(session -> targetLifecycleStatus.equals(resolveLifecycleStatus(session)))
                 .toList();
+    }
+
+    private Comparator<ClassOnlineEntity> defaultScheduleComparator() {
+        LocalDate today = LocalDate.now();
+        LocalDateTime now = LocalDateTime.now();
+        return Comparator.comparingInt((ClassOnlineEntity session) -> scheduleBucket(session, today, now))
+                .thenComparingLong(session -> scheduleDistanceSeconds(session, now))
+                .thenComparing(ClassOnlineEntity::getId, Comparator.nullsLast(Comparator.reverseOrder()));
+    }
+
+    private int scheduleBucket(ClassOnlineEntity session, LocalDate today, LocalDateTime now) {
+        LocalDateTime scheduledAt = session.getScheduledAt();
+        if (scheduledAt == null) {
+            return 3;
+        }
+        if (scheduledAt.toLocalDate().equals(today)) {
+            return 0;
+        }
+        if (scheduledAt.isAfter(now)) {
+            return 1;
+        }
+        return 2;
+    }
+
+    private long scheduleDistanceSeconds(ClassOnlineEntity session, LocalDateTime now) {
+        LocalDateTime scheduledAt = session.getScheduledAt();
+        if (scheduledAt == null) {
+            return Long.MAX_VALUE;
+        }
+        return Math.abs(Duration.between(now, scheduledAt).getSeconds());
     }
 
     private boolean hasLifecycleFilter(ClassOnlineSearchRequest request) {

@@ -14,6 +14,7 @@ import com.ailms.request.UpdateClassScheduleSlotRequest;
 import com.ailms.service.IClassService;
 
 import com.ailms.entity.ClassEntity;
+import com.ailms.entity.ClassMemberEntity;
 import com.ailms.entity.CourseEntity;
 import com.ailms.entity.ClassScheduleEntity;
 import com.ailms.entity.enums.BaseStatusEnum;
@@ -100,6 +101,19 @@ public class ClassService implements IClassService {
     public List<ClassResponse> getAll() {
         log.info("Getting all classes");
         return classRepository.findAll().stream().map(this::enrichClassResponse).toList();
+    }
+
+    @Override
+    public List<ClassResponse> getTeachingClassesByUserId(Long userId) {
+        log.info("Getting teaching classes for user: {}", userId);
+        return classMemberRepository.findById_UserId(userId).stream()
+                .filter(member -> member.getStatus() == ClassMemberStatusEnum.ACTIVE)
+                .filter(member -> member.getRoleInClass() == ClassMemberRole.TEACHER
+                        || member.getRoleInClass() == ClassMemberRole.TA)
+                .map(ClassMemberEntity::getClassEntity)
+                .distinct()
+                .map(this::enrichClassResponse)
+                .toList();
     }
 
     public ClassResponse getById(Long id) {

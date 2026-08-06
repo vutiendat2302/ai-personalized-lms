@@ -9,6 +9,7 @@ tại thời điểm buổi dạy để có thể kiểm thử đầy đủ các
 from datetime import datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 import random
+import uuid
 
 from snowflake_id import snowflake
 
@@ -20,6 +21,31 @@ MONEY = Decimal("0.01")
 def _exists(cursor, query, params):
     cursor.execute(query, params)
     return cursor.fetchone() is not None
+
+
+def _class_online_code_exists(cursor, code):
+    return _exists(cursor, "SELECT 1 FROM class_online WHERE code=%s LIMIT 1", (code,))
+
+
+def _generate_class_online_code(cursor):
+    yy_mm = datetime.now().strftime("%y%m")
+    for _ in range(10):
+        random_part = uuid.uuid4().hex[:6].upper()
+        candidate = f"BH-{yy_mm}-{random_part}"
+        if not _class_online_code_exists(cursor, candidate):
+            return candidate
+    raise RuntimeError("Tao ma code that bai BH sau 10 lan")
+
+
+def _backfill_class_online_codes(cursor):
+    cursor.execute("SELECT id FROM class_online WHERE code IS NULL OR TRIM(code) = ''")
+    rows = cursor.fetchall()
+    for row in rows:
+        cursor.execute(
+            "UPDATE class_online SET code=%s, updated_at=%s WHERE id=%s",
+            (_generate_class_online_code(cursor), datetime.now(), row["id"]),
+        )
+    return len(rows)
 
 
 def _rate_amount(rate, minutes):
@@ -102,15 +128,15 @@ def _ensure_online_sessions(cursor, class_row):
             cursor.execute(
                 """
                 INSERT INTO class_online (
-                    id, class_id, teacher_id, title, meeting_url, scheduled_at,
+                    id, code, class_id, teacher_id, title, meeting_url, meeting_provider, scheduled_at,
                     duration_min, status, created_at, updated_at, created_by, updated_by
-                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                 """,
                 (
-                    snowflake.next_id(), class_row["class_id"], class_row["teacher_id"],
+                    snowflake.next_id(), _generate_class_online_code(cursor), class_row["class_id"], class_row["teacher_id"],
                     f"Buổi {inserted + 1}: {topics[(week + slot_index) % len(topics)]}",
                     f"https://meet.google.com/ailms-{class_row['class_id']}-{week + 5}-{slot_index + 1}",
-                    scheduled_at, duration,
+                    "GOOGLE_MEET", scheduled_at, duration,
                     "INACTIVE" if scheduled_at < now else "ACTIVE",
                     now, now, class_row["teacher_id"], class_row["teacher_id"],
                 ),
@@ -155,7 +181,12 @@ def seed(cursor):
         print("   [warning] Không có lớp ACTIVE kèm giảng viên. Hãy chạy course_class.seed() trước.")
         return
 
-    stats = {"online_sessions": 0, "rates": 0, "payments": 0}
+    stats = {
+        "online_sessions": 0,
+        "online_codes_backfilled": _backfill_class_online_codes(cursor),
+        "rates": 0,
+        "payments": 0,
+    }
     now = datetime.now()
 
     initialized_classes = set()

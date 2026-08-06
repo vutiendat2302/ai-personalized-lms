@@ -35,6 +35,10 @@ public class AssignmentResponse {
 
     private BaseStatusEnum status;
 
+    private String createdBy;
+
+    private String updatedBy;
+
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime createdAt;
 

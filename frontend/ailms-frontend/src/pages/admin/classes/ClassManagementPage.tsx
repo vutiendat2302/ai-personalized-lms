@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -49,6 +50,14 @@ import { formatDateDisplay } from "@/components/ui/DatePickerInput";
 
 export const ClassManagementPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { auth } = useAuth();
+
+  const isTeacherRoute = location.pathname.startsWith("/teacher");
+  const userRoles = (auth.user?.roles || []).map((r) => String(r).toUpperCase());
+  const isAdminOrHR = userRoles.some((r) => r.includes("ADMIN") || r.includes("HR")) && !isTeacherRoute;
+  const classDetailPath = (classId: string) => isAdminOrHR ? `/admin/classes/${classId}` : `/teacher/classes/${classId}`;
+
   const [classes, setClasses] = useState<Classroom[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [teachers, setTeachers] = useState<any[]>([]);
@@ -84,11 +93,12 @@ export const ClassManagementPage: React.FC = () => {
     setLoading(true);
     setError("");
     try {
-      const [classRows, courseRows, categoryRows, employeeRows] = await Promise.all([
-        adminCourseClassApi.getClasses(),
+      const [classRows, courseRows, categoryRows, employeeRows, teacherCategoryRows] = await Promise.all([
+        isAdminOrHR ? adminCourseClassApi.getClasses() : adminCourseClassApi.getMyTeachingClasses(),
         adminCourseClassApi.getCourses(),
         adminCourseClassApi.getCategories(),
-        adminCourseClassApi.getEmployees(),
+        isAdminOrHR ? adminCourseClassApi.getEmployees() : Promise.resolve([]),
+        isAdminOrHR ? Promise.resolve([]) : adminCourseClassApi.getMyTeacherCategories().catch(() => []),
       ]);
 
       const courseById = new Map(courseRows.map((item: any) => [String(item.id), item]));
@@ -99,7 +109,6 @@ export const ClassManagementPage: React.FC = () => {
         classRows.map((item: any) => adminCourseClassApi.getClassMembers(item.id))
       );
 
-      setCategories(categoryRows);
       setTeachers(
         employeeRows.filter((employee: any) => {
           const text = [employee.position, ...(employee.roles || [])].join(" ").toUpperCase();
@@ -107,50 +116,87 @@ export const ClassManagementPage: React.FC = () => {
         })
       );
 
-      setClasses(
-        classRows.map((item: any, index: number) => {
-          const members = memberRows[index] || [];
-          const teacherMember = members.find(
-            (member: any) =>
-              member.status === "ACTIVE" &&
-              (member.roleInClass === "TEACHER" || member.roleInClass === "TA")
-          );
-          const teacher = teacherMember ? employeeById.get(String(teacherMember.userId)) : null;
-          const course = courseById.get(String(item.courseId));
-          const activeStudents = members.filter(
-            (member: any) => member.status === "ACTIVE" && member.roleInClass === "STUDENT"
-          );
-          const waitlisted = members.filter((member: any) => member.status === "WAITLISTED");
+      const currentUserId = String(auth.user?.id || "");
+      const currentUsername = String(auth.user?.username || "").toLowerCase();
 
-          const realCode = item.code || item.classCode || String(item.id || "");
+      const parsedClasses = classRows.map((item: any, index: number) => {
+        const members = memberRows[index] || [];
+        const teacherMember = members.find(
+          (member: any) =>
+            member.status === "ACTIVE" &&
+            (member.roleInClass === "TEACHER" || member.roleInClass === "TA")
+        );
+        const teacher = teacherMember ? employeeById.get(String(teacherMember.userId)) : null;
+        const course = courseById.get(String(item.courseId));
+        const activeStudents = members.filter(
+          (member: any) => member.status === "ACTIVE" && member.roleInClass === "STUDENT"
+        );
+        const waitlisted = members.filter((member: any) => member.status === "WAITLISTED");
 
-          return {
-            id: String(item.id),
-            code: String(realCode),
-            name: item.name,
-            courseId: String(item.courseId),
-            courseName: item.courseName || course?.name || "Chưa có khóa học",
-            categoryName: item.categoryName || course?.categoryName || "Chưa có danh mục",
-            type: item.packageType === "ONE_ON_ONE" ? "ONE_ON_ONE" : "GROUP_CLASS",
-            teacher: {
-              id: String(teacherMember?.userId || ""),
-              name: teacher?.fullName || teacherMember?.username || "Chưa phân công",
-              avatar: teacher?.avatarUrl || "",
-              category: item.categoryName || "",
-            },
-            currentCapacity: item.currentMemberCount ?? activeStudents.length,
-            maxCapacity: item.maxMembers || (item.packageType === "ONE_ON_ONE" ? 1 : 0),
-            waitlistCount: waitlisted.length,
-            status: item.status === "ACTIVE" ? "OPEN" : item.status === "INACTIVE" ? "CLOSED" : "READY",
-            startDate: item.startDate,
-            endDate: item.endDate,
-            schedule: [],
-            members: activeStudents,
-            waitlist: waitlisted,
-            sessions: [],
-          } as Classroom;
-        })
+        const realCode = item.code || item.classCode || String(item.id || "");
+        const memberUserIds = members.map((m: any) => String(m.userId));
+        const memberUsernames = members.map((m: any) => String(m.username || "").toLowerCase());
+
+        return {
+          id: String(item.id),
+          code: String(realCode),
+          name: item.name,
+          courseId: String(item.courseId),
+          courseName: item.courseName || course?.name || "Chưa có khóa học",
+          categoryName: item.categoryName || course?.categoryName || "Chưa có danh mục",
+          type: item.packageType === "ONE_ON_ONE" ? "ONE_ON_ONE" : "GROUP_CLASS",
+          teacher: {
+            id: String(teacherMember?.userId || item.teacherId || ""),
+            name: teacher?.fullName || teacherMember?.username || item.teacherName || "Chưa phân công",
+            avatar: teacher?.avatarUrl || "",
+            category: item.categoryName || "",
+          },
+          currentCapacity: item.currentMemberCount ?? activeStudents.length,
+          maxCapacity: item.maxMembers || (item.packageType === "ONE_ON_ONE" ? 1 : 0),
+          waitlistCount: waitlisted.length,
+          status: item.status === "ACTIVE" ? "OPEN" : item.status === "INACTIVE" ? "CLOSED" : "READY",
+          startDate: item.startDate,
+          endDate: item.endDate,
+          schedule: [],
+          members: activeStudents,
+          waitlist: waitlisted,
+          sessions: [],
+          _allMemberUserIds: memberUserIds,
+          _allMemberUsernames: memberUsernames,
+        } as any;
+      });
+
+      let userClasses = parsedClasses;
+      if (!isAdminOrHR) {
+        userClasses = parsedClasses.filter((c: any) => {
+          const isMainTeacherId = currentUserId && String(c.teacher.id) === currentUserId;
+          const isMainTeacherName = currentUsername && c.teacher.name.toLowerCase().includes(currentUsername);
+          const isMemberUserId = currentUserId && c._allMemberUserIds.includes(currentUserId);
+          const isMemberUsername = currentUsername && c._allMemberUsernames.includes(currentUsername);
+
+          return isMainTeacherId || isMainTeacherName || isMemberUserId || isMemberUsername;
+        });
+
+      }
+
+      const visibleCategoryNames = new Set(
+        isAdminOrHR
+          ? categoryRows.map((category: any) => category.name)
+          : [
+              ...teacherCategoryRows
+                .filter((item: any) => !item.status || item.status === "ACTIVE")
+                .map((item: any) => item.categoryName),
+              ...userClasses.map((item: any) => item.categoryName),
+            ]
       );
+      const visibleCategories = categoryRows.filter((category: any) => visibleCategoryNames.has(category.name));
+      setCategories(visibleCategories);
+      if (selectedCategory !== "ALL" && !visibleCategoryNames.has(selectedCategory)) {
+        setSelectedCategory("ALL");
+        setSelectedCategoryName("Tất cả danh mục");
+      }
+
+      setClasses(userClasses);
     } catch (err: any) {
       setError(err?.response?.data?.message || "Không thể tải dữ liệu lớp học từ máy chủ");
     } finally {
@@ -179,11 +225,11 @@ export const ClassManagementPage: React.FC = () => {
       const matchesCategory = selectedCategory === "ALL" || c.categoryName === selectedCategory;
       const matchesType = selectedType === "ALL" || c.type === selectedType;
       const matchesStatus = selectedStatus === "ALL" || c.status === selectedStatus;
-      const matchesTeacher = selectedTeacher === "ALL" || c.teacher.id === selectedTeacher;
+      const matchesTeacher = !isAdminOrHR || selectedTeacher === "ALL" || c.teacher.id === selectedTeacher;
 
       return matchesSearch && matchesCategory && matchesType && matchesStatus && matchesTeacher;
     });
-  }, [classes, searchTerm, selectedCategory, selectedType, selectedStatus, selectedTeacher]);
+  }, [classes, searchTerm, selectedCategory, selectedType, selectedStatus, selectedTeacher, isAdminOrHR]);
 
   // Pagination
   const [page, setPage] = useState(0);
@@ -300,11 +346,14 @@ export const ClassManagementPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-            Quản Lý Lớp Học
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
+            <Users className="h-6 w-6 text-blue-600" />
+            {isAdminOrHR ? "Quản Lý Lớp Học" : "Lớp Học Đảm Nhận"}
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Quản lý sĩ số, kho tài liệu, trao đổi lớp học và vận hành các lớp học online
+            {isAdminOrHR
+              ? "Quản lý sĩ số, kho tài liệu, trao đổi lớp học và vận hành các lớp học online"
+              : "Danh sách các lớp học nhóm & 1-1 được phân công cho bạn đảm nhận (Giảng viên / Trợ giảng)"}
           </p>
         </div>
 
@@ -339,16 +388,19 @@ export const ClassManagementPage: React.FC = () => {
             </button>
           </div>
 
-          <Button
-            onClick={() => navigate("/admin/classes/create")}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-xs cursor-pointer"
-          >
-            <Plus className="w-4 h-4 mr-1.5" /> Tạo Lớp Học Mới
-          </Button>
+          {isAdminOrHR && (
+            <Button
+              onClick={() => navigate("/admin/classes/create")}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-xs cursor-pointer"
+            >
+              <Plus className="w-4 h-4 mr-1.5" /> Tạo Lớp Học Mới
+            </Button>
+          )}
         </div>
       </div>
 
       {/* 3 Metric Cards */}
+      {isAdminOrHR && (
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card className="border-slate-200 shadow-none bg-white rounded-2xl">
           <CardContent className="p-4 flex items-center justify-between">
@@ -398,11 +450,12 @@ export const ClassManagementPage: React.FC = () => {
           </CardContent>
         </Card>
       </div>
+      )}
 
       {/* Filter Bar with Popovers */}
       <Card className="shadow-none border-slate-200 bg-slate-50/50 rounded-2xl">
         <CardContent className="p-4 space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          <div className={`grid grid-cols-1 sm:grid-cols-2 ${isAdminOrHR ? "lg:grid-cols-5" : "lg:grid-cols-4"} gap-3`}>
             {/* Search */}
             <div className="relative">
               <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
@@ -535,6 +588,7 @@ export const ClassManagementPage: React.FC = () => {
             </Select>
 
             {/* Teacher Popover Filter */}
+            {isAdminOrHR && (
             <Popover open={teacherPopoverOpen} onOpenChange={setTeacherPopoverOpen}>
               <PopoverTrigger
                 nativeButton={true}
@@ -629,6 +683,7 @@ export const ClassManagementPage: React.FC = () => {
                 )}
               </PopoverContent>
             </Popover>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -681,7 +736,7 @@ export const ClassManagementPage: React.FC = () => {
                         )}
                       </div>
                       <h3
-                        onClick={() => navigate(`/admin/classes/${cls.id}`)}
+                        onClick={() => navigate(classDetailPath(cls.id))}
                         className="font-bold text-base text-slate-900 hover:text-blue-600 cursor-pointer line-clamp-1"
                       >
                         {cls.name}
@@ -752,6 +807,7 @@ export const ClassManagementPage: React.FC = () => {
 
                   {/* Quick Action Operations */}
                   <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-1 flex-wrap">
+                    {isAdminOrHR && (
                     <div className="flex items-center gap-1">
                       <Button
                         type="button"
@@ -775,9 +831,10 @@ export const ClassManagementPage: React.FC = () => {
                         <Calendar className="h-3.5 w-3.5 mr-1" /> Sửa Lịch
                       </Button>
                     </div>
+                    )}
 
                     <div className="flex items-center gap-1">
-                      {cls.status === "OPEN" ? (
+                      {isAdminOrHR && (cls.status === "OPEN" ? (
                         <Button
                           type="button"
                           variant="ghost"
@@ -797,12 +854,12 @@ export const ClassManagementPage: React.FC = () => {
                         >
                           <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Mở Lớp
                         </Button>
-                      )}
+                      ))}
 
                       <Button
                         type="button"
                         size="sm"
-                        onClick={() => navigate(`/admin/classes/${cls.id}`)}
+                        onClick={() => navigate(classDetailPath(cls.id))}
                         className="h-8 px-2.5 text-xs font-bold bg-primary text-primary-foreground rounded-lg cursor-pointer shadow-xs"
                       >
                         <Eye className="h-3.5 w-3.5 mr-1" /> Xem
@@ -841,7 +898,7 @@ export const ClassManagementPage: React.FC = () => {
                   <TableRow
                     key={cls.id}
                     className="cursor-pointer hover:bg-slate-50/80 transition-colors"
-                    onClick={() => navigate(`/admin/classes/${cls.id}`)}
+                    onClick={() => navigate(classDetailPath(cls.id))}
                   >
                     <TableCell className="font-semibold text-slate-900">
                       <div>
@@ -919,54 +976,58 @@ export const ClassManagementPage: React.FC = () => {
 
                     <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setChangeTeacherTarget(cls)}
-                          className="h-8 px-2 text-[11px] font-bold text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
-                          title="Đổi giảng viên nhận lớp"
-                        >
-                          <UserPlus className="h-3.5 w-3.5 mr-1" /> Đổi GV
-                        </Button>
+                        {isAdminOrHR && (
+                          <>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setChangeTeacherTarget(cls)}
+                              className="h-8 px-2 text-[11px] font-bold text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
+                              title="Đổi giảng viên phụ trách"
+                            >
+                              <UserPlus className="h-3.5 w-3.5 mr-1" /> Đổi GV
+                            </Button>
 
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setEditScheduleTarget(cls)}
-                          className="h-8 px-2 text-[11px] font-bold text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
-                          title="Chỉnh sửa khung lịch học"
-                        >
-                          <Calendar className="h-3.5 w-3.5 mr-1" /> Sửa Lịch
-                        </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setEditScheduleTarget(cls)}
+                              className="h-8 px-2 text-[11px] font-bold text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
+                              title="Chỉnh sửa khung lịch học"
+                            >
+                              <Calendar className="h-3.5 w-3.5 mr-1" /> Sửa Lịch
+                            </Button>
 
-                        {cls.status === "OPEN" ? (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setToggleStatusTarget({ cls, nextStatus: "CLOSED" })}
-                            className="h-8 px-2 text-[11px] font-bold text-red-600 hover:bg-red-50 rounded-lg cursor-pointer"
-                          >
-                            <XCircle className="h-3.5 w-3.5 mr-1" /> Đóng Lớp
-                          </Button>
-                        ) : (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setToggleStatusTarget({ cls, nextStatus: "OPEN" })}
-                            className="h-8 px-2 text-[11px] font-bold text-emerald-600 hover:bg-emerald-50 rounded-lg cursor-pointer"
-                          >
-                            <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Mở Lớp
-                          </Button>
+                            {cls.status === "OPEN" ? (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setToggleStatusTarget({ cls, nextStatus: "CLOSED" })}
+                                className="h-8 px-2 text-[11px] font-bold text-red-600 hover:bg-red-50 rounded-lg cursor-pointer"
+                              >
+                                <XCircle className="h-3.5 w-3.5 mr-1" /> Đóng Lớp
+                              </Button>
+                            ) : (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setToggleStatusTarget({ cls, nextStatus: "OPEN" })}
+                                className="h-8 px-2 text-[11px] font-bold text-emerald-600 hover:bg-emerald-50 rounded-lg cursor-pointer"
+                              >
+                                <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> Mở Lớp
+                              </Button>
+                            )}
+                          </>
                         )}
 
                         <Button
                           type="button"
                           size="sm"
-                          onClick={() => navigate(`/admin/classes/${cls.id}`)}
+                          onClick={() => navigate(classDetailPath(cls.id))}
                           className="h-8 px-2.5 text-xs font-bold bg-primary text-primary-foreground rounded-lg cursor-pointer shadow-xs"
                         >
                           <Eye className="h-3.5 w-3.5 mr-1" /> Xem
@@ -1078,7 +1139,7 @@ export const ClassManagementPage: React.FC = () => {
       )}
 
       {/* Change Teacher Modal */}
-      {changeTeacherTarget && (
+      {isAdminOrHR && changeTeacherTarget && (
         <ChangeTeacherModal
           open={Boolean(changeTeacherTarget)}
           onClose={() => setChangeTeacherTarget(null)}
@@ -1090,7 +1151,7 @@ export const ClassManagementPage: React.FC = () => {
       )}
 
       {/* Edit Schedule Modal */}
-      {editScheduleTarget && (
+      {isAdminOrHR && editScheduleTarget && (
         <EditScheduleModal
           open={Boolean(editScheduleTarget)}
           onClose={() => setEditScheduleTarget(null)}
@@ -1103,7 +1164,7 @@ export const ClassManagementPage: React.FC = () => {
       )}
 
       {/* Toggle Status Confirmation Dialog */}
-      {toggleStatusTarget && (
+      {isAdminOrHR && toggleStatusTarget && (
         <ConfirmDialog
           open={Boolean(toggleStatusTarget)}
           onOpenChange={(val: boolean) => !val && setToggleStatusTarget(null)}

@@ -290,42 +290,42 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                 <div className="rounded-xl border border-orange-500/20 bg-orange-500/10 p-4"><div className="text-xs font-semibold text-muted-foreground">Streak dài nhất</div><div className="mt-1 flex items-center gap-2 text-2xl font-black text-orange-600"><Award className="h-5 w-5" />{student.longestStreak ?? 0} ngày</div></div>
                 <div>
                   <Label className="text-xs font-bold text-muted-foreground">Mã Học viên (Readonly)</Label>
-                  <Input value={student.studentCode} disabled className="mt-1 bg-muted/30 font-mono font-bold text-xs" />
+                  <Input value={student.studentCode} readOnly className="mt-1 bg-muted/60 font-mono font-bold text-xs cursor-text select-text" />
                 </div>
 
                 <div>
                   <Label className="text-xs font-bold text-muted-foreground">User ID (Readonly)</Label>
-                  <Input value={student.userId} disabled className="mt-1 bg-muted/30 font-mono font-bold text-xs" />
+                  <Input value={student.userId} readOnly className="mt-1 bg-muted/60 font-mono font-bold text-xs cursor-text select-text" />
                 </div>
 
                 <div>
                   <Label className="text-xs font-bold text-muted-foreground">Họ và Tên</Label>
-                  <Input value={fullNameInput} onChange={e => setFullNameInput(e.target.value)} disabled={!editingGeneral} className="mt-1 text-xs font-bold" />
+                  <Input value={fullNameInput} onChange={e => setFullNameInput(e.target.value)} readOnly={!editingGeneral} className={`mt-1 text-xs font-bold ${!editingGeneral ? "bg-muted/40 cursor-text select-text" : "bg-background border-primary/50"}`} />
                 </div>
 
                 <div>
                   <Label className="text-xs font-bold text-muted-foreground">Email</Label>
-                  <Input value={emailInput} onChange={e => setEmailInput(e.target.value)} disabled={!editingGeneral} className="mt-1 text-xs" />
+                  <Input value={emailInput} onChange={e => setEmailInput(e.target.value)} readOnly={!editingGeneral} className={`mt-1 text-xs ${!editingGeneral ? "bg-muted/40 cursor-text select-text" : "bg-background border-primary/50"}`} />
                 </div>
 
                 <div>
                   <Label className="text-xs font-bold text-muted-foreground">Số điện thoại</Label>
-                  <Input value={phoneInput} onChange={e => setPhoneInput(e.target.value)} disabled={!editingGeneral} className="mt-1 text-xs" />
+                  <Input value={phoneInput} onChange={e => setPhoneInput(e.target.value)} readOnly={!editingGeneral} className={`mt-1 text-xs ${!editingGeneral ? "bg-muted/40 cursor-text select-text" : "bg-background border-primary/50"}`} />
                 </div>
 
                 <div>
                   <Label className="text-xs font-bold text-muted-foreground">Ngày sinh</Label>
-                  <DatePickerInput value={dobInput} onChange={setDobInput} disabled={!editingGeneral} className="mt-1 text-xs" />
+                  <DatePickerInput value={dobInput} onChange={setDobInput} readOnly={!editingGeneral} className={`mt-1 text-xs ${!editingGeneral ? "bg-muted/40 cursor-text select-text" : "bg-background border-primary/50"}`} />
                 </div>
 
                 <div>
                   <Label className="text-xs font-bold text-muted-foreground">Trường học / Đào tạo</Label>
-                  <Input value={schoolInput} onChange={e => setSchoolInput(e.target.value)} disabled={!editingGeneral} className="mt-1 text-xs" />
+                  <Input value={schoolInput} onChange={e => setSchoolInput(e.target.value)} readOnly={!editingGeneral} className={`mt-1 text-xs ${!editingGeneral ? "bg-muted/40 cursor-text select-text" : "bg-background border-primary/50"}`} />
                 </div>
 
                 <div>
                   <Label className="text-xs font-bold text-muted-foreground">Địa chỉ liên hệ</Label>
-                  <Input value={addressInput} onChange={e => setAddressInput(e.target.value)} disabled={!editingGeneral} className="mt-1 text-xs" />
+                  <Input value={addressInput} onChange={e => setAddressInput(e.target.value)} readOnly={!editingGeneral} className={`mt-1 text-xs ${!editingGeneral ? "bg-muted/40 cursor-text select-text" : "bg-background border-primary/50"}`} />
                 </div>
               </div>
 

@@ -88,4 +88,7 @@ public class ClassOnlineEntity extends BaseEntity {
     /** Ghi chú chuẩn bị cho buổi tiếp theo. */
     @Column(name = "next_session_notes", columnDefinition = "TEXT")
     private String nextSessionNotes;
+
+    @Column(name = "code")
+    private String code;
 }

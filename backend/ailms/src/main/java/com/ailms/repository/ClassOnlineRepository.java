@@ -15,6 +15,8 @@ import java.time.LocalDateTime;
 public interface ClassOnlineRepository extends BaseRepository<ClassOnlineEntity, Long> {
     List<ClassOnlineEntity> findByClassEntity_Id(Long classId);
     List<ClassOnlineEntity> findByTeacherEntity_Id(Long teacherId);
+    boolean existsByCode(String code);
+
     @EntityGraph(attributePaths = {"classEntity", "classEntity.courseEntity", "teacherEntity"})
     List<ClassOnlineEntity> findByScheduledAtGreaterThanEqualAndScheduledAtLessThanOrderByScheduledAtAsc(
             LocalDateTime from, LocalDateTime to);
