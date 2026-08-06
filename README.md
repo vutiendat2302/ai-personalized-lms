@@ -93,3 +93,8 @@ docker compose down -v
 docker compose up --build -d
 ```
 
+``` bash 
+
+docker compose logs backend -f // xem logs be 
+```
+

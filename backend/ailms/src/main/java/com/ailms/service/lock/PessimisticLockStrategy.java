@@ -1,10 +1,12 @@
 package com.ailms.service.lock;
 
+import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
 
 @Component("pessimisticLockStrategy")
+@Primary
 public class PessimisticLockStrategy implements CapacityLockStrategy {
 
     private final ConcurrentHashMap<Long, ReentrantLock> locks = new ConcurrentHashMap<>();
