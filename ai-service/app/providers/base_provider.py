@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Optional, AsyncGenerator
 
 
 class BaseAIProvider(ABC):
@@ -19,5 +19,21 @@ class BaseAIProvider(ABC):
 
         Returns:
             str: Văn bản phản hồi do mô hình AI sinh ra.
+        """
+        pass
+    
+    @abstractmethod
+    async def chat_stream(
+        self, prompt: str, system_instruction: Optional[str] = None
+    ) -> AsyncGenerator[str, None]:
+        """
+        Sinh văn bản dạng streaming — yield từng đoạn text khi Gemini trả về.
+
+        Args:
+            prompt (str): Câu hỏi/prompt gửi cho AI.
+            system_instruction (Optional[str]): Chỉ dẫn vai trò hệ thống.
+
+        Yields:
+            str: Từng đoạn text (chunk) được sinh ra tuần tự.
         """
         pass

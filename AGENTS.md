@@ -11,6 +11,8 @@ AI Personalized LMS là hệ thống quản lý học tập gồm các thành ph
 - `docker-compose.yml`: Cấu hình chạy ứng dụng và hạ tầng trên môi trường cục bộ.
 - Không dùng dữ liệu fake, mock, giả ở FE, chỉ lấy data thật ở BE, ko có data thì thông báo không có data. 
 
+# Tất cả các phương thức đều phải có cmt ngắn gọn nêu đặc điểm chính của phương thức đó 
+
 ## Quy tắc làm việc chung
 
 - Đọc phần triển khai liên quan và các quy ước ở những file lân cận trước khi chỉnh sửa.

@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, AsyncGenerator
 from google import genai
 from google.genai import types
 from app.providers.base_provider import BaseAIProvider
@@ -61,3 +61,25 @@ class GeminiProvider(BaseAIProvider):
         if not response.text:
             return ""
         return response.text
+        
+    # Gửi prompt dạng streaming sang Gemini AI, generator yield liên tục từng đoạn text vừa nhận
+    async def chat_stream(
+        self, prompt: str, system_instruction: Optional[str] = None
+    ) -> AsyncGenerator[str, None]:
+        """
+        Gọi Gemini streaming API, yield từng đoạn text nhận được.
+        """
+        client = self._get_client()
+        config = None
+        if system_instruction:
+            config = types.GenerateContentConfig(system_instruction=system_instruction)
+
+        stream = client.models.generate_content_stream(
+            model=self.model_name,
+            contents=prompt,
+            config=config,
+        )
+
+        for chunk in stream:
+            if chunk.text:
+                yield chunk.text
