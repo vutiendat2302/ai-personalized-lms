@@ -105,7 +105,7 @@ export const AssessmentManagement: React.FC = () => {
   const navigate = useNavigate();
 
   // Active Tab: "quizzes" | "assignments" (Chỉ 2 Tab)
-  const [activeTab, setActiveTab] = useState<"quizzes" | "assignments font-mono font-mono font-mono font-mono font-mono font-mono font-mono">(() => {
+  const [activeTab, setActiveTab] = useState<"quizzes" | "assignments">(() => {
     if (location.pathname.includes("assignments")) return "assignments";
     return "quizzes";
   });

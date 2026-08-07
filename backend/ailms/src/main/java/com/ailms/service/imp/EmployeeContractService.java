@@ -688,15 +688,20 @@ public class EmployeeContractService implements IEmployeeContractService {
      * Hàm trợ giúp bổ sung Presigned Download URL vào DTO Response trước khi trả về client.
      */
     private EmployeeContractResponse enrichDownloadUrl(EmployeeContractEntity entity) {
+        if (entity == null) return null;
         EmployeeContractResponse res = employeeContractMapper.toResponse(entity);
-        if (entity.getFileMetadata() != null && StringUtils.hasText(entity.getFileMetadata().getFileKey())) {
-            res.setDownloadUrl(fileStorageService.getPresignedUrl(entity.getFileMetadata().getFileKey(), Duration.ofHours(24)));
-        } else if (StringUtils.hasText(entity.getFileKey())) {
-            res.setDownloadUrl(fileStorageService.getPresignedUrl(entity.getFileKey(), Duration.ofHours(24)));
-        }
+        try {
+            if (entity.getFileMetadata() != null && StringUtils.hasText(entity.getFileMetadata().getFileKey())) {
+                res.setDownloadUrl(fileStorageService.getPresignedUrl(entity.getFileMetadata().getFileKey(), Duration.ofHours(24)));
+            } else if (StringUtils.hasText(entity.getFileKey())) {
+                res.setDownloadUrl(fileStorageService.getPresignedUrl(entity.getFileKey(), Duration.ofHours(24)));
+            }
 
-        if (entity.getOriginalFileMetadata() != null && StringUtils.hasText(entity.getOriginalFileMetadata().getFileKey())) {
-            res.setOriginalFileDownloadUrl(fileStorageService.getPresignedUrl(entity.getOriginalFileMetadata().getFileKey(), Duration.ofHours(24)));
+            if (entity.getOriginalFileMetadata() != null && StringUtils.hasText(entity.getOriginalFileMetadata().getFileKey())) {
+                res.setOriginalFileDownloadUrl(fileStorageService.getPresignedUrl(entity.getOriginalFileMetadata().getFileKey(), Duration.ofHours(24)));
+            }
+        } catch (Exception e) {
+            log.warn("Unable to generate presigned download URL for contract ID {}: {}", entity.getId(), e.getMessage());
         }
         return res;
     }
@@ -942,6 +947,9 @@ public class EmployeeContractService implements IEmployeeContractService {
      * Kiểm tra quyền truy cập thông tin hợp đồng.
      */
     private void verifyContractAccess(EmployeeContractEntity contract) {
+        if (contract == null || contract.getEmployee() == null) {
+            return;
+        }
         verifyEmployeeAccess(contract.getEmployee().getUserId());
     }
 

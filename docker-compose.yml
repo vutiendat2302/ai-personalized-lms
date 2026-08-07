@@ -112,6 +112,7 @@ services:
       EMAIL_PASSWORD: ${EMAIL_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
       FRONTEND_URL: ${FRONTEND_URL}
+      FRONTEND_SET_PASSWORD_URL: ${FRONTEND_SET_PASSWORD_URL}
     depends_on:
       mysql:
         condition: service_healthy

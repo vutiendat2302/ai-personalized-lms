@@ -3,14 +3,14 @@ spring:
   application:
     name: ai-lms
   datasource:
-    url: jdbc:mysql://localhost:3306/ailms
-    username: root
-    password: 123456
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/ailms}
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:123456}
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
       ##(create, update, create-drop, validate)
-      ddl-auto: update
+      ddl-auto: create
     show-sql: true
     properties:
       hibernate:
@@ -18,8 +18,8 @@ spring:
     open-in-view: true
   data:
     redis:
-      host: localhost
-      port: 6379
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
       repositories:
 #        Khong check repository redis
         enabled: false
