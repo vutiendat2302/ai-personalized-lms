@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { courseApi } from "@/api/courses/courseApi";
 import { reviewApi } from "@/api/reviews/reviewApi";
+import { studentApi } from "@/api/students/studentApi";
 import type { CategoryResponse } from "@/types/admin";
 import { useModalStore } from "@/store/useModalStore";
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,17 @@ const getCourseImage = (categoryName: string) => {
   return "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3";
 };
 
+const formatRoundedCount = (count: number | null | undefined): string => {
+  if (count === null || count === undefined || isNaN(count)) return "Không có dữ liệu";
+  if (count <= 0) return "0";
+  if (count < 10) return `${count}+`;
+
+  const magnitude = Math.pow(10, Math.floor(Math.log10(count)));
+  const rounded = Math.floor(count / magnitude) * magnitude;
+  return `${rounded.toLocaleString()}+`;
+};
+
+
 // Mock categories removed, now fetched from BE
 
 // Mock TESTIMONIALS constant removed
@@ -72,6 +84,14 @@ export const Landing: React.FC = () => {
   const [reviewPage, setReviewPage] = useState(0);
   const [hasMoreReviews, setHasMoreReviews] = useState(false);
   const [loadingReviews, setLoadingReviews] = useState(false);
+  const [averageRating, setAverageRating] = useState<number | null>(null);
+  const [loadingAvgRating, setLoadingAvgRating] = useState(false);
+
+  const [activeCoursesCount, setActiveCoursesCount] = useState<number | null>(null);
+  const [loadingActiveCoursesCount, setLoadingActiveCoursesCount] = useState(false);
+
+  const [studentCount, setStudentCount] = useState<number | null>(null);
+  const [loadingStudentCount, setLoadingStudentCount] = useState(false);
 
   const [reviewSearchName, setReviewSearchName] = useState("");
   const [reviewFilterRating, setReviewFilterRating] = useState<string>("5");
@@ -241,6 +261,63 @@ export const Landing: React.FC = () => {
     }
   };
 
+  const fetchAverageRating = async () => {
+    try {
+      setLoadingAvgRating(true);
+      const res = await reviewApi.getAverageRating();
+      console.log("[fetchAverageRating] API Response:", res.data);
+      const rawData = res.data?.data;
+      if (rawData !== null && rawData !== undefined && !isNaN(Number(rawData))) {
+        setAverageRating(Number(rawData));
+      } else {
+        setAverageRating(null);
+      }
+    } catch (e) {
+      console.error("[fetchAverageRating] Error:", e);
+      setAverageRating(null);
+    } finally {
+      setLoadingAvgRating(false);
+    }
+  };
+
+  const fetchActiveCoursesCount = async () => {
+    try {
+      setLoadingActiveCoursesCount(true);
+      const res = await courseApi.getActiveCoursesCount();
+      console.log("[fetchActiveCoursesCount] API Response:", res.data);
+      const rawData = res.data?.data;
+      if (rawData !== null && rawData !== undefined && !isNaN(Number(rawData))) {
+        setActiveCoursesCount(Number(rawData));
+      } else {
+        setActiveCoursesCount(null);
+      }
+    } catch (e) {
+      console.error("[fetchActiveCoursesCount] Error:", e);
+      setActiveCoursesCount(null);
+    } finally {
+      setLoadingActiveCoursesCount(false);
+    }
+  };
+
+  const fetchStudentCount = async () => {
+    try {
+      setLoadingStudentCount(true);
+      const res = await studentApi.getStudentProfilesCount();
+      console.log("[fetchStudentCount] API Response:", res.data);
+      const rawData = res.data?.data;
+      if (rawData !== null && rawData !== undefined && !isNaN(Number(rawData))) {
+        setStudentCount(Number(rawData));
+      } else {
+        setStudentCount(null);
+      }
+    } catch (e) {
+      console.error("[fetchStudentCount] Error:", e);
+      setStudentCount(null);
+    } finally {
+      setLoadingStudentCount(false);
+    }
+  };
+
   const handleLoadMoreReviews = () => {
     const nextPage = reviewPage + 1;
     setReviewPage(nextPage);
@@ -309,6 +386,9 @@ export const Landing: React.FC = () => {
   useEffect(() => {
     fetchCategories(0);
     fetchFeaturedCourses();
+    fetchAverageRating();
+    fetchActiveCoursesCount();
+    fetchStudentCount();
   }, []);
 
   const handleLoadMoreCats = () => {
@@ -348,8 +428,8 @@ export const Landing: React.FC = () => {
   return (
     <div className="relative overflow-hidden bg-background">
       {/* Background gradients decor */}
-      <div className="absolute top-0 left-1/4 -z-10 h-[500px] w-[500px] -translate-x-1/2 rounded-full bg-primary/10 blur-[120px]" />
-      <div className="absolute top-[400px] right-1/4 -z-10 h-[400px] w-[400px] translate-x-1/2 rounded-full bg-accent/10 blur-[100px]" />
+      <div className="absolute top-0 left-1/4 -z-10 h-124 w-125 -translate-x-1/2 rounded-full bg-primary/10 blur-[120px]" />
+      <div className="absolute top-100 right-1/4 -z-10 h-100 w-100 translate-x-1/2 rounded-full bg-accent/10 blur-[100px]" />
 
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         
@@ -364,7 +444,7 @@ export const Landing: React.FC = () => {
 
           <h1 className="text-4xl sm:text-7xl font-extrabold tracking-tight text-primary leading-[1.15] mb-8">
             Học tập Cá nhân hóa <br />
-            <span className="bg-gradient-to-r from-primary via-indigo-600 to-accent bg-clip-text text-transparent">
+            <span className="bg-linear-to-r from-primary via-indigo-600 to-accent bg-clip-text text-transparent">
               Đột phá nhờ Trí tuệ Nhân tạo
             </span>
           </h1>
@@ -397,20 +477,44 @@ export const Landing: React.FC = () => {
           {/* Stats Bar */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 max-w-4xl mx-auto mt-20 p-6 bg-card rounded-2xl border border-border/70 shadow-md">
             <div>
-              <p className="text-3xl font-extrabold text-primary">15,000+</p>
-              <p className="text-xs text-muted-foreground font-semibold mt-1">Học viên hoạt động</p>
+              <p className={`${
+                loadingStudentCount !== null && loadingStudentCount !== undefined
+                ? "text-3xl font-extrabold text-accent"
+                : "text-base font-medium text-accent"
+              }`}>
+                {loadingStudentCount ? "..." : formatRoundedCount(studentCount)}
+              </p>
+              <p className="text-sm text-muted-foreground font-semibold mt-1">Học viên hoạt động</p>
             </div>
             <div>
-              <p className="text-3xl font-extrabold text-accent">120+</p>
-              <p className="text-xs text-muted-foreground font-semibold mt-1">Khóa học chuyên sâu</p>
+              <p className={`${
+                loadingActiveCoursesCount !== null && loadingActiveCoursesCount !== undefined
+                ? "text-3xl font-extrabold text-accent"
+                : "text-base font-medium text-accent"
+              }`}>
+                {loadingActiveCoursesCount ? "..." : formatRoundedCount(activeCoursesCount)}
+              </p>
+              <p className="text-sm text-muted-foreground font-semibold mt-1">Khóa học chuyên sâu</p>
+            </div>
+
+
+            <div>
+              <p className="text-3xl font-extrabold text-accent">95%</p>
+              <p className="text-sm text-muted-foreground font-semibold mt-1">Tỷ lệ hoàn thành mục tiêu</p>
             </div>
             <div>
-              <p className="text-3xl font-extrabold text-primary">95%</p>
-              <p className="text-xs text-muted-foreground font-semibold mt-1">Tỷ lệ hoàn thành mục tiêu</p>
-            </div>
-            <div>
-              <p className="text-3xl font-extrabold text-accent">4.9★</p>
-              <p className="text-xs text-muted-foreground font-semibold mt-1">Đánh giá trung bình</p>
+              <p className={`${
+                averageRating !== null && averageRating !== undefined
+                ? "text-3xl font-extrabold text-accent"
+                : "text-base font-medium text-accent"
+              }`}>
+                {loadingAvgRating
+                  ? "..."
+                  : averageRating !== null && averageRating !== undefined
+                  ? `${averageRating}★`
+                  : "Không có dữ liệu"}
+              </p>
+              <p className="text-sm text-muted-foreground font-semibold mt-1">Đánh giá trung bình</p>
             </div>
           </div>
         </section>
@@ -540,7 +644,7 @@ export const Landing: React.FC = () => {
                         <div
                           key={course.id}
                           onClick={() => navigate(`/courses/${course.id}`)}
-                          className="flex-none w-[260px] sm:w-[290px] snap-start flex flex-col bg-card rounded-2xl border border-border/70 shadow-sm hover:shadow-lg hover:border-primary/40 hover:-translate-y-1.5 cursor-pointer overflow-hidden group transition-all duration-300"
+                          className="flex-none w-65 sm:w-72.5 snap-start flex flex-col bg-card rounded-2xl border border-border/70 shadow-sm hover:shadow-lg hover:border-primary/40 hover:-translate-y-1.5 cursor-pointer overflow-hidden group transition-all duration-300"
                         >
                           <div className="relative aspect-video overflow-hidden bg-muted">
                             {course.image ? (
@@ -610,7 +714,7 @@ export const Landing: React.FC = () => {
           {/* Filter and Search Controls for Reviews */}
           <div className="bg-card border border-border/60 rounded-2xl p-5 shadow-sm space-y-4 md:space-y-0 md:flex md:items-center md:gap-4 max-w-7xl mx-auto">
             {/* Keyword Search */}
-            <div className="flex-1 min-w-[200px] relative">
+            <div className="flex-1 min-w-50 relative">
               <label className="block text-sm font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
                 Tìm nội dung đánh giá
               </label>
@@ -627,7 +731,7 @@ export const Landing: React.FC = () => {
             </div>
 
             {/* Course Filter with Autocomplete Dropdown */}
-            <div className="flex-1 min-w-[250px] relative" ref={courseDropdownRef}>
+            <div className="flex-1 min-w-62.5 relative" ref={courseDropdownRef}>
               <label className="block text-sm font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
                 Lọc theo khóa học
               </label>
@@ -635,7 +739,7 @@ export const Landing: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowCourseDropdown(!showCourseDropdown)}
-                  className="w-full bg-muted/50 border border-border/60 rounded-xl py-2 px-3 pl-9 pr-16 text-sm text-foreground text-left focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition truncate relative min-h-[38px]"
+                  className="w-full bg-muted/50 border border-border/60 rounded-xl py-2 px-3 pl-9 pr-16 text-sm text-foreground text-left focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition truncate relative min-h-9.5"
                 >
                   <BookOpen className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground/60" />
                   {selectedCourse ? (
@@ -671,7 +775,7 @@ export const Landing: React.FC = () => {
                     autoFocus
                   />
                   
-                  <div className="max-h-[200px] overflow-y-auto space-y-1 scrollbar-thin">
+                  <div className="max-h-50 overflow-y-auto space-y-1 scrollbar-thin">
                     {loadingCoursesList ? (
                       <div className="text-center py-4 text-sm text-muted-foreground">
                         Đang tìm khóa học...
@@ -706,7 +810,7 @@ export const Landing: React.FC = () => {
             </div>
 
             {/* Rating Filter */}
-            <div className="w-full md:w-[160px]">
+            <div className="w-full md:w-40">
               <label className="block text-sm font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
                 Đánh giá
               </label>
@@ -725,7 +829,7 @@ export const Landing: React.FC = () => {
             </div>
 
             {/* Sorting */}
-            <div className="w-full md:w-[180px]">
+            <div className="w-full md:w-45">
               <label className="block text-sm font-bold uppercase tracking-wider text-muted-foreground mb-1.5">
                 Sắp xếp theo
               </label>

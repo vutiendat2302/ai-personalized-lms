@@ -26,4 +26,8 @@ public class ReorderRequest {
     @NotEmpty(message = "IDs list must not be empty")
     private List<Long> ids;
 
+    /**
+     * ID chương đích khi chuyển bài học sang chương khác (optional).
+     */
+    private Long targetSectionId;
 }

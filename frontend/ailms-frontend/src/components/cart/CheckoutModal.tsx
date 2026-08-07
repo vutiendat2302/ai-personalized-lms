@@ -98,12 +98,15 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const generatedOrderId = completedOrder?.id || `ORD-${Date.now().toString().slice(-6)}`;
   const transferMemo = `AILMS ${generatedOrderId}`;
 
+  const [errorMessage, setErrorMessage] = useState<string>("");
+
   // Step 1: Proceed to QR Scan Screen
   const handleProceedToQR = () => {
     if (!auth.accessToken) {
-      alert("Vui lòng đăng nhập để hoàn tất đơn hàng.");
+      setErrorMessage("Vui lòng đăng nhập để hoàn tất đơn hàng.");
       return;
     }
+    setErrorMessage("");
     setStep("SCAN_QR");
   };
 
@@ -111,6 +114,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const handleConfirmTransfer = async () => {
     try {
       setVerifyingPayment(true);
+      setErrorMessage("");
 
       // Simulate payment gateway verification / webhook callback delay
       await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -174,7 +178,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       setStep("SUCCESS");
     } catch (err) {
       console.error("Error verifying payment:", err);
-      alert("Chưa ghi nhận được giao dịch. Vui lòng kiểm tra lại chuyển khoản hoặc thử lại.");
+      setErrorMessage("Chưa ghi nhận được giao dịch. Vui lòng kiểm tra lại chuyển khoản hoặc thử lại.");
     } finally {
       setVerifyingPayment(false);
     }

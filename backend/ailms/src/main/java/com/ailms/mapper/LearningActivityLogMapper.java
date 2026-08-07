@@ -12,6 +12,10 @@ import java.util.List;
 @Mapper(componentModel = "spring")
 public interface LearningActivityLogMapper {
 
+    @Mapping(target = "entityName", ignore = true)
+    @Mapping(target = "courseId", ignore = true)
+    @Mapping(target = "courseName", ignore = true)
+    @Mapping(target = "className", ignore = true)
     LearningActivityLogResponse toResponse(LearningActivityLogEntity entity);
 
     List<LearningActivityLogResponse> toResponseList(List<LearningActivityLogEntity> list);

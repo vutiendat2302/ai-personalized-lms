@@ -16,16 +16,15 @@ from snowflake_id import snowflake
 fake = Faker("vi_VN")
 
 # Chuỗi hash BCrypt chuẩn của mật khẩu: Password@123 (với cost/strength = 10)
-COMMON_PASSWORD_HASH = "$2a$10$djMqqqaw5rFMJgibP/iCU.D1tdCyXRDpqjNtI61ifaARAS0X9Sgl6"
+COMMON_PASSWORD_HASH = "$2a$10$oUoRbyMti8EO2Rd4Rz84welApeqtbJ7uthtb1nXzX9AS5jlBjkA7u"
 
 TOTAL_USERS = 150
 
 STATUS_POOL = (
-    ["ACTIVE"] * 120
-    + ["INACTIVE"] * 12
-    + ["DELETED"] * 9
-    + ["LOCKED"] * 6
-    + ["PENDING_VERIFICATION"] * 3
+    ["ACTIVE"] * int(TOTAL_USERS * 0.88)
+    + ["DELETED"] * int(TOTAL_USERS * 0.06)
+    + ["LOCKED"] * int(TOTAL_USERS * 0.04)
+    + ["VERIFICATION"] * int(TOTAL_USERS * 0.02)
 )
 
 def check_has_enough_users(cursor):

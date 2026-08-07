@@ -213,6 +213,7 @@ PRIMARY KEY (course_id, user_id)
 | user_id | BIGINT | FK → user.id |
 | assigned_at | DATETIME | Assigned time |
 | assigned_by | BIGINT | Assigned by |
+| status | VARCHAR(50) | PENDING / ACTIVE / REJECTED / INACTIVE |
 
 ---
 

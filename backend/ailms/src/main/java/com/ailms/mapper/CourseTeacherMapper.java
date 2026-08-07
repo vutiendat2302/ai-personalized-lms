@@ -14,6 +14,9 @@ public interface CourseTeacherMapper {
 
     @Mapping(target = "courseId", source = "id.courseId")
     @Mapping(target = "userId", source = "id.userId")
+    @Mapping(target = "teacherName", source = "userEntity.fullName")
+    @Mapping(target = "teacherUsername", source = "userEntity.username")
+    @Mapping(target = "teacherAvatar", source = "userEntity.avatarUrl")
     CourseTeacherResponse toResponse(CourseTeacherEntity entity);
 
     List<CourseTeacherResponse> toResponseList(List<CourseTeacherEntity> list);

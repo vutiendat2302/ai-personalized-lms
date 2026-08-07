@@ -14,5 +14,6 @@ public enum CourseStatusEnum {
     PENDING,
     ACTIVE,
     REJECTED,
-    INACTIVE
+    INACTIVE,
+    DELETED
 }

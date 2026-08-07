@@ -13,6 +13,9 @@ public class MinioConfig {
     @Value("${minio.endpoint}")
     private String endpoint;
 
+    @Value("${minio.external-endpoint:${minio.endpoint}}")
+    private String externalEndpoint;
+
     @Value("${minio.access-key}")
     private String accessKey;
 
@@ -36,5 +39,13 @@ public class MinioConfig {
         }
 
         return client;
+    }
+
+    @Bean
+    public MinioClient minioPresignClient() {
+        return MinioClient.builder()
+                .endpoint(externalEndpoint)
+                .credentials(accessKey, secretKey)
+                .build();
     }
 }

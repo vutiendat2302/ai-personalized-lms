@@ -8,6 +8,7 @@ import com.ailms.entity.TeachingSessionPaymentEntity;
 import com.ailms.entity.enums.BaseStatusEnum;
 import com.ailms.entity.enums.EmployeeStatusEnum;
 import com.ailms.entity.enums.SessionPaymentStatusEnum;
+import com.ailms.entity.enums.UserStatusEnum;
 import com.ailms.event.AuditLogEvent;
 import com.ailms.exception.BusinessException;
 import com.ailms.exception.ResourceNotFoundException;
@@ -40,6 +41,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
+import java.util.Comparator;
+import java.util.Collections;
 
 @Service
 @RequiredArgsConstructor
@@ -93,15 +96,15 @@ public class TeachingSessionPaymentService implements ITeachingSessionPaymentSer
         EmployeeEntity employee = employeeRepository.findById(employeeId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Employee", employeeId));
 
-        if (employee.getStatus() == EmployeeStatusEnum.DELETE) {
+        if (employee.getUserEntity().getStatus() == UserStatusEnum.DELETED) {
             throw new BusinessException("Employee is deleted. Cannot create payment.");
         }
 
         ClassOnlineEntity classOnline = classOnlineRepository.findById(classOnlineId)
                 .orElseThrow(() -> ResourceNotFoundException.of("ClassOnline", classOnlineId));
 
-        if (teachingSessionPaymentRepository.findByClassOnlineId(classOnlineId).isPresent()) {
-            throw new BusinessException("Payment already exists for this online class session.");
+        if (teachingSessionPaymentRepository.findByClassOnlineIdAndEmployee_UserId(classOnlineId, employeeId).isPresent()) {
+            throw new BusinessException("Payment already exists for this employee and online class session.");
         }
 
         // Resolve teaching rate active at the time of session
@@ -117,7 +120,7 @@ public class TeachingSessionPaymentService implements ITeachingSessionPaymentSer
         }
 
         TeachingRateEntity rate = activeRates.stream()
-                .max(java.util.Comparator.comparing(TeachingRateEntity::getEffectiveFrom))
+                .max(Comparator.comparing(TeachingRateEntity::getEffectiveFrom))
                 .get();
 
         int actualDurationMin = classOnline.getDurationMin() != null ? classOnline.getDurationMin() : durationMin;
@@ -201,7 +204,7 @@ public class TeachingSessionPaymentService implements ITeachingSessionPaymentSer
         if (request.getEmployeeId() != null && !request.getEmployeeId().equals(existing.getEmployee().getUserId())) {
             EmployeeEntity newEmployee = employeeRepository.findById(request.getEmployeeId())
                     .orElseThrow(() -> ResourceNotFoundException.of("Employee", request.getEmployeeId()));
-            if (newEmployee.getStatus() == EmployeeStatusEnum.DELETE) {
+            if (newEmployee.getUserEntity().getStatus() == UserStatusEnum.DELETED) {
                 throw new BusinessException("New employee is deleted. Cannot update payment.");
             }
             existing.setEmployee(newEmployee);
@@ -218,7 +221,7 @@ public class TeachingSessionPaymentService implements ITeachingSessionPaymentSer
             }
 
             TeachingRateEntity rate = activeRates.stream()
-                    .max(java.util.Comparator.comparing(TeachingRateEntity::getEffectiveFrom))
+                    .max(Comparator.comparing(TeachingRateEntity::getEffectiveFrom))
                     .get();
 
             existing.setTeachingRate(rate);
@@ -283,7 +286,7 @@ public class TeachingSessionPaymentService implements ITeachingSessionPaymentSer
     private List<String> getCurrentUserRoles() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated()) {
-            return java.util.Collections.emptyList();
+            return Collections.emptyList();
         }
         return auth.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)

@@ -14,12 +14,27 @@ public class EnrollmentResponse {
 
     private Long id;
 
+    // User info
     private Long userId;
+    private String studentName;
+    private String studentEmail;
+    private String studentPhone;
+    private String studentAvatar;
 
+    // Course & Class info
     private Long courseId;
+    private String courseName;
 
     private Long classId;
+    private String className;
 
+    /**
+     * Trạng thái ghi danh:
+     * 0 = IN_PROGRESS (ACTIVE)
+     * 1 = COMPLETED
+     * 2 = EXPIRED
+     * 3 = CANCELLED (DROPPED)
+     */
     private Byte status;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")

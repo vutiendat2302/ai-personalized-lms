@@ -16,6 +16,11 @@ public class ClassMemberResponse {
     private String className;
     private Long userId;
     private String username;
+    private String fullName;
+    private String email;
+    private String avatarUrl;
+    private String studentCode;
+    private String employeeCode;
     private ClassMemberRole roleInClass;
     private ClassMemberStatusEnum status;
     private LocalDateTime joinedAt;

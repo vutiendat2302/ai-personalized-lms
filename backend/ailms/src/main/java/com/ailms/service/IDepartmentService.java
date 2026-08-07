@@ -2,9 +2,11 @@ package com.ailms.service;
 
 import com.ailms.request.*;
 import com.ailms.response.DepartmentResponse;
+import com.ailms.response.EmployeeResponse;
 import com.ailms.response.PageResponse;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Service quản lý các phòng ban tổ chức trong hệ thống.
@@ -56,4 +58,18 @@ public interface IDepartmentService {
      * @return trang kết quả chứa danh sách đã được phân trang
      */
     PageResponse<DepartmentResponse> search(DepartmentSearchRequest request);
+
+    /**
+     * Lấy danh sách nhân viên thuộc phòng ban.
+     */
+    List<EmployeeResponse> getEmployeesByDepartmentId(Long id);
+
+    /**
+     * Lấy thống kê tổng quan phòng ban, có thể lọc theo năm.
+     * @param year năm cần lọc, null = tất cả
+     */
+    Map<String, Object> getDepartmentOverviewStats(Integer year);
+    void transferEmployees(Long targetDeptId, List<Long> employeeIds);
+    void removeEmployeesFromDepartment(List<Long> employeeIds);
 }
+

@@ -2,15 +2,20 @@ package com.ailms.controller;
 
 import com.ailms.request.CreateClassRequest;
 import com.ailms.request.UpdateClassRequest;
+import com.ailms.request.UpdateClassScheduleSlotRequest;
 import com.ailms.response.PageResponse;
 import com.ailms.request.ClassSearchRequest;
 import com.ailms.response.ClassResponse;
+import com.ailms.response.ClassScheduleResponse;
 
 
 import com.ailms.response.ApiResponse;
+import com.ailms.security.CustomUserDetails;
 import com.ailms.service.IClassService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -50,10 +55,31 @@ public class ClassController {
         return ResponseEntity.ok(ApiResponse.of("Classes retrieved successfully", response));
     }
 
+    @GetMapping("/teaching/me")
+    @PreAuthorize("hasAnyAuthority('ROLE_TEACHER', 'ROLE_TA', 'ROLE_ADMIN')")
+    public ResponseEntity<ApiResponse<List<ClassResponse>>> getMyTeachingClasses(
+            @AuthenticationPrincipal CustomUserDetails currentUser) {
+        Long userId = currentUser.getUser().getId();
+        List<ClassResponse> response = classService.getTeachingClassesByUserId(userId);
+        return ResponseEntity.ok(ApiResponse.of("Teaching classes retrieved successfully", response));
+    }
+
     @GetMapping("/course/{courseId}")
     public ResponseEntity<ApiResponse<List<ClassResponse>>> getByCourseId(@PathVariable Long courseId) {
         List<ClassResponse> response = classService.getByCourseId(courseId);
         return ResponseEntity.ok(ApiResponse.of("Classes retrieved successfully", response));
+    }
+
+    @GetMapping("/{id}/schedules")
+    public ResponseEntity<ApiResponse<List<ClassScheduleResponse>>> getSchedules(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.of("Class schedules retrieved successfully", classService.getSchedules(id)));
+    }
+
+    @PutMapping("/{id}/schedules")
+    public ResponseEntity<ApiResponse<List<ClassScheduleResponse>>> updateSchedules(
+            @PathVariable Long id,
+            @RequestBody List<UpdateClassScheduleSlotRequest> schedules) {
+        return ResponseEntity.ok(ApiResponse.of("Class schedules updated successfully", classService.updateSchedules(id, schedules)));
     }
 
     @DeleteMapping("/{id}")

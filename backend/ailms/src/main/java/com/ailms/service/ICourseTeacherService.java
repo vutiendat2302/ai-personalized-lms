@@ -1,5 +1,7 @@
 package com.ailms.service;
 
+import com.ailms.entity.enums.CourseTeacherStatusEnum;
+import com.ailms.request.CourseTeacherStatusRequest;
 import com.ailms.response.PageResponse;
 import com.ailms.request.CourseTeacherSearchRequest;
 import com.ailms.response.CourseTeacherResponse;
@@ -58,6 +60,16 @@ public interface ICourseTeacherService {
      * @return danh sách các đối tượng phù hợp
      */
     List<CourseTeacherResponse> getByCourseId(Long courseId);
+
+    /**
+     * Lấy danh sách giáo viên phụ trách khóa học theo trạng thái.
+     */
+    List<CourseTeacherResponse> getByCourseId(Long courseId, CourseTeacherStatusEnum status);
+
+    /**
+     * Cập nhật trạng thái phân công giảng viên.
+     */
+    CourseTeacherResponse updateStatus(Long courseId, Long userId, CourseTeacherStatusRequest request);
 
     /**
      * Lấy danh sách khóa học mà giáo viên đang phụ trách.

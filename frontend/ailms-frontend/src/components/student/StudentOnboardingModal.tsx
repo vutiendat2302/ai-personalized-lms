@@ -45,7 +45,7 @@ export const StudentOnboardingModal: React.FC<StudentOnboardingModalProps> = ({
   initialStep,
 }) => {
   const { auth } = useAuth();
-  const userId = auth.user?.id;
+  const userId = auth.user?.id != null ? String(auth.user.id) : undefined;
 
   // Onboarding steps: 1: Profile, 2: Guardian (if < 18), 3: Goal, 4: Interests
   const [step, setStep] = useState(1);
@@ -78,9 +78,7 @@ export const StudentOnboardingModal: React.FC<StudentOnboardingModalProps> = ({
 
   // Step 4: Interests State
   const [interests, setInterests] = useState<InterestResponse[]>([]);
-  const [selectedInterestIds, setSelectedInterestIds] = useState<
-    (string | number)[]
-  >([]);
+  const [selectedInterestIds, setSelectedInterestIds] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
   // Preset options for quick selection
@@ -237,7 +235,6 @@ export const StudentOnboardingModal: React.FC<StudentOnboardingModalProps> = ({
     setStep1Error(null);
 
     // Create / Update Student Profile in Step 1 and get isMinor calculated by Backend
-    const userId = auth.user?.id;
     let backendIsMinor = false;
 
     if (userId) {
@@ -296,7 +293,7 @@ export const StudentOnboardingModal: React.FC<StudentOnboardingModalProps> = ({
     setStep(4);
   };
 
-  const handleToggleInterest = (id: string | number) => {
+  const handleToggleInterest = (id: string) => {
     setSelectedInterestIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
     );
@@ -399,10 +396,10 @@ export const StudentOnboardingModal: React.FC<StudentOnboardingModalProps> = ({
   const progressPercent = Math.round((currentDisplayStep / totalSteps) * 100);
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 backdrop-blur-xl p-4 sm:p-6 md:p-8 animate-in fade-in duration-200">
-      <div className="bg-card w-full max-w-4xl rounded-3xl border border-border/80 shadow-2xl shadow-black/50 overflow-hidden flex flex-col max-h-[88vh] my-auto relative z-[101]">
+    <div className="fixed inset-0 z-100 flex items-center justify-center bg-slate-950/80 backdrop-blur-xl p-4 sm:p-6 md:p-8 animate-in fade-in duration-200">
+      <div className="bg-card w-full max-w-4xl rounded-3xl border border-border/80 shadow-2xl shadow-black/50 overflow-hidden flex flex-col max-h-[88vh] my-auto relative z-101">
         {/* Header & Coursera Progress Bar */}
-        <div className="p-6 border-b border-border bg-gradient-to-r from-primary/5 via-indigo-500/5 to-transparent relative">
+        <div className="p-6 border-b border-border bg-linear-to-r from-primary/5 via-indigo-500/5 to-transparent relative">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <div className="h-8 w-8 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold">

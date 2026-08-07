@@ -14,5 +14,6 @@ public interface AuditLogRepository extends BaseRepository<AuditLogEntity, Long>
     List<AuditLogEntity> user(UserEntity user);
 
     List<AuditLogEntity> findByUser_Id(Long userId);
+    List<AuditLogEntity> findByEntityTypeAndEntityIdOrderByOccurredAtDesc(String entityType, Long entityId);
 }
 

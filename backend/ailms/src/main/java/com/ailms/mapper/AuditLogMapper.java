@@ -13,6 +13,7 @@ public interface AuditLogMapper {
     @Mapping(target = "userId", source = "user.id")
     @Mapping(target = "userEmail", source = "user.email")
     @Mapping(target = "userFullName", source = "user.fullName")
+    @Mapping(target = "userAvatarUrl", source = "user.avatarUrl")
     AuditLogResponse toResponse(AuditLogEntity entity);
 
     List<AuditLogResponse> toResponseList(List<AuditLogEntity> entities);

@@ -1,5 +1,6 @@
 package com.ailms.service.imp;
 import com.ailms.common.converter.SimpleJsonWriter;
+import com.ailms.entity.enums.FileUsageTypeEnum;
 import com.ailms.event.AuditLogEvent;
 import com.ailms.repository.specification.LessonResourceSpecification;
 import com.ailms.request.LessonResourceSearchRequest;
@@ -26,7 +27,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -76,6 +76,13 @@ public class LessonResourceService implements ILessonResourceService {
         entity.setFileMetadata(fileMetadata);
 
         LessonResourceEntity savedEntity = lessonResourceRepository.save(entity);
+        if (fileMetadata != null) {
+            fileMetadata.setUsageType(FileUsageTypeEnum.LESSON_RESOURCE);
+            fileMetadata.setReferenceEntityId(savedEntity.getId());
+            fileMetadata.setReferenceEntityType("LessonResource");
+            fileMetadataRepository.save(fileMetadata);
+        }
+
         ResourceResponse resourceResponse = lessonResourceMapper.toResponse(entity);
         resourceResponse.setFileUrl(fileService.getDownloadUrl(entity.getFileMetadata().getFileKey()));
 

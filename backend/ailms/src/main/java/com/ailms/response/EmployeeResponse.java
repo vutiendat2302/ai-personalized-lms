@@ -2,10 +2,12 @@ package com.ailms.response;
 
 import com.ailms.entity.enums.EmployeeStatusEnum;
 import com.ailms.entity.enums.EmploymentTypeEnum;
+import com.ailms.entity.enums.UserStatusEnum;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Getter
 @Setter
@@ -14,15 +16,40 @@ import java.time.LocalDateTime;
 @Builder
 public class EmployeeResponse {
 
+    private Long id;
+
     private Long userId;
 
+    private String userName;
+
+    private String userEmail;
+
+    private String fullName;
+
     private String employeeCode;
+
+    private String avatarUrl;
+
+    private String phone;
+
+    private Integer gender;
+
+    private String address;
+
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
+    private LocalDateTime dateOfBirth;
 
     private Long departmentId;
 
     private String departmentName;
 
+    private String departmentCode;
+
     private String position;
+
+    private List<String> roles;
+
+    private List<Long> roleIds;
 
     private EmploymentTypeEnum employmentTypeEnum;
 
@@ -33,6 +60,8 @@ public class EmployeeResponse {
     private LocalDateTime endDate;
 
     private EmployeeStatusEnum status;
+
+    private UserStatusEnum userStatus;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime createdAt;

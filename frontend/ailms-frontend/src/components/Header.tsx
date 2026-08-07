@@ -4,11 +4,16 @@ import { useAuth } from "@/hooks/useAuth";
 import { useModalStore } from "@/store/useModalStore";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { LogOut, ChevronDown, Bell, Globe, Search, User, Settings, BookOpen, Users, Shield, Activity, Clock, Trash2, Sparkles, Target, ShoppingBag, Tag, BarChart, Loader2 } from "lucide-react";
+import { LogOut, ChevronDown, Bell, Globe, Search, User, Settings, BookOpen, Shield, Activity, Clock, Trash2, Sparkles, Target, ShoppingBag, BarChart, Loader2 } from "lucide-react";
 import { searchApi, type SearchHistoryResponse, type PopularSearchResponse, type SuggestionResponse } from "@/api/search/searchApi";
 import { StudentOnboardingModal } from "@/components/student/StudentOnboardingModal";
 import { studentApi } from "@/api/students/studentApi";
 import { useCartStore } from "@/store/useCartStore";
+import { WorkspaceSwitcher } from "@/components/WorkspaceSwitcher";
+import type { StudentProfileData } from "@/api/students/studentApi";
+import type { ApiResponse } from "@/types/base";
+import { notificationApi, type NotificationItem } from "@/api/notifications/notificationApi";
+
 
 export const Header: React.FC = () => {
   const { auth, logout } = useAuth();
@@ -17,6 +22,10 @@ export const Header: React.FC = () => {
   const { openLogin, openRegister, openChangePassword } = useModalStore();
   const { items: cartItems, toggleCart } = useCartStore();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [notificationOpen, setNotificationOpen] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notificationLoading, setNotificationLoading] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [searchFocused, setSearchFocused] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -27,7 +36,55 @@ export const Header: React.FC = () => {
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [onboardingModalOpen, setOnboardingModalOpen] = useState(false);
   const [onboardingInitialStep, setOnboardingInitialStep] = useState(1);
+  const [hasGoal, setHasGoal] = useState<boolean>(() => {
+    if (!auth.user?.id) return false;
+    return localStorage.getItem(`hasGoal_${auth.user.id}`) === "true";
+  });
   const searchRef = useRef<HTMLDivElement>(null);
+
+  const loadNotifications = async () => {
+    if (!auth.accessToken) return;
+    setNotificationLoading(true);
+    try {
+      const [page, count] = await Promise.all([
+        notificationApi.getMine(0, 8),
+        notificationApi.getUnreadCount(),
+      ]);
+      setNotifications(page?.content || []);
+      setUnreadCount(count || 0);
+    } catch {
+      setNotifications([]);
+      setUnreadCount(0);
+    } finally {
+      setNotificationLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!auth.accessToken) {
+      setNotifications([]);
+      setUnreadCount(0);
+      return;
+    }
+    void loadNotifications();
+    const timer = window.setInterval(() => void loadNotifications(), 60000);
+    return () => window.clearInterval(timer);
+  }, [auth.accessToken, auth.user?.id]);
+
+  const openNotification = async (item: NotificationItem) => {
+    if (!item.isRead) {
+      try {
+        await notificationApi.markRead(item.id);
+        setNotifications((items) => items.map((entry) => entry.id === item.id ? { ...entry, isRead: true } : entry));
+        setUnreadCount((count) => Math.max(0, count - 1));
+      } catch { /* Không chặn việc xem thông báo khi cập nhật trạng thái thất bại. */ }
+    }
+    if (item.targetUrl) {
+      setNotificationOpen(false);
+      if (/^https?:\/\//i.test(item.targetUrl)) window.location.assign(item.targetUrl);
+      else navigate(item.targetUrl);
+    }
+  };
 
   const isStudent = Boolean(
     auth.user?.roles?.some((r: any) => {
@@ -49,13 +106,15 @@ export const Header: React.FC = () => {
     if (auth.accessToken && auth.user && isStudent) {
       const uId = auth.user.id;
 
-      studentApi.getProfileById(uId)
-        .then((res) => {
+      studentApi.getStudentById(uId)
+        .then((res: import("axios").AxiosResponse<ApiResponse<StudentProfileData>>) => {
           const profile = res.data?.data;
           if (profile && profile.hasGoal === true) {
             localStorage.setItem(`hasGoal_${uId}`, "true");
+            setHasGoal(true);
           } else {
             localStorage.removeItem(`hasGoal_${uId}`);
+            setHasGoal(false);
             setOnboardingInitialStep(1); // First login starts at Step 1 (Profile & Guardian)
             setOnboardingModalOpen(true);
           }
@@ -63,9 +122,12 @@ export const Header: React.FC = () => {
         .catch(() => {
           // If student profile is missing (404), this is definitely first login -> open onboarding Step 1
           localStorage.removeItem(`hasGoal_${uId}`);
+          setHasGoal(false);
           setOnboardingInitialStep(1);
           setOnboardingModalOpen(true);
         });
+    } else {
+      setHasGoal(false);
     }
   }, [auth.accessToken, auth.user, isStudent]);
 
@@ -326,7 +388,26 @@ export const Header: React.FC = () => {
     return () => document.removeEventListener("mousedown", handleSearchClickOutside);
   }, []);
 
-  const isAdmin = auth.user?.roles.includes("ADMIN");
+  const isAdmin = Boolean(
+    auth.user?.roles?.some((r: any) => {
+      const roleStr = (typeof r === "object" ? (r?.code || r?.name || "") : String(r)).toUpperCase();
+      return roleStr === "ADMIN" || roleStr === "ROLE_ADMIN" || roleStr.includes("ADMIN");
+    })
+  );
+
+  // Ẩn giỏ hàng cho toàn bộ nhóm nhân viên (Admin, HR, Teacher, TA)
+  const isEmployee = Boolean(
+    auth.user?.roles?.some((r: any) => {
+      const roleStr = (typeof r === "object" ? (r?.code || r?.name || "") : String(r)).toUpperCase();
+      return (
+        roleStr.includes("ADMIN") ||
+        roleStr.includes("HR") ||
+        roleStr.includes("TEACHER") ||
+        roleStr.includes("TA") ||
+        roleStr.includes("EMPLOYEE")
+      );
+    })
+  );
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border/40 bg-card/70 backdrop-blur-md transition-colors duration-200">
@@ -338,9 +419,9 @@ export const Header: React.FC = () => {
         </Link>
 
         {/* Center: Global Search Bar & Navigation */}
-        <div className="flex-1 flex items-center justify-between max-w-4xl mx-4 sm:mx-8 md:mx-12 gap-4">
-          {/* Courses Dropdown (Only for Authenticated users) */}
-          {auth.accessToken && auth.user && (
+        <div className="flex-1 flex items-center justify-center max-w-4xl mx-4 sm:mx-8 md:mx-12 gap-4">
+          {/* Courses Dropdown (Only for Authenticated Student/User - Hidden for Employee/Staff) */}
+          {auth.accessToken && auth.user && !isEmployee && (
             <div className="relative shrink-0 hidden md:block">
               <button 
                 onClick={() => navigate("/dashboard")}
@@ -351,8 +432,6 @@ export const Header: React.FC = () => {
               </button>
             </div>
           )}
-
-          
 
           {/* Public navigation links (Visible only when logged out and on large screens) */}
           {!auth.accessToken && (
@@ -365,7 +444,7 @@ export const Header: React.FC = () => {
           )}
 
           {/* Coursera-style Search Bar (Visible for everyone) */}
-          <div ref={searchRef} className="relative flex-1 max-w-lg hidden sm:block">
+          <div ref={searchRef} className="relative flex-1 max-w-lg mx-auto hidden sm:block">
             <form onSubmit={handleSearchSubmit} className="relative flex items-center h-10 w-full rounded-full border border-border/50 bg-white hover:bg-background focus-within:bg-background focus-within:ring-3 focus-within:ring-primary/20 transition-all overflow-hidden pr-1 shadow-sm">
               <input
                 type="text"
@@ -383,7 +462,7 @@ export const Header: React.FC = () => {
               </button>
             </form>
             {searchFocused && (
-              <div className="absolute left-1/2 -translate-x-1/2 mt-2 w-[600px] max-w-[90vw] bg-card rounded-2xl border border-border/40 shadow-2xl p-5 z-50 animate-in fade-in-50 slide-in-from-top-3 duration-200">
+              <div className="absolute left-1/2 -translate-x-1/2 mt-2 w-150 max-w-[90vw] bg-card rounded-2xl border border-border/40 shadow-2xl p-5 z-50 animate-in fade-in-50 slide-in-from-top-3 duration-200">
                 {/* 1. Real Autocomplete Suggestions from API */}
                 {searchQuery.trim() !== "" ? (
                   <div className="space-y-2">
@@ -437,7 +516,7 @@ export const Header: React.FC = () => {
                               onClick={() => handleSelectKeyword(item.keyword, item.courseId)}
                               className="group flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-border/60 bg-muted/30 text-sm font-semibold text-foreground hover:bg-primary/5 hover:text-primary hover:border-primary/20 transition-all cursor-pointer"
                             >
-                              <span className="line-clamp-1 max-w-[200px]">{item.keyword}</span>
+                              <span className="line-clamp-1 max-w-50">{item.keyword}</span>
                               <button
                                 type="button"
                                 onClick={(e) => handleDeleteHistory(e, item.id)}
@@ -499,7 +578,7 @@ export const Header: React.FC = () => {
                               className="flex flex-col bg-muted/20 border border-border/80 rounded-xl overflow-hidden cursor-pointer hover:shadow-md hover:border-primary/20 transition-all group"
                             >
                               <div className="aspect-video overflow-hidden bg-muted relative">
-                                <img src={c.image} alt={c.name} className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300" />
+                                {c.image ? <img src={c.image} alt={c.name} className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300" /> : <div className="flex h-full w-full items-center justify-center bg-primary/5"><BookOpen className="h-6 w-6 text-primary/40" /></div>}
                               </div>
                               <div className="p-2 flex-1 flex flex-col justify-between space-y-1">
                                 <span className="text-[10px] font-extrabold uppercase text-primary tracking-wider">{c.category}</span>
@@ -528,8 +607,11 @@ export const Header: React.FC = () => {
             // Authenticated Right Side Icons & Profile Dropdown
             <div className="flex items-center gap-3 relative" ref={dropdownRef}>
               
-              {/* Goal Widget Button for Student */}
-              {isStudent && (
+              {/* Workspace Switcher dropdown for multi-role users */}
+              <WorkspaceSwitcher />
+
+              {/* Goal Widget Button for Student (Chỉ hiển thị khi Học viên CHƯA có goal) */}
+              {isStudent && !hasGoal && (
                 <button
                   onClick={() => {
                     const isCompleted = localStorage.getItem(`hasGoal_${auth.user?.id}`) === "true";
@@ -549,25 +631,78 @@ export const Header: React.FC = () => {
                 <Globe className="h-4.5 w-4.5" />
               </button>
 
-              {/* Shopping Cart Trigger */}
+              {/* Shopping Cart Trigger (Chỉ hiển thị cho Học Viên / Khách vãng lai, ẩn hoàn toàn đối với Nhân Viên & Admin) */}
+              {(!auth.accessToken || isStudent) && !isEmployee && (
+                <button
+                  onClick={toggleCart}
+                  className="p-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors relative"
+                  title="Giỏ hàng"
+                >
+                  <ShoppingBag className="h-4.5 w-4.5" />
+                  {cartItems.length > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-primary text-white font-extrabold text-[9px] flex items-center justify-center border-2 border-background shadow-sm">
+                      {cartItems.length}
+                    </span>
+                  )}
+                </button>
+              )}
+
+
+              {/* Notification Bell */}
               <button
-                onClick={toggleCart}
+                onClick={() => { setNotificationOpen((open) => !open); setDropdownOpen(false); }}
                 className="p-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors relative"
-                title="Giỏ hàng"
+                title="Thông báo"
+                aria-label={`Thông báo${unreadCount ? `, ${unreadCount} chưa đọc` : ""}`}
               >
-                <ShoppingBag className="h-4.5 w-4.5" />
-                {cartItems.length > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 h-4 w-4 rounded-full bg-primary text-white font-extrabold text-[9px] flex items-center justify-center border-2 border-background shadow-sm">
-                    {cartItems.length}
+                <Bell className="h-4.5 w-4.5" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-destructive text-[9px] font-bold text-white flex items-center justify-center ring-2 ring-background">
+                    {unreadCount > 99 ? "99+" : unreadCount}
                   </span>
                 )}
               </button>
 
-              {/* Notification Bell */}
-              <button className="p-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors relative" title="Thông báo">
-                <Bell className="h-4.5 w-4.5" />
-                <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-destructive" />
-              </button>
+              {notificationOpen && (
+                <div className="absolute right-10 top-12 z-50 w-[min(92vw,360px)] overflow-hidden rounded-2xl border border-border/70 bg-card shadow-2xl animate-in fade-in-50 slide-in-from-top-2">
+                  <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
+                    <div>
+                      <p className="text-sm font-bold text-foreground">Thông báo</p>
+                      <p className="text-[10px] text-muted-foreground">Theo tài khoản và vai trò hiện tại</p>
+                    </div>
+                    {unreadCount > 0 && (
+                      <button
+                        className="text-[11px] font-semibold text-primary hover:underline"
+                        onClick={async () => { await notificationApi.markAllRead(); setUnreadCount(0); setNotifications((items) => items.map((item) => ({ ...item, isRead: true }))); }}
+                      >
+                        Đánh dấu đã đọc
+                      </button>
+                    )}
+                  </div>
+                  <div className="max-h-105 overflow-y-auto p-2">
+                    {notificationLoading ? (
+                      <div className="flex items-center justify-center gap-2 py-10 text-xs text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Đang tải thông báo...</div>
+                    ) : notifications.length === 0 ? (
+                      <div className="py-10 text-center"><Bell className="mx-auto mb-2 h-7 w-7 text-muted-foreground/40" /><p className="text-xs font-medium text-muted-foreground">Chưa có thông báo</p></div>
+                    ) : notifications.map((item) => (
+                      <button
+                        key={item.id}
+                        onClick={() => void openNotification(item)}
+                        className={`mb-1 w-full rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-muted ${item.isRead ? "" : "bg-primary/5"}`}
+                      >
+                        <div className="flex items-start gap-2.5">
+                          <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${item.isRead ? "bg-muted-foreground/25" : "bg-primary"}`} />
+                          <span className="min-w-0">
+                            <span className="block truncate text-xs font-semibold text-foreground">{item.title}</span>
+                            <span className="mt-0.5 line-clamp-2 block text-[11px] leading-4 text-muted-foreground">{item.content}</span>
+                            <span className="mt-1 block text-[10px] text-muted-foreground/70">{new Date(item.createdAt).toLocaleString("vi-VN")}</span>
+                          </span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Avatar trigger */}
               <button 
@@ -601,32 +736,11 @@ export const Header: React.FC = () => {
                         <span>Thông tin cá nhân</span>
                       </button>
                       <button
-                        onClick={() => { setDropdownOpen(false); navigate("/admin/users"); }}
-                        className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
-                      >
-                        <Users className="h-4 w-4 text-primary" />
-                        <span>Quản lý người dùng</span>
-                      </button>
-                      <button
-                        onClick={() => { setDropdownOpen(false); navigate("/admin/hr"); }}
-                        className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
-                      >
-                        <Users className="h-4 w-4 text-primary" />
-                        <span>Quản lý nhân sự (HR)</span>
-                      </button>
-                      <button
                         onClick={() => { setDropdownOpen(false); navigate("/admin/approval-center"); }}
                         className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
                       >
                         <Shield className="h-4 w-4 text-primary" />
                         <span>Trung tâm phê duyệt</span>
-                      </button>
-                      <button
-                        onClick={() => { setDropdownOpen(false); navigate("/admin/category-teachers"); }}
-                        className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
-                      >
-                        <BookOpen className="h-4 w-4 text-primary" />
-                        <span>Phân công giảng viên</span>
                       </button>
                       <button
                         onClick={() => { setDropdownOpen(false); navigate("/analytics"); }}
@@ -635,41 +749,7 @@ export const Header: React.FC = () => {
                         <BarChart className="h-4 w-4 text-primary" />
                         <span>Báo cáo & Analytics</span>
                       </button>
-                      <button
-                        onClick={() => { setDropdownOpen(false); navigate("/admin/roles"); }}
-                        className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
-                      >
-                        <Shield className="h-4 w-4 text-primary" />
-                        <span>Quản lý vai trò</span>
-                      </button>
-                      <button
-                        onClick={() => { setDropdownOpen(false); navigate("/admin/permissions"); }}
-                        className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
-                      >
-                        <Settings className="h-4 w-4 text-primary" />
-                        <span>Quản lý quyền hạn</span>
-                      </button>
-                      <button
-                        onClick={() => { setDropdownOpen(false); navigate("/admin/courses"); }}
-                        className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
-                      >
-                        <BookOpen className="h-4 w-4 text-primary" />
-                        <span>Quản lý khóa học</span>
-                      </button>
-                      <button
-                        onClick={() => { setDropdownOpen(false); navigate("/admin/orders"); }}
-                        className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
-                      >
-                        <ShoppingBag className="h-4 w-4 text-primary" />
-                        <span>Quản lý đơn hàng</span>
-                      </button>
-                      <button
-                        onClick={() => { setDropdownOpen(false); navigate("/admin/coupons"); }}
-                        className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
-                      >
-                        <Tag className="h-4 w-4 text-primary" />
-                        <span>Quản lý mã giảm giá</span>
-                      </button>
+        
                       <button
                         onClick={() => { setDropdownOpen(false); navigate("/activity-log"); }}
                         className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
@@ -678,7 +758,26 @@ export const Header: React.FC = () => {
                         <span>Nhật ký hệ thống</span>
                       </button>
                     </>
-                  ) : (
+                  ) : isEmployee ? (
+                    // Teacher / HR Menu Items
+                      <>
+                        <button
+                          onClick={() => { setDropdownOpen(false); navigate("/profile"); }}
+                          className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
+                        >
+                          <User className="h-4 w-4 text-primary" />
+                          <span>Thông tin cá nhân</span>
+                        </button>
+                        <button
+                          onClick={() => { setDropdownOpen(false); navigate("/activity-log"); }}
+                          className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
+                        >
+                          <Activity className="h-4 w-4 text-primary" />
+                          <span>Lịch sử hoạt động</span>
+                        </button>
+                      </>
+                  ) :
+                  (
                     // Student Menu Items
                     <>
                       <button
@@ -718,7 +817,7 @@ export const Header: React.FC = () => {
                     className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
                   >
                     <Settings className="h-4 w-4 text-primary" />
-                    <span>Cài đặt (Đổi mật khẩu)</span>
+                  <span>Cài đặt (Đổi mật khẩu)</span>
                   </button>
 
                   <div className="border-t border-border/60 my-1 pt-1">
@@ -751,7 +850,12 @@ export const Header: React.FC = () => {
       <StudentOnboardingModal
         isOpen={onboardingModalOpen}
         initialStep={onboardingInitialStep}
-        onClose={() => setOnboardingModalOpen(false)}
+        onClose={() => {
+          setOnboardingModalOpen(false);
+          if (auth.user?.id) {
+            setHasGoal(localStorage.getItem(`hasGoal_${auth.user.id}`) === "true");
+          }
+        }}
       />
     </header>
   );

@@ -20,6 +20,7 @@ public class UserResponse {
     private LocalDateTime dateOfBirth;
 
     private UserStatusEnum status;
+    private String attributes;
     private LocalDateTime lastLoginAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

@@ -1,6 +1,7 @@
 package com.ailms.service.imp;
 import com.ailms.common.converter.SimpleJsonWriter;
 import com.ailms.entity.ClassEntity;
+import com.ailms.entity.enums.UserStatusEnum;
 import com.ailms.event.AuditLogEvent;
 import com.ailms.repository.ClassRepository;
 import com.ailms.repository.specification.TeachingRateSpecification;
@@ -73,7 +74,7 @@ public class TeachingRateService implements ITeachingRateService {
         EmployeeEntity employee = employeeRepository.findById(request.getEmployeeId())
                 .orElseThrow(() -> ResourceNotFoundException.of("Employee", request.getEmployeeId()));
 
-        if (employee.getStatus() == EmployeeStatusEnum.DELETE) {
+        if (employee.getUserEntity().getStatus() == UserStatusEnum.DELETED) {
             throw new BusinessException("Employee is deleted. Cannot create teaching rate.");
         }
 

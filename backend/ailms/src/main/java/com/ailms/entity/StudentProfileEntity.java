@@ -67,6 +67,14 @@ public class StudentProfileEntity extends BaseEntity {
     @Builder.Default
     private Boolean isMinor = false;
 
+    /** Chỉ số dẫn xuất từ learning_activity_log, không lưu trong student_profile. */
+    @Transient
+    private Integer currentStreak;
+
+    /** Chuỗi ngày học dài nhất, được tính từ toàn bộ lịch sử hoạt động học tập. */
+    @Transient
+    private Integer longestStreak;
+
     /** Danh sách lĩnh vực sở thích quan tâm của học viên. */
     @OneToMany(mappedBy = "studentProfile", fetch = FetchType.LAZY)
     @Builder.Default

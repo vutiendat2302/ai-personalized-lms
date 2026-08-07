@@ -4,15 +4,18 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
 @Getter
 @Setter
+@Slf4j
 public class BaseSearchRequest {
 
     private static final int DEFAULT_PAGE = 0;
@@ -39,14 +42,16 @@ public class BaseSearchRequest {
         int safePage = (page == null || page < 0) ? DEFAULT_PAGE : page;
         int safeSize = (size == null || size <= 0 || size > MAX_SIZE) ? DEFAULT_SIZE : size;
 
-        System.out.println("sort raw = " + sort);
+        log.debug("sort raw = {}", sort);
 
         List<Sort.Order> orders = (sort == null || sort.isEmpty())
                 ? List.of(new Sort.Order(Sort.Direction.DESC, "id"))
                 : sort.stream()
-                .map(this::parseSortItem)
-                .filter(Objects::nonNull)
-                .toList();
+                  .filter(Objects::nonNull)
+                  .flatMap(s -> Arrays.stream(s.split(",")))
+                  .map(this::parseSortItem)
+                  .filter(Objects::nonNull)
+                  .toList();
 
         Sort finalSort = orders.isEmpty()
                 ? Sort.by(Sort.Direction.DESC, "id")
@@ -55,11 +60,20 @@ public class BaseSearchRequest {
         return PageRequest.of(safePage, safeSize, finalSort);
     }
 
+    protected List<String> allowedSortFields() {
+        return List.of(); // subclass override nếu cần whitelist
+    }
+
     private Sort.Order parseSortItem(String item) {
         if (item == null || item.isBlank()) return null;
-        String delimiter = item.contains(",") ? "," : ":";
-        String[] parts = item.split(delimiter);
+        String[] parts = item.split(":");
         String field = parts[0].trim();
+
+        List<String> allowed = allowedSortFields();
+        if (!allowed.isEmpty() && !allowed.contains(field)) {
+            return null; // hoặc throw exception tùy bạn muốn strict hay silent-skip
+        }
+
         Sort.Direction direction = (parts.length > 1 && "asc".equalsIgnoreCase(parts[1].trim()))
                 ? Sort.Direction.ASC
                 : Sort.Direction.DESC;

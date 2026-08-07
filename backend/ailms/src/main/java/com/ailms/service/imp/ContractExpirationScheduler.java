@@ -25,10 +25,10 @@ public class ContractExpirationScheduler {
     /**
      * Runs every day at 8:00 AM to check for contracts expiring in exactly 7 days.
      */
-    @Scheduled(cron = "0 0 8 * * ?")
+    @Scheduled(cron = "0 0 0 * * ?")
     public void checkExpiringContracts() {
         log.info("Starting scheduled scan for contracts expiring in 7 days...");
-        LocalDate targetDate = LocalDate.now().plusDays(7);
+        LocalDate targetDate = LocalDate.now().plusDays(30);
         List<EmployeeContractEntity> expiringContracts = employeeContractRepository.findByStatusAndEndDate(BaseStatusEnum.ACTIVE, targetDate);
 
         if (expiringContracts.isEmpty()) {

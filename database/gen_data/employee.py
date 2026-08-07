@@ -5,7 +5,7 @@ Seed dữ liệu cho bảng `employee`.
 - Khóa chính là `user_id` (1-1 với user).
 - Chỉ lấy user có role HR, TEACHER, TA.
 - TA -> PART_TIME; HR, TEACHER -> FULL_TIME.
-- Trạng thái: 80% ACTIVE, 10% ON_LEAVE, 3% TERMINATED, 7% DELETE.
+- Trạng thái: 80% ACTIVE, 10% ON_LEAVE, 3% TERMINATED, 
 - employee_code format: EP-{MMyy}-{6 alphanumeric}.
 - Có đầy đủ các cột của BaseEntity (created_by lấy ID Admin).
 - Cố định seed 100% (random.seed(42)).
@@ -110,17 +110,15 @@ def seed(cursor):
 
     total_emp = len(users)
 
-    # 4. Phân bổ Status: 80% ACTIVE, 10% ON_LEAVE, 3% TERMINATED, 7% DELETE
+    # 4. Phân bổ Status: 80% ACTIVE, 10% ON_LEAVE, 3% TERMINATED,
     active_count = int(total_emp * 0.80)
-    leave_count = int(total_emp * 0.10)
-    terminated_count = int(total_emp * 0.03)
-    delete_count = total_emp - (active_count + leave_count + terminated_count)
+    leave_count = int(total_emp * 0.15)
+    terminated_count = total_emp - (active_count + leave_count)
 
     statuses = (
         ["ACTIVE"] * active_count
         + ["ON_LEAVE"] * leave_count
         + ["TERMINATED"] * terminated_count
-        + ["DELETE"] * delete_count
     )
     random.shuffle(statuses)
 
@@ -154,7 +152,7 @@ def seed(cursor):
         )
 
         # Xử lý Ngày nghỉ việc (end_date) logic theo status
-        if status in ["TERMINATED", "DELETE"]:
+        if status in ["TERMINATED"]:
             # Nghỉ việc sau khi làm được một khoảng thời gian
             work_days = random.randint(10, days_ago - 1) if days_ago > 10 else 1
             end_date = start_date + timedelta(days=work_days)

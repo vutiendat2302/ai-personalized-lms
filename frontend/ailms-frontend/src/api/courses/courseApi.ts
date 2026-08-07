@@ -14,6 +14,18 @@ export const courseApi = {
   createCourse: (payload: CreateCourseRequest) =>
     httpClient.post<ApiResponse<CourseResponse>>("/v1/courses", payload),
 
+  createTeacherCourse: (teacherUserId: string, payload: CreateCourseRequest) =>
+    httpClient.post<ApiResponse<CourseResponse>>("/v1/courses/teacher", payload, { params: { teacherUserId } }),
+
+  approveCourse: (id: string, approve: boolean, rejectionReason?: string) =>
+    httpClient.post<ApiResponse<CourseResponse>>(`/v1/courses/${id}/approve`, { approve, rejectionReason }),
+
+  getSuggestedClasses: (teacherUserId: string) =>
+    httpClient.get<ApiResponse<any[]>>("/v1/courses/suggested-classes", { params: { teacherUserId } }),
+
+  claimClass: (classId: string, teacherUserId: string) =>
+    httpClient.post<ApiResponse<any>>(`/v1/courses/classes/${classId}/claim`, null, { params: { teacherUserId } }),
+
   updateCourse: (id: string, payload: UpdateCourseRequest) =>
     httpClient.put<ApiResponse<CourseResponse>>(`/v1/courses/${id}`, payload),
 
@@ -30,7 +42,7 @@ export const courseApi = {
     httpClient.get<ApiResponse<CourseResponse[]>>("/v1/courses"),
 
   searchCourses: (params?: {
-    categoryId?: number;
+    categoryId?: string;
     name?: string;
     level?: string;
     status?: string;
@@ -39,6 +51,7 @@ export const courseApi = {
     sortBy?: string;
     sortDirection?: string;
     keyword?: string;
+    createdBy?: string;
   }) =>
     httpClient.get<ApiResponse<any>>("/v1/courses/search", { params }),
 
@@ -50,6 +63,9 @@ export const courseApi = {
 
   getLatestCourses: (params?: { page?: number; size?: number }) =>
     httpClient.get<ApiResponse<any>>("/v1/courses/latest", { params }),
+
+  getActiveCoursesCount: () =>
+    httpClient.get<ApiResponse<number>>("/v1/courses/active-count"),
 
   // Category Endpoints
   createCategory: (payload: CreateCategoryRequest) =>

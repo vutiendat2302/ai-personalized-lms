@@ -49,7 +49,7 @@ public class CoursePackageEntity extends BaseEntity {
     @Column(name = "description")
     private String description;
 
-    /** Hình thức học (SELF_PACED, LIVE_CLASS, HYBRID, ONE_ON_ONE). */
+    /** Hình thức học (SELF_STUDY, GROUP_CLASS, ONE_ON_ONE, COMBO). */
     @Column(name = "delivery_mode", length = 30)
     @Enumerated(EnumType.STRING)
     private DeliveryModeEnum deliveryMode;

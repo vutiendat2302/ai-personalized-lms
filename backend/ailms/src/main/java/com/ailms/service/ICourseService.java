@@ -135,4 +135,9 @@ public interface ICourseService {
      * Tính toán lại điểm xu hướng và đồng bộ chỉ số cho toàn bộ khóa học.
      */
     void recalculateTrendingScores();
+
+    /**
+     * Lấy ra tổng số khóa học đang active
+     */
+    long countActiveCourses();
 }

@@ -10,4 +10,6 @@ import java.util.List;
 @Repository
 public interface ClassRepository extends BaseRepository<ClassEntity, Long> {
     List<ClassEntity> findByCourseEntity_Id(Long courseId);
+
+    boolean existsByCode(String code);
 }

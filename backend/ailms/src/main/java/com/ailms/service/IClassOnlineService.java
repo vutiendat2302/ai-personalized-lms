@@ -76,4 +76,6 @@ public interface IClassOnlineService {
      * @param id ID của bản ghi cần xử lý
      */
     void delete(Long id);
+
+    PageResponse<ClassOnlineResponse> getSessionsPage(Long classId, String keyword, String status, int page, int size, String sortDirection);
 }

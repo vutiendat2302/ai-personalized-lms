@@ -64,6 +64,16 @@ public interface IOrderService {
     List<OrderResponse> getOrdersByUserId(Long userId);
 
     /**
+     * Lấy tất cả danh sách đơn hàng cho Admin Sales.
+     */
+    List<OrderResponse> getAllOrders();
+
+    /**
+     * Hủy đơn hàng thủ công kèm theo lý do.
+     */
+    OrderResponse cancelOrder(Long orderId, String reason);
+
+    /**
      * Quét và tự động hủy các đơn hàng chưa thanh toán đã quá hạn.
      */
     void cancelExpiredOrders();

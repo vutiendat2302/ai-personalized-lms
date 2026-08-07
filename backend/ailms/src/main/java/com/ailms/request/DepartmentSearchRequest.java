@@ -7,4 +7,8 @@ import lombok.Setter;
 @Getter
 @Setter
 public class DepartmentSearchRequest extends CommonSearchRequest<BaseStatusEnum> {
+    /**
+     * null = tất cả, true = có nhân viên, false = không có nhân viên (phòng ban rỗng)
+     */
+    private Boolean hasEmployees;
 }

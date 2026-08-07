@@ -1,6 +1,7 @@
 package com.ailms.request;
 
 import com.ailms.entity.enums.FileTypeEnum;
+import com.ailms.entity.enums.FileUsageTypeEnum;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -25,4 +26,10 @@ public class CreateFileMetadataRequest {
 
     @NotNull(message = "fileType không được để trống")
     private FileTypeEnum fileType;
+
+    private FileUsageTypeEnum usageType;
+
+    private Long referenceEntityId;
+
+    private String referenceEntityType;
 }

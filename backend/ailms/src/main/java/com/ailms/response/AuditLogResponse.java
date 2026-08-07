@@ -10,6 +10,7 @@ public class AuditLogResponse {
     private Long userId;
     private String userEmail;
     private String userFullName;
+    private String userAvatarUrl;
     private String action;
     private String entityType;
     private Long entityId;

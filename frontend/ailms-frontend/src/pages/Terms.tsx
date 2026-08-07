@@ -43,7 +43,7 @@ export const Terms: React.FC = () => {
     <div className="mx-auto max-w-none w-full px-6 py-8 lg:px-12 space-y-8 animate-in fade-in-50 duration-300">
       
       {/* Header Banner */}
-      <div className="relative rounded-2xl bg-gradient-to-r from-primary to-indigo-950 p-6 md:p-8 text-white overflow-hidden shadow-lg shadow-primary/10">
+      <div className="relative rounded-2xl bg-linear-to-r from-primary to-indigo-950 p-6 md:p-8 text-white overflow-hidden shadow-lg shadow-primary/10">
         <div className="absolute right-0 bottom-0 top-0 w-1/3 opacity-10 hidden md:block">
           <Scale className="w-full h-full text-white transform translate-x-10 translate-y-10" />
         </div>

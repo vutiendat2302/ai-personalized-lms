@@ -26,10 +26,8 @@ public class CreateAssignmentRequest {
 
     private String description;
 
-    @NotNull(message = "Max score is required")
     private BigDecimal maxScore;
 
-    @NotNull(message = "Due date is required")
     private LocalDateTime dueDate;
 
     @Builder.Default

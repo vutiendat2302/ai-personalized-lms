@@ -1,12 +1,52 @@
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
+import { DatePickerInput, formatDateDisplay } from "@/components/ui/DatePickerInput";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { roleApi } from "@/api/roles/roleApi";
-import { permissionApi } from "@/api/permissions/permissionApi";
-import type { RoleResponse, PermissionResponse } from "@/types/admin";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter
+} from "@/components/ui/dialog";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from "@/components/ui/table";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import {
   Shield,
   Plus,
@@ -18,490 +58,1486 @@ import {
   X,
   ArrowLeft,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Eye,
+  Users,
+  BarChart3,
+  Filter,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  RotateCcw,
+  ChevronLeft,
+  ChevronRight,
+  ShieldAlert,
+  RefreshCw,
+  Layers
 } from "lucide-react";
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Cell,
+} from "recharts";
+
+import { roleApi } from "@/api/roles/roleApi";
+import type { RoleResponse } from "@/types/admin";
+
+import { RoleDetailModal } from "@/components/admin/role/RoleDetailModal";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+
+const ROLE_COLORS = ["#2563eb", "#7c3aed", "#db2777", "#ea580c", "#059669", "#d97706", "#4f46e5"];
+
+const getPageNumbers = (currentPage: number, total: number) => {
+  const pages: (number | string)[] = [];
+  if (total <= 7) {
+    for (let i = 0; i < total; i++) pages.push(i);
+  } else {
+    pages.push(0);
+    if (currentPage > 2) pages.push("...");
+    const start = Math.max(1, currentPage - 1);
+    const end = Math.min(total - 2, currentPage + 1);
+    for (let i = start; i <= end; i++) pages.push(i);
+    if (currentPage < total - 3) pages.push("...");
+    pages.push(total - 1);
+  }
+  return pages;
+};
 
 export const RoleManagement: React.FC = () => {
-  const [roles, setRoles] = useState<RoleResponse[]>([]);
-  const [permissions, setPermissions] = useState<PermissionResponse[]>([]);
-  const [assignedPermissionIds, setAssignedPermissionIds] = useState<string[]>([]);
-  const [searchRole, setSearchRole] = useState("");
-  const [successBanner, setSuccessBanner] = useState("");
-  const [errorBanner, setErrorBanner] = useState("");
+  const location = useLocation();
 
-  // Loading
-  const [loading, setLoading] = useState(false);
+  // Data States
+  const [roles, setRoles] = useState<RoleResponse[]>([]);
+  const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([]);
+  
+  // 3.8.1 Overview Stats States
+  const [totalRoles, setTotalRoles] = useState<number>(0);
+  const [systemRoles, setSystemRoles] = useState<number>(0);
+  const [customRoles, setCustomRoles] = useState<number>(0);
+  const [unusedRoles, setUnusedRoles] = useState<number>(0);
+  const [emptyRoles, setEmptyRoles] = useState<number>(0);
+  const [permissionDistData, setPermissionDistData] = useState<{ name: string; value: number }[]>([]);
+  const [userDistData, setUserDistData] = useState<{ name: string; value: number }[]>([]);
+
+  // 3.8.2 Filter & Search Bar Form
+  const [searchKeyword, setSearchKeyword] = useState("");
+  const [filterIsSystem, setFilterIsSystem] = useState<string>("ALL");
+  const [filterHasUsers, setFilterHasUsers] = useState<string>("ALL");
+  const [filterHasPermissions, setFilterHasPermissions] = useState<string>("ALL");
+  const [filterStartDate, setFilterStartDate] = useState("");
+  const [filterEndDate, setFilterEndDate] = useState("");
+
+  // Multi-column sorting (EmployeeManagement pattern)
+  const [sortRules, setSortRules] = useState<Array<{ field: string; dir: "ASC" | "DESC" }>>([
+    { field: "id", dir: "DESC" }
+  ]);
 
   // Pagination
   const [page, setPage] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalPages, setTotalPages] = useState(1);
   const [totalElements, setTotalElements] = useState(0);
+  const [jumpPageInput, setJumpPageInput] = useState<string>("1");
 
-  // Modals state
-  const [roleModalOpen, setRoleModalOpen] = useState(false);
-  const [editingRole, setEditingRole] = useState<RoleResponse | null>(null);
+  // Loading States
+  const [loading, setLoading] = useState(false);
+  const [statsLoading, setStatsLoading] = useState(false);
 
-  const [assignPermissionsModalOpen, setAssignPermissionsModalOpen] = useState(false);
-  const [assigningRole, setAssigningRole] = useState<RoleResponse | null>(null);
-
-  useEffect(() => {
-    fetchPermissions();
-  }, []);
-
-  useEffect(() => {
-    fetchRoles();
-  }, [page]);
+  // Toast Banners & Newly Created Item Highlight
+  const [successBanner, setSuccessBanner] = useState("");
+  const [errorBanner, setErrorBanner] = useState("");
+  const [newlyCreatedId, setNewlyCreatedId] = useState<string | null>(null);
+  const [actionBanner, setActionBanner] = useState<{
+    message: string;
+    actionText?: string;
+    onAction?: () => void;
+  } | null>(null);
 
   const showBanner = (msg: string, isError = false) => {
     if (isError) {
       setErrorBanner(msg);
-      setTimeout(() => setErrorBanner(""), 3000);
+      setTimeout(() => setErrorBanner(""), 3500);
     } else {
       setSuccessBanner(msg);
-      setTimeout(() => setSuccessBanner(""), 3000);
+      setTimeout(() => setSuccessBanner(""), 3500);
     }
   };
 
-  const fetchPermissions = async () => {
-    try {
-      const res = await permissionApi.getAllPermissions();
-      if (res.data.success) {
-        setPermissions(res.data.data);
-      }
-    } catch (err: any) {
-      console.error("Lỗi lấy danh sách quyền hạn:", err);
+  const doesRoleMatchFilters = (r: RoleResponse): boolean => {
+    if (!r) return false;
+    if (filterIsSystem !== "ALL") {
+      if (Boolean(r.isSystem) !== (filterIsSystem === "TRUE")) return false;
+    }
+    if (filterHasUsers !== "ALL") {
+      const hasU = (r.userCount || 0) > 0;
+      if (hasU !== (filterHasUsers === "TRUE")) return false;
+    }
+    if (filterHasPermissions !== "ALL") {
+      const hasP = (r.permissionCount || 0) > 0;
+      if (hasP !== (filterHasPermissions === "TRUE")) return false;
+    }
+    if (searchKeyword.trim()) {
+      const kw = searchKeyword.trim().toLowerCase();
+      const nameMatch = r.name ? r.name.toLowerCase().includes(kw) : false;
+      const codeMatch = r.code ? r.code.toLowerCase().includes(kw) : false;
+      const descMatch = r.description ? r.description.toLowerCase().includes(kw) : false;
+      if (!nameMatch && !codeMatch && !descMatch) return false;
+    }
+    if (filterStartDate && r.createdAt) {
+      if (r.createdAt.slice(0, 10) < filterStartDate) return false;
+    }
+    if (filterEndDate && r.createdAt) {
+      if (r.createdAt.slice(0, 10) > filterEndDate) return false;
+    }
+    return true;
+  };
+
+  // Sticky Sub-navbar Active Tab
+  const [activeSubTab, setActiveSubTab] = useState<"statistics" | "management">(() => {
+    return location.hash === "#management" ? "management" : "statistics";
+  });
+
+  const scrollToSection = (sectionId: "statistics" | "management") => {
+    setActiveSubTab(sectionId);
+    const element = document.getElementById(sectionId);
+    if (element) {
+      const offset = 130;
+      const bodyRect = document.body.getBoundingClientRect().top;
+      const elementRect = element.getBoundingClientRect().top;
+      const elementPosition = elementRect - bodyRect;
+      const offsetPosition = elementPosition - offset;
+
+      window.scrollTo({
+        top: offsetPosition,
+        behavior: "smooth"
+      });
     }
   };
 
-  const fetchRoles = async () => {
-    setLoading(true);
-    try {
-      const params: any = {
-        page,
-        size: 10,
-        sort: "id:desc"
-      };
-      if (searchRole) params.search = searchRole;
+  // Role Detail Modal State (3.8.4 4-Tab Modal)
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [selectedRoleForDetail, setSelectedRoleForDetail] = useState<RoleResponse | null>(null);
 
-      const res = await roleApi.getRoles(params);
-      if (res.data.success) {
-        // Spring Page response
-        const pageData = res.data.data;
-        setRoles(pageData.content || []);
-        setTotalPages(pageData.totalPages || 0);
-        setTotalElements(pageData.totalElements || 0);
-      }
-    } catch (err: any) {
-      showBanner(err.message || "Không thể tải danh sách vai trò", true);
-    } finally {
-      setLoading(false);
-    }
+  // Create/Edit Role Modal State
+  const [roleFormModalOpen, setRoleFormModalOpen] = useState(false);
+  const [editingRole, setEditingRole] = useState<RoleResponse | null>(null);
+  const [formSubmitting, setFormSubmitting] = useState(false);
+
+  // Clone Role Modal State
+  const [cloneModalOpen, setCloneModalOpen] = useState(false);
+  const [cloneSourceRole, setCloneSourceRole] = useState<RoleResponse | null>(null);
+  const [cloneSubmitting, setCloneSubmitting] = useState(false);
+
+  // --- Zod Schemas ---
+  const roleSchema = z.object({
+    name: z.string().min(1, "Tên Role không được để trống").max(100, "Tối đa 100 ký tự"),
+    description: z.string().max(255, "Tối đa 255 ký tự").optional(),
+  });
+  type RoleFormValues = z.infer<typeof roleSchema>;
+
+  const cloneSchema = z.object({
+    name: z.string().min(1, "Tên Role mới không được để trống").max(100, "Tối đa 100 ký tự"),
+    description: z.string().max(255, "Tối đa 255 ký tự").optional(),
+  });
+  type CloneFormValues = z.infer<typeof cloneSchema>;
+
+  const roleForm = useForm<RoleFormValues>({
+    resolver: zodResolver(roleSchema),
+    defaultValues: { name: "", description: "" },
+  });
+
+  const cloneForm = useForm<CloneFormValues>({
+    resolver: zodResolver(cloneSchema),
+    defaultValues: { name: "", description: "" },
+  });
+
+  const handleOpenCreateModal = () => {
+    setEditingRole(null);
+    roleForm.reset({ name: "", description: "" });
+    setRoleFormModalOpen(true);
   };
 
-  const handleSaveRole = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const data = new FormData(e.target as HTMLFormElement);
-    const name = (data.get("name") as string).toUpperCase();
-    const description = data.get("description") as string;
+  const handleCloseRoleFormModal = () => {
+    setRoleFormModalOpen(false);
+    setEditingRole(null);
+    roleForm.reset({ name: "", description: "" });
+  };
 
+  const handleOpenEditModal = (role: RoleResponse) => {
+    setEditingRole(role);
+    roleForm.reset({
+      name: role.name || "",
+      description: role.description || "",
+    });
+    setRoleFormModalOpen(true);
+  };
+
+  const handleSaveRole = async (values: RoleFormValues) => {
+    setFormSubmitting(true);
     try {
       if (editingRole) {
-        const res = await roleApi.updateRole(editingRole.id, { name, description });
-        if (res.data.success) {
-          showBanner("Cập nhật vai trò thành công!");
-          fetchRoles();
-        }
-      } else {
-        const res = await roleApi.createRole({ name, description });
-        if (res.data.success) {
-          showBanner("Tạo vai trò mới thành công!");
-          setPage(0);
-          fetchRoles();
-        }
-      }
-      setRoleModalOpen(false);
-      setEditingRole(null);
-    } catch (err: any) {
-      showBanner(err.message || "Lỗi lưu thông tin vai trò", true);
-    }
-  };
-
-  const handleCloneRole = async (role: RoleResponse) => {
-    const newName = prompt(`Nhập tên vai trò mới (bản sao của ${role.name}):`, `${role.name}_CLONE`);
-    if (!newName) return;
-
-    try {
-      const res = await roleApi.cloneRole(role.id, { name: newName.toUpperCase() });
-      if (res.data.success) {
-        showBanner(`Nhân bản vai trò ${role.name} thành công!`);
+        await roleApi.updateRole(String(editingRole.id), {
+          name: values.name.trim(),
+          description: (values.description ?? "").trim(),
+        });
+        showBanner("Cập nhật Role thành công!");
         fetchRoles();
-      }
-    } catch (err: any) {
-      showBanner(err.message || "Lỗi nhân bản vai trò", true);
-    }
-  };
+      } else {
+        const res = await roleApi.createRole({
+          name: values.name.trim(),
+          description: (values.description ?? "").trim(),
+        });
+        const newRole = res?.data?.data || (res as any)?.data || res;
 
-  const handleDeleteRole = async (id: string, roleName: string) => {
-    const role = roles.find(r => r.id === id);
-    if (role?.isSystem) {
-      alert("Không thể xóa vai trò hệ thống!");
-      return;
-    }
-    if (window.confirm(`Bạn có muốn xóa vai trò ${roleName}?`)) {
-      try {
-        const res = await roleApi.deleteRole(id);
-        if (res.data.success) {
-          showBanner("Xóa vai trò thành công!");
+        if (newRole && newRole.id) {
+          const isMatch = doesRoleMatchFilters(newRole);
+          if (isMatch) {
+            setNewlyCreatedId(String(newRole.id));
+            setRoles(prev => [newRole, ...prev.filter(r => String(r.id) !== String(newRole.id))]);
+            setTotalElements(prev => prev + 1);
+            showBanner(`Tạo mới Role ${newRole.name || newRole.code} thành công!`);
+            setTimeout(() => setNewlyCreatedId(null), 3500);
+          } else {
+            setActionBanner({
+              message: `Đã tạo Role "${newRole.name || newRole.code}" thành công.`,
+              actionText: "Xem bản ghi này",
+              onAction: () => {
+                handleResetFilters();
+                setNewlyCreatedId(String(newRole.id));
+                setRoles(prev => [newRole, ...prev.filter(r => String(r.id) !== String(newRole.id))]);
+                scrollToSection("management");
+                setActionBanner(null);
+                setTimeout(() => setNewlyCreatedId(null), 4000);
+              },
+            });
+            setTimeout(() => setActionBanner(null), 7000);
+          }
+        } else {
           fetchRoles();
         }
-      } catch (err: any) {
-        showBanner(err.message || "Lỗi xóa vai trò", true);
       }
+      handleCloseRoleFormModal();
+      fetchOverviewStats();
+    } catch (err: any) {
+      showBanner(err?.response?.data?.message || err.message || "Lỗi lưu Role", true);
+    } finally {
+      setFormSubmitting(false);
     }
   };
 
-  const handleOpenAssignModal = async (role: RoleResponse) => {
-    setAssigningRole(role);
+  useEffect(() => {
+    setJumpPageInput(String(page + 1));
+  }, [page]);
+
+  useEffect(() => {
+    fetchOverviewStats();
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchRoles();
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [
+    page,
+    pageSize,
+    searchKeyword,
+    filterIsSystem,
+    filterHasUsers,
+    filterHasPermissions,
+    filterStartDate,
+    filterEndDate,
+    sortRules
+  ]);
+
+  const fetchOverviewStats = async () => {
+    setStatsLoading(true);
+    try {
+      const [ovRes, distRes, userDistRes] = await Promise.all([
+        roleApi.getOverviewStats().catch(() => ({ totalRoles: 0, systemRoles: 0, customRoles: 0, unusedRoles: 0, emptyRoles: 0 })),
+        roleApi.getPermissionsDistribution().catch(() => ({})),
+        roleApi.getUsersDistribution().catch(() => ({}))
+      ]);
+
+      setTotalRoles(ovRes.totalRoles || 0);
+      setSystemRoles(ovRes.systemRoles || 0);
+      setCustomRoles(ovRes.customRoles || 0);
+      setUnusedRoles(ovRes.unusedRoles || 0);
+      setEmptyRoles(ovRes.emptyRoles || 0);
+
+      if (distRes) {
+        setPermissionDistData(Object.entries(distRes).map(([name, value]) => ({ name, value: Number(value) })));
+      }
+      if (userDistRes) {
+        setUserDistData(Object.entries(userDistRes).map(([name, value]) => ({ name, value: Number(value) })));
+      }
+    } catch (err: any) {
+      console.error("Lỗi lấy thống kê Role:", err);
+    } finally {
+      setStatsLoading(false);
+    }
+  };
+
+  const fetchRoles = async (overrideParams?: { resetFilters?: boolean }) => {
     setLoading(true);
     try {
-      const res = await roleApi.getPermissionsByRoleId(role.id);
-      if (res.data.success) {
-        // Map permission objects to their IDs
-        const ids = res.data.data.map((p) => p.id);
-        setAssignedPermissionIds(ids);
+      const sortParams = sortRules.length > 0
+        ? sortRules.map(r => `${r.field}:${r.dir.toLowerCase()}`)
+        : ["id:desc"];
+      const isReset = overrideParams?.resetFilters;
+      const activeSearch = isReset ? "" : searchKeyword.trim();
+      const activeIsSystem = isReset ? "ALL" : filterIsSystem;
+      const activeHasUsers = isReset ? "ALL" : filterHasUsers;
+      const activeHasPerms = isReset ? "ALL" : filterHasPermissions;
+      const activeStartDate = isReset ? "" : filterStartDate;
+      const activeEndDate = isReset ? "" : filterEndDate;
+
+      const isCustomFilterActive = activeHasUsers !== "ALL" || activeHasPerms !== "ALL" || Boolean(activeStartDate) || Boolean(activeEndDate);
+      const params: any = {
+        page: isCustomFilterActive ? 0 : page,
+        size: isCustomFilterActive ? 1000 : pageSize,
+        sort: sortParams,
+        keyword: activeSearch || undefined
+      };
+      if (activeIsSystem !== "ALL") params.isSystem = activeIsSystem === "TRUE";
+
+      const res = await roleApi.getRoles(params).catch(() => null);
+
+      if (res?.data?.success && res.data.data?.content) {
+        const pageData = res.data.data;
+        let content: RoleResponse[] = pageData.content || [];
+
+        // Client-side Keyword Filter Fallback (search name, code, description)
+        if (activeSearch) {
+          const kw = activeSearch.toLowerCase();
+          content = content.filter(r =>
+            (r.name && r.name.toLowerCase().includes(kw)) ||
+            (r.code && r.code.toLowerCase().includes(kw)) ||
+            (r.description && r.description.toLowerCase().includes(kw))
+          );
+        }
+
+        // Filter by isSystem
+        if (activeIsSystem !== "ALL") {
+          content = content.filter(r => Boolean(r.isSystem) === (activeIsSystem === "TRUE"));
+        }
+
+        // Filter by Has Users
+        if (activeHasUsers !== "ALL") {
+          content = content.filter(r => {
+            const uCount = Number(r.userCount || 0);
+            return activeHasUsers === "TRUE" ? uCount > 0 : uCount === 0;
+          });
+        }
+
+        // Filter by Has Permissions (Role rỗng vs Role đã gán quyền)
+        if (activeHasPerms !== "ALL") {
+          content = content.filter(r => {
+            const pCount = Number(r.permissionCount || 0);
+            return activeHasPerms === "TRUE" ? pCount > 0 : pCount === 0;
+          });
+        }
+
+        // Filter by Date Range
+        if (activeStartDate) {
+          content = content.filter(r => r.createdAt && r.createdAt.slice(0, 10) >= activeStartDate);
+        }
+        if (activeEndDate) {
+          content = content.filter(r => r.createdAt && r.createdAt.slice(0, 10) <= activeEndDate);
+        }
+
+        // Apply Client-Side Multi-Column Sorting
+        if (sortRules.length > 0) {
+          content.sort((a: any, b: any) => {
+            for (const rule of sortRules) {
+              const field = rule.field;
+              const isAsc = rule.dir === "ASC";
+              let valA = a[field];
+              let valB = b[field];
+
+              const numA = (valA !== null && valA !== undefined && valA !== "") ? Number(valA) : NaN;
+              const numB = (valB !== null && valB !== undefined && valB !== "") ? Number(valB) : NaN;
+
+              let cmp = 0;
+              if (!isNaN(numA) && !isNaN(numB)) {
+                cmp = numA - numB;
+              } else {
+                if (valA === undefined || valA === null) valA = "";
+                if (valB === undefined || valB === null) valB = "";
+                const strA = String(valA).toLowerCase();
+                const strB = String(valB).toLowerCase();
+                if (strA < strB) cmp = -1;
+                else if (strA > strB) cmp = 1;
+              }
+
+              if (cmp !== 0) {
+                return isAsc ? cmp : -cmp;
+              }
+            }
+            return 0;
+          });
+        }
+
+        setRoles(content);
+        setTotalPages(pageData.totalPages || 1);
+        setTotalElements(pageData.totalElements || content.length);
+      } else {
+        setRoles([]);
+        setTotalPages(1);
+        setTotalElements(0);
       }
-      setAssignPermissionsModalOpen(true);
     } catch (err: any) {
-      showBanner(err.message || "Không thể lấy thông tin quyền hạn vai trò", true);
+      showBanner(err.message || "Lỗi tải danh sách Role", true);
+      setRoles([]);
+      setTotalPages(1);
+      setTotalElements(0);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleAssignPermissions = async (e: React.FormEvent) => {
+  const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!assigningRole) return;
-    const data = new FormData(e.target as HTMLFormElement);
-    const checkedPerms = data.getAll("assignedPerms").map(p => p as string);
+    setPage(0);
+    fetchRoles();
+  };
 
-    try {
-      const res = await roleApi.assignPermissions(assigningRole.id, { permissionIds: checkedPerms });
-      if (res.data.success) {
-        showBanner(`Cập nhật quyền hạn cho vai trò ${assigningRole.name} thành công!`);
-        fetchRoles();
-        setAssignPermissionsModalOpen(false);
-        setAssigningRole(null);
+  const handleResetFilters = () => {
+    setSearchKeyword("");
+    setFilterIsSystem("ALL");
+    setFilterHasUsers("ALL");
+    setFilterHasPermissions("ALL");
+    setFilterStartDate("");
+    setFilterEndDate("");
+    setSortRules([{ field: "id", dir: "DESC" }]);
+    setPage(0);
+  };
+
+  // Multi-column sorting helper (Exact EmployeeManagement algorithm)
+  const handleSort = (field: string) => {
+    setSortRules(prevRules => {
+      const existingIndex = prevRules.findIndex(r => r.field === field);
+
+      if (existingIndex === -1) {
+        // Click 1: Sắp xếp Tăng dần (ASC)
+        const filtered = prevRules.filter(r => r.field !== "id");
+        return [...filtered, { field, dir: "ASC" }];
+      } else {
+        const currentRule = prevRules[existingIndex];
+        if (currentRule.dir === "ASC") {
+          // Click 2: Đổi sang Giảm dần (DESC)
+          const updated = [...prevRules];
+          updated[existingIndex] = { field, dir: "DESC" };
+          return updated;
+        } else {
+          // Click 3: Bỏ sắp xếp cột này
+          const updated = prevRules.filter(r => r.field !== field);
+          return updated.length === 0 ? [{ field: "id", dir: "DESC" }] : updated;
+        }
       }
+    });
+    setPage(0);
+  };
+
+  const getSortRuleInfo = (field: string) => {
+    const idx = sortRules.findIndex(r => r.field === field);
+    if (idx === -1) return null;
+    return { priority: idx + 1, dir: sortRules[idx].dir };
+  };
+
+  const renderSortIcon = (field: string) => {
+    const info = getSortRuleInfo(field);
+    if (!info) return <ArrowUpDown className="h-3.5 w-3.5 opacity-40 group-hover:opacity-100" />;
+    return (
+      <span className="flex items-center gap-0.5 text-primary font-bold text-xs">
+        {info.dir === "ASC" ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />}
+        {sortRules.length > 1 && <span className="text-[10px]">{info.priority}</span>}
+      </span>
+    );
+  };
+
+  const handleSelectAllRoles = (checked: boolean) => {
+    if (checked) setSelectedRoleIds(roles.map(r => String(r.id)));
+    else setSelectedRoleIds([]);
+  };
+
+  const handleSelectRole = (id: string) => {
+    if (selectedRoleIds.includes(id)) setSelectedRoleIds(selectedRoleIds.filter(i => i !== id));
+    else setSelectedRoleIds([...selectedRoleIds, id]);
+  };
+
+  const handleOpenDetailModal = (role: RoleResponse) => {
+    setSelectedRoleForDetail(role);
+    setDetailModalOpen(true);
+  };
+
+  const handleCloneRole = (roleToClone: RoleResponse) => {
+    setCloneSourceRole(roleToClone);
+    cloneForm.reset({
+      name: `${roleToClone.name} (Copy)`,
+      description: `Sao chép từ Role ${roleToClone.code}`,
+    });
+    setCloneModalOpen(true);
+  };
+
+  const handleCloseCloneModal = () => {
+    setCloneModalOpen(false);
+    setCloneSourceRole(null);
+    cloneForm.reset({ name: "", description: "" });
+  };
+
+  const handleSubmitClone = async (values: CloneFormValues) => {
+    if (!cloneSourceRole) return;
+    setCloneSubmitting(true);
+    try {
+      await roleApi.cloneRole(String(cloneSourceRole.id), {
+        name: values.name.trim(),
+        description: (values.description ?? "").trim() || `Sao chép từ Role ${cloneSourceRole.code}`,
+      });
+      showBanner(`Đã nhân bản Role "${values.name.trim()}" thành công!`);
+      handleCloseCloneModal();
+      fetchRoles();
+      fetchOverviewStats();
     } catch (err: any) {
-      showBanner(err.message || "Lỗi cập nhật quyền hạn", true);
+      showBanner(err?.response?.data?.message || err.message || "Lỗi sao chép Role", true);
+    } finally {
+      setCloneSubmitting(false);
+    }
+  };
+
+  const [confirmDeleteRoleId, setConfirmDeleteRoleId] = useState<string | null>(null);
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+
+  const handleDeleteRole = (roleId: string) => {
+    setConfirmDeleteRoleId(roleId);
+  };
+
+  const confirmDeleteRole = async () => {
+    if (!confirmDeleteRoleId) return;
+    try {
+      await roleApi.deleteRole(confirmDeleteRoleId);
+      showBanner("Xóa Role thành công!");
+      if (detailModalOpen) setDetailModalOpen(false);
+      fetchRoles();
+      fetchOverviewStats();
+    } catch (err: any) {
+      showBanner(err.message || "Không thể xóa Role này (Role hệ thống hoặc đang có User sử dụng)", true);
+    } finally {
+      setConfirmDeleteRoleId(null);
+    }
+  };
+
+  const handleBulkDeleteRoles = () => {
+    setConfirmBulkDelete(true);
+  };
+
+  const confirmBulkDeleteRoles = async () => {
+    try {
+      await roleApi.bulkDeleteRoles(selectedRoleIds);
+      showBanner("Đã xóa hàng loạt role chọn thành công!");
+      setSelectedRoleIds([]);
+      fetchRoles();
+      fetchOverviewStats();
+    } catch (err: any) {
+      showBanner(err?.response?.data?.message || err.message || "Lỗi xóa hàng loạt role", true);
+    } finally {
+      setConfirmBulkDelete(false);
     }
   };
 
   return (
-    <div className="mx-auto max-w-none w-full px-6 py-8 lg:px-12 space-y-8 animate-in fade-in-50 duration-300">
+    <div className="mx-auto max-w-none w-full px-4 sm:px-6 lg:px-10 py-6 space-y-8 animate-in fade-in-50 duration-300">
       
-      {/* Top Banner Messages */}
+      {/* Toast Banners */}
+      {actionBanner && (
+        <div className="fixed bottom-6 right-6 z-9999 flex items-center gap-3 rounded-2xl bg-emerald-600 text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
+          <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-100" />
+          <div className="flex items-center gap-3 flex-wrap text-sm font-semibold">
+            <span>{actionBanner.message}</span>
+            {actionBanner.actionText && actionBanner.onAction && (
+              <button
+                onClick={actionBanner.onAction}
+                className="underline font-bold text-amber-200 hover:text-white transition-colors cursor-pointer bg-white/20 px-2.5 py-1 rounded-xl text-xs flex items-center gap-1 shadow-xs"
+              >
+                <span>[{actionBanner.actionText}]</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
       {successBanner && (
-        <div className="fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-xl bg-green-500 text-white px-4 py-3 shadow-xl animate-in slide-in-from-bottom-5 duration-300">
+        <div className="fixed bottom-6 right-6 z-9999 flex items-center gap-3 rounded-2xl bg-emerald-600 text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
           <CheckCircle2 className="h-5 w-5 shrink-0" />
           <span className="text-sm font-semibold">{successBanner}</span>
         </div>
       )}
 
       {errorBanner && (
-        <div className="fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-xl bg-destructive text-white px-4 py-3 shadow-xl animate-in slide-in-from-bottom-5 duration-300">
+        <div className="fixed bottom-6 right-6 z-9999 flex items-center gap-3 rounded-2xl bg-red-600 text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
           <AlertCircle className="h-5 w-5 shrink-0" />
           <span className="text-sm font-semibold">{errorBanner}</span>
         </div>
       )}
 
-      {/* Header and Quick Switch Links */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      {/* Page Title Header (Exact UserManagement typography) */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-border/30 pb-4">
         <div>
-          <div className="flex items-center gap-2 text-xs font-bold text-primary mb-1">
+          <div className="flex items-center gap-2 text-sm font-semibold text-primary mb-1">
             <Link to="/dashboard" className="flex items-center gap-1 hover:underline">
-              <ArrowLeft className="h-3 w-3" />
-              <span>Quay lại Dashboard</span>
+              <ArrowLeft className="h-3.5 w-3.5" />
+              <span>Quay lại Tổng quan</span>
             </Link>
           </div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-foreground flex items-center gap-2">
-            <Shield className="h-6 w-6 text-primary" />
-            <span>Quản lý Vai trò (Roles)</span>
+          <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-foreground flex items-center gap-3 mt-2">
+            <div className="p-2.5 rounded-2xl bg-primary/10 text-primary">
+              <Shield className="h-7 w-7" />
+            </div>
+            <span>Quản lý Role (Vai trò hệ thống)</span>
           </h1>
         </div>
 
-        {/* Sub Nav Links */}
-        <div className="flex gap-2">
-          <Link to="/admin/users">
-            <Button variant="outline" size="sm" className="h-9 font-bold">
-              Người dùng
-            </Button>
-          </Link>
-          <Link to="/admin/roles">
-            <Button variant="default" size="sm" className="h-9 font-bold bg-primary text-primary-foreground">
-              Vai trò
-            </Button>
-          </Link>
-          <Link to="/admin/permissions">
-            <Button variant="outline" size="sm" className="h-9 font-bold">
-              Quyền hạn
-            </Button>
-          </Link>
-          <Link to="/admin/courses">
-            <Button variant="outline" size="sm" className="h-9 font-bold">
-              Khóa học
-            </Button>
-          </Link>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button onClick={() => fetchRoles()} variant="outline" size="sm" className="rounded-xl gap-1.5 font-semibold">
+            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Làm mới
+          </Button>
+          <Button onClick={handleOpenCreateModal} size="sm" className="rounded-xl gap-1 font-semibold bg-primary text-primary-foreground cursor-pointer">
+            <Plus className="h-4 w-4" /> Thêm Role Mới
+          </Button>
         </div>
       </div>
 
-      {/* Main Roles Card */}
-      <Card className="border-border shadow-sm bg-card">
-        <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-4 border-b border-border">
-          <div>
-            <CardTitle className="text-lg font-bold font-heading">Danh sách vai trò hệ thống</CardTitle>
-            <CardDescription className="text-xs text-muted-foreground">
-              Định nghĩa chức năng, phân phối quyền hạn thao tác cho giảng viên, trợ giảng và học viên.
-            </CardDescription>
-          </div>
-
-          <Button
-            onClick={() => { setEditingRole(null); setRoleModalOpen(true); }}
-            variant="default"
-            size="sm"
-            className="h-9 gap-1.5 bg-primary text-primary-foreground hover:bg-primary/95"
-          >
-            <Plus className="h-4 w-4" />
-            <span>Thêm vai trò</span>
-          </Button>
-        </CardHeader>
-
-        {/* Search */}
-        <div className="p-4 bg-muted/20 border-b border-border/80 flex gap-3">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Tìm theo Tên hoặc Mô tả vai trò..."
-              value={searchRole}
-              onChange={(e) => setSearchRole(e.target.value)}
-              className="w-full pl-9 pr-4 py-1.5 rounded-lg border border-border bg-background text-sm outline-none focus:ring-2 focus:ring-primary/20"
-            />
-          </div>
-          <Button onClick={() => { setPage(0); fetchRoles(); }} size="sm" className="h-9 font-bold bg-muted text-foreground hover:bg-muted/80 px-4">
-            Tìm
-          </Button>
-        </div>
-
-        {/* Table Content */}
-        <CardContent className="p-0 relative">
-          {loading && (
-            <div className="absolute inset-0 bg-background/50 backdrop-blur-xs flex items-center justify-center z-10">
-              <Loader2 className="h-6 w-6 text-primary animate-spin" />
-            </div>
-          )}
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead>
-                <tr className="border-b border-border/85 text-muted-foreground text-xs font-semibold bg-muted/10">
-                  <th className="py-3 px-4">Tên vai trò</th>
-                  <th className="py-3 px-2">Mã vai trò (Code)</th>
-                  <th className="py-3 px-2">Mô tả</th>
-                  <th className="py-3 px-2">Phân loại</th>
-                  <th className="py-3 px-4 text-right">Thao tác</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border/60">
-                {roles.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="py-8 text-center text-muted-foreground text-sm">
-                      Không tìm thấy vai trò nào.
-                    </td>
-                  </tr>
-                ) : (
-                  roles.map((r) => (
-                    <tr key={r.id} className="hover:bg-muted/10 transition-colors">
-                      <td className="py-3 px-4">
-                        <span className="px-2 py-0.5 rounded text-xs bg-primary/10 text-primary font-bold uppercase">
-                          {r.name}
-                        </span>
-                      </td>
-                      <td className="py-3 px-2 font-bold text-xs text-muted-foreground">{r.code}</td>
-                      <td className="py-3 px-2 text-xs text-muted-foreground">{r.description}</td>
-                      <td className="py-3 px-2">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                          r.isSystem ? "bg-indigo-500/10 text-indigo-600" : "bg-orange-500/10 text-orange-600"
-                        }`}>
-                          {r.isSystem ? "Hệ thống" : "Tùy chỉnh"}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <Button
-                            onClick={() => handleOpenAssignModal(r)}
-                            variant="ghost"
-                            size="icon-xs"
-                            title="Phân quyền"
-                            className="text-primary hover:bg-primary/10"
-                          >
-                            <Shield className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            onClick={() => handleCloneRole(r)}
-                            variant="ghost"
-                            size="icon-xs"
-                            title="Nhân bản"
-                            className="text-green-600 hover:bg-green-500/10"
-                          >
-                            <Copy className="h-4 w-4" />
-                          </Button>
-                          {!r.isSystem && (
-                            <>
-                              <Button
-                                onClick={() => { setEditingRole(r); setRoleModalOpen(true); }}
-                                variant="ghost"
-                                size="icon-xs"
-                                title="Chỉnh sửa"
-                                className="text-muted-foreground hover:bg-muted"
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                onClick={() => handleDeleteRole(r.id, r.name)}
-                                variant="ghost"
-                                size="icon-xs"
-                                title="Xóa"
-                                className="text-destructive hover:bg-destructive/10"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="p-4 border-t border-border flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">Tổng số: {totalElements} vai trò</span>
-            <div className="flex gap-2">
-              <Button
-                disabled={page === 0}
-                onClick={() => setPage(prev => prev - 1)}
-                variant="outline"
-                size="sm"
-                className="h-8"
-              >
-                Trước
-              </Button>
-              <span className="text-xs font-semibold py-1 px-3 bg-muted rounded">Trang {page + 1} / {totalPages}</span>
-              <Button
-                disabled={page >= totalPages - 1}
-                onClick={() => setPage(prev => prev + 1)}
-                variant="outline"
-                size="sm"
-                className="h-8"
-              >
-                Sau
-              </Button>
-            </div>
-          </div>
-        )}
-      </Card>
-
-      {/* Role Create/Edit Modal */}
-      {roleModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl relative animate-in fade-in-50 zoom-in-95 duration-200">
+      {/* STICKY SUB-NAVBAR TABS */}
+      <div className="sticky top-16 bg-card/85 backdrop-blur-md border-b border-border/30 z-30 shadow-xs -mx-4 sm:-mx-6 lg:-mx-10 px-4 sm:px-6 lg:px-10 transition-all duration-200">
+        <div className="flex items-center justify-between h-12">
+          <div className="flex gap-6 md:gap-8 h-full items-center text-base font-semibold">
             <button
-              onClick={() => setRoleModalOpen(false)}
-              className="absolute right-4 top-4 p-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground"
+              onClick={() => scrollToSection("statistics")}
+              className={`flex items-center gap-2 h-full border-b-2 transition-colors cursor-pointer ${
+                activeSubTab === "statistics"
+                  ? "border-primary text-primary font-extrabold"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
             >
-              <X className="h-4 w-4" />
+              <BarChart3 className="h-4 w-4" />
+              <span>Thống kê & Phân tích (3.8.1)</span>
             </button>
 
-            <h3 className="text-lg font-bold text-foreground mb-4">
-              {editingRole ? "Cập nhật vai trò" : "Thêm vai trò mới"}
-            </h3>
+            <button
+              onClick={() => scrollToSection("management")}
+              className={`flex items-center gap-2 h-full border-b-2 transition-colors cursor-pointer ${
+                activeSubTab === "management"
+                  ? "border-primary text-primary font-extrabold"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Shield className="h-4 w-4" />
+              <span>Danh sách Role (3.8.3)</span>
+            </button>
+          </div>
+        </div>
+      </div>
 
-            <form onSubmit={handleSaveRole} className="space-y-4">
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">Tên vai trò (E.g. AUDITOR, MANAGER)</Label>
-                <Input type="text" name="name" defaultValue={editingRole?.name || ""} placeholder="E.g. TA_LEAD" required className="h-9" />
-              </div>
+      {/* SECTION 1: 3.8.1 OVERVIEW SECTION */}
+      <section id="statistics" className="space-y-8 scroll-mt-36">
+        
+        {/* KPI Cards & Warning Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+          {/* Card 1: Tổng số Role */}
+          <Card
+            onClick={() => {
+              handleResetFilters();
+              scrollToSection("management");
+              showBanner("Đã hiển thị danh sách tất cả Role!");
+            }}
+            className="border-border shadow-xs bg-card overflow-hidden relative cursor-pointer hover:border-primary/50 transition-all"
+          >
+            <div className="absolute top-0 right-0 p-4 opacity-10 text-primary">
+              <Shield className="h-20 w-20" />
+            </div>
+            <CardHeader className="pb-2">
+              <CardDescription className="text-xs font-semibold text-muted-foreground uppercase">
+                Tổng số Role
+              </CardDescription>
+              <CardTitle className="text-3xl font-extrabold text-foreground flex items-center gap-2 mt-1">
+                <span className="text-primary">{statsLoading ? "..." : totalRoles}</span>
+                <span className="text-xs font-semibold text-primary bg-primary/10 px-2.5 py-0.5 rounded-full">Roles</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0"><p className="text-xs text-muted-foreground">Tổng các vai trò định nghĩa trong hệ thống &rarr;</p></CardContent>
+          </Card>
 
-              <div className="space-y-1">
-                <Label className="text-xs font-semibold">Mô tả vai trò</Label>
-                <textarea
-                  name="description"
-                  defaultValue={editingRole?.description || ""}
-                  placeholder="E.g. Quản lý phân bổ trợ giảng và giám sát lớp học..."
-                  required
-                  className="flex min-h-[80px] w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none"
+          {/* Card 2: System vs Custom */}
+          <Card
+            onClick={() => {
+              handleResetFilters();
+              setFilterIsSystem("TRUE");
+              setPage(0);
+              scrollToSection("management");
+              showBanner("Đã lọc danh sách Role Hệ thống (System)!");
+            }}
+            className="border-border shadow-xs bg-card overflow-hidden relative cursor-pointer hover:border-purple-500/50 transition-all"
+          >
+            <div className="absolute top-0 right-0 p-4 opacity-10 text-purple-600">
+              <Layers className="h-20 w-20" />
+            </div>
+            <CardHeader className="pb-2">
+              <CardDescription className="text-xs font-semibold text-muted-foreground uppercase">
+                Role Hệ thống / Tùy chỉnh
+              </CardDescription>
+              <CardTitle className="text-2xl font-extrabold text-foreground flex items-center gap-2 mt-1">
+                <span className="text-purple-600">{systemRoles} System</span>
+                <span className="text-muted-foreground text-sm font-normal">/ {customRoles} Custom</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0"><p className="text-xs text-muted-foreground">Role System cố định không cho phép xóa &rarr;</p></CardContent>
+          </Card>
+
+          {/* Card 4: KPI Warning Card (Số Role không có User đang dùng) */}
+          <Card
+            onClick={() => {
+              setFilterHasUsers("FALSE");
+              setPage(0);
+              scrollToSection("management");
+              showBanner("Đã lọc danh sách Role không có User nào đang dùng!");
+            }}
+            className="border-2 border-amber-500/40 bg-linear-to-br from-amber-500/10 via-card to-card shadow-xs cursor-pointer hover:border-amber-500 hover:shadow-md hover:scale-[1.005] transition-all group flex flex-col justify-between"
+          >
+            <CardHeader className="pb-2">
+              <CardDescription className="text-xs font-extrabold text-amber-600 uppercase flex items-center justify-between">
+                <span className="flex items-center gap-1"><ShieldAlert className="h-4 w-4" /> Role Không Có User</span>
+                <span className="px-2 py-0.5 rounded-full bg-amber-600 text-white text-[10px] font-black">CẢNH BÁO</span>
+              </CardDescription>
+              <CardTitle className="text-3xl font-extrabold text-amber-600 flex items-center gap-2 mt-1">
+                <span>{unusedRoles}</span>
+                <span className="text-xs font-semibold text-amber-600 bg-amber-500/10 px-2 py-0.5 rounded-full">Role thừa</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0"><p className="text-xs text-muted-foreground">Gợi ý dọn dẹp các role không có user đang dùng &rarr;</p></CardContent>
+          </Card>
+
+          {/* Card 5: KPI Warning Card (Số Role rỗng chưa có Permission) */}
+          <Card
+            onClick={() => {
+              setFilterHasPermissions("FALSE");
+              setPage(0);
+              scrollToSection("management");
+              showBanner("Đã lọc danh sách Role rỗng chưa được gán quyền!");
+            }}
+            className="border-2 border-red-500/40 bg-linear-to-br from-red-500/10 via-card to-card shadow-xs cursor-pointer hover:border-red-500 hover:shadow-md hover:scale-[1.005] transition-all group flex flex-col justify-between"
+          >
+            <CardHeader className="pb-2">
+              <CardDescription className="text-xs font-extrabold text-red-600 uppercase flex items-center justify-between">
+                <span className="flex items-center gap-1"><AlertCircle className="h-4 w-4" /> Role Rỗng (No Perm)</span>
+                <span className="px-2 py-0.5 rounded-full bg-red-600 text-white text-[10px] font-black">CẢNH BÁO</span>
+              </CardDescription>
+              <CardTitle className="text-3xl font-extrabold text-red-600 flex items-center gap-2 mt-1">
+                <span>{emptyRoles}</span>
+                <span className="text-xs font-semibold text-red-600 bg-red-500/10 px-2 py-0.5 rounded-full">Role rỗng</span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0"><p className="text-xs text-muted-foreground">Role rỗng gán cho user sẽ vô nghĩa, cần gán quyền &rarr;</p></CardContent>
+          </Card>
+        </div>
+
+        {/* 2 CHARTS GRID */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+          {/* Chart 1: So sánh số Permission giữa các Role */}
+          <Card className="lg:col-span-6 border-border shadow-xs bg-card">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <BarChart3 className="h-4 w-4 text-primary" />
+                <span>1. So sánh Số lượng Permissions Giữa Các Role</span>
+              </CardTitle>
+              <CardDescription className="text-xs">Giúp phát hiện role bị "phình" quyền bất thường trong hệ thống</CardDescription>
+            </CardHeader>
+            <CardContent className="min-h-55 flex items-center justify-center">
+              {statsLoading ? (
+                <div className="flex items-center justify-center gap-2 text-muted-foreground py-10">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                  <span className="text-xs">Đang tải thống kê permission...</span>
+                </div>
+              ) : permissionDistData.length === 0 ? (
+                <div className="flex flex-col items-center justify-center text-muted-foreground text-xs py-10 gap-2">
+                  <BarChart3 className="h-8 w-8 opacity-40" />
+                  <span>Không có dữ liệu thống kê permission</span>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={permissionDistData} margin={{ top: 10, right: 20, left: -10, bottom: 10 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="name" style={{ fontSize: "11px" }} />
+                    <YAxis style={{ fontSize: "11px" }} />
+                    <Tooltip formatter={(v: any) => [`${v} Permissions`, "Số lượng quyền"]} />
+                    <Bar dataKey="value" radius={[6, 6, 0, 0]} fill="#2563eb">
+                      {permissionDistData.map((_, idx) => <Cell key={idx} fill={ROLE_COLORS[idx % ROLE_COLORS.length]} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Chart 2: Phân bổ Số lượng User theo từng Role (BE & FE) */}
+          <Card className="lg:col-span-6 border-border shadow-xs bg-card">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                <Users className="h-4 w-4 text-emerald-600" />
+                <span>2. Phân bổ Số lượng Users Theo Từng Role</span>
+              </CardTitle>
+              <CardDescription className="text-xs">Thống kê số lượng tài khoản người dùng gắn với từng vai trò</CardDescription>
+            </CardHeader>
+            <CardContent className="min-h-55 flex items-center justify-center">
+              {statsLoading ? (
+                <div className="flex items-center justify-center gap-2 text-muted-foreground py-10">
+                  <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
+                  <span className="text-xs">Đang tải thống kê user...</span>
+                </div>
+              ) : userDistData.length === 0 ? (
+                <div className="flex flex-col items-center justify-center text-muted-foreground text-xs py-10 gap-2">
+                  <Users className="h-8 w-8 opacity-40" />
+                  <span>Không có dữ liệu thống kê user</span>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={userDistData} margin={{ top: 10, right: 20, left: -10, bottom: 10 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="name" style={{ fontSize: "11px" }} />
+                    <YAxis style={{ fontSize: "11px" }} />
+                    <Tooltip formatter={(v: any) => [`${v} Users`, "Số người dùng"]} />
+                    <Bar dataKey="value" radius={[6, 6, 0, 0]} fill="#059669">
+                      {userDistData.map((_, idx) => <Cell key={idx} fill={ROLE_COLORS[(idx + 2) % ROLE_COLORS.length]} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+
+      {/* SECTION 2: MANAGEMENT TABLE & UNIFIED FILTER FORM (3.8.2 & 3.8.3) */}
+      <section id="management" className="scroll-mt-36">
+        <Card className="border-border shadow-sm bg-card overflow-hidden">
+          
+          {/* Header & Main Actions */}
+          <CardHeader className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 pb-4 border-b border-border/30 bg-card">
+            <div>
+              <CardTitle className="text-xl font-semibold tracking-tight font-heading flex items-center gap-2">
+                <span>Danh sách Role trong Hệ thống</span>
+              </CardTitle>
+              <CardDescription className="text-sm text-muted-foreground mt-0.5">
+                Tìm kiếm, lọc loại role system/custom, phân quyền ma trận và quản lý người dùng gán role.
+              </CardDescription>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button onClick={handleOpenCreateModal} size="sm" className="h-9 gap-1.5 font-semibold bg-primary text-primary-foreground cursor-pointer">
+                <Plus className="h-4 w-4" /> <span>Thêm Role mới</span>
+              </Button>
+            </div>
+          </CardHeader>
+
+          {/* 3.8.2 UNIFIED FILTER & SEARCH TOOLBAR FORM */}
+          <form onSubmit={handleSearchSubmit} className="py-3 px-4 bg-muted/20 border-b border-border/30 flex flex-wrap items-end gap-3 w-full">
+            {/* Search Input */}
+            <div className="flex flex-col gap-1 flex-1 min-w-50">
+              <Label className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Từ khóa tìm kiếm</Label>
+              <div className="relative w-full">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <Input
+                  type="text"
+                  placeholder="Tên role, code role..."
+                  value={searchKeyword}
+                  onChange={(e) => setSearchKeyword(e.target.value)}
+                  className="pl-8 h-9 text-sm border border-border/30 bg-background rounded-lg focus-visible:ring-2 focus-visible:ring-primary/20 placeholder:opacity-50"
                 />
               </div>
+            </div>
 
-              <div className="flex justify-end gap-2 pt-2">
-                <Button type="button" variant="outline" onClick={() => setRoleModalOpen(false)} className="h-9">Hủy</Button>
-                <Button type="submit" className="h-9 bg-primary text-primary-foreground hover:bg-primary/95">Xác nhận</Button>
+            {/* Is System Role Select */}
+            <div className="flex flex-col gap-1 w-37.5 shrink-0">
+              <Label className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Loại Role</Label>
+              <Select value={filterIsSystem} onValueChange={setFilterIsSystem}>
+                <SelectTrigger className="h-9 text-sm border border-border/30 bg-background rounded-lg w-full"><SelectValue placeholder="Tất cả" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">Tất cả loại</SelectItem>
+                  <SelectItem value="TRUE">System Role</SelectItem>
+                  <SelectItem value="FALSE">Custom Role</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Has Users Select */}
+            <div className="flex flex-col gap-1 w-40 shrink-0">
+              <Label className="text-xs font-semibold text-muted-foreground whitespace-nowrap">User đang dùng</Label>
+              <Select value={filterHasUsers} onValueChange={setFilterHasUsers}>
+                <SelectTrigger className="h-9 text-sm border border-border/30 bg-background rounded-lg w-full"><SelectValue placeholder="Tất cả" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">Tất cả</SelectItem>
+                  <SelectItem value="TRUE">Đang có User dùng</SelectItem>
+                  <SelectItem value="FALSE">Không có User (Chưa dùng)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Has Permissions Select (Quyền / Permission) */}
+            <div className="flex flex-col gap-1 w-42.5 shrink-0">
+              <Label className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Trạng thái Quyền</Label>
+              <Select value={filterHasPermissions} onValueChange={setFilterHasPermissions}>
+                <SelectTrigger className="h-9 text-sm border border-border/30 bg-background rounded-lg w-full"><SelectValue placeholder="Tất cả" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ALL">Tất cả trạng thái</SelectItem>
+                  <SelectItem value="TRUE">Đã gán Quyền (&gt; 0 Perm)</SelectItem>
+                  <SelectItem value="FALSE">Role rỗng (0 Permission)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Từ ngày tạo Filter */}
+            <div className="w-35 shrink-0">
+              <DatePickerInput
+                label="Từ ngày tạo"
+                placeholder="dd/mm/yyyy"
+                value={filterStartDate}
+                onChange={(isoDate) => {
+                  setFilterStartDate(isoDate);
+                  setPage(0);
+                }}
+              />
+            </div>
+
+            {/* Đến ngày tạo Filter */}
+            <div className="w-35 shrink-0">
+              <DatePickerInput
+                label="Đến ngày tạo"
+                placeholder="dd/mm/yyyy"
+                value={filterEndDate}
+                onChange={(isoDate) => {
+                  setFilterEndDate(isoDate);
+                  setPage(0);
+                }}
+              />
+            </div>
+
+            {/* Filter Buttons */}
+            <div className="flex items-center gap-1.5 shrink-0 self-end">
+              <Button type="submit" size="sm" className="h-9 font-semibold bg-primary text-primary-foreground text-xs rounded-lg px-3">
+                <Search className="h-3.5 w-3.5 mr-1" /> Lọc
+              </Button>
+              <Button type="button" onClick={handleResetFilters} variant="outline" size="sm" className="h-9 text-xs text-muted-foreground hover:text-foreground rounded-lg px-2.5 border border-border/30 bg-background flex items-center gap-1">
+                <RotateCcw className="h-3.5 w-3.5 mr-1" /> Đặt lại
+              </Button>
+            </div>
+          </form>
+
+          {/* BULK ACTION TOOLBAR (Xóa nhiều Role Custom chưa dùng + Nút Bỏ chọn tất cả) */}
+          {selectedRoleIds.length > 0 && (
+            <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-primary/10 border-b border-primary/20 text-xs animate-in fade-in-50 duration-200">
+              <div className="flex items-center gap-2 font-bold text-primary">
+                <CheckCircle2 className="h-4 w-4" />
+                <span>Đã chọn {selectedRoleIds.length} Role</span>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  onClick={() => setSelectedRoleIds([])}
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs font-semibold text-muted-foreground hover:text-foreground border-border/40 bg-background rounded-lg cursor-pointer gap-1"
+                >
+                  <X className="h-3.5 w-3.5" />
+                  <span>Bỏ chọn tất cả</span>
+                </Button>
+                <Button
+                  onClick={handleBulkDeleteRoles}
+                  size="sm"
+                  variant="destructive"
+                  className="h-7 text-xs font-semibold gap-1.5 rounded-lg cursor-pointer shadow-xs"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> Xóa hàng loạt ({selectedRoleIds.length})
+                </Button>
+              </div>
+            </div>
+          )}
 
-      {/* Assign Permissions to Role Modal */}
-      {assignPermissionsModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl relative animate-in fade-in-50 zoom-in-95 duration-200">
-            <button
-              onClick={() => setAssignPermissionsModalOpen(false)}
-              className="absolute right-4 top-4 p-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground"
-            >
-              <X className="h-4 w-4" />
-            </button>
+          {/* 3.8.3 TABLE CONTAINER */}
+          <CardContent className="p-0 relative min-h-75">
+            {loading && (
+              <div className="absolute inset-0 bg-background/60 backdrop-blur-xs flex items-center justify-center z-20">
+                <Loader2 className="h-8 w-8 text-primary animate-spin" />
+              </div>
+            )}
 
-            <h3 className="text-lg font-bold text-foreground mb-1">Cấu hình Quyền hạn</h3>
-            <p className="text-xs text-muted-foreground mb-4">Gán các quyền cụ thể cho vai trò: <strong className="uppercase">{assigningRole?.name}</strong></p>
+            <Table containerClassName="max-h-[calc(100vh-240px)] min-h-[240px] overflow-auto border-b border-border/20">
+              <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur-md shadow-2xs border-b border-border/40">
+                <TableRow className="border-b border-border/30 bg-muted/20 hover:bg-muted/20">
+                  <TableHead className="w-8 pb-4">
+                    <Checkbox checked={roles.length > 0 && selectedRoleIds.length === roles.length} onCheckedChange={(checked) => handleSelectAllRoles(!!checked)} className="translate-y-0.5 border-border/30" />
+                  </TableHead>
 
-            <form onSubmit={handleAssignPermissions} className="space-y-4">
-              <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                {permissions.map((p) => (
-                  <label key={p.id} className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-muted cursor-pointer transition-colors">
-                    <input
-                      type="checkbox"
-                      name="assignedPerms"
-                      value={p.id}
-                      defaultChecked={assignedPermissionIds.includes(p.id)}
-                      className="rounded border-border text-primary focus:ring-0 h-4 w-4"
-                    />
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <p className="text-xs font-bold text-foreground">{p.name}</p>
-                        <span className="px-1.5 py-0.5 rounded text-[8px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold uppercase">{p.entity}:{p.action}</span>
-                      </div>
-                      <p className="text-[10px] text-muted-foreground">{p.description}</p>
+                  {/* Code Header */}
+                  <TableHead className="cursor-pointer pb-4 select-none text-sm font-semibold uppercase tracking-wider group" onClick={() => handleSort("code")}>
+                    <div className="flex items-center gap-1.5 pl-2">
+                      <span className={getSortRuleInfo("code") ? "text-primary font-bold" : "text-muted-foreground"}>Mã Role</span>
+                      {renderSortIcon("code")}
                     </div>
-                  </label>
-                ))}
+                  </TableHead>
+
+                  {/* Name Header */}
+                  <TableHead className="cursor-pointer pb-4 select-none text-sm font-semibold uppercase tracking-wider group" onClick={() => handleSort("name")}>
+                    <div className="flex items-center gap-1.5 pl-2">
+                      <span className={getSortRuleInfo("name") ? "text-primary font-bold" : "text-muted-foreground"}>Tên Role</span>
+                      {renderSortIcon("name")}
+                    </div>
+                  </TableHead>
+
+                  {/* Badge Loại Header */}
+                  <TableHead className="pb-4 text-center text-sm font-semibold uppercase tracking-wider">
+                    <div className="flex items-center justify-center gap-1.5">
+                      <span className="text-muted-foreground">Loại Role</span>
+                      <Popover>
+                        <PopoverTrigger nativeButton={true} render={<Button variant="ghost" size="icon" className="h-5 w-5 p-0 hover:bg-muted"><Filter className={`h-3.5 w-3.5 ${filterIsSystem !== "ALL" ? "text-primary font-bold" : "text-muted-foreground"}`} /></Button>} />
+                        <PopoverContent className="w-48 p-2 text-xs bg-popover border border-border shadow-xl rounded-xl">
+                          <div className="font-bold mb-2 pb-1 border-b border-border/40 text-foreground">Lọc loại Role</div>
+                          <Select value={filterIsSystem} onValueChange={setFilterIsSystem}>
+                            <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Tất cả" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="ALL">Tất cả loại</SelectItem>
+                              <SelectItem value="TRUE">System Role</SelectItem>
+                              <SelectItem value="FALSE">Custom Role</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  </TableHead>
+
+                  {/* Số Permission Header */}
+                  <TableHead className="cursor-pointer pb-4 select-none text-sm font-semibold uppercase tracking-wider text-center group" onClick={() => handleSort("permissionCount")}>
+                    <div className="flex items-center gap-1.5 justify-center">
+                      <span className={getSortRuleInfo("permissionCount") ? "text-primary font-bold" : "text-muted-foreground"}>Permissions</span>
+                      {renderSortIcon("permissionCount")}
+                    </div>
+                  </TableHead>
+
+                  {/* Số User Header */}
+                  <TableHead className="cursor-pointer pb-4 select-none text-sm font-semibold uppercase tracking-wider text-center group" onClick={() => handleSort("userCount")}>
+                    <div className="flex items-center gap-1.5 justify-center">
+                      <span className={getSortRuleInfo("userCount") ? "text-primary font-bold" : "text-muted-foreground"}>Users dùng</span>
+                      {renderSortIcon("userCount")}
+                    </div>
+                  </TableHead>
+
+                  {/* Ngày tạo Header */}
+                  <TableHead className="cursor-pointer pb-4 select-none text-sm font-semibold uppercase tracking-wider text-center group" onClick={() => handleSort("createdAt")}>
+                    <div className="flex items-center gap-1.5 justify-center">
+                      <span className={getSortRuleInfo("createdAt") ? "text-primary font-bold" : "text-muted-foreground"}>Ngày tạo</span>
+                      {renderSortIcon("createdAt")}
+                    </div>
+                  </TableHead>
+
+                  {/* Actions Header */}
+                  <TableHead className="text-sm text-center pb-4 font-semibold text-muted-foreground uppercase tracking-wider">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+
+              <TableBody className="opacity-90">
+                {roles.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={8} className="py-12 text-center text-muted-foreground text-sm">
+                      Không tìm thấy Role nào phù hợp với điều kiện lọc.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  roles.map((role) => {
+                    const isSystemRole = Boolean(role.isSystem);
+                    const hasUsers = (role.userCount || 0) > 0;
+                    const canDelete = !isSystemRole && !hasUsers;
+                    const isNewlyCreated = String(role.id) === newlyCreatedId;
+
+                    return (
+                      <TableRow
+                        key={role.id}
+                        className={cn(
+                          "transition-all duration-700 border-border/30",
+                          isNewlyCreated
+                            ? "bg-emerald-500/20 dark:bg-emerald-950/40 border-l-4 border-l-emerald-500 font-semibold shadow-xs"
+                            : "hover:bg-foreground/10"
+                        )}
+                      >
+                        <TableCell>
+                          <Checkbox checked={selectedRoleIds.includes(String(role.id))} onCheckedChange={() => handleSelectRole(String(role.id))} className="translate-y-0.5 border-border/30" />
+                        </TableCell>
+
+                        <TableCell className="font-mono font-bold text-primary text-sm pl-2">
+                          <span className="px-2.5 py-0.5 rounded-lg bg-primary/10 border border-primary/20">
+                            {role.code}
+                          </span>
+                        </TableCell>
+
+                        <TableCell>
+                          <div>
+                            <p onClick={() => handleOpenDetailModal(role)} className="font-semibold text-foreground hover:text-primary cursor-pointer transition-colors text-sm">
+                              {role.name}
+                            </p>
+                            <p className="text-xs text-muted-foreground truncate max-w-xs">{role.description || "Không có mô tả"}</p>
+                          </div>
+                        </TableCell>
+
+                        <TableCell className="text-center">
+                          {isSystemRole ? (
+                            <Badge className="bg-purple-600 text-white font-bold text-xs">System</Badge>
+                          ) : (
+                            <Badge variant="outline" className="font-bold text-xs border-primary text-primary">Custom</Badge>
+                          )}
+                        </TableCell>
+
+                        <TableCell className="text-center font-mono font-bold text-xs">
+                          <span className="px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                            {role.permissionCount || 0} Quyền
+                          </span>
+                        </TableCell>
+
+                        <TableCell className="text-center font-mono font-bold text-xs">
+                          <span className={`px-2.5 py-0.5 rounded-full ${hasUsers ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" : "bg-amber-500/10 text-amber-600 border border-amber-500/20"}`}>
+                            {role.userCount || 0} Users
+                          </span>
+                        </TableCell>
+
+                        <TableCell className="text-center font-mono font-medium text-xs text-muted-foreground">
+                          {role.createdAt ? formatDateDisplay(role.createdAt) : "—"}
+                        </TableCell>
+
+                        {/* Actions theo dòng: Xem chi tiết / Sửa / Clone / Xóa (disable nếu system hoặc còn user) */}
+                        <TableCell className="text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <Button onClick={() => handleOpenDetailModal(role)} variant="ghost" size="icon" className="h-8 w-8 text-primary hover:bg-primary/10 cursor-pointer" title="Xem chi tiết & Phân quyền (4 Tabs)">
+                              <Eye className="h-4 w-4" />
+                            </Button>
+
+                            <Button onClick={() => handleOpenEditModal(role)} variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:bg-blue-500/10 cursor-pointer" title="Sửa Role">
+                              <Edit className="h-4 w-4" />
+                            </Button>
+
+                            <Button onClick={() => handleCloneRole(role)} variant="ghost" size="icon" className="h-8 w-8 text-purple-600 hover:bg-purple-500/10 cursor-pointer" title="Nhân bản Role (Clone)">
+                              <Copy className="h-4 w-4" />
+                            </Button>
+
+                            <Button
+                              onClick={() => handleDeleteRole(String(role.id))}
+                              disabled={!canDelete}
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-red-600 hover:bg-red-500/10 disabled:opacity-30 cursor-pointer"
+                              title={!canDelete ? "Không thể xóa Role hệ thống hoặc Role đang có User sử dụng" : "Xóa Role"}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+
+          {/* Fixed Table Footer & Pagination Form */}
+          <div className="px-5 py-3 border-t border-border/40 bg-card flex flex-col md:flex-row items-center justify-between gap-4 text-sm font-medium">
+            <div className="text-muted-foreground">
+              Hiển thị <span className="font-semibold text-foreground">{roles.length === 0 ? 0 : page * pageSize + 1}</span> đến{" "}
+              <span className="font-semibold text-foreground">{Math.min((page + 1) * pageSize, totalElements)}</span> trên{" "}
+              <span className="font-semibold text-foreground">{totalElements}</span> bản ghi
+            </div>
+
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground">Số dòng/trang:</span>
+                <Select value={String(pageSize)} onValueChange={(val) => { setPageSize(Number(val)); setPage(0); }}>
+                  <SelectTrigger className="h-8 w-16 text-xs bg-background border border-border rounded-lg font-bold">
+                    <SelectValue placeholder={String(pageSize)} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="20">20</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
-              <div className="flex justify-end gap-2 pt-2 border-t border-border">
-                <Button type="button" variant="outline" onClick={() => setAssignPermissionsModalOpen(false)} className="h-9">Hủy</Button>
-                <Button type="submit" className="h-9 bg-primary text-primary-foreground hover:bg-primary/95 font-semibold">Lưu thay đổi</Button>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const pNum = parseInt(jumpPageInput, 10);
+                  if (!isNaN(pNum) && pNum >= 1 && pNum <= totalPages) setPage(pNum - 1);
+                }}
+                className="flex items-center gap-1.5"
+              >
+                <span className="text-muted-foreground">Tới trang:</span>
+                <Input
+                  type="number"
+                  min={1}
+                  max={totalPages || 1}
+                  value={jumpPageInput}
+                  onChange={(e) => setJumpPageInput(e.target.value)}
+                  className="h-8 w-14 text-center text-xs font-bold bg-background border border-border rounded-lg"
+                />
+              </form>
+
+              <div className="flex items-center gap-1">
+                <Button disabled={page === 0} onClick={() => setPage(p => p - 1)} variant="outline" size="sm" className="h-8 text-xs font-semibold rounded-lg cursor-pointer">
+                  <ChevronLeft className="h-3.5 w-3.5" /> Trước
+                </Button>
+                {getPageNumbers(page, totalPages).map((p, idx) => {
+                  if (p === "...") return <span key={`dots-${idx}`} className="px-1 text-muted-foreground">...</span>;
+                  const pageNum = p as number;
+                  const isCurrent = pageNum === page;
+                  return (
+                    <Button key={pageNum} onClick={() => setPage(pageNum)} variant={isCurrent ? "default" : "outline"} size="sm" className="h-8 w-8 text-xs font-semibold rounded-lg cursor-pointer">
+                      {pageNum + 1}
+                    </Button>
+                  );
+                })}
+                <Button disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)} variant="outline" size="sm" className="h-8 text-xs font-semibold rounded-lg cursor-pointer">
+                  Sau <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
               </div>
-            </form>
+            </div>
           </div>
-        </div>
-      )}
+        </Card>
+      </section>
+
+      {/* 3.8.4 ROLE DETAIL MODAL (4 TABS) */}
+      <RoleDetailModal
+        open={detailModalOpen}
+        onClose={() => setDetailModalOpen(false)}
+        role={selectedRoleForDetail}
+        onUpdateRole={(updated) => {
+          if (!selectedRoleForDetail) return;
+          const u = { ...selectedRoleForDetail, ...updated };
+          setSelectedRoleForDetail(u);
+          setRoles(prev => prev.map(item => item.id === u.id ? u : item));
+          fetchRoles();
+          fetchOverviewStats();
+        }}
+        onPermissionUpdated={() => {
+          fetchRoles();
+          fetchOverviewStats();
+        }}
+        onCloneRole={handleCloneRole}
+        onDeleteRole={handleDeleteRole}
+        onShowBanner={showBanner}
+      />
+
+      {/* CREATE / EDIT ROLE MODAL */}
+      <Dialog open={roleFormModalOpen} onOpenChange={(val) => { if (!val) handleCloseRoleFormModal(); else setRoleFormModalOpen(true); }}>
+        <DialogContent className="max-w-md w-[90vw] p-6 rounded-2xl bg-card border border-border/40 shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-foreground">
+              {editingRole ? "Sửa Role Hệ Thống" : "Thêm Role Mới"}
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              {editingRole ? "Cập nhật thông tin hiển thị và mô tả của Role." : "Nhập tên vai trò và mô tả. Mã code sẽ được hệ thống tự động sinh."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <Form {...roleForm}>
+            <form onSubmit={roleForm.handleSubmit(handleSaveRole)} className="space-y-4 py-2">
+
+              <FormField
+                control={roleForm.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs font-semibold text-muted-foreground">Tên Role (Name) *</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="VD: Quản lý học tập, Trợ giảng"
+                        className="h-9 text-sm border-border/30 font-semibold"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage className="text-xs" />
+                  </FormItem>
+                )}
+              />
+
+              <div className="space-y-1">
+                <Label className="text-xs font-semibold text-muted-foreground">Mã Code Duy Nhất (Code - Readonly)</Label>
+                <Input
+                  placeholder={editingRole ? (editingRole.code ?? "") : "Tự động sinh (VD: ROLE-2607-A1B2C3)"}
+                  value={editingRole ? (editingRole.code ?? "") : ""}
+                  disabled
+                  className="h-9 text-sm font-mono uppercase border-border/30 bg-muted/40 text-muted-foreground cursor-not-allowed"
+                />
+                <p className="text-[11px] text-muted-foreground italic">
+                  {editingRole ? "Mã code cố định, không thể chỉnh sửa." : "Mã code sẽ được tự động sinh bằng CodeGenerator (định dạng ROLE-yyMM-XXXXXX)."}
+                </p>
+              </div>
+
+              <FormField
+                control={roleForm.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs font-semibold text-muted-foreground">Mô tả chức năng</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="Mô tả mục đích sử dụng của Role..."
+                        className="h-9 text-sm border-border/30"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage className="text-xs" />
+                  </FormItem>
+                )}
+              />
+
+              <DialogFooter className="pt-2">
+                <Button type="button" variant="outline" size="sm" onClick={handleCloseRoleFormModal} className="cursor-pointer">
+                  Hủy
+                </Button>
+                <Button type="submit" size="sm" disabled={formSubmitting} className="bg-primary text-primary-foreground font-semibold cursor-pointer">
+                  {formSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                  {editingRole ? "Lưu thay đổi" : "Tạo Role"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* CLONE ROLE MODAL */}
+      <Dialog open={cloneModalOpen} onOpenChange={(val) => { if (!val) handleCloseCloneModal(); }}>
+        <DialogContent className="max-w-md w-[90vw] p-6 rounded-2xl bg-card border border-border/40 shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-foreground flex items-center gap-2">
+              <Copy className="h-5 w-5 text-primary" />
+              Nhân bản Role
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Tạo bản sao của Role{" "}
+              <strong className="text-foreground font-mono">
+                {cloneSourceRole?.code}
+              </strong>{" "}
+              với toàn bộ danh sách Quyền.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Source Role Info Banner */}
+          {cloneSourceRole && (
+            <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-primary/10 border border-primary/20 text-xs">
+              <div className="p-1.5 rounded-lg bg-primary/15 text-primary shrink-0">
+                <Copy className="h-4 w-4" />
+              </div>
+              <div>
+                <div className="font-extrabold text-foreground">{cloneSourceRole.name}</div>
+                <div className="text-muted-foreground font-mono text-[11px]">
+                  {cloneSourceRole.code} &bull; {cloneSourceRole.permissionCount ?? 0} Quyền &bull; {cloneSourceRole.userCount ?? 0} Users
+                </div>
+              </div>
+            </div>
+          )}
+
+          <Form {...cloneForm}>
+            <form onSubmit={cloneForm.handleSubmit(handleSubmitClone)} className="space-y-4 py-1">
+              <FormField
+                control={cloneForm.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs font-semibold text-muted-foreground">
+                      Tên Role mới <span className="text-red-500">*</span>
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="VD: Administrator (Copy)"
+                        autoFocus
+                        className="h-9 text-sm border-border/30 font-semibold"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage className="text-xs" />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={cloneForm.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-xs font-semibold text-muted-foreground">Mô tả chức năng</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="Mô tả mục đích sử dụng của Role mới..."
+                        className="h-9 text-sm border-border/30"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage className="text-xs" />
+                  </FormItem>
+                )}
+              />
+
+              <div className="px-3 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-700 font-medium flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>Role mới sẽ kế thừa toàn bộ danh sách Quyền từ Role gốc. Mã Code sẽ được hệ thống tự động sinh.</span>
+              </div>
+
+              <DialogFooter className="pt-1">
+                <Button type="button" variant="outline" size="sm" onClick={handleCloseCloneModal} className="cursor-pointer">
+                  Hủy
+                </Button>
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={cloneSubmitting}
+                  className="bg-primary text-primary-foreground font-semibold cursor-pointer gap-1.5"
+                >
+                  {cloneSubmitting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
+                  {cloneSubmitting ? "Đang nhân bản..." : "Xác nhận Nhân bản"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+
+      {/* CONFIRM DELETE ROLE DIALOG */}
+      <ConfirmDialog
+        open={Boolean(confirmDeleteRoleId)}
+        onOpenChange={(open) => { if (!open) setConfirmDeleteRoleId(null); }}
+        title="Xác nhận xóa Vai trò"
+        description="Bạn có chắc chắn muốn xóa Role này khỏi hệ thống? Thao tác không thể hoàn tác."
+        confirmText="Xóa ngay"
+        cancelText="Hủy bỏ"
+        onConfirm={confirmDeleteRole}
+      />
+
+      {/* CONFIRM BULK DELETE ROLES DIALOG */}
+      <ConfirmDialog
+        open={confirmBulkDelete}
+        onOpenChange={setConfirmBulkDelete}
+        title="Xác nhận xóa hàng loạt Role"
+        description={`Bạn có chắc chắn muốn xóa ${selectedRoleIds.length} vai trò tùy chỉnh đã chọn khỏi hệ thống?`}
+        confirmText="Xóa tất cả"
+        cancelText="Hủy bỏ"
+        onConfirm={confirmBulkDeleteRoles}
+      />
 
     </div>
   );
 };
+
+

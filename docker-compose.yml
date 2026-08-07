@@ -1,45 +1,163 @@
-version: '3.8'
-
 services:
   mysql:
-    image: mysql:8.0
-    container_name: ailms-mysql
+    image: mysql:8.4
+    container_name: ailms-mysql-docker
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: "123456"
-      MYSQL_DATABASE: ailms
-    ports:
-      - "3306:3306"
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     volumes:
-    - ./docker/mysql:/var/lib/mysql
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p\"$$MYSQL_ROOT_PASSWORD\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - ailms-network
 
   redis:
-    image: redis:alpine
-    container_name: ailms-redis
+    image: redis:7-alpine
+    container_name: ailms-redis-docker
     restart: always
-    ports:
-      - "6379:6379"
     volumes:
-    - ./docker/redis:/data
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ailms-network
 
   minio:
     image: minio/minio:latest
-    container_name: ailms-minio
+    container_name: ailms-minio-docker
     restart: always
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    command: server /data --console-address ":9001"
     ports:
       - "9000:9000"
       - "9001:9001"
-    environment:
-      MINIO_ROOT_USER: "minioadmin"
-      MINIO_ROOT_PASSWORD: "minioadmin123"
-    command: server /data --console-address ":9001"
     volumes:
-      - ./docker/minio:/data
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "mc ready local || curl -f http://localhost:9000/minio/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ailms-network
+
+  minio-init:
+    image: minio/mc
+    container_name: ailms-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc alias set myminio http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD};
+      /usr/bin/mc mb --ignore-existing myminio/ailms-minio;
+      /usr/bin/mc anonymous set download myminio/ailms-minio;
+      exit 0;
+      "
+    networks:
+      - ailms-network
+
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    container_name: ailms-ai-service
+    restart: always
+    environment:
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_MODEL: ${GEMINI_MODEL}
+      INTERNAL_SECRET: ${AI_INTERNAL_SECRET}
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/test/health')\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - ailms-network
+
+  backend:
+    build:
+      context: ./backend/ailms
+      dockerfile: Dockerfile
+    container_name: ailms-backend
+    restart: always
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_EXTERNAL_ENDPOINT: ${MINIO_EXTERNAL_ENDPOINT:-http://192.168.0.103:9000}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      AI_SERVICE_BASE_URL: http://ai-service:8000
+      AI_SERVICE_INTERNAL_TOKEN: ${AI_INTERNAL_SECRET}
+      EMAIL_USERNAME: ${EMAIL_USERNAME}
+      EMAIL_PASSWORD: ${EMAIL_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      FRONTEND_URL: ${FRONTEND_URL}
+      FRONTEND_SET_PASSWORD_URL: ${FRONTEND_SET_PASSWORD_URL}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      ai-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/api/v1/courses || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - ailms-network
+
+  frontend:
+    build:
+      context: ./frontend/ailms-frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+    container_name: ailms-frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - ailms-network
+
+networks:
+  ailms-network:
+    name: ailms-network
+    driver: bridge
 
 volumes:
-  mysql-data:
+  mysql_data:
+    name: ailms_mysql_data
     driver: local
-  redis-data:
+  redis_data:
+    name: ailms_redis_data
     driver: local
-  minio-data:
+  minio_data:
+    name: ailms_minio_data
     driver: local

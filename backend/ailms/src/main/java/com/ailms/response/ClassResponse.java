@@ -17,17 +17,27 @@ public class ClassResponse {
 
     private Long id;
 
+    private String code;
+
     private Long courseId;
+
+    private String courseName;
 
     private Long categoryId;
 
+    private String categoryName;
+
     private String name;
+
+    private String teacherName;
 
     private Byte type;
 
     private DeliveryModeEnum packageType;
 
     private Integer maxMembers;
+
+    private Integer currentMemberCount;
 
     private BaseStatusEnum status;
 
