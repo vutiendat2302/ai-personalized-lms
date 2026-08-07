@@ -5,8 +5,8 @@ import com.ailms.service.IFileStorageService;
 import com.ailms.exception.FileStorageException;
 import io.minio.*;
 import io.minio.http.Method;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -24,20 +24,21 @@ import java.util.concurrent.TimeUnit;
  * - Kiểm tra file tồn tại
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class MinioFileStorageService implements IFileStorageService {
 
     private final MinioClient minioClient;
+    private final MinioClient minioPresignClient;
 
     @Value("${minio.bucket-name}")
     private String bucketName;
 
-    @Value("${minio.endpoint}")
-    private String minioEndpoint;
-
-    @Value("${minio.external-endpoint:${minio.endpoint}}")
-    private String minioExternalEndpoint;
+    public MinioFileStorageService(
+            MinioClient minioClient,
+            @Qualifier("minioPresignClient") MinioClient minioPresignClient) {
+        this.minioClient = minioClient;
+        this.minioPresignClient = minioPresignClient;
+    }
 
     @Override
     public void upload(MultipartFile file, String fileKey) {
@@ -96,7 +97,7 @@ public class MinioFileStorageService implements IFileStorageService {
     @Override
     public String getPresignedUrl(String fileKey, Duration expiry) {
         try {
-            String url = minioClient.getPresignedObjectUrl(
+            return minioPresignClient.getPresignedObjectUrl(
                     GetPresignedObjectUrlArgs.builder()
                             .method(Method.GET)
                             .bucket(bucketName)
@@ -104,10 +105,6 @@ public class MinioFileStorageService implements IFileStorageService {
                             .expiry((int) expiry.toSeconds(), TimeUnit.SECONDS)
                             .build()
             );
-            if (!minioEndpoint.equals(minioExternalEndpoint)) {
-                url = url.replace(minioEndpoint, minioExternalEndpoint);
-            }
-            return url;
         } catch (Exception e) {
             log.error("Failed to generate presigned URL for key: {}", fileKey, e);
             throw new FileStorageException("Failed to generate preview link for key");

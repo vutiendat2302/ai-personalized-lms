@@ -76,7 +76,7 @@ export const LearningRightPanel: React.FC<LearningRightPanelProps> = ({ descript
                 </div>
                 <div className="space-y-1.5">
                   {resources.map((res: any, idx: number) => {
-                    const downloadUrl = res.fileUrl || (res.fileKey ? `http://localhost:8080/api/v1/files/download?fileKey=${encodeURIComponent(res.fileKey)}` : "#");
+                    const downloadUrl = res.fileUrl || (res.fileKey ? `/api/v1/files/download?fileKey=${encodeURIComponent(res.fileKey)}` : "#");
                     return (
                       <div key={res.id || idx} className="p-2 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-between text-xs">
                         <span className="font-semibold text-gray-800 truncate mr-2">{res.name || "Tài liệu đính kèm"}</span>

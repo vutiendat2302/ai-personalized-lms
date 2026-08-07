@@ -379,10 +379,10 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
       if (previewUrl) {
         window.open(previewUrl, "_blank");
       } else {
-        window.open(`http://localhost:8080/api/v1/files/download?fileKey=${encodeURIComponent(res.url)}`, "_blank");
+        window.open(`/api/v1/files/download?fileKey=${encodeURIComponent(res.url)}`, "_blank");
       }
     } catch (e) {
-      window.open(`http://localhost:8080/api/v1/files/download?fileKey=${encodeURIComponent(res.url)}`, "_blank");
+      window.open(`/api/v1/files/download?fileKey=${encodeURIComponent(res.url)}`, "_blank");
     }
   };
 
@@ -827,9 +827,9 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
                   let streamUrl = contentUrl;
                   if (contentUrl.includes("s3.lms.com/")) {
                     const key = contentUrl.substring(contentUrl.indexOf("s3.lms.com/") + "s3.lms.com/".length);
-                    streamUrl = `http://localhost:8080/api/v1/files/download?fileKey=${encodeURIComponent(key)}`;
+                    streamUrl = `/api/v1/files/download?fileKey=${encodeURIComponent(key)}`;
                   } else if (!contentUrl.startsWith("http://") && !contentUrl.startsWith("https://")) {
-                    streamUrl = `http://localhost:8080/api/v1/files/download?fileKey=${encodeURIComponent(contentUrl)}`;
+                    streamUrl = `/api/v1/files/download?fileKey=${encodeURIComponent(contentUrl)}`;
                   }
 
                   return (
@@ -1288,7 +1288,7 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
                     href={
                       contentUrl.startsWith("http://") || contentUrl.startsWith("https://")
                         ? contentUrl
-                        : `http://localhost:8080/api/v1/files/download?fileKey=${encodeURIComponent(contentUrl)}`
+                        : `/api/v1/files/download?fileKey=${encodeURIComponent(contentUrl)}`
                     }
                     target="_blank"
                     rel="noreferrer"
@@ -1304,7 +1304,7 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
                     const lowerUrl = contentUrl.toLowerCase();
                     const docStreamUrl = contentUrl.startsWith("http://") || contentUrl.startsWith("https://")
                       ? contentUrl
-                      : `http://localhost:8080/api/v1/files/download?fileKey=${encodeURIComponent(contentUrl)}`;
+                      : `/api/v1/files/download?fileKey=${encodeURIComponent(contentUrl)}`;
 
                     // PDF Viewer (using <PdfViewer /> with presigned URL)
                     if (lowerUrl.includes(".pdf") || lowerUrl.includes("pdf")) {

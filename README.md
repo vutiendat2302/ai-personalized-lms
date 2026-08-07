@@ -98,3 +98,9 @@ docker compose up --build -d
 docker compose logs backend -f // xem logs be 
 ```
 
+``` bash 
+
+
+docker run --rm --network ailms-network -v $(pwd):/app -w /app python:3.12-slim bash -c "pip install -r requirements.txt && DB_HOST=mysql python main.py"
+
+```

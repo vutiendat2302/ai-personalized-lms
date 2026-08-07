@@ -36,12 +36,12 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ fileKeyOrUrl, className = 
           if (presignedUrl) {
             setPdfUrl(presignedUrl);
           } else {
-            setPdfUrl(`http://localhost:8080/api/v1/files/download?fileKey=${encodeURIComponent(fileKeyOrUrl)}`);
+            setPdfUrl(`/api/v1/files/download?fileKey=${encodeURIComponent(fileKeyOrUrl)}`);
           }
         }
       } catch (err) {
         if (isMounted) {
-          setPdfUrl(`http://localhost:8080/api/v1/files/download?fileKey=${encodeURIComponent(fileKeyOrUrl)}`);
+          setPdfUrl(`/api/v1/files/download?fileKey=${encodeURIComponent(fileKeyOrUrl)}`);
           setError(true);
         }
       } finally {
@@ -68,7 +68,7 @@ export const PdfViewer: React.FC<PdfViewerProps> = ({ fileKeyOrUrl, className = 
   const rawUrl = pdfUrl || (
     fileKeyOrUrl.startsWith("http://") || fileKeyOrUrl.startsWith("https://")
       ? fileKeyOrUrl
-      : `http://localhost:8080/api/v1/files/download?fileKey=${encodeURIComponent(fileKeyOrUrl)}`
+      : `/api/v1/files/download?fileKey=${encodeURIComponent(fileKeyOrUrl)}`
   );
 
   // Append #toolbar=0&navpanes=0 to strip away Chrome's dark embedded window header & toolbar controls

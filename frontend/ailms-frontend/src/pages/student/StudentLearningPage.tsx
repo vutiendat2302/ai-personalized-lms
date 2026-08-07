@@ -439,7 +439,7 @@ export const StudentLearningPage: React.FC = () => {
                           const lower = url.toLowerCase();
                           const docStreamUrl = url.startsWith("http://") || url.startsWith("https://")
                             ? url
-                            : `http://localhost:8080/api/v1/files/download?fileKey=${encodeURIComponent(url)}`;
+                            : `/api/v1/files/download?fileKey=${encodeURIComponent(url)}`;
 
                           if (lower.includes(".pdf") || activeLesson.contentType === "PDF") {
                             return <PdfViewer fileKeyOrUrl={url} className="h-full" />;

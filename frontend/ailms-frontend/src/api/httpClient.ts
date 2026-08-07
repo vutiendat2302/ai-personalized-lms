@@ -38,7 +38,7 @@ export const clearAuth = () => {
  *  - Cho phép Browser tự động gửi HttpOnly Cookie.
  *  - Đây là điều kiện bắt buộc để Refresh Token hoạt động.
  * ============================================================ */
-const BASE_URL = import.meta.env.VITE_BE_URL;
+const BASE_URL = import.meta.env.VITE_BE_URL || import.meta.env.VITE_API_BASE_URL || "/api";
 
 const httpClient = axios.create({
   baseURL: BASE_URL,
