@@ -12,7 +12,10 @@ import java.util.List;
 public interface ClassMapper {
 
     @Mapping(target = "courseId", source = "courseEntity.id")
+    @Mapping(target = "courseName", source = "courseEntity.name")
     @Mapping(target = "categoryId", source = "categoryEntity.id")
+    @Mapping(target = "categoryName", source = "categoryEntity.name")
+    @Mapping(target = "teacherName", ignore = true)
     ClassResponse toResponse(ClassEntity entity);
 
     List<ClassResponse> toResponseList(List<ClassEntity> list);
@@ -26,6 +29,7 @@ public interface ClassMapper {
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
     @Mapping(target = "currentMemberCount", ignore = true)
+    @Mapping(target = "code", ignore = true)
     ClassEntity toEntity(CreateClassRequest request);
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
@@ -36,5 +40,6 @@ public interface ClassMapper {
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
+    @Mapping(target = "code", ignore = true)
     void updateFromRequest(UpdateClassRequest request, @MappingTarget ClassEntity entity);
 }

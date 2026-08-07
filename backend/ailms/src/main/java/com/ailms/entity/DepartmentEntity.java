@@ -35,6 +35,7 @@ public class DepartmentEntity extends BaseEntity {
 
     /** Tên hiển thị đầy đủ của phòng ban. */
     @Column(name = "name", nullable = false, length = 255)
+
     private String name;
 
     /** Mô tả chi tiết về chức năng và nhiệm vụ của phòng ban. */
@@ -53,4 +54,7 @@ public class DepartmentEntity extends BaseEntity {
     @OneToMany(mappedBy = "department", fetch = FetchType.LAZY)
     @Builder.Default
     private List<EmployeeEntity> employees = new ArrayList<>();
+
+    @Transient // Ko luu trong db, chi chua du lieu tra ve
+    private Long employeeCount;
 }

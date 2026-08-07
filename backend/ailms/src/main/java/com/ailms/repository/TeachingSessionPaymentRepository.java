@@ -15,7 +15,8 @@ import java.util.Optional;
 
 @Repository
 public interface TeachingSessionPaymentRepository extends BaseRepository<TeachingSessionPaymentEntity, Long> {
-    Optional<TeachingSessionPaymentEntity> findByClassOnlineId(Long classOnlineId);
+    List<TeachingSessionPaymentEntity> findByClassOnlineIdOrderByUpdatedAtDescCreatedAtDescIdDesc(Long classOnlineId);
+    Optional<TeachingSessionPaymentEntity> findByClassOnlineIdAndEmployee_UserId(Long classOnlineId, Long employeeId);
     List<TeachingSessionPaymentEntity> findByEmployee_UserId(Long userId);
     boolean existsByTeachingRate_Id(Long rateId);
 
@@ -23,8 +24,8 @@ public interface TeachingSessionPaymentRepository extends BaseRepository<Teachin
         SELECT tsp FROM TeachingSessionPaymentEntity tsp
         WHERE tsp.employee.userId = :userId
           AND tsp.status = :status
-          AND tsp.createdAt >= :start
-          AND tsp.createdAt <= :end
+          AND tsp.classOnline.scheduledAt >= :start
+          AND tsp.classOnline.scheduledAt <= :end
     """)
     List<TeachingSessionPaymentEntity> findByEmployeeAndStatusAndPeriod(
             @Param("userId") Long userId,

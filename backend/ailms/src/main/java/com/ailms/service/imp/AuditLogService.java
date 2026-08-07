@@ -24,9 +24,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.request.RequestContextHolder;
-
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.function.Function;
+import com.ailms.common.util.CsvBuilder;
 
 @Service
 @RequiredArgsConstructor
@@ -148,5 +149,100 @@ public class AuditLogService implements IAuditLogService{
         }
         request.setUserId(userId);
         return getAuditLogs(request);
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public PageResponse<AuditLogResponse> getAuditLogsByEntity(String entityType, Long entityId, AuditLogSearchRequest request) {
+        if (request == null) {
+            request = new AuditLogSearchRequest();
+        }
+        request.setEntityType(entityType);
+        request.setEntityId(entityId);
+        return getAuditLogs(request);
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public byte[] exportAuditLogs(AuditLogSearchRequest request) {
+        log.info("Xuất file danh sách audit log qua CsvBuilder");
+        if (request != null) {
+            request.setSize(100000); // Giới hạn tối đa 100k bản ghi khi xuất báo cáo
+        }
+        List<AuditLogResponse> logs = getAuditLogs(request).getContent();
+
+        List<String> headers = List.of(
+                "ID", "Thời gian", "Tài khoản tác động", "Email", "Hành động",
+                "Thực thể", "ID Thực thể", "Địa chỉ IP", "User Agent", "Giá trị cũ", "Giá trị mới"
+        );
+
+        List<Function<AuditLogResponse, Object>> extractors = List.of(
+                AuditLogResponse::getId,
+                l -> l.getOccurredAt() != null ? l.getOccurredAt().toString() : "",
+                l -> l.getUserFullName() != null ? l.getUserFullName() : "N/A",
+                l -> l.getUserEmail() != null ? l.getUserEmail() : "N/A",
+                AuditLogResponse::getAction,
+                AuditLogResponse::getEntityType,
+                AuditLogResponse::getEntityId,
+                AuditLogResponse::getIpAddress,
+                AuditLogResponse::getUserAgent,
+                l -> l.getOldValue() != null ? l.getOldValue() : "",
+                l -> l.getNewValue() != null ? l.getNewValue() : ""
+        );
+
+        return CsvBuilder.create()
+                .tableFromList(headers, logs, extractors, "Không có dữ liệu nhật ký")
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    @Override
+    public byte[] exportSingleAuditLogToCsv(Long id) {
+        log.info("Xuất file CSV chi tiết cho audit log ID: {}", id);
+        AuditLogEntity entity = auditLogRepository.findById(id)
+                .orElseThrow(() -> ResourceNotFoundException.of("AuditLog", id));
+        AuditLogResponse logResponse = auditLogMapper.toResponse(entity);
+
+        List<String> headers = List.of(
+                "ID", "Thời gian", "Tài khoản tác động", "Email", "Hành động",
+                "Thực thể", "ID Thực thể", "Địa chỉ IP", "User Agent", "Giá trị cũ", "Giá trị mới"
+        );
+
+        List<java.util.function.Function<AuditLogResponse, Object>> extractors = List.of(
+                AuditLogResponse::getId,
+                l -> l.getOccurredAt() != null ? l.getOccurredAt().toString() : "",
+                l -> l.getUserFullName() != null ? l.getUserFullName() : "N/A",
+                l -> l.getUserEmail() != null ? l.getUserEmail() : "N/A",
+                AuditLogResponse::getAction,
+                AuditLogResponse::getEntityType,
+                AuditLogResponse::getEntityId,
+                AuditLogResponse::getIpAddress,
+                AuditLogResponse::getUserAgent,
+                l -> l.getOldValue() != null ? l.getOldValue() : "",
+                l -> l.getNewValue() != null ? l.getNewValue() : ""
+        );
+
+        return CsvBuilder.create()
+                .tableFromList(headers, List.of(logResponse), extractors, "Không có dữ liệu nhật ký")
+                .build();
+    }
+
+    @Transactional
+    @Override
+    public void deleteAuditLog(Long id) {
+        log.info("Deleting audit log ID: {}", id);
+        if (!auditLogRepository.existsById(id)) {
+            throw ResourceNotFoundException.of("AuditLog", id);
+        }
+        auditLogRepository.deleteById(id);
+    }
+
+    @Transactional
+    @Override
+    public void bulkDeleteAuditLogs(List<Long> ids) {
+        log.info("Bulk deleting audit logs: {}", ids);
+        if (ids != null) {
+            auditLogRepository.deleteAllById(ids);
+        }
     }
 }

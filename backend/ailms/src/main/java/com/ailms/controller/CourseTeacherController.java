@@ -1,5 +1,7 @@
 package com.ailms.controller;
 
+import com.ailms.entity.enums.CourseTeacherStatusEnum;
+import com.ailms.request.CourseTeacherStatusRequest;
 import com.ailms.response.PageResponse;
 import com.ailms.request.CourseTeacherSearchRequest;
 import com.ailms.response.CourseTeacherResponse;
@@ -53,9 +55,20 @@ public class CourseTeacherController {
         return ResponseEntity.ok(ApiResponse.of("Course teachers retrieved successfully", response));
     }
 
+    @PatchMapping("/{courseId}/{userId}/status")
+    public ResponseEntity<ApiResponse<CourseTeacherResponse>> updateStatus(
+            @PathVariable Long courseId,
+            @PathVariable Long userId,
+            @Valid @RequestBody CourseTeacherStatusRequest request) {
+        CourseTeacherResponse response = courseTeacherService.updateStatus(courseId, userId, request);
+        return ResponseEntity.ok(ApiResponse.of("Course teacher status updated successfully", response));
+    }
+
     @GetMapping("/course/{courseId}")
-    public ResponseEntity<ApiResponse<List<CourseTeacherResponse>>> getByCourseId(@PathVariable Long courseId) {
-        List<CourseTeacherResponse> response = courseTeacherService.getByCourseId(courseId);
+    public ResponseEntity<ApiResponse<List<CourseTeacherResponse>>> getByCourseId(
+            @PathVariable Long courseId,
+            @RequestParam(required = false) CourseTeacherStatusEnum status) {
+        List<CourseTeacherResponse> response = courseTeacherService.getByCourseId(courseId, status);
         return ResponseEntity.ok(ApiResponse.of("Course teachers retrieved successfully", response));
     }
 

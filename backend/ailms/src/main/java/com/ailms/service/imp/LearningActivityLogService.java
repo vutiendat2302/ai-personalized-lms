@@ -20,6 +20,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import jakarta.persistence.EntityManager;
+import com.ailms.entity.LessonEntity;
+import com.ailms.entity.CourseEntity;
+import com.ailms.entity.ClassEntity;
+import com.ailms.entity.QuizEntity;
 
 @Service
 @RequiredArgsConstructor
@@ -29,6 +34,7 @@ public class LearningActivityLogService implements ILearningActivityLogService {
 
     private final LearningActivityLogRepository learningActivityLogRepository;
     private final LearningActivityLogMapper learningActivityLogMapper;
+    private final EntityManager entityManager;
 
     private static final String RESOURCE_NAME = "LearningActivityLog";
 
@@ -46,7 +52,34 @@ public class LearningActivityLogService implements ILearningActivityLogService {
 
     public List<LearningActivityLogResponse> getByUserId(Long userId) {
         log.info("Getting learning activity logs by user id: {}", userId);
-        return learningActivityLogMapper.toResponseList(learningActivityLogRepository.findByUserId(userId));
+        return learningActivityLogRepository.findByUserId(userId).stream().map(this::toDetailedResponse).toList();
+    }
+
+    private LearningActivityLogResponse toDetailedResponse(LearningActivityLogEntity entity) {
+        LearningActivityLogResponse response = learningActivityLogMapper.toResponse(entity);
+        if (entity.getEntityId() == null) return response;
+        if ("LESSON".equalsIgnoreCase(entity.getEntityType())) {
+            LessonEntity lesson = entityManager.find(LessonEntity.class, entity.getEntityId());
+            if (lesson != null) { response.setEntityName(lesson.getName());
+                if (lesson.getCourseSectionEntity() != null && lesson.getCourseSectionEntity().getCourseEntity() != null) {
+                    CourseEntity course = lesson.getCourseSectionEntity().getCourseEntity(); response.setCourseId(course.getId()); response.setCourseName(course.getName());
+                }
+            }
+        } else if ("COURSE".equalsIgnoreCase(entity.getEntityType())) {
+            CourseEntity course = entityManager.find(CourseEntity.class, entity.getEntityId());
+            if (course != null) { response.setEntityName(course.getName()); response.setCourseId(course.getId()); response.setCourseName(course.getName()); }
+        } else if ("CLASS".equalsIgnoreCase(entity.getEntityType())) {
+            ClassEntity clazz = entityManager.find(ClassEntity.class, entity.getEntityId());
+            if (clazz != null) { response.setEntityName(clazz.getName()); response.setClassName(clazz.getName());
+                if (clazz.getCourseEntity() != null) { response.setCourseId(clazz.getCourseEntity().getId()); response.setCourseName(clazz.getCourseEntity().getName()); }
+            }
+        } else if ("QUIZ".equalsIgnoreCase(entity.getEntityType())) {
+            QuizEntity quiz = entityManager.find(QuizEntity.class, entity.getEntityId());
+            if (quiz != null) { response.setEntityName(quiz.getTitle()); response.setCourseId(quiz.getCourseId());
+                if (quiz.getCourseId() != null) { CourseEntity course = entityManager.find(CourseEntity.class, quiz.getCourseId()); if (course != null) response.setCourseName(course.getName()); }
+            }
+        }
+        return response;
     }
 
     public List<LearningActivityLogResponse> getByEntity(String entityType, Long entityId) {

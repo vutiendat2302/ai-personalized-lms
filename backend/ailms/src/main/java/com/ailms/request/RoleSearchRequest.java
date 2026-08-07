@@ -8,9 +8,6 @@ import lombok.*;
 @AllArgsConstructor
 @Builder
 @EqualsAndHashCode(callSuper = false)
-public class RoleSearchRequest extends BaseSearchRequest {
-
-    private String keyword;
-
+public class RoleSearchRequest extends CommonSearchRequest<Boolean> {
     private Boolean isSystem;
 }

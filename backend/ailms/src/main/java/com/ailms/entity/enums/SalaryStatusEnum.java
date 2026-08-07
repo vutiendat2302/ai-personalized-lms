@@ -12,4 +12,5 @@ public enum SalaryStatusEnum {
     CONFIRMED,
     PAID,
     PENDING
+    ,REJECTED
 }

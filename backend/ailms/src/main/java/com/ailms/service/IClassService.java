@@ -2,9 +2,11 @@ package com.ailms.service;
 
 import com.ailms.request.CreateClassRequest;
 import com.ailms.request.UpdateClassRequest;
+import com.ailms.request.UpdateClassScheduleSlotRequest;
 import com.ailms.response.PageResponse;
 import com.ailms.request.ClassSearchRequest;
 import com.ailms.response.ClassResponse;
+import com.ailms.response.ClassScheduleResponse;
 
 
 import java.util.List;
@@ -28,6 +30,8 @@ public interface IClassService {
      */
     List<ClassResponse> getAll();
 
+    List<ClassResponse> getTeachingClassesByUserId(Long userId);
+
     /**
      * Lấy thông tin chi tiết của bản ghi theo ID.
      *
@@ -43,6 +47,10 @@ public interface IClassService {
      * @return danh sách các đối tượng phù hợp
      */
     List<ClassResponse> getByCourseId(Long courseId);
+
+    List<ClassScheduleResponse> getSchedules(Long classId);
+
+    List<ClassScheduleResponse> updateSchedules(Long classId, List<UpdateClassScheduleSlotRequest> schedules);
 
     /**
      * Tạo mới bản ghi từ dữ liệu yêu cầu.

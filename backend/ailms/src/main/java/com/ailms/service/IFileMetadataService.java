@@ -1,8 +1,11 @@
 package com.ailms.service;
 import com.ailms.entity.enums.BaseStatusEnum;
 import com.ailms.entity.enums.FileTypeEnum;
+import com.ailms.request.BulkFileActionRequest;
 import com.ailms.request.CreateFileMetadataRequest;
 import com.ailms.request.FileSearchRequest;
+import com.ailms.request.UpdateFileMetadataRequest;
+import com.ailms.response.FileManagementSummaryResponse;
 import com.ailms.response.FileMetadataResponse;
 import com.ailms.response.PageResponse;
 
@@ -98,4 +101,39 @@ public interface IFileMetadataService {
      * @return danh sách các đối tượng phù hợp
      */
     List<FileMetadataResponse> getAllFiles();
+
+    /**
+     * Lấy tổng quan các chỉ số (metrics) và biểu đồ quản lý file hệ thống.
+     */
+    FileManagementSummaryResponse getSummary();
+
+    /**
+     * Chuyển trạng thái ARCHIVED cho danh sách file.
+     */
+    void bulkArchive(BulkFileActionRequest request);
+
+    /**
+     * Chuyển trạng thái DELETED (xoá mềm) cho các file mồ côi. Chặn xoá file đang được tham chiếu.
+     */
+    void bulkDelete(BulkFileActionRequest request);
+
+    /**
+     * Xoá vĩnh viễn (purge) khỏi DB và MinIO đối với các file đã ở trạng thái DELETED.
+     */
+    void bulkPurge(BulkFileActionRequest request);
+
+    /**
+     * Kích hoạt thủ công job quét file mồ côi.
+     */
+    int triggerRescanOrphaned();
+
+    /**
+     * Xuất dữ liệu báo cáo danh sách file dạng CSV theo bộ lọc.
+     */
+    byte[] exportCsv(FileSearchRequest request);
+
+    /**
+     * Cập nhật thông tin siêu dữ liệu (Tên file gốc, Ngày tải lên).
+     */
+    FileMetadataResponse updateMetadata(Long id, UpdateFileMetadataRequest request);
 }

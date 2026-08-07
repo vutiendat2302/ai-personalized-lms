@@ -13,8 +13,14 @@ import java.util.List;
 public interface EnrollmentMapper {
 
     @Mapping(target = "userId", source = "userEntity.id")
+    @Mapping(target = "studentName", source = "userEntity.fullName")
+    @Mapping(target = "studentEmail", source = "userEntity.email")
+    @Mapping(target = "studentPhone", source = "userEntity.phone")
+    @Mapping(target = "studentAvatar", source = "userEntity.avatarUrl")
     @Mapping(target = "courseId", source = "courseEntity.id")
+    @Mapping(target = "courseName", source = "courseEntity.name")
     @Mapping(target = "classId", source = "classEntity.id")
+    @Mapping(target = "className", source = "classEntity.name")
     EnrollmentResponse toResponse(EnrollmentEntity entity);
 
     List<EnrollmentResponse> toResponseList(List<EnrollmentEntity> list);

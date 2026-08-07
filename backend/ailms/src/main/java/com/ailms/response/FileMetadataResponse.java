@@ -10,6 +10,8 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
+import com.ailms.entity.enums.FileUsageTypeEnum;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -21,9 +23,24 @@ public class FileMetadataResponse {
     private Long fileSize;
     private String contentType;
     private FileTypeEnum fileType;
+    private FileUsageTypeEnum usageType;
+    private Long referenceEntityId;
+    private String referenceEntityType;
     private BaseStatusEnum status;
 
+    /**
+     * Tài nguyên không còn được tham chiếu đến
+     */
+    private boolean orphaned;
+
+    /**
+     * Thời điểm hệ thống phát hiện hợp đồng không còn được tham chiếu đến
+     */
+    private LocalDateTime orphanedDetectedAt;
+
     private Long createdBy;
+    private String createdByName;
+    private String createdByCode;
     private Long updatedBy;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")

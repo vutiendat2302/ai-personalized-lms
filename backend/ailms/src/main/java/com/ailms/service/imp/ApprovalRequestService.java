@@ -7,7 +7,7 @@ import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.repository.*;
 import com.ailms.security.CustomUserDetails;
 import com.ailms.service.IApprovalRequestService;
-import com.ailms.service.IEmailService;
+import com.ailms.service.INotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
@@ -15,8 +15,11 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 @Service
@@ -33,7 +36,7 @@ public class ApprovalRequestService implements IApprovalRequestService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final UserRoleRepository userRoleRepository;
-    private final IEmailService emailService;
+    private final INotificationService notificationService;
 
     private Long getCurrentUserId() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -115,7 +118,7 @@ public class ApprovalRequestService implements IApprovalRequestService {
             throw new BusinessException("Approval request is not in PENDING status.");
         }
 
-        if (!currentUserId.equals(request.getApproverId())) {
+        if (!currentUserId.equals(request.getApproverId()) && !isHrOrAdmin(currentUserId)) {
             throw new BusinessException("You are not authorized to approve this request.");
         }
 
@@ -129,24 +132,9 @@ public class ApprovalRequestService implements IApprovalRequestService {
         request.setDecidedAt(LocalDateTime.now());
         approvalRequestRepository.save(request);
 
-        if (request.getLevel() < request.getTotalLevels()) {
-            int nextLevel = request.getLevel() + 1;
-            Long nextApproverId = resolveNextApprover(request.getTargetType(), nextLevel);
+        finalizeTargetStatus(request.getTargetType(), request.getTargetId(), true);
 
-            ApprovalRequestEntity nextRequest = ApprovalRequestEntity.builder()
-                    .targetType(request.getTargetType())
-                    .targetId(request.getTargetId())
-                    .level(nextLevel)
-                    .totalLevels(request.getTotalLevels())
-                    .approverId(nextApproverId)
-                    .status(ApprovalStatusEnum.PENDING)
-                    .build();
-
-            nextRequest.setCreatedBy(request.getCreatedBy());
-            approvalRequestRepository.save(nextRequest);
-        } else {
-            finalizeTargetStatus(request.getTargetType(), request.getTargetId(), true);
-        }
+        notifyCreator(request, true, comment);
 
         return request;
     }
@@ -168,7 +156,7 @@ public class ApprovalRequestService implements IApprovalRequestService {
             throw new BusinessException("Approval request is not in PENDING status.");
         }
 
-        if (!currentUserId.equals(request.getApproverId())) {
+        if (!currentUserId.equals(request.getApproverId()) && !isHrOrAdmin(currentUserId)) {
             throw new BusinessException("You are not authorized to reject this request.");
         }
 
@@ -179,18 +167,26 @@ public class ApprovalRequestService implements IApprovalRequestService {
 
         finalizeTargetStatus(request.getTargetType(), request.getTargetId(), false);
 
-        // Notify creator / target owner of rejection with reason
-        if (request.getCreatedBy() != null) {
-            userRepository.findById(request.getCreatedBy()).ifPresent(creator -> {
-                try {
-                    emailService.sendContractExpirationAlertEmail(creator.getEmail(), creator.getFullName(), "REJECTED_" + request.getTargetType() + ": " + comment, java.time.LocalDate.now());
-                } catch (Exception e) {
-                    log.error("Failed to send rejection email notification", e);
-                }
-            });
-        }
+        notifyCreator(request, false, comment);
 
         return request;
+    }
+
+    private void notifyCreator(ApprovalRequestEntity request, boolean approved, String comment) {
+        if (request.getCreatedBy() == null) return;
+        userRepository.findById(request.getCreatedBy()).ifPresent(creator ->
+                notificationService.createSystemNotification(
+                        creator,
+                        NotificationTypeEnum.GENERAL,
+                        approved ? "Yêu cầu đã được phê duyệt" : "Yêu cầu đã bị từ chối",
+                        approved
+                                ? "Yêu cầu " + request.getTargetType() + " #" + request.getTargetId()
+                                    + " đã được phê duyệt" + (comment == null || comment.isBlank() ? "." : ". Ghi chú: " + comment)
+                                : "Yêu cầu " + request.getTargetType() + " #" + request.getTargetId()
+                                    + " đã bị từ chối. Lý do: " + comment,
+                        request.getTargetId(),
+                        "/admin/approval-center"
+                ));
     }
 
     @Override
@@ -227,11 +223,68 @@ public class ApprovalRequestService implements IApprovalRequestService {
     @Override
     public List<ApprovalRequestEntity> getPendingRequestsForApprover(Long approverId) {
         return approvalRequestRepository.findAll().stream()
-                .filter(r -> approverId.equals(r.getApproverId()) && r.getStatus() == ApprovalStatusEnum.PENDING)
+                .filter(r -> r.getStatus() == ApprovalStatusEnum.PENDING)
+                .filter(r -> isHrOrAdmin(approverId) || approverId.equals(r.getApproverId()))
                 .toList();
     }
 
+    @Override
+    public List<ApprovalRequestEntity> getRequestedByUser(Long userId) {
+        return approvalRequestRepository.findAll().stream()
+                .filter(request -> userId.equals(request.getCreatedBy()))
+                .sorted(Comparator.comparing(
+                        ApprovalRequestEntity::getCreatedAt,
+                        Comparator.nullsLast(Comparator.reverseOrder())
+                ))
+                .toList();
+    }
+
+    @Override
+    public List<ApprovalRequestEntity> getAssignedToUser(Long userId) {
+        return approvalRequestRepository.findAll().stream()
+                .filter(request -> isHrOrAdmin(userId) || userId.equals(request.getApproverId()))
+                .sorted(Comparator.comparing(
+                        ApprovalRequestEntity::getCreatedAt,
+                        Comparator.nullsLast(Comparator.reverseOrder())
+                ))
+                .toList();
+    }
+
+    @Override
+    public List<ApprovalRequestEntity> getAllRequests() {
+        return approvalRequestRepository.findAll().stream()
+                .sorted(Comparator.comparing(ApprovalRequestEntity::getCreatedAt,
+                        Comparator.nullsLast(Comparator.reverseOrder())))
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public void deleteApprovedRequest(Long id) {
+        ApprovalRequestEntity request = approvalRequestRepository.findById(id)
+                .orElseThrow(() -> ResourceNotFoundException.of("ApprovalRequest", id));
+        if (request.getStatus() != ApprovalStatusEnum.CONFIRMED) {
+            throw new BusinessException("Chỉ được xóa yêu cầu đã phê duyệt.");
+        }
+        approvalRequestRepository.delete(request);
+    }
+
+    private boolean isHrOrAdmin(Long userId) {
+        return userRoleRepository.findByUserEntity_IdWithRole(userId).stream()
+                .map(item -> item.getRoleEntity().getCode())
+                .filter(Objects::nonNull)
+                .map(String::toUpperCase)
+                .anyMatch(code -> code.equals("HR") || code.equals("ROLE_HR")
+                        || code.equals("ADMIN") || code.equals("ROLE_ADMIN"));
+    }
+
     private Long resolveNextApprover(String targetType, int nextLevel) {
+        if (nextLevel == 2 && List.of(
+                "LEAVE_REQUEST", "HALF_DAY_LEAVE", "RESIGNATION",
+                "CLASS_TRANSFER_REQUEST", "TEACHER_CHANGE_REQUEST"
+        ).contains(targetType.toUpperCase())) {
+            return firstUserByRole("ADMIN", "ROLE_ADMIN");
+        }
         if ("SALARY".equalsIgnoreCase(targetType) && nextLevel == 2) {
             Optional<RoleEntity> payrollRole = roleRepository.findByCode("PAYROLL");
             if (payrollRole.isEmpty()) {
@@ -240,11 +293,22 @@ public class ApprovalRequestService implements IApprovalRequestService {
             if (payrollRole.isPresent()) {
                 List<UserRoleEntity> userRoles = userRoleRepository.findByRoleEntity_Id(payrollRole.get().getId());
                 if (!userRoles.isEmpty()) {
-                    return userRoles.get(0).getUserEntity().getId();
+                    return userRoles.getFirst().getUserEntity().getId();
                 }
             }
         }
         return 1L; 
+    }
+
+    private Long firstUserByRole(String... roleCodes) {
+        for (String roleCode : roleCodes) {
+            Optional<RoleEntity> role = roleRepository.findByCode(roleCode);
+            if (role.isPresent()) {
+                List<UserRoleEntity> assignments = userRoleRepository.findByRoleEntity_Id(role.get().getId());
+                if (!assignments.isEmpty()) return assignments.getFirst().getUserEntity().getId();
+            }
+        }
+        throw new BusinessException("Không tìm thấy người dùng phù hợp cho cấp phê duyệt tiếp theo.");
     }
 
     private void finalizeTargetStatus(String targetType, Long targetId, boolean approved) {

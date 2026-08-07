@@ -11,65 +11,101 @@ export interface UpdateProfileRequest {
   attributes?: string; // Contains extra academic & guardian info as JSON
 }
 
+export interface ProfileGuardianRequest {
+  id?: string;
+  fullName: string;
+  relationship: "FATHER" | "MOTHER" | "GUARDIAN" | "OTHER";
+  phone?: string;
+  email?: string;
+  address?: string;
+}
+
+export interface UpdateRoleProfileRequest {
+  educationLevel?: string;
+  schoolName?: string;
+  goal?: string;
+  description?: string;
+  isMinor?: boolean;
+  guardians?: ProfileGuardianRequest[];
+  departmentId?: string | number;
+  position?: string;
+  employmentTypeEnum?: "FULL_TIME" | "PART_TIME";
+  startDate?: string;
+  address?: string;
+}
+
+/** Trích xuất message lỗi từ response của axios hoặc BE */
+const extractErrorMessage = (e: unknown): string => {
+  if (e && typeof e === "object") {
+    const err = e as any;
+    // BE thường trả về { message: "..." } hoặc { error: "..." }
+    const beMsg =
+      err?.response?.data?.message ||
+      err?.response?.data?.error ||
+      err?.response?.data?.errors?.[0]?.message;
+    if (beMsg) return beMsg;
+    if (err?.message) return err.message;
+  }
+  return "Có lỗi xảy ra, vui lòng thử lại.";
+};
+
 export const userService = {
   getProfile: async (): Promise<UserEntity> => {
     try {
       const { data } = await httpClient.get<ApiResponse<UserEntity>>("/v1/users/profile");
+      // Cache lại để dùng lần sau khi offline tạm thời
+      localStorage.setItem("user_profile_cache", JSON.stringify(data.data));
       return data.data;
     } catch (e) {
-      // Fallback local storage for mock robustness
-      const local = localStorage.getItem("user_profile");
-      if (local) return JSON.parse(local);
-      
-      const defaultProfile: UserEntity = {
-        id: "1",
-        username: "huan_hoa_hong",
-        email: "huanrose@ailms.edu.vn",
-        fullName: "Bùi Xuân Huấn",
-        phone: "0999999999",
-        avatarUrl: null,
-        gender: 0,
-        dateOfBirth: "1994-08-12",
-        attributes: JSON.stringify({
-          guardianName: "Bùi Xuân Hải",
-          guardianPhone: "0988888888",
-          academicLevel: "Cao đẳng",
-          schoolName: "Trường đời",
-          gradeClass: "Lớp học đạo lý",
-          learningGoals: "Nâng cao nhận thức xã hội và phát triển tư duy dịch vụ"
-        }),
-        status: "ACTIVE",
-        lastLoginAt: new Date().toISOString(),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-      
-      localStorage.setItem("user_profile", JSON.stringify(defaultProfile));
-      return defaultProfile;
+      // Nếu là lỗi mạng tạm thời và có cache → trả cache
+      const cache = localStorage.getItem("user_profile_cache");
+      if (cache) {
+        try { return JSON.parse(cache); } catch { /* skip */ }
+      }
+      // Không có cache → rethrow để UI báo lỗi thật
+      throw new Error(extractErrorMessage(e));
     }
   },
 
   updateProfile: async (payload: UpdateProfileRequest): Promise<UserEntity> => {
-    try {
-      const { data } = await httpClient.put<ApiResponse<UserEntity>>("/v1/users/profile", payload);
-      // Synchronize with local storage
-      localStorage.setItem("user_profile", JSON.stringify(data.data));
-      return data.data;
-    } catch (e) {
-      // Fallback
-      const current = await userService.getProfile();
-      const updated = { 
-        ...current, 
-        fullName: payload.fullName !== undefined ? payload.fullName : current.fullName,
-        phone: payload.phone !== undefined ? payload.phone : current.phone,
-        gender: payload.gender !== undefined ? payload.gender : current.gender,
-        dateOfBirth: payload.dateOfBirth !== undefined ? payload.dateOfBirth : current.dateOfBirth,
-        avatarUrl: payload.avatarUrl !== undefined ? payload.avatarUrl : current.avatarUrl,
-        attributes: payload.attributes !== undefined ? payload.attributes : current.attributes,
-        updatedAt: new Date().toISOString()
-      };
-      localStorage.setItem("user_profile", JSON.stringify(updated));
-      return updated;
-    }
-  }
+    // Không catch — để lỗi nổi lên cho UI xử lý và hiển thị đúng thông báo
+    const { data } = await httpClient.put<ApiResponse<UserEntity>>("/v1/users/profile", payload);
+    // Cập nhật cache sau khi lưu thành công
+    localStorage.setItem("user_profile_cache", JSON.stringify(data.data));
+    return data.data;
+  },
+
+  updateBasicProfile: async (payload: UpdateProfileRequest): Promise<UserEntity> => {
+    const { data } = await httpClient.put<ApiResponse<UserEntity>>("/v1/users/profile/basic", payload);
+    localStorage.setItem("user_profile_cache", JSON.stringify(data.data));
+    return data.data;
+  },
+
+  updateRoleProfile: async (payload: UpdateRoleProfileRequest): Promise<UserEntity> => {
+    const { data } = await httpClient.put<ApiResponse<UserEntity>>("/v1/users/profile/role", payload);
+    localStorage.setItem("user_profile_cache", JSON.stringify(data.data));
+    return data.data;
+  },
+
+  updateEmployeeAddress: async (address: string): Promise<UserEntity> => {
+    const { data } = await httpClient.patch<ApiResponse<UserEntity>>("/v1/users/profile/employee/address", { address });
+    localStorage.setItem("user_profile_cache", JSON.stringify(data.data));
+    return data.data;
+  },
+
+  uploadAvatar: async (file: File): Promise<UserEntity> => {
+    const formData = new FormData();
+    formData.append("file", file);
+    const { data } = await httpClient.post<ApiResponse<UserEntity>>("/v1/users/profile/avatar", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    localStorage.setItem("user_profile_cache", JSON.stringify(data.data));
+    return data.data;
+  },
+
+  deleteAvatar: async (): Promise<UserEntity> => {
+    const { data } = await httpClient.delete<ApiResponse<UserEntity>>("/v1/users/profile/avatar");
+    localStorage.setItem("user_profile_cache", JSON.stringify(data.data));
+    return data.data;
+  },
 };

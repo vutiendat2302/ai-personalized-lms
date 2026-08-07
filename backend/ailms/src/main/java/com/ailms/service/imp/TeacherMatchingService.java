@@ -33,14 +33,20 @@ public class TeacherMatchingService implements ITeacherMatchingService {
 
     @Override
     public boolean checkScheduleCollision(Long teacherEmployeeId, List<CreateGroupClassRequest.ScheduleSlotRequest> requestedSlots) {
+        return findScheduleCollisionDetail(teacherEmployeeId, requestedSlots) != null;
+    }
+
+    @Override
+    public String findScheduleCollisionDetail(Long teacherEmployeeId, List<CreateGroupClassRequest.ScheduleSlotRequest> requestedSlots) {
         if (requestedSlots == null || requestedSlots.isEmpty()) {
-            return false;
+            return null;
         }
 
         // Get active teaching assignments for teacher
         List<ClassMemberEntity> activeTeacherMembers = classMemberRepository.findAll().stream()
                 .filter(cm -> cm.getUserEntity() != null && cm.getStatus() == ClassMemberStatusEnum.ACTIVE
-                        && (cm.getRoleInClass() == ClassMemberRole.TEACHER || cm.getRoleInClass() == ClassMemberRole.TA))
+                        && (cm.getRoleInClass() == ClassMemberRole.TEACHER || cm.getRoleInClass() == ClassMemberRole.TA)
+                        && (cm.getUserEntity().getId().equals(teacherEmployeeId)))
                 .toList();
 
         List<Long> activeClassIds = activeTeacherMembers.stream()
@@ -49,10 +55,11 @@ public class TeacherMatchingService implements ITeacherMatchingService {
                 .toList();
 
         if (activeClassIds.isEmpty()) {
-            return false;
+            return null;
         }
 
         List<ClassScheduleEntity> existingSchedules = classScheduleRepository.findByClassEntity_IdIn(activeClassIds);
+        String[] dayNames = new String[]{"", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "Chủ Nhật"};
 
         for (CreateGroupClassRequest.ScheduleSlotRequest slot : requestedSlots) {
             for (ClassScheduleEntity existing : existingSchedules) {
@@ -61,13 +68,17 @@ public class TeacherMatchingService implements ITeacherMatchingService {
                     if (slot.getStartTime().isBefore(existing.getEndTime()) && slot.getEndTime().isAfter(existing.getStartTime())) {
                         log.warn("Collision detected for employee {} on day {} between {}-{} and {}-{}",
                                 teacherEmployeeId, slot.getDayOfWeek(), slot.getStartTime(), slot.getEndTime(), existing.getStartTime(), existing.getEndTime());
-                        return true;
+                        int d = slot.getDayOfWeek() != null ? slot.getDayOfWeek() : 0;
+                        String dayName = (d >= 1 && d <= 7) ? dayNames[d] : ("Thứ " + d);
+                        String className = existing.getClassEntity() != null ? existing.getClassEntity().getName() : "lớp khác";
+                        return String.format("Giảng viên bị trùng lịch dạy vào %s (%s - %s) với lớp \"%s\" (%s - %s)",
+                                dayName, slot.getStartTime(), slot.getEndTime(), className, existing.getStartTime(), existing.getEndTime());
                     }
                 }
             }
         }
 
-        return false;
+        return null;
     }
 
     @Override

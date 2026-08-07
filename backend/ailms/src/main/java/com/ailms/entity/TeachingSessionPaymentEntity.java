@@ -13,7 +13,7 @@ import java.math.BigDecimal;
  */
 @Entity
 @Table(name = "teaching_session_payment", uniqueConstraints = {
-        @UniqueConstraint(name = "uk_class_online_id", columnNames = {"class_online_id"})
+        @UniqueConstraint(name = "uk_session_payment_employee", columnNames = {"class_online_id", "employee_id"})
 })
 @Getter
 @Setter

@@ -60,4 +60,13 @@ public interface IApprovalRequestService {
      * @return danh sách các đối tượng phù hợp
      */
     List<ApprovalRequestEntity> getPendingRequestsForApprover(Long approverId);
+
+    List<ApprovalRequestEntity> getRequestedByUser(Long userId);
+
+    List<ApprovalRequestEntity> getAssignedToUser(Long userId);
+
+    List<ApprovalRequestEntity> getAllRequests();
+
+    /** Xóa lịch sử của một yêu cầu đã phê duyệt; không xóa đối tượng nghiệp vụ gốc. */
+    void deleteApprovedRequest(Long id);
 }

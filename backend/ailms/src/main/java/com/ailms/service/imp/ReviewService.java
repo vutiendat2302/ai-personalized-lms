@@ -131,7 +131,7 @@ public class ReviewService implements IReviewService {
 
     @Override
     public List<ReviewResponse> getReviewsByCourseId(Long courseId) {
-        List<ReviewResponse> list = reviewMapper.toResponseList(reviewRepository.findByCourseIdAndStatusWithRelations(courseId, ReviewStatusEnum.APPROVED));
+        List<ReviewResponse> list = reviewMapper.toResponseList(reviewRepository.findByCourseIdAndStatusWithRelations(courseId, ReviewStatusEnum.ACTIVE));
         return populateExtraInfo(list);
     }
 
@@ -164,6 +164,14 @@ public class ReviewService implements IReviewService {
         return response;
     }
 
+    @Override
+    public Double getAverageRating() {
+        log.info("Calculating average rating of all active reviews");
+        Double avg = reviewRepository.getAverageRatingOfActiveReviews();
+        return avg != null ? Math.round(avg * 10.0) / 10.0 : 0.0;
+    }
+
+
     private void recalculateCourseRating(CourseEntity course) {
         Double avg = reviewRepository.getAverageRatingForCourse(course.getId());
         Long count = reviewRepository.getReviewCountForCourse(course.getId());
@@ -193,6 +201,9 @@ public class ReviewService implements IReviewService {
 
         List<StudentProfileEntity> profiles = studentProfileRepository.findAllById(userIds);
         Map<Long, String> userIdToSchoolName = profiles.stream()
+                // Collectors.toMap rejects null values. School is optional, so a
+                // profile without one must not make the whole review search fail.
+                .filter(profile -> profile.getSchoolName() != null)
                 .collect(Collectors.toMap(StudentProfileEntity::getUserId, StudentProfileEntity::getSchoolName));
 
         responses.forEach(r -> {

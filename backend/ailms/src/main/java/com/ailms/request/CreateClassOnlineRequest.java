@@ -1,6 +1,5 @@
 package com.ailms.request;
 
-import com.ailms.entity.enums.BaseStatusEnum;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 
@@ -23,8 +22,21 @@ public class CreateClassOnlineRequest {
 
     private String meetingUrl;
 
+    private String meetingProvider;
+
+    @com.fasterxml.jackson.annotation.JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime scheduledAt;
 
     private Integer durationMin;
+
+    private String recordUrl;
+
+    private String sessionSummary;
+
+    private String studentFeedback;
+
+    private String teacherNotes;
+
+    private String nextSessionNotes;
 
 }

@@ -4,8 +4,11 @@ import com.ailms.request.PermissionRequest;
 import com.ailms.request.PermissionSearchRequest;
 import com.ailms.response.PermissionResponse;
 import com.ailms.response.PageResponse;
+import com.ailms.response.RoleResponse;
+import com.ailms.response.PermissionMetadataResponse;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Service quản lý danh mục các quyền hạn (Permission) trong hệ thống.
@@ -57,4 +60,33 @@ public interface IPermissionService {
      * @param id ID của bản ghi cần xử lý
      */
     void deletePermission(Long id);
+
+    /** Lấy thống kê tổng quan về quyền. */
+    Map<String, Object> getPermissionOverviewStats();
+
+    /** Lấy danh sách vai trò theo quyền. */
+    List<RoleResponse> getRolesByPermissionId(Long permissionId);
+
+    /**
+     * Đếm số role theo quyền.
+     *
+     * @param permissionId ID của quyền hạn
+     * @return số lượng vai trò sở hữu quyền hạn này
+     */
+    long countRolesByPermissionId(Long permissionId);
+
+    /** Xóa role khỏi quyền hạn. */
+    void removeRoleFromPermission(Long permissionId, Long roleId);
+
+    /** Gán role cho quyền hạn. */
+    void assignRoleToPermission(Long permissionId, Long roleId);
+
+    /**
+     * Xóa hàng loạt Permission (Nếu permision chọn còn gán role thì không cho xóa)
+     */
+    void bulkDeletePermissions(List<Long> permissionIds);
+
+    /** Lấy danh sách metadata các entity và action đang có trong hệ thống. */
+    PermissionMetadataResponse getPermissionMetadata();
 }
+

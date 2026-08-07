@@ -68,8 +68,8 @@ public class CourseEntity extends BaseEntity {
     @Builder.Default
     private CourseLevelEnum level = CourseLevelEnum.BEGINNER;
 
-    /** Trạng thái khóa học (DRAFT, PENDING_APPROVAL, PUBLISHED, REJECTED, ARCHIVED). */
-    @Column(name = "status")
+    /** Trạng thái khóa học (DRAFT, PENDING, ACTIVE, REJECTED, INACTIVE, DELETED). */
+    @Column(name = "status", length = 50)
     @Enumerated(EnumType.STRING)
     @Builder.Default
     private CourseStatusEnum status = CourseStatusEnum.DRAFT;

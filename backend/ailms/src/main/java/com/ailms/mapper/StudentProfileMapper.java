@@ -12,6 +12,18 @@ import java.util.List;
 @Mapper(componentModel = "spring")
 public interface StudentProfileMapper {
 
+    @Mapping(target = "id", source = "userId")
+    @Mapping(target = "fullName", source = "userEntity.fullName")
+    @Mapping(target = "email", source = "userEntity.email")
+    @Mapping(target = "phone", source = "userEntity.phone")
+    @Mapping(target = "avatarUrl", source = "userEntity.avatarUrl")
+    @Mapping(target = "gender", source = "userEntity.gender")
+    @Mapping(target = "dateOfBirth", source = "userEntity.dateOfBirth")
+    @Mapping(target = "status", expression = "java(entity.getUserEntity() != null && entity.getUserEntity().getStatus() != null ? entity.getUserEntity().getStatus().name() : null)")
+    @Mapping(target = "lastActiveAt", ignore = true)
+    @Mapping(target = "enrolledCourseName", ignore = true)
+    @Mapping(target = "hasGuardian", ignore = true)
+    @Mapping(target = "goalTypes", ignore = true)
     StudentProfileResponse toResponse(StudentProfileEntity entity);
 
     List<StudentProfileResponse> toResponseList(List<StudentProfileEntity> list);
@@ -25,6 +37,8 @@ public interface StudentProfileMapper {
     @Mapping(target = "hasGoal", ignore = true)
     @Mapping(target = "isMinor", ignore = true)
     @Mapping(target = "studentCode", ignore = true)
+    @Mapping(target = "currentStreak", ignore = true)
+    @Mapping(target = "longestStreak", ignore = true)
     StudentProfileEntity toEntity(CreateStudentProfileRequest request);
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
@@ -38,5 +52,7 @@ public interface StudentProfileMapper {
     @Mapping(target = "isMinor", ignore = true)
     @Mapping(target = "studentCode", ignore = true)
     @Mapping(target = "hasGoal", ignore = true)
+    @Mapping(target = "currentStreak", ignore = true)
+    @Mapping(target = "longestStreak", ignore = true)
     void updateFromRequest(UpdateStudentProfileRequest request, @MappingTarget StudentProfileEntity entity);
 }

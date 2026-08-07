@@ -21,9 +21,11 @@ export interface RoleResponse {
   description: string;
   isSystem: boolean;
   createdAt: string;
-  createdBy: number | null;
-  updatedBy: number | null;
-  updatedAt: string | null;
+  createdBy: string;
+  updatedBy: string | null;
+  updatedAt: string;
+  permissionCount?: number;
+  userCount?: number;
 }
 
 export interface PermissionResponse {
@@ -34,9 +36,10 @@ export interface PermissionResponse {
   action: string;
   description: string;
   createdAt: string;
-  createdBy: number | null;
-  updatedBy: number | null;
+  createdBy: string;
+  updatedBy: string;
   updatedAt: string | null;
+  roleCount?: number;
 }
 
 export interface CourseResponse {
@@ -48,8 +51,11 @@ export interface CourseResponse {
   description: string;
   level: string;
   status: string; // ACTIVE, INACTIVE, etc.
+  enrollmentCount?: number;
   createdAt: string;
   updatedAt: string | null;
+  createdBy?: string | number;
+  teachers?: any[];
 }
 
 export interface CategoryResponse {
@@ -79,6 +85,7 @@ export interface CreateUserRequest {
   phone?: string;
   gender?: number;
   dateOfBirth?: string;
+  roleIds?: string[];
 }
 
 export interface UpdateUserRequest {
@@ -86,6 +93,7 @@ export interface UpdateUserRequest {
   phone?: string;
   gender?: number;
   dateOfBirth?: string;
+  status?: string;
 }
 
 export interface UpdateProfileRequest {
@@ -100,16 +108,16 @@ export interface InviteUserRequest {
 }
 
 export interface BulkDeleteRequest {
-  ids: string[];
+  userIds: string[];
 }
 
 export interface BulkAssignRoleRequest {
   userIds: string[];
-  roleName: string; // or code
+  roleId: string;
 }
 
 export interface AssignRolesRequest {
-  roleIds: (string | number)[];
+  roleIds: string[];
 }
 
 export interface RoleRequest {
@@ -119,6 +127,7 @@ export interface RoleRequest {
 
 export interface CloneRoleRequest {
   name: string;
+  description: string;
 }
 
 export interface AssignPermissionsRequest {
@@ -148,12 +157,150 @@ export interface UpdateCourseRequest {
   level: string;
 }
 
+export interface StudentProfileResponse {
+  userId: string;
+  studentCode: string;
+  educationLevel: string;
+  description: string;
+  goal: string;
+  schoolName: string;
+  isMinor: boolean;
+  hasGoal: boolean;
+  enrolledCoursesCount?: number;
+  avgGrade?: number;
+  learningProgress?: number;
+  certificatesCount?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EmployeeResponse {
+  userId: string;
+  employeeCode: string;
+  departmentId: string;
+  departmentName: string;
+  position: string;
+  employmentTypeEnum: string;
+  startDate: string;
+  endDate: string;
+  status: string;
+  coursesCount?: number;
+  categories?: string[];
+  revenue?: number;
+  rating?: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GuardianResponse {
+  id?: number;
+  fullName: string;
+  phone: string;
+  email: string;
+  relationship: string;
+  occupation?: string;
+  isPrimary?: boolean;
+}
+
+export interface UserDetailResponse {
+  userAccount: UserResponse;
+  studentProfile?: StudentProfileResponse | null;
+  guardians?: GuardianResponse[] | null;
+  employeeProfile?: EmployeeResponse | null;
+  createdBy?: string;
+  updatedBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MonthlyUserCountResponse {
+  month: number;
+  count: number;
+}
+
+export interface SendBulkEmailRequest {
+  emails: string[];
+  subject: string;
+  content: string;
+}
+
+export interface BulkCreateEmployeeRequest {
+  emails: string[];
+  departmentId?: string;
+  roleId?: string;
+}
+
+export interface BulkRemoveRoleRequest {
+  userIds: string[];
+  roleId: string;
+}
+
 export interface CreateCategoryRequest {
   name: string;
-  description: string;
+  code?: string;
+  description?: string;
 }
 
 export interface UpdateCategoryRequest {
-  name: string;
-  description: string;
+  name?: string;
+  code?: string;
+  description?: string;
+  status?: string;
+}
+
+export interface ClassOnlineResponse {
+  id: string;
+  classId: string;
+  className?: string;
+  classCode?: string;
+  teacherId: string;
+  teacherName?: string;
+  title: string;
+  meetingUrl: string;
+  meetingProvider?: string;
+  scheduledAt: string;
+  durationMin: number;
+  status: string; // ACTIVE, INACTIVE, UPCOMING, COMPLETED, CANCELLED
+  lifecycleStatus?: string;
+  sessionCode?: string;
+  teachingRatePerHour?: number;
+  actualDurationMin?: number;
+  remuneration?: number;
+  paymentStatus?: string;
+  recordUrl?: string;
+  sessionSummary?: string;
+  studentFeedback?: string;
+  teacherNotes?: string;
+  nextSessionNotes?: string;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+export interface CreateClassOnlinePayload {
+  classId: string;
+  teacherId: string;
+  title: string;
+  meetingUrl?: string;
+  meetingProvider?: string;
+  scheduledAt: string;
+  durationMin?: number;
+  recordUrl?: string;
+  sessionSummary?: string;
+  studentFeedback?: string;
+  teacherNotes?: string;
+  nextSessionNotes?: string;
+}
+
+export interface UpdateClassOnlinePayload {
+  title?: string;
+  meetingUrl?: string;
+  meetingProvider?: string;
+  scheduledAt?: string;
+  durationMin?: number;
+  status?: string;
+  recordUrl?: string;
+  sessionSummary?: string;
+  studentFeedback?: string;
+  teacherNotes?: string;
+  nextSessionNotes?: string;
 }

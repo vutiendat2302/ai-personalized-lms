@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import {
   hrApi,
   type EmployeeResponse,
@@ -9,8 +10,29 @@ import {
   type EmploymentType,
 } from "@/api/hr/hrApi";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from "@/components/ui/table";
+import { cn } from "@/lib/utils";
+import { attendanceAdminApi } from "@/api/attendance/attendanceApi";
+import { useToast } from "@/hooks/useToast";
+import { ContractManagement } from "./ContractManagement";
 import {
   Users,
   UserPlus,
@@ -18,14 +40,39 @@ import {
   Clock,
   DollarSign,
   Calendar,
-  AlertTriangle,
   Search,
   RefreshCw,
   X,
-  FileCheck,
+  ChevronLeft,
+  ChevronRight,
+  Trash,
+  Trash2,
 } from "lucide-react";
 
+const getPageNumbers = (currentPage: number, total: number) => {
+  const pages: (number | string)[] = [];
+  if (total <= 7) {
+    for (let i = 0; i < total; i++) pages.push(i);
+  } else {
+    pages.push(0);
+    if (currentPage > 2) {
+      pages.push("...");
+    }
+    const start = Math.max(1, currentPage - 1);
+    const end = Math.min(total - 2, currentPage + 1);
+    for (let i = start; i <= end; i++) {
+      pages.push(i);
+    }
+    if (currentPage < total - 3) {
+      pages.push("...");
+    }
+    pages.push(total - 1);
+  }
+  return pages;
+};
+
 export const HRManagement: React.FC = () => {
+  const { success, error } = useToast();
   const [activeTab, setActiveTab] = useState<
     "employees" | "contracts" | "attendance" | "payroll" | "leaves"
   >("employees");
@@ -37,10 +84,114 @@ export const HRManagement: React.FC = () => {
   const [salaries, setSalaries] = useState<SalaryResponse[]>([]);
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequestResponse[]>([]);
 
+  const [selectedContractIds, setSelectedContractIds] = useState<string[]>([]);
+  const [bulkTerminateReason, setBulkTerminateReason] = useState("");
+
   // Search & Modals
   const [searchTerm, setSearchTerm] = useState("");
   const [isCreateEmpOpen, setIsCreateEmpOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  // Trash & Delete states
+  const [trashEmployees, setTrashEmployees] = useState<EmployeeResponse[]>([]);
+  const [selectedTrashIds, setSelectedTrashIds] = useState<string[]>([]);
+  const showBanner = (text: string, isError = false) => {
+    if (isError) error(text);
+    else success(text);
+  };
+
+  const fetchTrashEmployees = async () => {
+    try {
+      const res = await hrApi.getTrashEmployees();
+      if (res.data.success && Array.isArray(res.data.data)) {
+        setTrashEmployees(res.data.data);
+      }
+    } catch (e) {
+      console.error("Lỗi lấy danh sách thùng rác:", e);
+    }
+  };
+
+  const [softDeleteConfirmId, setSoftDeleteConfirmId] = useState<string | null>(null);
+  const [hardDeleteConfirmId, setHardDeleteConfirmId] = useState<string | null>(null);
+  const [bulkHardDeleteConfirm, setBulkHardDeleteConfirm] = useState(false);
+
+  const handleSoftDeleteEmployee = (id: string) => {
+    setSoftDeleteConfirmId(id);
+  };
+
+  const confirmSoftDeleteAction = async () => {
+    if (!softDeleteConfirmId) return;
+    try {
+      const res = await hrApi.softDeleteEmployee(softDeleteConfirmId);
+      if (res.data.success) {
+        showBanner("Đã xóa mềm nhân viên thành công (chuyển vào Thùng rác)!");
+        fetchData();
+        fetchTrashEmployees();
+      }
+    } catch (err: any) {
+      showBanner(err.message || "Lỗi xóa mềm nhân viên", true);
+    } finally {
+      setSoftDeleteConfirmId(null);
+    }
+  };
+
+  const handleHardDeleteEmployee = (id: string) => {
+    setHardDeleteConfirmId(id);
+  };
+
+  const confirmHardDeleteAction = async () => {
+    if (!hardDeleteConfirmId) return;
+    try {
+      const res = await hrApi.hardDeleteEmployee(hardDeleteConfirmId);
+      if (res.data.success) {
+        showBanner("Đã xóa vĩnh viễn nhân viên thành công!");
+        fetchData();
+        fetchTrashEmployees();
+      }
+    } catch (err: any) {
+      showBanner(err.message || "Lỗi xóa vĩnh viễn nhân viên", true);
+    } finally {
+      setHardDeleteConfirmId(null);
+    }
+  };
+
+  const confirmBulkHardDeleteAction = async () => {
+    try {
+      const res = await hrApi.bulkHardDeleteEmployees(selectedTrashIds);
+      if (res.data.success) {
+        showBanner(`Đã xóa vĩnh viễn ${selectedTrashIds.length} nhân viên thành công!`);
+        fetchData();
+        fetchTrashEmployees();
+        setSelectedTrashIds([]);
+      }
+    } catch (err: any) {
+      showBanner(err.message || "Lỗi xóa vĩnh viễn hàng loạt", true);
+    } finally {
+      setBulkHardDeleteConfirm(false);
+    }
+  };
+
+  // Pagination states
+  const [empPage, setEmpPage] = useState(0);
+  const [empPageSize, setEmpPageSize] = useState(10);
+  const [empJumpPageInput, setEmpJumpPageInput] = useState<string>("1");
+
+  const [attPage, setAttPage] = useState(0);
+  const [attPageSize, setAttPageSize] = useState(10);
+  const [attJumpPageInput, setAttJumpPageInput] = useState<string>("1");
+
+  const [salPage, setSalPage] = useState(0);
+  const [salPageSize, setSalPageSize] = useState(10);
+  const [salJumpPageInput, setSalJumpPageInput] = useState<string>("1");
+
+  const [lvPage, setLvPage] = useState(0);
+  const [lvPageSize, setLvPageSize] = useState(10);
+  const [lvJumpPageInput, setLvJumpPageInput] = useState<string>("1");
+
+  useEffect(() => { setEmpJumpPageInput(String(empPage + 1)); }, [empPage]);
+  useEffect(() => { setAttJumpPageInput(String(attPage + 1)); }, [attPage]);
+  useEffect(() => { setSalJumpPageInput(String(salPage + 1)); }, [salPage]);
+  useEffect(() => { setLvJumpPageInput(String(lvPage + 1)); }, [lvPage]);
 
   // New Employee Form State
   const [fullName, setFullName] = useState("");
@@ -59,154 +210,16 @@ export const HRManagement: React.FC = () => {
     return `EP-${yy}${mm}-${rand}`;
   };
 
-  const MOCK_EMPLOYEES: EmployeeResponse[] = [
-    {
-      id: "emp-1",
-      userId: "usr-1",
-      userName: "datbritget",
-      userEmail: "dat.vt@ailms.edu.vn",
-      employeeCode: "EP-2607-A3F9C1",
-      fullName: "Vũ Tiến Đạt",
-      departmentName: "Phòng Công Nghệ & AI",
-      position: "Quản trị viên Hệ thống & Chuyên gia AI",
-      employmentType: "FULL_TIME",
-      status: "ACTIVE",
-      baseSalary: 25000000,
-      joinedAt: "2026-07-01",
-    },
-    {
-      id: "emp-2",
-      userId: "usr-4",
-      userName: "trietle",
-      userEmail: "triet.lm@outlook.com",
-      employeeCode: "EP-2607-F88B12",
-      fullName: "Lê Minh Triết",
-      departmentName: "Phòng Giảng Dạy & Đào Tạo",
-      position: "Giảng viên Lập trình Web Fullstack",
-      employmentType: "FULL_TIME",
-      status: "PROBATION",
-      baseSalary: 18000000,
-      joinedAt: "2026-06-01",
-      probationEndDate: "2026-07-31", // Alert expiring in < 7 days
-    },
-    {
-      id: "emp-3",
-      userId: "usr-5",
-      userName: "haivo",
-      userEmail: "hai.vo@ailms.edu.vn",
-      employeeCode: "EP-2607-C3D4E5",
-      fullName: "Võ Văn Hải",
-      departmentName: "Phòng Trợ Giảng & Hỗ Trợ",
-      position: "Trợ giảng Python AI",
-      employmentType: "PART_TIME",
-      status: "ACTIVE",
-      baseSalary: 8000000,
-      joinedAt: "2026-07-10",
-    },
-  ];
-
-  const MOCK_CONTRACTS: EmployeeContractResponse[] = [
-    {
-      id: "ct-1",
-      employeeId: "emp-1",
-      employeeCode: "EP-2607-A3F9C1",
-      contractType: "OFFICIAL",
-      fileUrl: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
-      signedAt: "2026-07-01",
-      validFrom: "2026-07-01",
-      status: "ACTIVE",
-      baseSalary: 25000000,
-    },
-    {
-      id: "ct-2",
-      employeeId: "emp-2",
-      employeeCode: "EP-2607-F88B12",
-      contractType: "PROBATION",
-      fileUrl: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
-      signedAt: "2026-06-01",
-      validFrom: "2026-06-01",
-      validTo: "2026-07-31",
-      status: "ACTIVE",
-      baseSalary: 18000000,
-    },
-  ];
-
-  const MOCK_ATTENDANCES: AttendanceResponse[] = [
-    {
-      id: "att-1",
-      employeeId: "emp-1",
-      employeeName: "Vũ Tiến Đạt",
-      workDate: "2026-07-24",
-      checkInTime: "07:58:00",
-      checkOutTime: "17:02:00",
-      status: "PRESENT",
-    },
-    {
-      id: "att-2",
-      employeeId: "emp-2",
-      employeeName: "Lê Minh Triết",
-      workDate: "2026-07-24",
-      checkInTime: "08:35:00", // Late check-in > 8:00
-      checkOutTime: "17:00:00",
-      status: "LATE",
-      penaltyAmount: 100000,
-    },
-  ];
-
-  const MOCK_SALARIES: SalaryResponse[] = [
-    {
-      id: "sal-1",
-      employeeId: "emp-1",
-      employeeName: "Vũ Tiến Đạt",
-      employeeCode: "EP-2607-A3F9C1",
-      employmentType: "FULL_TIME",
-      period: "2026-07",
-      grossSalary: 25000000,
-      insuranceDeduction: 2625000, // 10.5%
-      taxDeduction: 1850000,
-      penaltyDeduction: 0,
-      netSalary: 20525000,
-      status: "APPROVED",
-    },
-    {
-      id: "sal-2",
-      employeeId: "emp-2",
-      employeeName: "Lê Minh Triết",
-      employeeCode: "EP-2607-F88B12",
-      employmentType: "FULL_TIME",
-      period: "2026-07",
-      grossSalary: 18000000,
-      insuranceDeduction: 1890000,
-      taxDeduction: 1100000,
-      penaltyDeduction: 200000, // 2 late days
-      netSalary: 14810000,
-      status: "DRAFT",
-    },
-  ];
-
-  const MOCK_LEAVES: LeaveRequestResponse[] = [
-    {
-      id: "lv-1",
-      employeeId: "emp-2",
-      employeeName: "Lê Minh Triết",
-      startDate: "2026-07-28",
-      endDate: "2026-07-29",
-      reason: "Nghỉ phép cá nhân đi khám sức khỏe định kỳ",
-      status: "PENDING",
-      createdAt: "2026-07-24T08:00:00Z",
-    },
-  ];
-
   const fetchData = async () => {
     try {
       const empRes = await hrApi.getEmployees();
-      if (empRes.data.success && Array.isArray(empRes.data.data) && empRes.data.data.length > 0) {
+      if (empRes.data.success && Array.isArray(empRes.data.data)) {
         setEmployees(empRes.data.data);
       } else {
-        setEmployees(MOCK_EMPLOYEES);
+        setEmployees([]);
       }
     } catch (e) {
-      setEmployees(MOCK_EMPLOYEES);
+      setEmployees([]);
     }
 
     try {
@@ -214,15 +227,38 @@ export const HRManagement: React.FC = () => {
       if (ctRes.data.success && Array.isArray(ctRes.data.data)) {
         setContracts(ctRes.data.data);
       } else {
-        setContracts(MOCK_CONTRACTS);
+        setContracts([]);
       }
     } catch (e) {
-      setContracts(MOCK_CONTRACTS);
+      setContracts([]);
     }
 
-    setAttendances(MOCK_ATTENDANCES);
-    setSalaries(MOCK_SALARIES);
-    setLeaveRequests(MOCK_LEAVES);
+    try {
+      const page = await attendanceAdminApi.getAttendances({ page: 0, size: 200, sortBy: "workDate", sortDir: "DESC" });
+      setAttendances((page?.content || []).map((item) => ({
+        id: String(item.id),
+        employeeId: String(item.employeeId),
+        employeeName: item.employeeName || "Chưa có tên",
+        workDate: item.workDate,
+        checkInTime: item.checkInTime,
+        checkOutTime: item.checkOutTime,
+        status: (["PRESENT_LATE", "HALF_DAY_LATE"].includes(item.status) ? "LATE" :
+          ["CANCELLED", "INVALID"].includes(item.status) ? "ABSENT" : item.status) as AttendanceResponse["status"],
+      })));
+    } catch {
+      setAttendances([]);
+      error("Không tải được dữ liệu điểm danh.");
+    }
+
+    try {
+      const salaryRes = await hrApi.getSalaries();
+      setSalaries(Array.isArray(salaryRes.data.data) ? salaryRes.data.data : []);
+    } catch { setSalaries([]); }
+
+    try {
+      const leaveRes = await hrApi.getLeaveRequests();
+      setLeaveRequests(Array.isArray(leaveRes.data.data) ? leaveRes.data.data : []);
+    } catch { setLeaveRequests([]); }
   };
 
   useEffect(() => {
@@ -232,7 +268,7 @@ export const HRManagement: React.FC = () => {
   const handleCreateEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName.trim() || !email.trim()) {
-      alert("Vui lòng điền đầy đủ Họ tên và Email.");
+      showBanner("Vui lòng điền đầy đủ Họ tên và Email.", true);
       return;
     }
 
@@ -273,8 +309,8 @@ export const HRManagement: React.FC = () => {
       };
       setContracts((prev) => [newContract, ...prev]);
 
-      alert(
-        `Khởi tạo Nhân viên thành công!\nMã nhân viên tự động: ${generatedCode}\nHệ thống đã tự động gửi Email chào mừng kèm hợp đồng scan.`
+      showBanner(
+        `Khởi tạo Nhân viên thành công! Mã nhân viên: ${generatedCode}`
       );
       setIsCreateEmpOpen(false);
       setFullName("");
@@ -288,21 +324,21 @@ export const HRManagement: React.FC = () => {
     setLeaveRequests((prev) =>
       prev.map((l) => (l.id === id ? { ...l, status } : l))
     );
-    alert(`Đã cập nhật trạng thái đơn nghỉ phép thành ${status}`);
+    showBanner(`Đã cập nhật trạng thái đơn nghỉ phép thành ${status}`);
   };
 
   const handleApproveSalary = (id: string) => {
     setSalaries((prev) =>
       prev.map((s) => (s.id === id ? { ...s, status: "PAID", paidAt: new Date().toISOString() } : s))
     );
-    alert("Đã xác nhận thanh toán bảng lương thành công!");
+    showBanner("Đã xác nhận thanh toán bảng lương thành công!");
   };
 
   const filteredEmployees = employees.filter(
     (e) =>
-      e.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      e.employeeCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      e.userEmail.toLowerCase().includes(searchTerm.toLowerCase())
+      (e.fullName || "").toLowerCase().includes((searchTerm || "").toLowerCase()) ||
+      (e.employeeCode || "").toLowerCase().includes((searchTerm || "").toLowerCase()) ||
+      (e.userEmail || "").toLowerCase().includes((searchTerm || "").toLowerCase())
   );
 
   return (
@@ -322,6 +358,21 @@ export const HRManagement: React.FC = () => {
           <Button onClick={fetchData} variant="outline" size="sm" className="rounded-xl gap-1 text-xs font-bold">
             <RefreshCw className="h-3.5 w-3.5" /> Làm mới
           </Button>
+          <Link to="/admin/trash">
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-xl gap-1 text-xs font-bold border-destructive/40 text-destructive hover:bg-destructive/10 relative"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span>Thùng rác hệ thống</span>
+              {trashEmployees.length > 0 && (
+                <span className="ml-1 bg-destructive text-destructive-foreground px-1.5 py-0.2 text-[10px] font-black rounded-full">
+                  {trashEmployees.length}
+                </span>
+              )}
+            </Button>
+          </Link>
           <Button onClick={() => setIsCreateEmpOpen(true)} size="sm" className="rounded-xl gap-1 text-xs font-bold bg-primary">
             <UserPlus className="h-3.5 w-3.5" /> Thêm Nhân Viên Mới
           </Button>
@@ -387,336 +438,659 @@ export const HRManagement: React.FC = () => {
       </div>
 
       {/* TAB 1: EMPLOYEES */}
-      {activeTab === "employees" && (
-        <div className="space-y-4">
-          <div className="relative max-w-md">
-            <Search className="absolute left-3.5 top-3 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="text"
-              placeholder="Tìm theo Mã nhân viên (EP-...), Tên hoặc Email..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 rounded-xl text-xs"
-            />
-          </div>
-
-          <Card className="border border-border/80 rounded-2xl overflow-hidden bg-card shadow-sm">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-muted/40 text-muted-foreground uppercase text-[10px] font-extrabold border-b border-border">
-                  <tr>
-                    <th className="p-4">Mã Nhân Viên</th>
-                    <th className="p-4">Họ & Tên</th>
-                    <th className="p-4">Phòng Ban & Vị Trí</th>
-                    <th className="p-4">Hình Thức</th>
-                    <th className="p-4">Lương Cơ Bản</th>
-                    <th className="p-4">Trạng Thái</th>
-                    <th className="p-4">Ngày Vào</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/60">
-                  {filteredEmployees.map((emp) => (
-                    <tr key={emp.id} className="hover:bg-muted/20 transition-colors">
-                      <td className="p-4 font-mono font-extrabold text-primary">
-                        <span className="px-2.5 py-1 rounded-lg bg-primary/10 border border-primary/20">
-                          {emp.employeeCode}
-                        </span>
-                      </td>
-                      <td className="p-4">
-                        <div className="font-bold text-foreground">{emp.fullName}</div>
-                        <div className="text-[10px] text-muted-foreground">{emp.userEmail}</div>
-                      </td>
-                      <td className="p-4">
-                        <div className="font-semibold text-foreground">{emp.position}</div>
-                        <div className="text-[10px] text-muted-foreground">{emp.departmentName || "Ban điều hành"}</div>
-                      </td>
-                      <td className="p-4">
-                        <span
-                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${
-                            emp.employmentType === "FULL_TIME"
-                              ? "bg-indigo-500/10 text-indigo-600 border border-indigo-500/20"
-                              : "bg-amber-500/10 text-amber-600 border border-amber-500/20"
-                          }`}
-                        >
-                          {emp.employmentType === "FULL_TIME" ? "Chính thức (Full-time)" : "Bán thời gian (Part-time)"}
-                        </span>
-                      </td>
-                      <td className="p-4 font-extrabold text-foreground">
-                        {emp.baseSalary ? `${emp.baseSalary.toLocaleString()} đ` : "-"}
-                      </td>
-                      <td className="p-4">
-                        {emp.status === "ACTIVE" ? (
-                          <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 text-[10px] font-bold">
-                            Đang hoạt động
-                          </span>
-                        ) : (
-                          <span className="px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 text-[10px] font-bold">
-                            Thử việc (Probation)
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-4 text-muted-foreground">{emp.joinedAt}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-        </div>
-      )}
-
-      {/* TAB 2: CONTRACTS & PROBATION */}
-      {activeTab === "contracts" && (
-        <div className="space-y-4">
-          <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-between text-xs text-amber-700 dark:text-amber-300">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0" />
-              <div>
-                <strong className="font-extrabold block">Cảnh báo đánh giá hết hạn thử việc (Probation Review):</strong>
-                <span>Cần đánh giá ký hợp đồng OFFICIAL hoặc kết thúc thử việc trước 1 tuần đối với các hợp đồng sắp hết hạn.</span>
+      {activeTab === "employees" && (() => {
+        const totalElements = filteredEmployees.length;
+        const totalPages = Math.ceil(totalElements / empPageSize);
+        const paginated = filteredEmployees.slice(empPage * empPageSize, (empPage + 1) * empPageSize);
+        return (
+          <div className="space-y-4">
+            <Card className="border border-border/80 rounded-2xl overflow-hidden bg-card shadow-sm">
+              <div className="p-4 bg-muted/20 border-b border-border/30 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-12 gap-3 items-end">
+                <div className="flex flex-col gap-1 lg:col-span-12">
+                  <Label className="text-[11px] font-bold text-muted-foreground">Từ khóa tìm kiếm</Label>
+                  <div className="relative w-full">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+                    <Input
+                      type="text"
+                      placeholder="Tìm theo Mã nhân viên (EP-...), Tên hoặc Email..."
+                      value={searchTerm}
+                      onChange={(e) => { setSearchTerm(e.target.value); setEmpPage(0); }}
+                      className="pl-8 h-9 text-xs border border-border bg-background rounded-lg focus-visible:ring-2 focus-visible:ring-primary/20"
+                    />
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
 
-          <Card className="border border-border/80 rounded-2xl overflow-hidden bg-card shadow-sm">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-muted/40 text-muted-foreground uppercase text-[10px] font-extrabold border-b border-border">
-                  <tr>
-                    <th className="p-4">Mã Nhân Viên</th>
-                    <th className="p-4">Loại Hợp Đồng</th>
-                    <th className="p-4">Lương Ký Hợp Đồng</th>
-                    <th className="p-4">Ngày Ký</th>
-                    <th className="p-4">Thời Hạn Thử Việc / Hết Hạn</th>
-                    <th className="p-4">Trạng Thái Hợp Đồng</th>
-                    <th className="p-4 text-right">File Hợp Đồng (MinIO)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/60">
-                  {contracts.map((ct) => (
-                    <tr key={ct.id} className="hover:bg-muted/20 transition-colors">
-                      <td className="p-4 font-mono font-extrabold text-foreground">{ct.employeeCode}</td>
-                      <td className="p-4 font-bold">
-                        {ct.contractType === "PROBATION" ? "Hợp đồng thử việc" : "Hợp đồng chính thức"}
-                      </td>
-                      <td className="p-4 font-extrabold text-primary">{ct.baseSalary.toLocaleString()} đ</td>
-                      <td className="p-4 text-muted-foreground">{ct.signedAt}</td>
-                      <td className="p-4 text-muted-foreground">{ct.validTo || "Không thời hạn"}</td>
-                      <td className="p-4">
-                        <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 text-[10px] font-bold">
-                          {ct.status}
-                        </span>
-                      </td>
-                      <td className="p-4 text-right">
-                        <a
-                          href={ct.fileUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline"
-                        >
-                          <FileCheck className="h-4 w-4" />
-                          <span>Tải PDF MinIO</span>
-                        </a>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-        </div>
-      )}
+              <CardContent className="p-0 relative">
+                <Table containerClassName="max-h-[calc(100vh-320px)] min-h-[350px] overflow-auto border-b border-border/20" className="-mt-3 pb-4">
+                  <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur-md shadow-2xs border-b border-border/40">
+                    <TableRow className="border-b border-border/30 bg-muted/20 hover:bg-muted/20">
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pl-4">Mã Nhân Viên</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Họ & Tên</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Phòng Ban & Vị Trí</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Hình Thức</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Lương Cơ Bản</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Trạng Thái</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Ngày Vào</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider text-right pr-4">Hành Động</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody className="opacity-90">
+                    {paginated.length > 0 ? (
+                      paginated.map((emp) => (
+                        <TableRow key={emp.id} className="hover:bg-foreground/10 transition-colors border-border/30">
+                          <TableCell className="font-mono font-bold text-xs text-primary pl-4">
+                            <span className="px-2.5 py-0.5 rounded-lg bg-primary/10 border border-primary/20">
+                              {emp.employeeCode}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <div className="font-semibold text-xs text-foreground">{emp.fullName}</div>
+                            <div className="text-[10px] text-muted-foreground">{emp.userEmail}</div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="font-semibold text-xs text-foreground">{emp.position}</div>
+                            <div className="text-[10px] text-muted-foreground">{emp.departmentName || "Ban điều hành"}</div>
+                          </TableCell>
+                          <TableCell>
+                            <span
+                              className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+                                emp.employmentType === "FULL_TIME"
+                                  ? "bg-indigo-500/10 text-indigo-600 border border-indigo-500/20"
+                                  : "bg-amber-500/10 text-amber-600 border border-amber-500/20"
+                              }`}
+                            >
+                              {emp.employmentType === "FULL_TIME" ? "Chính thức (Full-time)" : "Bán thời gian (Part-time)"}
+                            </span>
+                          </TableCell>
+                          <TableCell className="font-extrabold text-xs text-foreground">
+                            {emp.baseSalary ? `${emp.baseSalary.toLocaleString()} đ` : "-"}
+                          </TableCell>
+                          <TableCell>
+                            {emp.status === "ACTIVE" ? (
+                              <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 text-[10px] font-bold border border-emerald-500/20">
+                                Đang hoạt động
+                              </span>
+                            ) : (
+                              <span className="px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 text-[10px] font-bold border border-amber-500/20">
+                                Thử việc (Probation)
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-xs font-medium">{emp.joinedAt}</TableCell>
+                          <TableCell className="text-right pr-4">
+                            <div className="flex items-center justify-end gap-1">
+                              {/* Soft Delete */}
+                              <Button
+                                onClick={() => handleSoftDeleteEmployee(emp.id)}
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-amber-600 hover:bg-amber-500/10 hover:text-amber-700"
+                                title="Xóa mềm (Chuyển sang DELETED vào Thùng rác)"
+                              >
+                                <Trash className="h-3.5 w-3.5" />
+                              </Button>
+                              {/* Hard Delete */}
+                              <Button
+                                onClick={() => handleHardDeleteEmployee(emp.id)}
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                title="Xóa cứng (Xóa vĩnh viễn khỏi CSDL)"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={8} className="py-12 text-center text-muted-foreground text-sm">
+                          Không tìm thấy nhân viên nào.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+
+              {/* Modern Table Footer */}
+              <div className="px-5 py-3 border-t border-border/40 bg-card/40 flex flex-col md:flex-row items-center justify-between gap-4 text-xs">
+                <div className="text-muted-foreground font-medium">
+                  Showing <span className="font-semibold text-foreground">{totalElements === 0 ? 0 : empPage * empPageSize + 1}</span> to{" "}
+                  <span className="font-semibold text-foreground">{Math.min((empPage + 1) * empPageSize, totalElements)}</span> of{" "}
+                  <span className="font-semibold text-foreground">{totalElements}</span> results
+                </div>
+
+                <div className="flex flex-wrap items-center gap-5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground font-medium">Rows per page:</span>
+                    <Select value={String(empPageSize)} onValueChange={(val) => { setEmpPageSize(Number(val)); setEmpPage(0); }}>
+                      <SelectTrigger className="h-8 w-16 text-xs bg-background border border-border/40 rounded-lg font-semibold">
+                        <SelectValue placeholder={String(empPageSize)} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="10">10</SelectItem>
+                        <SelectItem value="20">20</SelectItem>
+                        <SelectItem value="50">50</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const pageNum = parseInt(empJumpPageInput, 10);
+                      if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
+                        setEmpPage(pageNum - 1);
+                      } else {
+                        setEmpJumpPageInput(String(empPage + 1));
+                      }
+                    }}
+                    className="flex items-center gap-1.5"
+                  >
+                    <span className="text-muted-foreground font-medium">Go to:</span>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={totalPages || 1}
+                      value={empJumpPageInput}
+                      onChange={(e) => setEmpJumpPageInput(e.target.value)}
+                      onBlur={() => {
+                        const pageNum = parseInt(empJumpPageInput, 10);
+                        if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
+                          setEmpPage(pageNum - 1);
+                        } else {
+                          setEmpJumpPageInput(String(empPage + 1));
+                        }
+                      }}
+                      className="h-8 w-14 text-center text-xs font-semibold bg-background border border-border/40 rounded-lg px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    />
+                  </form>
+
+                  <div className="flex items-center gap-1">
+                    <Button disabled={empPage === 0} onClick={() => setEmpPage((prev) => prev - 1)} variant="outline" size="sm" className="h-8 px-2.5 text-xs font-semibold gap-1 border-border/40 rounded-lg hover:bg-muted">
+                      <ChevronLeft className="h-3.5 w-3.5" /> Previous
+                    </Button>
+                    {getPageNumbers(empPage, totalPages).map((p, pIdx) => {
+                      if (p === "...") return <span key={`dots-${pIdx}`} className="px-2 text-muted-foreground font-bold pointer-events-none">...</span>;
+                      const pageNum = p as number;
+                      const isCurrent = pageNum === empPage;
+                      return (
+                        <Button key={pageNum} onClick={() => setEmpPage(pageNum)} variant={isCurrent ? "default" : "outline"} size="sm" className={cn("h-8 min-w-8 px-2 text-xs font-semibold rounded-lg transition-all", isCurrent ? "bg-primary text-primary-foreground shadow-xs" : "border-border/40 text-foreground hover:bg-muted/70")}>
+                          {pageNum + 1}
+                        </Button>
+                      );
+                    })}
+                    <Button disabled={empPage >= totalPages - 1 || totalPages === 0} onClick={() => setEmpPage((prev) => prev + 1)} variant="outline" size="sm" className="h-8 px-2.5 text-xs font-semibold gap-1 border-border/40 rounded-lg hover:bg-muted">
+                      Next <ChevronRight className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          </div>
+        );
+      })()}
+
+      {/* TAB 2: CONTRACT MANAGEMENT (TRANG QUẢN LÝ HỢP ĐỒNG TỔNG THỂ) */}
+      {activeTab === "contracts" && <ContractManagement />}
 
       {/* TAB 3: ATTENDANCE */}
-      {activeTab === "attendance" && (
-        <div className="space-y-4">
-          <div className="flex justify-between items-center bg-muted/20 p-4 rounded-2xl border border-border text-xs">
-            <div>
-              <h3 className="font-bold text-foreground">Chấm công nhân viên Full-time hôm nay (8:00 - 17:00)</h3>
-              <p className="text-muted-foreground text-[11px]">Hệ thống tự động tính status: PRESENT, LATE (phạt 100k), HALF_DAY, ABSENT.</p>
+      {activeTab === "attendance" && (() => {
+        const totalElements = attendances.length;
+        const totalPages = Math.ceil(totalElements / attPageSize);
+        const paginated = attendances.slice(attPage * attPageSize, (attPage + 1) * attPageSize);
+        return (
+          <div className="space-y-4">
+            <div className="flex justify-between items-center bg-muted/20 p-4 rounded-2xl border border-border text-xs">
+              <div>
+                <h3 className="font-bold text-foreground">Chấm công nhân viên Full-time hôm nay (8:00 - 17:00)</h3>
+                <p className="text-muted-foreground text-[11px]">Hệ thống tự động tính status: PRESENT, LATE (phạt 100k), HALF_DAY, ABSENT.</p>
+              </div>
+              <Button size="sm" className="rounded-xl font-bold bg-primary text-xs">
+                <Clock className="h-3.5 w-3.5 mr-1" /> Giả lập Check-in
+              </Button>
             </div>
-            <Button size="sm" className="rounded-xl font-bold bg-primary text-xs">
-              <Clock className="h-3.5 w-3.5 mr-1" /> Giả lập Check-in
-            </Button>
-          </div>
 
-          <Card className="border border-border/80 rounded-2xl overflow-hidden bg-card shadow-sm">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-muted/40 text-muted-foreground uppercase text-[10px] font-extrabold border-b border-border">
-                  <tr>
-                    <th className="p-4">Nhân Viên</th>
-                    <th className="p-4">Ngày Làm Việc</th>
-                    <th className="p-4">Giờ Check-in</th>
-                    <th className="p-4">Giờ Check-out</th>
-                    <th className="p-4">Trạng Thái Công</th>
-                    <th className="p-4">Khấu Trừ Phạt</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/60">
-                  {attendances.map((att) => (
-                    <tr key={att.id} className="hover:bg-muted/20 transition-colors">
-                      <td className="p-4 font-bold text-foreground">{att.employeeName}</td>
-                      <td className="p-4 text-muted-foreground">{att.workDate}</td>
-                      <td className="p-4 font-mono">{att.checkInTime || "-"}</td>
-                      <td className="p-4 font-mono">{att.checkOutTime || "-"}</td>
-                      <td className="p-4">
-                        {att.status === "PRESENT" && (
-                          <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 font-bold text-[10px]">
-                            Đúng giờ (PRESENT)
-                          </span>
-                        )}
-                        {att.status === "LATE" && (
-                          <span className="px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-600 font-bold text-[10px]">
-                            Đi trễ (LATE)
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-4 font-bold text-rose-600">
-                        {att.penaltyAmount ? `-${att.penaltyAmount.toLocaleString()} đ` : "0 đ"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-        </div>
-      )}
+            <Card className="border border-border/80 rounded-2xl overflow-hidden bg-card shadow-sm">
+              <CardContent className="p-0 relative">
+                <Table containerClassName="max-h-[calc(100vh-320px)] min-h-[350px] overflow-auto border-b border-border/20" className="-mt-3 pb-4">
+                  <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur-md shadow-2xs border-b border-border/40">
+                    <TableRow className="border-b border-border/30 bg-muted/20 hover:bg-muted/20">
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pl-4">Nhân Viên</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Ngày Làm Việc</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Giờ Check-in</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Giờ Check-out</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Trạng Thái Công</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pr-4">Khấu Trừ Phạt</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody className="opacity-90">
+                    {paginated.length > 0 ? (
+                      paginated.map((att) => (
+                        <TableRow key={att.id} className="hover:bg-foreground/10 transition-colors border-border/30">
+                          <TableCell className="font-semibold text-xs text-foreground pl-4">{att.employeeName}</TableCell>
+                          <TableCell className="text-muted-foreground text-xs font-medium">{att.workDate}</TableCell>
+                          <TableCell className="font-mono text-xs text-foreground">{att.checkInTime || "-"}</TableCell>
+                          <TableCell className="font-mono text-xs text-foreground">{att.checkOutTime || "-"}</TableCell>
+                          <TableCell>
+                            {att.status === "PRESENT" && (
+                              <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 font-bold text-[10px] border border-emerald-500/20">
+                                Đúng giờ (PRESENT)
+                              </span>
+                            )}
+                            {att.status === "LATE" && (
+                              <span className="px-2.5 py-0.5 rounded-full bg-rose-500/10 text-rose-600 font-bold text-[10px] border border-rose-500/20">
+                                Đi trễ (LATE)
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell className="font-extrabold text-xs text-rose-600 pr-4">
+                            {att.penaltyAmount ? `-${att.penaltyAmount.toLocaleString()} đ` : "0 đ"}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={6} className="py-12 text-center text-muted-foreground text-sm">
+                          Không có dữ liệu chấm công.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+
+              {/* Modern Table Footer */}
+              <div className="px-5 py-3 border-t border-border/40 bg-card/40 flex flex-col md:flex-row items-center justify-between gap-4 text-xs">
+                <div className="text-muted-foreground font-medium">
+                  Showing <span className="font-semibold text-foreground">{totalElements === 0 ? 0 : attPage * attPageSize + 1}</span> to{" "}
+                  <span className="font-semibold text-foreground">{Math.min((attPage + 1) * attPageSize, totalElements)}</span> of{" "}
+                  <span className="font-semibold text-foreground">{totalElements}</span> results
+                </div>
+
+                <div className="flex flex-wrap items-center gap-5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground font-medium">Rows per page:</span>
+                    <Select value={String(attPageSize)} onValueChange={(val) => { setAttPageSize(Number(val)); setAttPage(0); }}>
+                      <SelectTrigger className="h-8 w-16 text-xs bg-background border border-border/40 rounded-lg font-semibold">
+                        <SelectValue placeholder={String(attPageSize)} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="10">10</SelectItem>
+                        <SelectItem value="20">20</SelectItem>
+                        <SelectItem value="50">50</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const pageNum = parseInt(attJumpPageInput, 10);
+                      if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
+                        setAttPage(pageNum - 1);
+                      } else {
+                        setAttJumpPageInput(String(attPage + 1));
+                      }
+                    }}
+                    className="flex items-center gap-1.5"
+                  >
+                    <span className="text-muted-foreground font-medium">Go to:</span>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={totalPages || 1}
+                      value={attJumpPageInput}
+                      onChange={(e) => setAttJumpPageInput(e.target.value)}
+                      onBlur={() => {
+                        const pageNum = parseInt(attJumpPageInput, 10);
+                        if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
+                          setAttPage(pageNum - 1);
+                        } else {
+                          setAttJumpPageInput(String(attPage + 1));
+                        }
+                      }}
+                      className="h-8 w-14 text-center text-xs font-semibold bg-background border border-border/40 rounded-lg px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    />
+                  </form>
+
+                  <div className="flex items-center gap-1">
+                    <Button disabled={attPage === 0} onClick={() => setAttPage((prev) => prev - 1)} variant="outline" size="sm" className="h-8 px-2.5 text-xs font-semibold gap-1 border-border/40 rounded-lg hover:bg-muted">
+                      <ChevronLeft className="h-3.5 w-3.5" /> Previous
+                    </Button>
+                    {getPageNumbers(attPage, totalPages).map((p, pIdx) => {
+                      if (p === "...") return <span key={`dots-${pIdx}`} className="px-2 text-muted-foreground font-bold pointer-events-none">...</span>;
+                      const pageNum = p as number;
+                      const isCurrent = pageNum === attPage;
+                      return (
+                        <Button key={pageNum} onClick={() => setAttPage(pageNum)} variant={isCurrent ? "default" : "outline"} size="sm" className={cn("h-8 min-w-8 px-2 text-xs font-semibold rounded-lg transition-all", isCurrent ? "bg-primary text-primary-foreground shadow-xs" : "border-border/40 text-foreground hover:bg-muted/70")}>
+                          {pageNum + 1}
+                        </Button>
+                      );
+                    })}
+                    <Button disabled={attPage >= totalPages - 1 || totalPages === 0} onClick={() => setAttPage((prev) => prev + 1)} variant="outline" size="sm" className="h-8 px-2.5 text-xs font-semibold gap-1 border-border/40 rounded-lg hover:bg-muted">
+                      Next <ChevronRight className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          </div>
+        );
+      })()}
 
       {/* TAB 4: PAYROLL */}
-      {activeTab === "payroll" && (
-        <div className="space-y-4">
-          <div className="flex justify-between items-center bg-muted/20 p-4 rounded-2xl border border-border text-xs">
-            <div>
-              <h3 className="font-bold text-foreground">Bảng lương kỳ tháng 07/2026</h3>
-              <p className="text-muted-foreground text-[11px]">Công thức: Thực lĩnh = Gross - BHXH/BHYT (10.5%) - Thuế TNCN - Khấu trừ phạt đi trễ.</p>
+      {activeTab === "payroll" && (() => {
+        const totalElements = salaries.length;
+        const totalPages = Math.ceil(totalElements / salPageSize);
+        const paginated = salaries.slice(salPage * salPageSize, (salPage + 1) * salPageSize);
+        return (
+          <div className="space-y-4">
+            <div className="flex justify-between items-center bg-muted/20 p-4 rounded-2xl border border-border text-xs">
+              <div>
+                <h3 className="font-bold text-foreground">Bảng lương kỳ tháng 07/2026</h3>
+                <p className="text-muted-foreground text-[11px]">Công thức: Thực lĩnh = Gross - BHXH/BHYT (10.5%) - Thuế TNCN - Khấu trừ phạt đi trễ.</p>
+              </div>
+              <Button size="sm" className="rounded-xl font-bold bg-emerald-600 text-white text-xs">
+                <DollarSign className="h-3.5 w-3.5 mr-1" /> Chạy Job Tổng Hợp Lương Kỳ Này
+              </Button>
             </div>
-            <Button size="sm" className="rounded-xl font-bold bg-emerald-600 text-white text-xs">
-              <DollarSign className="h-3.5 w-3.5 mr-1" /> Chạy Job Tổng Hợp Lương Kỳ Này
-            </Button>
-          </div>
 
-          <Card className="border border-border/80 rounded-2xl overflow-hidden bg-card shadow-sm">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-muted/40 text-muted-foreground uppercase text-[10px] font-extrabold border-b border-border">
-                  <tr>
-                    <th className="p-4">Mã NV</th>
-                    <th className="p-4">Nhân Viên</th>
-                    <th className="p-4">Lương Gross</th>
-                    <th className="p-4">Trừ Bảo Hiểm (10.5%)</th>
-                    <th className="p-4">Trừ Thuế TNCN</th>
-                    <th className="p-4">Trừ Phạt Đi Trễ</th>
-                    <th className="p-4">Lương Thực Lĩnh</th>
-                    <th className="p-4 text-right">Trạng Thái & Chi Trả</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/60">
-                  {salaries.map((sal) => (
-                    <tr key={sal.id} className="hover:bg-muted/20 transition-colors">
-                      <td className="p-4 font-mono font-bold text-foreground">{sal.employeeCode}</td>
-                      <td className="p-4 font-bold text-foreground">{sal.employeeName}</td>
-                      <td className="p-4 font-bold">{sal.grossSalary.toLocaleString()} đ</td>
-                      <td className="p-4 text-muted-foreground">-{sal.insuranceDeduction.toLocaleString()} đ</td>
-                      <td className="p-4 text-muted-foreground">-{sal.taxDeduction.toLocaleString()} đ</td>
-                      <td className="p-4 text-rose-600">-{sal.penaltyDeduction.toLocaleString()} đ</td>
-                      <td className="p-4 font-extrabold text-emerald-600 text-sm">
-                        {sal.netSalary.toLocaleString()} đ
-                      </td>
-                      <td className="p-4 text-right">
-                        {sal.status === "PAID" ? (
-                          <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 text-[10px] font-bold">
-                            Đã chuyển khoản (PAID)
-                          </span>
-                        ) : (
-                          <Button
-                            size="sm"
-                            onClick={() => handleApproveSalary(sal.id)}
-                            className="rounded-xl text-xs font-bold bg-primary"
-                          >
-                            Duyệt & Chi trả
-                          </Button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-        </div>
-      )}
+            <Card className="border border-border/80 rounded-2xl overflow-hidden bg-card shadow-sm">
+              <CardContent className="p-0 relative">
+                <Table containerClassName="max-h-[calc(100vh-320px)] min-h-[350px] overflow-auto border-b border-border/20" className="-mt-3 pb-4">
+                  <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur-md shadow-2xs border-b border-border/40">
+                    <TableRow className="border-b border-border/30 bg-muted/20 hover:bg-muted/20">
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pl-4">Mã NV</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Nhân Viên</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Lương Gross</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Trừ Bảo Hiểm (10.5%)</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Trừ Thuế TNCN</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Trừ Phạt Đi Trễ</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Lương Thực Lĩnh</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider text-right pr-4">Trạng Thái & Chi Trả</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody className="opacity-90">
+                    {paginated.length > 0 ? (
+                      paginated.map((sal) => (
+                        <TableRow key={sal.id} className="hover:bg-foreground/10 transition-colors border-border/30">
+                          <TableCell className="font-mono font-bold text-xs text-foreground pl-4">{sal.employeeCode}</TableCell>
+                          <TableCell className="font-semibold text-xs text-foreground">{sal.employeeName}</TableCell>
+                          <TableCell className="font-semibold text-xs text-foreground">{sal.grossSalary.toLocaleString()} đ</TableCell>
+                          <TableCell className="text-muted-foreground text-xs font-medium">-{sal.insuranceDeduction.toLocaleString()} đ</TableCell>
+                          <TableCell className="text-muted-foreground text-xs font-medium">-{sal.taxDeduction.toLocaleString()} đ</TableCell>
+                          <TableCell className="text-rose-600 font-semibold text-xs">-{sal.penaltyDeduction.toLocaleString()} đ</TableCell>
+                          <TableCell className="font-extrabold text-emerald-600 text-xs">
+                            {sal.netSalary.toLocaleString()} đ
+                          </TableCell>
+                          <TableCell className="text-right pr-4">
+                            {sal.status === "PAID" ? (
+                              <span className="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 text-[10px] font-bold border border-emerald-500/20">
+                                Đã chuyển khoản (PAID)
+                              </span>
+                            ) : (
+                              <Button
+                                size="sm"
+                                onClick={() => handleApproveSalary(sal.id)}
+                                className="h-7 rounded-lg text-xs font-bold bg-primary text-primary-foreground"
+                              >
+                                Duyệt & Chi trả
+                              </Button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={8} className="py-12 text-center text-muted-foreground text-sm">
+                          Không có bảng lương nào.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+
+              {/* Modern Table Footer */}
+              <div className="px-5 py-3 border-t border-border/40 bg-card/40 flex flex-col md:flex-row items-center justify-between gap-4 text-xs">
+                <div className="text-muted-foreground font-medium">
+                  Showing <span className="font-semibold text-foreground">{totalElements === 0 ? 0 : salPage * salPageSize + 1}</span> to{" "}
+                  <span className="font-semibold text-foreground">{Math.min((salPage + 1) * salPageSize, totalElements)}</span> of{" "}
+                  <span className="font-semibold text-foreground">{totalElements}</span> results
+                </div>
+
+                <div className="flex flex-wrap items-center gap-5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground font-medium">Rows per page:</span>
+                    <Select value={String(salPageSize)} onValueChange={(val) => { setSalPageSize(Number(val)); setSalPage(0); }}>
+                      <SelectTrigger className="h-8 w-16 text-xs bg-background border border-border/40 rounded-lg font-semibold">
+                        <SelectValue placeholder={String(salPageSize)} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="10">10</SelectItem>
+                        <SelectItem value="20">20</SelectItem>
+                        <SelectItem value="50">50</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const pageNum = parseInt(salJumpPageInput, 10);
+                      if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
+                        setSalPage(pageNum - 1);
+                      } else {
+                        setSalJumpPageInput(String(salPage + 1));
+                      }
+                    }}
+                    className="flex items-center gap-1.5"
+                  >
+                    <span className="text-muted-foreground font-medium">Go to:</span>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={totalPages || 1}
+                      value={salJumpPageInput}
+                      onChange={(e) => setSalJumpPageInput(e.target.value)}
+                      onBlur={() => {
+                        const pageNum = parseInt(salJumpPageInput, 10);
+                        if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
+                          setSalPage(pageNum - 1);
+                        } else {
+                          setSalJumpPageInput(String(salPage + 1));
+                        }
+                      }}
+                      className="h-8 w-14 text-center text-xs font-semibold bg-background border border-border/40 rounded-lg px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    />
+                  </form>
+
+                  <div className="flex items-center gap-1">
+                    <Button disabled={salPage === 0} onClick={() => setSalPage((prev) => prev - 1)} variant="outline" size="sm" className="h-8 px-2.5 text-xs font-semibold gap-1 border-border/40 rounded-lg hover:bg-muted">
+                      <ChevronLeft className="h-3.5 w-3.5" /> Previous
+                    </Button>
+                    {getPageNumbers(salPage, totalPages).map((p, pIdx) => {
+                      if (p === "...") return <span key={`dots-${pIdx}`} className="px-2 text-muted-foreground font-bold pointer-events-none">...</span>;
+                      const pageNum = p as number;
+                      const isCurrent = pageNum === salPage;
+                      return (
+                        <Button key={pageNum} onClick={() => setSalPage(pageNum)} variant={isCurrent ? "default" : "outline"} size="sm" className={cn("h-8 min-w-8 px-2 text-xs font-semibold rounded-lg transition-all", isCurrent ? "bg-primary text-primary-foreground shadow-xs" : "border-border/40 text-foreground hover:bg-muted/70")}>
+                          {pageNum + 1}
+                        </Button>
+                      );
+                    })}
+                    <Button disabled={salPage >= totalPages - 1 || totalPages === 0} onClick={() => setSalPage((prev) => prev + 1)} variant="outline" size="sm" className="h-8 px-2.5 text-xs font-semibold gap-1 border-border/40 rounded-lg hover:bg-muted">
+                      Next <ChevronRight className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          </div>
+        );
+      })()}
 
       {/* TAB 5: LEAVE REQUESTS */}
-      {activeTab === "leaves" && (
-        <div className="space-y-4">
-          <Card className="border border-border/80 rounded-2xl overflow-hidden bg-card shadow-sm">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-muted/40 text-muted-foreground uppercase text-[10px] font-extrabold border-b border-border">
-                  <tr>
-                    <th className="p-4">Nhân Viên Xin Nghỉ</th>
-                    <th className="p-4">Từ Ngày</th>
-                    <th className="p-4">Đến Ngày</th>
-                    <th className="p-4">Lý Do Xin Nghỉ</th>
-                    <th className="p-4">Trạng Thái</th>
-                    <th className="p-4 text-right">Duyệt Đơn</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/60">
-                  {leaveRequests.map((lv) => (
-                    <tr key={lv.id} className="hover:bg-muted/20 transition-colors">
-                      <td className="p-4 font-bold text-foreground">{lv.employeeName}</td>
-                      <td className="p-4 text-muted-foreground">{lv.startDate}</td>
-                      <td className="p-4 text-muted-foreground">{lv.endDate}</td>
-                      <td className="p-4 text-foreground">{lv.reason}</td>
-                      <td className="p-4">
-                        {lv.status === "APPROVED" && (
-                          <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 font-bold text-[10px]">
-                            Đã chấp thuận
-                          </span>
-                        )}
-                        {lv.status === "REJECTED" && (
-                          <span className="px-2.5 py-0.5 rounded-full bg-rose-500/10 text-rose-600 font-bold text-[10px]">
-                            Từ chối
-                          </span>
-                        )}
-                        {lv.status === "PENDING" && (
-                          <span className="px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 font-bold text-[10px]">
-                            Chờ Admin duyệt
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-4 text-right space-x-2">
-                        {lv.status === "PENDING" && (
-                          <>
-                            <Button
-                              size="sm"
-                              onClick={() => handleApproveLeave(lv.id, "APPROVED")}
-                              className="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs"
-                            >
-                              Chấp thuận
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleApproveLeave(lv.id, "REJECTED")}
-                              className="rounded-lg border-rose-300 text-rose-600 font-bold text-xs"
-                            >
-                              Từ chối
-                            </Button>
-                          </>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-        </div>
-      )}
+      {activeTab === "leaves" && (() => {
+        const totalElements = leaveRequests.length;
+        const totalPages = Math.ceil(totalElements / lvPageSize);
+        const paginated = leaveRequests.slice(lvPage * lvPageSize, (lvPage + 1) * lvPageSize);
+        return (
+          <div className="space-y-4">
+            <Card className="border border-border/80 rounded-2xl overflow-hidden bg-card shadow-sm">
+              <CardContent className="p-0 relative">
+                <Table containerClassName="max-h-[calc(100vh-320px)] min-h-[350px] overflow-auto border-b border-border/20" className="-mt-3 pb-4">
+                  <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur-md shadow-2xs border-b border-border/40">
+                    <TableRow className="border-b border-border/30 bg-muted/20 hover:bg-muted/20">
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pl-4">Nhân Viên Xin Nghỉ</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Từ Ngày</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Đến Ngày</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Lý Do Xin Nghỉ</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Trạng Thái</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider text-right pr-4">Duyệt Đơn</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody className="opacity-90">
+                    {paginated.length > 0 ? (
+                      paginated.map((lv) => (
+                        <TableRow key={lv.id} className="hover:bg-foreground/10 transition-colors border-border/30">
+                          <TableCell className="font-semibold text-xs text-foreground pl-4">{lv.employeeName}</TableCell>
+                          <TableCell className="text-muted-foreground text-xs font-medium">{lv.startDate}</TableCell>
+                          <TableCell className="text-muted-foreground text-xs font-medium">{lv.endDate}</TableCell>
+                          <TableCell className="text-foreground text-xs">{lv.reason}</TableCell>
+                          <TableCell>
+                            {lv.status === "APPROVED" && (
+                              <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 font-bold text-[10px] border border-emerald-500/20">
+                                Đã chấp thuận
+                              </span>
+                            )}
+                            {lv.status === "REJECTED" && (
+                              <span className="px-2.5 py-0.5 rounded-full bg-rose-500/10 text-rose-600 font-bold text-[10px] border border-rose-500/20">
+                                Từ chối
+                              </span>
+                            )}
+                            {lv.status === "PENDING" && (
+                              <span className="px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 font-bold text-[10px] border border-amber-500/20">
+                                Chờ Admin duyệt
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right pr-4 space-x-2">
+                            {lv.status === "PENDING" && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleApproveLeave(lv.id, "APPROVED")}
+                                  className="h-7 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs"
+                                >
+                                  Chấp thuận
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => handleApproveLeave(lv.id, "REJECTED")}
+                                  className="h-7 rounded-lg text-xs font-semibold"
+                                >
+                                  Từ chối
+                                </Button>
+                              </>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={6} className="py-12 text-center text-muted-foreground text-sm">
+                          Không có đơn xin nghỉ phép nào.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+
+              {/* Modern Table Footer */}
+              <div className="px-5 py-3 border-t border-border/40 bg-card/40 flex flex-col md:flex-row items-center justify-between gap-4 text-xs">
+                <div className="text-muted-foreground font-medium">
+                  Showing <span className="font-semibold text-foreground">{totalElements === 0 ? 0 : lvPage * lvPageSize + 1}</span> to{" "}
+                  <span className="font-semibold text-foreground">{Math.min((lvPage + 1) * lvPageSize, totalElements)}</span> of{" "}
+                  <span className="font-semibold text-foreground">{totalElements}</span> results
+                </div>
+
+                <div className="flex flex-wrap items-center gap-5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground font-medium">Rows per page:</span>
+                    <Select value={String(lvPageSize)} onValueChange={(val) => { setLvPageSize(Number(val)); setLvPage(0); }}>
+                      <SelectTrigger className="h-8 w-16 text-xs bg-background border border-border/40 rounded-lg font-semibold">
+                        <SelectValue placeholder={String(lvPageSize)} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="10">10</SelectItem>
+                        <SelectItem value="20">20</SelectItem>
+                        <SelectItem value="50">50</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const pageNum = parseInt(lvJumpPageInput, 10);
+                      if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
+                        setLvPage(pageNum - 1);
+                      } else {
+                        setLvJumpPageInput(String(lvPage + 1));
+                      }
+                    }}
+                    className="flex items-center gap-1.5"
+                  >
+                    <span className="text-muted-foreground font-medium">Go to:</span>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={totalPages || 1}
+                      value={lvJumpPageInput}
+                      onChange={(e) => setLvJumpPageInput(e.target.value)}
+                      onBlur={() => {
+                        const pageNum = parseInt(lvJumpPageInput, 10);
+                        if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= totalPages) {
+                          setLvPage(pageNum - 1);
+                        } else {
+                          setLvJumpPageInput(String(lvPage + 1));
+                        }
+                      }}
+                      className="h-8 w-14 text-center text-xs font-semibold bg-background border border-border/40 rounded-lg px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    />
+                  </form>
+
+                  <div className="flex items-center gap-1">
+                    <Button disabled={lvPage === 0} onClick={() => setLvPage((prev) => prev - 1)} variant="outline" size="sm" className="h-8 px-2.5 text-xs font-semibold gap-1 border-border/40 rounded-lg hover:bg-muted">
+                      <ChevronLeft className="h-3.5 w-3.5" /> Previous
+                    </Button>
+                    {getPageNumbers(lvPage, totalPages).map((p, pIdx) => {
+                      if (p === "...") return <span key={`dots-${pIdx}`} className="px-2 text-muted-foreground font-bold pointer-events-none">...</span>;
+                      const pageNum = p as number;
+                      const isCurrent = pageNum === lvPage;
+                      return (
+                        <Button key={pageNum} onClick={() => setLvPage(pageNum)} variant={isCurrent ? "default" : "outline"} size="sm" className={cn("h-8 min-w-8 px-2 text-xs font-semibold rounded-lg transition-all", isCurrent ? "bg-primary text-primary-foreground shadow-xs" : "border-border/40 text-foreground hover:bg-muted/70")}>
+                          {pageNum + 1}
+                        </Button>
+                      );
+                    })}
+                    <Button disabled={lvPage >= totalPages - 1 || totalPages === 0} onClick={() => setLvPage((prev) => prev + 1)} variant="outline" size="sm" className="h-8 px-2.5 text-xs font-semibold gap-1 border-border/40 rounded-lg hover:bg-muted">
+                      Next <ChevronRight className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          </div>
+        );
+      })()}
 
       {/* CREATE EMPLOYEE MODAL */}
       {isCreateEmpOpen && (
@@ -834,6 +1208,38 @@ export const HRManagement: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* CONFIRM DIALOGS */}
+      <ConfirmDialog
+        open={Boolean(softDeleteConfirmId)}
+        onOpenChange={(open) => { if (!open) setSoftDeleteConfirmId(null); }}
+        title="Xác nhận xóa mềm"
+        description="Bạn có chắc chắn muốn XÓA MỀM nhân viên này? (Tài khoản sẽ được chuyển vào Thùng rác)"
+        confirmText="Xóa mềm"
+        cancelText="Hủy bỏ"
+        onConfirm={confirmSoftDeleteAction}
+      />
+
+      <ConfirmDialog
+        open={Boolean(hardDeleteConfirmId)}
+        onOpenChange={(open) => { if (!open) setHardDeleteConfirmId(null); }}
+        title="CẢNH BÁO: Xác nhận xóa vĩnh viễn"
+        description="CẢNH BÁO: Thao tác XÓA CỨNG (Vĩnh viễn) không thể hoàn tác! Bạn có chắc muốn xóa khỏi CSDL?"
+        confirmText="Xóa vĩnh viễn"
+        cancelText="Hủy bỏ"
+        onConfirm={confirmHardDeleteAction}
+      />
+
+      <ConfirmDialog
+        open={bulkHardDeleteConfirm}
+        onOpenChange={setBulkHardDeleteConfirm}
+        title="CẢNH BÁO: Xóa vĩnh viễn hàng loạt"
+        description={`CẢNH BÁO: Bạn có chắc chắn muốn XÓA VĨNH VIỄN ${selectedTrashIds.length} nhân viên đã chọn khỏi CSDL?`}
+        confirmText="Xóa tất cả vĩnh viễn"
+        cancelText="Hủy bỏ"
+        onConfirm={confirmBulkHardDeleteAction}
+      />
+
     </div>
   );
 };

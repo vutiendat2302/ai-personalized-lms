@@ -7,6 +7,8 @@ import com.ailms.response.AuditLogResponse;
 
 import com.ailms.response.ApiResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -50,5 +52,44 @@ public class AuditLogController {
             AuditLogSearchRequest request) {
         PageResponse<AuditLogResponse> response = auditLogService.getAuditLogsByUserId(userId, request);
         return ResponseEntity.ok(ApiResponse.of("User audit logs retrieved successfully", response));
+    }
+
+    @GetMapping("/entity/{entityType}/{entityId}")
+    public ResponseEntity<ApiResponse<PageResponse<AuditLogResponse>>> getAuditLogsByEntity(
+            @PathVariable String entityType,
+            @PathVariable Long entityId,
+            AuditLogSearchRequest request) {
+        PageResponse<AuditLogResponse> response = auditLogService.getAuditLogsByEntity(entityType, entityId, request);
+        return ResponseEntity.ok(ApiResponse.of("Entity audit logs retrieved successfully", response));
+    }
+
+    @GetMapping("/export")
+    public ResponseEntity<byte[]> exportAuditLogs(AuditLogSearchRequest request) {
+        byte[] csvBytes = auditLogService.exportAuditLogs(request);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=audit_logs_export.csv")
+                .contentType(MediaType.parseMediaType("text/csv"))
+                .body(csvBytes);
+    }
+
+    @GetMapping("/{id}/export-csv")
+    public ResponseEntity<byte[]> exportSingleAuditLogToCsv(@PathVariable Long id) {
+        byte[] csvBytes = auditLogService.exportSingleAuditLogToCsv(id);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=audit_log_" + id + ".csv")
+                .contentType(MediaType.parseMediaType("text/csv"))
+                .body(csvBytes);
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteAuditLog(@PathVariable Long id) {
+        auditLogService.deleteAuditLog(id);
+        return ResponseEntity.ok(ApiResponse.message("Audit log deleted successfully"));
+    }
+
+    @PostMapping("/bulk-delete")
+    public ResponseEntity<ApiResponse<Void>> bulkDeleteAuditLogs(@RequestBody List<Long> ids) {
+        auditLogService.bulkDeleteAuditLogs(ids);
+        return ResponseEntity.ok(ApiResponse.message("Audit logs bulk deleted successfully"));
     }
 }

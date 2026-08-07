@@ -56,6 +56,18 @@ public class ClassOnlineController {
         return ResponseEntity.ok(ApiResponse.of("Online classes retrieved successfully", response));
     }
 
+    @GetMapping("/class/{classId}/page")
+    public ResponseEntity<ApiResponse<PageResponse<ClassOnlineResponse>>> getByClassIdPage(
+            @PathVariable Long classId,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "DESC") String sortDirection) {
+        PageResponse<ClassOnlineResponse> response = classOnlineService.getSessionsPage(classId, keyword, status, page, size, sortDirection);
+        return ResponseEntity.ok(ApiResponse.of("Online class sessions page retrieved successfully", response));
+    }
+
     @GetMapping("/teacher/{teacherId}")
     public ResponseEntity<ApiResponse<List<ClassOnlineResponse>>> getByTeacherId(@PathVariable Long teacherId) {
         List<ClassOnlineResponse> response = classOnlineService.getByTeacherId(teacherId);

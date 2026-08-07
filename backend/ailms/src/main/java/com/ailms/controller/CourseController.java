@@ -17,6 +17,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -44,6 +45,7 @@ public class CourseController {
     }
 
     @PostMapping("/{id}/approve")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_HR')")
     public ResponseEntity<ApiResponse<CourseResponse>> approveCourse(
             @PathVariable Long id,
             @Valid @RequestBody CourseApprovalRequest request) {
@@ -133,5 +135,11 @@ public class CourseController {
     public ResponseEntity<ApiResponse<Void>> recalculateMetrics() {
         courseService.recalculateTrendingScores();
         return ResponseEntity.ok(ApiResponse.message("Course metrics and trending scores recalculated successfully"));
+    }
+
+    @GetMapping("/active-count")
+    public ResponseEntity<ApiResponse<Long>> countActiveCourses() {
+        long response = courseService.countActiveCourses();
+        return ResponseEntity.ok(ApiResponse.of("Active courses count retrieved successfully", response));
     }
 }

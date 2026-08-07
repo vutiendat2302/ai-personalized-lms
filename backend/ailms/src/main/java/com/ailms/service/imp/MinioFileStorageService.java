@@ -5,14 +5,21 @@ import com.ailms.service.IFileStorageService;
 import com.ailms.exception.FileStorageException;
 import io.minio.*;
 import io.minio.http.Method;
-import lombok.RequiredArgsConstructor;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
 import java.time.Duration;
+import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -24,20 +31,46 @@ import java.util.concurrent.TimeUnit;
  * - Kiểm tra file tồn tại
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class MinioFileStorageService implements IFileStorageService {
 
     private final MinioClient minioClient;
+    private final MinioClient minioPresignClient;
+    private final ConcurrentMap<String, MinioClient> clientCache = new ConcurrentHashMap<>();
 
     @Value("${minio.bucket-name}")
     private String bucketName;
 
-    @Value("${minio.endpoint}")
-    private String minioEndpoint;
-
     @Value("${minio.external-endpoint:${minio.endpoint}}")
-    private String minioExternalEndpoint;
+    private String externalEndpoint;
+
+    @Value("${minio.access-key}")
+    private String accessKey;
+
+    @Value("${minio.secret-key}")
+    private String secretKey;
+
+    @Value("${app.frontend.url}")
+    private List<String> frontendUrls;
+
+    public MinioFileStorageService(
+            MinioClient minioClient,
+            @Qualifier("minioPresignClient") MinioClient minioPresignClient) {
+        this.minioClient = minioClient;
+        this.minioPresignClient = minioPresignClient;
+    }
+
+    private MinioClient getOrCreateClient(String endpoint) {
+        if (externalEndpoint.equals(endpoint)) {
+            return minioPresignClient;
+        }
+        return clientCache.computeIfAbsent(endpoint, ep ->
+                MinioClient.builder()
+                        .endpoint(ep)
+                        .credentials(accessKey, secretKey)
+                        .build()
+        );
+    }
 
     @Override
     public void upload(MultipartFile file, String fileKey) {
@@ -95,8 +128,46 @@ public class MinioFileStorageService implements IFileStorageService {
 
     @Override
     public String getPresignedUrl(String fileKey, Duration expiry) {
+        String targetEndpoint = externalEndpoint;
+
         try {
-            String url = minioClient.getPresignedObjectUrl(
+            ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+            if (attrs != null) {
+                HttpServletRequest request = attrs.getRequest();
+                String hostHeader = request.getHeader("X-Forwarded-Host");
+                if (!StringUtils.hasText(hostHeader)) {
+                    hostHeader = request.getHeader("Host");
+                }
+                if (StringUtils.hasText(hostHeader)) {
+                    String hostOnly = hostHeader.contains(":")
+                            ? hostHeader.substring(0, hostHeader.indexOf(":"))
+                            : hostHeader;
+
+                    boolean isAllowed = (frontendUrls != null && frontendUrls.stream().anyMatch(url -> url.contains(hostOnly)))
+                            || "localhost".equals(hostOnly)
+                            || "127.0.0.1".equals(hostOnly);
+
+                    if (isAllowed) {
+                        String scheme = request.getHeader("X-Forwarded-Proto");
+                        if (!StringUtils.hasText(scheme)) scheme = "http";
+                        if ("https".equalsIgnoreCase(scheme) || hostOnly.contains("ts.net") || hostOnly.contains("taile")) {
+                            targetEndpoint = scheme + "://" + hostOnly;
+                        } else {
+                            targetEndpoint = scheme + "://" + hostOnly + ":9000";
+                        }
+                    } else {
+                        log.warn("Unrecognized host header for presigned URL: {}", hostOnly);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to resolve dynamic MinIO endpoint, using default: {}", e.getMessage());
+        }
+
+        MinioClient clientToUse = getOrCreateClient(targetEndpoint);
+
+        try {
+            return clientToUse.getPresignedObjectUrl(
                     GetPresignedObjectUrlArgs.builder()
                             .method(Method.GET)
                             .bucket(bucketName)
@@ -104,10 +175,6 @@ public class MinioFileStorageService implements IFileStorageService {
                             .expiry((int) expiry.toSeconds(), TimeUnit.SECONDS)
                             .build()
             );
-            if (!minioEndpoint.equals(minioExternalEndpoint)) {
-                url = url.replace(minioEndpoint, minioExternalEndpoint);
-            }
-            return url;
         } catch (Exception e) {
             log.error("Failed to generate presigned URL for key: {}", fileKey, e);
             throw new FileStorageException("Failed to generate preview link for key");

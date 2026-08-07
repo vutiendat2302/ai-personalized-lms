@@ -11,6 +11,8 @@ import java.util.List;
 public interface CertificateMapper {
 
     @Mapping(target = "isValid", source = "valid")
+    @Mapping(target = "courseName", ignore = true)
+    @Mapping(target = "studentName", ignore = true)
     CertificateResponse toResponse(CertificateEntity entity);
 
     List<CertificateResponse> toResponseList(List<CertificateEntity> list);

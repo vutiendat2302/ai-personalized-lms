@@ -11,10 +11,8 @@ import lombok.*;
 @Builder
 public class CreateDepartmentRequest {
 
-    @Size(max = 50, message = "Department code must not exceed 50 characters")
-    private String code;
-
     @NotBlank(message = "Department name must not be blank")
+    @Size(max = 255, message = "Department name must not exceed 255 characters")
     private String name;
 
     @Size(max = 3000, message = "Description must not exceed 3000 characters")

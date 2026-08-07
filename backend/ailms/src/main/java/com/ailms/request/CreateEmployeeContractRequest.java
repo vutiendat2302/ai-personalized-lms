@@ -1,8 +1,8 @@
 package com.ailms.request;
 
-import com.ailms.entity.enums.BaseStatusEnum;
 import com.ailms.entity.enums.ContractTypeEnum;
 import com.ailms.entity.enums.SalaryTypeEnum;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
 
@@ -17,22 +17,25 @@ import java.time.LocalDateTime;
 @Builder
 public class CreateEmployeeContractRequest {
 
-    @NotNull(message = "Employee ID is required")
+    @NotNull(message = "Mã nhân viên (employeeId) không được để trống")
     private Long employeeId;
 
+    @NotNull(message = "Loại hợp đồng (contractTypeEnum) không được để trống")
     private ContractTypeEnum contractTypeEnum;
 
+    @NotNull(message = "Ngày bắt đầu (startDate) không được để trống")
     private LocalDate startDate;
 
     private LocalDate endDate;
 
+    @NotNull(message = "Mức lương cơ bản (baseSalary) không được để trống")
+    @DecimalMin(value = "0.0", inclusive = false, message = "Lương cơ bản phải lớn hơn 0")
     private BigDecimal baseSalary;
 
+    @NotNull(message = "Hình thức trả lương (salaryTypeEnum) không được để trống")
     private SalaryTypeEnum salaryTypeEnum;
 
-    private String fileKey;
-
-    private BaseStatusEnum status;
-
     private LocalDateTime signedAt;
+
+    // KHÔNG có fileKey và KHÔNG có status theo quy tắc nghiệp vụ Nhánh A (bước A1)
 }

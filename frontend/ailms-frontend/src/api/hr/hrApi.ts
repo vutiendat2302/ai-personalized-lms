@@ -39,15 +39,54 @@ export interface CreateEmployeeRequest {
 export interface EmployeeContractResponse {
   id: string;
   employeeId: string;
-  employeeCode: string;
-  contractType: ContractType;
+  employeeCode?: string;
+  fullName?: string;
+  departmentName?: string;
+  position?: string;
+  contractType?: ContractType | string;
+  contractTypeEnum?: string;
   fileKey?: string;
   fileUrl?: string;
-  signedAt: string;
-  validFrom: string;
+  fileName?: string;
+  fileSize?: number;
+  signedAt?: string;
+  startDate?: string;
+  endDate?: string;
+  validFrom?: string;
   validTo?: string;
-  status: "ACTIVE" | "EXPIRED" | "TERMINATED";
+  status: "ACTIVE" | "EXPIRED" | "TERMINATED" | "INACTIVE" | string;
+  signingStatus?: "PENDING_COMPANY_SIGN" | "PENDING_EMPLOYEE_SIGN" | "FULLY_SIGNED" | string;
+  signingToken?: string;
+  signingTokenExpiresAt?: string;
+  originalFileDownloadUrl?: string;
+  downloadUrl?: string;
   baseSalary: number;
+  salaryTypeEnum?: "HOURLY" | "DAILY" | "MONTHLY" | string;
+  createdBy?: string;
+  createdByName?: string;
+  createdAt?: string;
+  updatedBy?: string;
+  updatedAt?: string;
+  terminationReason?: string;
+  terminatedAt?: string;
+}
+
+export interface ContractDashboardStatsResponse {
+  totalContracts: number;
+  activeContracts: number;
+  expiringSoonContracts: number;
+  probationExpiringContracts: number;
+  signedThisMonthContracts: number;
+  terminatedThisMonthContracts: number;
+  missingFileContracts: number;
+  unsignedContracts: number;
+  pendingCompanySignCount: number;
+  pendingEmployeeSignCount: number;
+  fullySignedCount: number;
+  contractTypeDistribution?: Record<string, number>;
+  salaryTypeDistribution?: Record<string, number>;
+  departmentDistribution?: Record<string, number>;
+  expiryTimeline6Months?: Record<string, number>;
 }
 
 export interface AttendanceResponse {
@@ -97,12 +136,46 @@ export const hrApi = {
   createEmployee: (payload: CreateEmployeeRequest) =>
     httpClient.post<ApiResponse<EmployeeResponse>>("/v1/employees", payload),
 
+  softDeleteEmployee: (id: string) =>
+    httpClient.delete<ApiResponse<void>>(`/v1/employees/${id}`),
+
+  getTrashEmployees: () =>
+    httpClient.get<ApiResponse<EmployeeResponse[]>>("/v1/employees/trash"),
+
+  hardDeleteEmployee: (id: string) =>
+    httpClient.delete<ApiResponse<void>>(`/v1/employees/trash/${id}`),
+
+  bulkHardDeleteEmployees: (ids: string[]) =>
+    httpClient.post<ApiResponse<any>>(
+      "/v1/employees/trash/bulk-hard-delete", ids),
+
   // Contracts
   getContracts: (employeeId?: string) =>
     httpClient.get<ApiResponse<EmployeeContractResponse[]>>("/v1/employee-contracts", { params: { employeeId } }),
 
   createContract: (payload: any) =>
     httpClient.post<ApiResponse<EmployeeContractResponse>>("/v1/employee-contracts", payload),
+
+  deleteAllEmployeeContracts: (employeeId: string) =>
+    httpClient.delete<ApiResponse<void>>(`/v1/contracts/employee/${employeeId}`),
+
+  bulkTerminateContracts: (ids: string[], reason?: string) =>
+    httpClient.post<ApiResponse<any>>("/v1/employee-contracts/bulk-terminate", { ids, reason }),
+
+  bulkRemindExpiration: (payload: { ids: string[]; recipientUserIds: string[]; subject?: string; content: string }) =>
+    httpClient.post<ApiResponse<any>>("/v1/employee-contracts/bulk-remind-expiration", payload),
+
+  bulkDownloadContractsZip: (ids: string[]) =>
+    httpClient.post("/v1/employee-contracts/bulk-download-zip", { ids }, { responseType: "blob" }),
+
+  getContractReminderRecipients: () =>
+    httpClient.get<ApiResponse<Array<{ id: string; fullName: string; email: string }>>>("/v1/employee-contracts/reminder-recipients"),
+
+  getExpiringProbationContracts: () =>
+    httpClient.get<ApiResponse<EmployeeContractResponse[]>>("/v1/employee-contracts/expiring-probation"),
+
+  getDashboardStats: () =>
+    httpClient.get<ApiResponse<ContractDashboardStatsResponse>>("/v1/contracts/dashboard-stats"),
 
   // Attendance
   getAttendances: (params?: any) =>

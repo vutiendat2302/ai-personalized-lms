@@ -4,10 +4,20 @@ import { useAuth } from "@/hooks/useAuth";
 import { courseApi } from "@/api/courses/courseApi";
 import { degreeApi } from "@/api/degrees/degreeApi";
 import { adminApi } from "@/api/admin/adminApi";
+import { userApi } from "@/api/users/userApi";
+import { employeeApi } from "@/api/employees/employeeApi";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   BarChart,
   Bar,
@@ -18,7 +28,10 @@ import {
   PieChart,
   Pie,
   Cell,
-  Tooltip as ChartTooltip
+  Tooltip as ChartTooltip,
+  AreaChart,
+  Area,
+  Legend
 } from "recharts";
 import {
   Flame,
@@ -54,8 +67,16 @@ import {
   Award,
   Edit3,
   Star,
-  FileCheck
+  FileCheck,
+  ShieldCheck,
+  PieChart as PieIcon,
+  BarChart3
 } from "lucide-react";
+
+// Color palettes for Recharts
+const ROLE_COLORS = ["#7b2525", "#ba6a4c", "#ff97d0", "#fe7f2d", "#2b5748", "#4e220f"];
+const GENDER_COLORS = ["#7b2525", "#ba6a4c", "#ff97d0","#fe7f2d"];
+const STATUS_COLORS = ["#ff97d0","#2b5748", "#be1a1a", "#4e220f"];
 
 // ==========================================
 // MOCK DATA INITIALIZATION & LOCALSTORAGE HELPERS
@@ -116,6 +137,20 @@ export const Dashboard: React.FC = () => {
   const [totalRealPermissions, setTotalRealPermissions] = useState<number>(0);
   const [totalRealCourses, setTotalRealCourses] = useState<number>(0);
   const [totalRealCategories, setTotalRealCategories] = useState<number>(0);
+  const [realStudentCount, setRealStudentCount] = useState<number>(0);
+  const [realEmployeeCount, setRealEmployeeCount] = useState<number>(0);
+  const [realMonthlyUsers, setRealMonthlyUsers] = useState<any[]>([]);
+  const [realRoleStats, setRealRoleStats] = useState<any[]>([]);
+  const [realGenderStats, setRealGenderStats] = useState<any[]>([]);
+  const [realStatusStats, setRealStatusStats] = useState<any[]>([]);
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+
+  const currentYear = new Date().getFullYear();
+  const earliestDataYear = 2023;
+  const years = Array.from(
+    { length: currentYear - earliestDataYear + 1 },
+    (_, i) => currentYear - i
+  );
 
   // Student Dashboard State
   const [selectedCategory, setSelectedCategory] = useState<string>("Tất cả");
@@ -245,6 +280,12 @@ export const Dashboard: React.FC = () => {
   const [employeePositionInput, setEmployeePositionInput] = useState<string>("");
   const [employeeDepartmentInput, setEmployeeDepartmentInput] = useState<string>("");
 
+  // Confirm Dialog states
+  const [confirmDeleteUserObj, setConfirmDeleteUserObj] = useState<{ id: number; name?: string } | null>(null);
+  const [confirmBulkDeleteDashUsers, setConfirmBulkDeleteDashUsers] = useState(false);
+  const [confirmDeleteRoleObj, setConfirmDeleteRoleObj] = useState<{ id: number; name: string } | null>(null);
+  const [confirmDeletePermObj, setConfirmDeletePermObj] = useState<{ id: number; name: string } | null>(null);
+
   useEffect(() => {
     if (!isAdmin) {
       const userId = user?.id || "guest";
@@ -320,6 +361,47 @@ export const Dashboard: React.FC = () => {
             setTotalRealCourses(data.totalCourses || 0);
             setTotalRealCategories(data.totalCategories || 0);
           }
+
+          const [stRes, empRes, roleRes, genderRes, statusRes, userPageRes] = await Promise.all([
+            userApi.getStudentCount().catch(() => null),
+            employeeApi.getEmployeeCount().catch(() => null),
+            userApi.getStatsByRole().catch(() => null),
+            userApi.getStatsByGender().catch(() => null),
+            userApi.getStatsByStatus().catch(() => null),
+            userApi.getUsersPage({ page: 0, size: 1 }).catch(() => null),
+          ]);
+
+          if (userPageRes?.data?.success && userPageRes.data.data?.totalElements !== undefined) {
+            setTotalRealUsers(userPageRes.data.data.totalElements);
+          }
+
+          if (stRes?.data?.success) setRealStudentCount(stRes.data.data);
+          if (empRes?.data?.success) setRealEmployeeCount(empRes.data.data);
+
+          if (roleRes?.data?.success && roleRes.data.data) {
+            const formatted = Object.entries(roleRes.data.data).map(([key, val]) => ({
+              name: key.replace("ROLE_", ""),
+              value: Number(val)
+            }));
+            setRealRoleStats(formatted);
+          }
+
+          if (genderRes?.data?.success && genderRes.data.data) {
+            const genderMap: Record<string, string> = { "0": "Nam", "1": "Nữ", "2": "Khác" };
+            const formatted = Object.entries(genderRes.data.data).map(([key, val]) => ({
+              name: genderMap[key] || key,
+              value: Number(val)
+            }));
+            setRealGenderStats(formatted);
+          }
+
+          if (statusRes?.data?.success && statusRes.data.data) {
+            const formatted = Object.entries(statusRes.data.data).map(([key, val]) => ({
+              name: key,
+              value: Number(val)
+            }));
+            setRealStatusStats(formatted);
+          }
         } catch (e) {
           console.warn("Failed to fetch admin stats:", e);
         }
@@ -328,6 +410,34 @@ export const Dashboard: React.FC = () => {
       fetchRealStats();
     }
   }, [isAdmin]);
+
+  useEffect(() => {
+    if (isAdmin) {
+      const fetchMonthlyUsers = async () => {
+        try {
+          const res = await userApi.getMonthlyNewUsers(selectedYear);
+          if (res.data?.success && Array.isArray(res.data.data)) {
+            const monthNames = [
+              "Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6",
+              "Tháng 7", "Tháng 8", "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12"
+            ];
+            const formatted = monthNames.map((monthName, idx) => {
+              const found = res.data.data.find((item: any) => item.month === idx + 1);
+              return {
+                month: monthName,
+                count: found ? Number(found.count) : 0
+              };
+            });
+            setRealMonthlyUsers(formatted);
+          }
+        } catch (err) {
+          console.warn("Failed to fetch monthly new users:", err);
+        }
+      };
+
+      fetchMonthlyUsers();
+    }
+  }, [isAdmin, selectedYear]);
 
   // Admin Active Tab
   const [activeTab, setActiveTab] = useState<"overview" | "users" | "roles" | "permissions">("overview");
@@ -404,7 +514,7 @@ export const Dashboard: React.FC = () => {
     localStorage.setItem("mock_db_permissions", JSON.stringify(newPerms));
   };
 
-  const showBanner = (msg: string) => {
+  const showBanner = (msg: string, _isError = false) => {
     setSuccessBanner(msg);
     setTimeout(() => setSuccessBanner(""), 3000);
   };
@@ -451,12 +561,16 @@ export const Dashboard: React.FC = () => {
   };
 
   const handleDeleteUser = (id: number) => {
-    if (window.confirm("Bạn có chắc chắn muốn xóa người dùng này?")) {
-      const updated = users.filter((u) => u.id !== id);
-      updateLocalStorage(updated, roles, permissions);
-      showBanner("Xóa người dùng thành công!");
-      setSelectedUserIds(selectedUserIds.filter(selectedId => selectedId !== id));
-    }
+    setConfirmDeleteUserObj({ id });
+  };
+
+  const confirmDeleteUserAction = () => {
+    if (!confirmDeleteUserObj) return;
+    const updated = users.filter((u) => u.id !== confirmDeleteUserObj.id);
+    updateLocalStorage(updated, roles, permissions);
+    showBanner("Xóa người dùng thành công!");
+    setSelectedUserIds(selectedUserIds.filter((selectedId) => selectedId !== confirmDeleteUserObj.id));
+    setConfirmDeleteUserObj(null);
   };
 
   const handleInviteUser = (e: React.FormEvent) => {
@@ -483,12 +597,15 @@ export const Dashboard: React.FC = () => {
   // Bulk operations
   const handleBulkDelete = () => {
     if (selectedUserIds.length === 0) return;
-    if (window.confirm(`Xóa ${selectedUserIds.length} người dùng đã chọn?`)) {
-      const updated = users.filter((u) => !selectedUserIds.includes(u.id));
-      updateLocalStorage(updated, roles, permissions);
-      showBanner("Đã xóa hàng loạt người dùng thành công!");
-      setSelectedUserIds([]);
-    }
+    setConfirmBulkDeleteDashUsers(true);
+  };
+
+  const confirmBulkDeleteDashUsersAction = () => {
+    const updated = users.filter((u) => !selectedUserIds.includes(u.id));
+    updateLocalStorage(updated, roles, permissions);
+    showBanner("Đã xóa hàng loạt người dùng thành công!");
+    setSelectedUserIds([]);
+    setConfirmBulkDeleteDashUsers(false);
   };
 
   const handleBulkAssignRole = (e: React.FormEvent) => {
@@ -518,12 +635,12 @@ export const Dashboard: React.FC = () => {
   const handleSaveRole = (e: React.FormEvent) => {
     e.preventDefault();
     const data = new FormData(e.target as HTMLFormElement);
-    const name = (data.get("name") as string).toUpperCase();
-    const description = data.get("description") as string;
+    const name = data.get("name") as string;
+    const code = (data.get("code") as string).toLowerCase().replace(/\s+/g, "_");
 
     if (editingRole) {
       const updated = roles.map((r) =>
-        r.id === editingRole.id ? { ...r, name, description } : r
+        r.id === editingRole.id ? { ...r, name, code } : r
       );
       updateLocalStorage(users, updated, permissions);
       showBanner("Cập nhật vai trò thành công!");
@@ -531,8 +648,10 @@ export const Dashboard: React.FC = () => {
       const newRole = {
         id: Date.now(),
         name,
+        code,
+        description: `Vai trò ${name}`,
+        userCount: 0,
         isSystem: false,
-        description,
         permissions: []
       };
       updateLocalStorage(users, [...roles, newRole], permissions);
@@ -555,22 +674,26 @@ export const Dashboard: React.FC = () => {
   };
 
   const handleDeleteRole = (id: number, roleName: string) => {
-    const role = roles.find(r => r.id === id);
+    const role = roles.find((r) => r.id === id);
     if (role?.isSystem) {
-      alert("Không thể xóa vai trò hệ thống!");
+      showBanner("Không thể xóa vai trò hệ thống!", true);
       return;
     }
-    if (window.confirm(`Xóa vai trò ${roleName}?`)) {
-      const updated = roles.filter((r) => r.id !== id);
-      updateLocalStorage(users, updated, permissions);
-      showBanner("Xóa vai trò thành công!");
-    }
+    setConfirmDeleteRoleObj({ id, name: roleName });
+  };
+
+  const confirmDeleteRoleAction = () => {
+    if (!confirmDeleteRoleObj) return;
+    const updated = roles.filter((r) => r.id !== confirmDeleteRoleObj.id);
+    updateLocalStorage(users, updated, permissions);
+    showBanner("Xóa vai trò thành công!");
+    setConfirmDeleteRoleObj(null);
   };
 
   const handleAssignPermissions = (e: React.FormEvent) => {
     e.preventDefault();
     const data = new FormData(e.target as HTMLFormElement);
-    const checkedPerms = data.getAll("assignedPerms").map(p => parseInt(p as string));
+    const checkedPerms = data.getAll("assignedPerms").map((p) => parseInt(p as string));
 
     const updated = roles.map((r) =>
       r.id === assigningRole.id ? { ...r, permissions: checkedPerms } : r
@@ -604,7 +727,7 @@ export const Dashboard: React.FC = () => {
         name,
         entity,
         action,
-        description
+        description,
       };
       updateLocalStorage(users, roles, [...permissions, newPerm]);
       showBanner("Tạo quyền mới thành công!");
@@ -614,16 +737,19 @@ export const Dashboard: React.FC = () => {
   };
 
   const handleDeletePermission = (id: number, name: string) => {
-    if (window.confirm(`Xóa quyền ${name}?`)) {
-      const updated = permissions.filter((p) => p.id !== id);
-      // Remove this permission from any roles as well
-      const updatedRoles = roles.map((r) => ({
-        ...r,
-        permissions: r.permissions.filter((pId: number) => pId !== id)
-      }));
-      updateLocalStorage(users, updatedRoles, updated);
-      showBanner("Xóa quyền thành công!");
-    }
+    setConfirmDeletePermObj({ id, name });
+  };
+
+  const confirmDeletePermAction = () => {
+    if (!confirmDeletePermObj) return;
+    const updated = permissions.filter((p) => p.id !== confirmDeletePermObj.id);
+    const updatedRoles = roles.map((r) => ({
+      ...r,
+      permissions: r.permissions.filter((pId: number) => pId !== confirmDeletePermObj.id),
+    }));
+    updateLocalStorage(users, updatedRoles, updated);
+    showBanner("Xóa quyền thành công!");
+    setConfirmDeletePermObj(null);
   };
 
   // ==========================================
@@ -670,7 +796,7 @@ export const Dashboard: React.FC = () => {
     if (!gradingSubmission) return;
     const numGrade = parseFloat(gradeInput);
     if (isNaN(numGrade) || numGrade < 0 || numGrade > 10) {
-      alert("Vui lòng nhập điểm số hợp lệ từ 0 đến 10");
+      showBanner("Vui lòng nhập điểm số hợp lệ từ 0 đến 10", true);
       return;
     }
     setTeacherSubmissions((prev) =>
@@ -1742,6 +1868,18 @@ export const Dashboard: React.FC = () => {
           Quản lý Người dùng
         </button>
         <button
+          onClick={() => navigate("/admin/students")}
+          className="px-4 py-2.5 text-sm font-bold border-b-2 border-transparent text-muted-foreground hover:text-foreground transition-all shrink-0"
+        >
+          Quản lý Học viên
+        </button>
+        <button
+          onClick={() => navigate("/admin/employees")}
+          className="px-4 py-2.5 text-sm font-bold border-b-2 border-transparent text-muted-foreground hover:text-foreground transition-all shrink-0"
+        >
+          Quản lý Nhân viên
+        </button>
+        <button
           onClick={() => navigate("/admin/roles")}
           className="px-4 py-2.5 text-sm font-bold border-b-2 border-transparent text-muted-foreground hover:text-foreground transition-all shrink-0"
         >
@@ -1773,132 +1911,272 @@ export const Dashboard: React.FC = () => {
       {activeTab === "overview" && (
         <div className="space-y-8 animate-in fade-in-30 duration-200">
           {/* Admin Widgets */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-            <Card className="border-border/80 shadow-sm bg-card">
-              <CardContent className="p-5 flex items-center justify-between">
-                <div className="space-y-1">
-                  <p className="text-xs font-semibold text-muted-foreground">Tổng người dùng</p>
-                  <p className="text-2xl font-extrabold text-foreground">{totalRealUsers}</p>
-                  <p className="text-[10px] text-green-600 font-bold flex items-center gap-0.5">
-                    <span>Hoạt động</span>
-                  </p>
-                </div>
-                <div className="p-3 rounded-xl bg-primary/10 text-primary">
-                  <Users className="h-5 w-5" />
-                </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+            {/* Stat Box 1: Total Users */}
+            <Card className="border-border shadow-sm hover:shadow-md transition-shadow bg-card overflow-hidden relative cursor-pointer" onClick={() => navigate("/admin/users")}>
+              <div className="absolute top-0 right-0 p-4 opacity-10 text-primary">
+                <Users className="h-20 w-20" />
+              </div>
+              <CardHeader className="pb-2">
+                <CardDescription className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                  Tổng số Tài khoản
+                </CardDescription>
+                <CardTitle className="text-4xl font-black text-foreground flex items-center gap-2 mt-1">
+                  <span>{totalRealUsers ? totalRealUsers.toLocaleString() : "0"}</span>
+                  <span className="text-sm font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full flex items-center gap-0.5">
+                    <TrendingUp className="h-3 w-3" /> System
+                  </span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <p className="text-sm font-medium text-muted-foreground">Tài khoản ghi nhận trên hệ thống</p>
               </CardContent>
             </Card>
 
-            <Card className="border-border/80 shadow-sm bg-card">
-              <CardContent className="p-5 flex items-center justify-between">
-                <div className="space-y-1">
-                  <p className="text-xs font-semibold text-muted-foreground">Vai trò cấu hình</p>
-                  <p className="text-2xl font-extrabold text-foreground">{totalRealRoles}</p>
-                  <p className="text-[10px] text-primary font-bold">
-                    Quyền hạn chi tiết
-                  </p>
-                </div>
-                <div className="p-3 rounded-xl bg-accent/10 text-accent">
-                  <Shield className="h-5 w-5" />
-                </div>
+            {/* Stat Box 2: Active Users */}
+            <Card className="border-border shadow-sm hover:shadow-md transition-shadow bg-card overflow-hidden relative cursor-pointer" onClick={() => navigate("/admin/users")}>
+              <div className="absolute top-0 right-0 p-4 opacity-10 text-emerald-500">
+                <ShieldCheck className="h-20 w-20" />
+              </div>
+              <CardHeader className="pb-2">
+                <CardDescription className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                  Trạng thái Hoạt động
+                </CardDescription>
+                <CardTitle className="text-4xl font-black text-foreground flex items-center gap-2 mt-1">
+                  <span className="text-emerald-600">
+                    {realStatusStats.find(s => s.name === "ACTIVE")?.value || totalRealUsers || 0}
+                  </span>
+                  <span className="text-sm font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                    Active
+                  </span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <p className="text-sm text-muted-foreground">Tài khoản đang hoạt động</p>
               </CardContent>
             </Card>
 
-            <Card className="border-border/80 shadow-sm bg-card">
-              <CardContent className="p-5 flex items-center justify-between">
-                <div className="space-y-1">
-                  <p className="text-xs font-semibold text-muted-foreground">Tổng quyền hạn</p>
-                  <p className="text-2xl font-extrabold text-foreground">{totalRealPermissions}</p>
-                  <p className="text-[10px] text-green-600 font-bold">
-                    Đầy đủ CRUD
-                  </p>
-                </div>
-                <div className="p-3 rounded-xl bg-green-500/10 text-green-600">
-                  <Trophy className="h-5 w-5" />
-                </div>
+            {/* Stat Box 3: Students */}
+            <Card className="border-border shadow-sm hover:shadow-md transition-shadow bg-card overflow-hidden relative cursor-pointer" onClick={() => navigate("/admin/students")}>
+              <div className="absolute top-0 right-0 p-4 opacity-10 text-sky-500">
+                <GraduationCap className="h-20 w-20" />
+              </div>
+              <CardHeader className="pb-2">
+                <CardDescription className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                  Học viên
+                </CardDescription>
+                <CardTitle className="text-4xl font-black text-foreground flex items-center gap-2 mt-1">
+                  <span className="text-sky-600">{realStudentCount ? realStudentCount.toLocaleString() : "0"}</span>
+                  <span className="text-sm font-bold text-sky-600 bg-sky-500/10 px-2 py-0.5 rounded-full">
+                    Student
+                  </span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <p className="text-sm font-medium text-muted-foreground">Học viên đang theo học</p>
               </CardContent>
             </Card>
 
-            <Card className="border-border/80 shadow-sm bg-card">
-              <CardContent className="p-5 flex items-center justify-between">
-                <div className="space-y-1">
-                  <p className="text-xs font-semibold text-muted-foreground">Khóa học hệ thống</p>
-                  <p className="text-2xl font-extrabold text-foreground">{totalRealCourses}</p>
-                  <p className="text-[10px] text-primary font-bold">
-                    {totalRealCategories} danh mục
-                  </p>
-                </div>
-                <div className="p-3 rounded-xl bg-indigo-500/10 text-indigo-600">
-                  <BookOpen className="h-5 w-5" />
-                </div>
+            {/* Stat Box 4: Staff / Employees */}
+            <Card className="border-border shadow-sm hover:shadow-md transition-shadow bg-card overflow-hidden relative cursor-pointer" onClick={() => navigate("/admin/employees")}>
+              <div className="absolute top-0 right-0 p-4 opacity-10 text-purple-500">
+                <Briefcase className="h-20 w-20" />
+              </div>
+              <CardHeader className="pb-2">
+                <CardDescription className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
+                  Nhân sự & Giảng viên
+                </CardDescription>
+                <CardTitle className="text-4xl font-black text-foreground flex items-center gap-2 mt-1">
+                  <span className="text-purple-600">{realEmployeeCount ? realEmployeeCount.toLocaleString() : "0"}</span>
+                  <span className="text-sm font-bold text-purple-600 bg-purple-500/10 px-2 py-0.5 rounded-full">
+                    Staff
+                  </span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <p className="text-sm font-medium text-muted-foreground">Cán bộ nhân viên cơ quan</p>
               </CardContent>
             </Card>
           </div>
 
-          {/* Analytics Charts Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <Card className="lg:col-span-2 border-border shadow-sm bg-card">
+          {/* Main Charts Grid: Role & Monthly Users */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            {/* Pie Chart: Distribution by Role */}
+            <Card className="lg:col-span-5 border-border shadow-sm bg-card flex flex-col justify-between">
               <CardHeader className="pb-2">
-                <CardTitle className="text-base font-bold">Số lượng người đăng ký mới (6 tháng gần đây)</CardTitle>
-                <CardDescription className="text-xs text-muted-foreground">Thống kê lượng học viên đăng ký qua từng tháng.</CardDescription>
-              </CardHeader>
-              <CardContent className="p-5">
-                <div className="h-72 w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={REGISTRATION_DATA} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                      <XAxis dataKey="month" tickLine={false} axisLine={false} style={{ fontSize: "11px" }} />
-                      <YAxis tickLine={false} axisLine={false} style={{ fontSize: "11px" }} />
-                      <ChartTooltip cursor={{ fill: "rgba(0,0,0,0.05)" }} />
-                      <Bar dataKey="value" fill="#293681" radius={[4, 4, 0, 0]}>
-                        {REGISTRATION_DATA.map((_, index) => (
-                          <Cell key={`cell-${index}`} fill={index === 5 ? "#FE7F2D" : "#293681"} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <PieIcon className="h-5 w-5 text-primary" />
+                    <CardTitle className="text-lg font-semibold">Cơ cấu theo Vai trò</CardTitle>
+                  </div>
                 </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border-border shadow-sm bg-card">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-base font-bold">Danh mục khóa học hoàn thành</CardTitle>
-                <CardDescription className="text-xs text-muted-foreground">Tỷ lệ phân bố các môn học được hoàn thành nhiều nhất.</CardDescription>
+                <CardDescription className="text-sm">
+                  Tỷ lệ phân bổ tài khoản người dùng theo vai trò hệ thống
+                </CardDescription>
               </CardHeader>
-              <CardContent className="p-5 flex flex-col items-center justify-center">
-                <div className="h-48 w-full relative">
-                  <ResponsiveContainer width="100%" height="100%">
+              <CardContent className="pt-4 flex-1 flex items-center justify-center min-h-[280px]">
+                {realRoleStats.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={260}>
                     <PieChart>
                       <Pie
-                        data={CATEGORY_DATA}
+                        data={realRoleStats}
                         cx="50%"
                         cy="50%"
-                        innerRadius={60}
-                        outerRadius={80}
+                        innerRadius={55}
+                        outerRadius={85}
                         paddingAngle={4}
                         dataKey="value"
                       >
-                        {CATEGORY_DATA.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        {realRoleStats.map((_, index) => (
+                          <Cell key={`cell-${index}`} fill={ROLE_COLORS[index % ROLE_COLORS.length]} />
                         ))}
                       </Pie>
-                      <ChartTooltip />
+                      <ChartTooltip formatter={(value: any) => [`${value} người dùng`, "Số lượng"]} />
+                      <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: "13px" }} />
                     </PieChart>
                   </ResponsiveContainer>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 w-full mt-4 pt-4 border-t border-border/80">
-                  {CATEGORY_DATA.map((cat, idx) => (
-                    <div key={idx} className="flex items-center gap-1.5 text-xs">
-                      <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: cat.color }} />
-                      <span className="text-muted-foreground truncate">{cat.name}:</span>
-                      <span className="font-bold text-foreground">{cat.value}%</span>
-                    </div>
-                  ))}
-                </div>
+                ) : (
+                  <div className="text-center text-sm text-muted-foreground py-8">
+                    Đang tải dữ liệu biểu đồ vai trò...
+                  </div>
+                )}
               </CardContent>
             </Card>
+
+            {/* Area Chart: Monthly New Users */}
+            <Card className="lg:col-span-7 border-border shadow-sm bg-card flex flex-col justify-between">
+              <CardHeader className="pb-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <TrendingUp className="h-5 w-5 text-emerald-600" />
+                    <CardTitle className="text-lg font-semibold">Người dùng mới theo tháng</CardTitle>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Label className="text-xs font-semibold text-muted-foreground">Năm:</Label>
+                    <Select
+                      value={String(selectedYear)}
+                      onValueChange={(val) => setSelectedYear(Number(val))}
+                    >
+                      <SelectTrigger className="w-[100px] h-8 border-border/40 text-xs font-semibold">
+                        <SelectValue placeholder="Chọn năm" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {years.map((year) => (
+                          <SelectItem key={year} value={String(year)}>
+                            {year}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <CardDescription className="text-sm">
+                  Thống kê lượng người dùng mới đăng ký từng tháng trong năm {selectedYear}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="pt-4 flex-1 flex items-center justify-center min-h-[280px]">
+                {realMonthlyUsers.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={260}>
+                    <AreaChart data={realMonthlyUsers} margin={{ top: 10, right: 20, left: -20, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="colorMonthlyCountOverview" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
+                          <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                      <XAxis dataKey="month" tickLine={false} style={{ fontSize: "11px" }} />
+                      <YAxis tickLine={false} axisLine={false} style={{ fontSize: "11px" }} />
+                      <ChartTooltip formatter={(val: any) => [`${val} tài khoản mới`, "Số lượng"]} />
+                      <Area type="monotone" dataKey="count" stroke="#10b981" strokeWidth={2.5} fillOpacity={1} fill="url(#colorMonthlyCountOverview)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="text-center text-sm text-muted-foreground py-8">
+                    Đang tải dữ liệu biểu đồ người dùng mới...
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+          </div>
+
+          {/* Secondary Section: Distribution by Status & Gender */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            {/* Chart: Users by Status */}
+            <Card className="border-border shadow-sm bg-card">
+              <CardHeader className="pb-1">
+                <CardTitle className="text-lg font-semibold flex items-center gap-1.5">
+                  <PieIcon className="h-4 w-4 text-emerald-500" />
+                  <span>Phân bổ Người dùng theo Trạng thái</span>
+                </CardTitle>
+                <CardDescription className="text-xs text-muted-foreground">Tỷ lệ các tài khoản đang Hoạt động, Đã khóa hoặc Chờ duyệt</CardDescription>
+              </CardHeader>
+              <CardContent className="min-h-[220px] flex items-center justify-center">
+                {realStatusStats.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={200}>
+                    <PieChart>
+                      <Pie
+                        data={realStatusStats}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={40}
+                        outerRadius={70}
+                        paddingAngle={4}
+                        dataKey="value"
+                      >
+                        {realStatusStats.map((_, idx) => (
+                          <Cell key={`status-${idx}`} fill={STATUS_COLORS[idx % STATUS_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <ChartTooltip formatter={(v: any) => [`${v} tài khoản`, "Số lượng"]} />
+                      <Legend verticalAlign="bottom" height={30} iconType="circle" wrapperStyle={{ fontSize: "12px" }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Không có dữ liệu trạng thái</p>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Chart: Users by Gender */}
+            <Card className="border-border shadow-sm bg-card">
+              <CardHeader className="pb-1">
+                <CardTitle className="text-lg font-semibold flex items-center gap-1.5">
+                  <PieIcon className="h-4 w-4 text-sky-500" />
+                  <span>Phân bổ Người dùng theo Giới tính</span>
+                </CardTitle>
+                <CardDescription className="text-xs text-muted-foreground">Tỷ lệ giới tính của toàn bộ tài khoản người dùng</CardDescription>
+              </CardHeader>
+              <CardContent className="min-h-[220px] flex items-center justify-center">
+                {realGenderStats.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={200}>
+                    <PieChart>
+                      <Pie
+                        data={realGenderStats}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={40}
+                        outerRadius={70}
+                        paddingAngle={4}
+                        dataKey="value"
+                      >
+                        {realGenderStats.map((_, idx) => (
+                          <Cell key={`gender-${idx}`} fill={GENDER_COLORS[idx % GENDER_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <ChartTooltip formatter={(v: any) => [`${v} tài khoản`, "Số lượng"]} />
+                      <Legend verticalAlign="bottom" height={30} iconType="circle" wrapperStyle={{ fontSize: "12px" }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Không có dữ liệu giới tính</p>
+                )}
+              </CardContent>
+            </Card>
+
           </div>
 
           {/* Quick shortcuts to management pages */}
@@ -2729,6 +3007,47 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* CONFIRM DIALOGS */}
+      <ConfirmDialog
+        open={Boolean(confirmDeleteUserObj)}
+        onOpenChange={(open) => { if (!open) setConfirmDeleteUserObj(null); }}
+        title="Xác nhận xóa người dùng"
+        description="Bạn có chắc chắn muốn xóa người dùng này khỏi hệ thống?"
+        confirmText="Xóa người dùng"
+        cancelText="Hủy bỏ"
+        onConfirm={confirmDeleteUserAction}
+      />
+
+      <ConfirmDialog
+        open={confirmBulkDeleteDashUsers}
+        onOpenChange={setConfirmBulkDeleteDashUsers}
+        title="Xác nhận xóa hàng loạt người dùng"
+        description={`Bạn có chắc chắn muốn xóa ${selectedUserIds.length} người dùng đã chọn?`}
+        confirmText="Xóa tất cả"
+        cancelText="Hủy bỏ"
+        onConfirm={confirmBulkDeleteDashUsersAction}
+      />
+
+      <ConfirmDialog
+        open={Boolean(confirmDeleteRoleObj)}
+        onOpenChange={(open) => { if (!open) setConfirmDeleteRoleObj(null); }}
+        title="Xác nhận xóa vai trò"
+        description={`Bạn có chắc chắn muốn xóa vai trò ${confirmDeleteRoleObj?.name}?`}
+        confirmText="Xóa vai trò"
+        cancelText="Hủy bỏ"
+        onConfirm={confirmDeleteRoleAction}
+      />
+
+      <ConfirmDialog
+        open={Boolean(confirmDeletePermObj)}
+        onOpenChange={(open) => { if (!open) setConfirmDeletePermObj(null); }}
+        title="Xác nhận xóa quyền"
+        description={`Bạn có chắc chắn muốn xóa quyền ${confirmDeletePermObj?.name}?`}
+        confirmText="Xóa quyền"
+        cancelText="Hủy bỏ"
+        onConfirm={confirmDeletePermAction}
+      />
 
     </div>
   );

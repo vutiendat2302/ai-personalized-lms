@@ -12,6 +12,7 @@ import java.util.List;
 @Mapper(componentModel = "spring")
 public interface QuizMapper {
 
+    @Mapping(target = "questions", ignore = true)
     QuizResponse toResponse(QuizEntity entity);
 
     List<QuizResponse> toResponseList(List<QuizEntity> list);

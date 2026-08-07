@@ -17,11 +17,20 @@ export const Login: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError("");
     try {
       await login(email, pass);
-      // Removed navigate from here, relying on useEffect
     } catch (err: any) {
-      setError("Login failed. Please check your credentials.");
+      const msg = err?.message || err?.error || "";
+      if (msg.toLowerCase().includes("khóa") || msg.toLowerCase().includes("locked") || msg.toLowerCase().includes("kích hoạt")) {
+        setError("Tài khoản của bạn đã bị khóa hoặc chưa được kích hoạt. Vui lòng liên hệ quản trị viên.");
+      } else if (msg.toLowerCase().includes("password") || msg.toLowerCase().includes("credentials") || msg.toLowerCase().includes("sai")) {
+        setError("Tên đăng nhập hoặc mật khẩu không đúng.");
+      } else if (msg) {
+        setError(msg);
+      } else {
+        setError("Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.");
+      }
       console.error(err);
     }
   };

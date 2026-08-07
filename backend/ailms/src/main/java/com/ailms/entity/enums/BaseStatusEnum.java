@@ -19,5 +19,8 @@ public enum BaseStatusEnum {
     REJECTED,
     EXPIRED,
     UNASSIGNED,
-    DELETE
+    DELETE,
+    TERMINATED,
+    ARCHIVED,
+    DELETED
 }

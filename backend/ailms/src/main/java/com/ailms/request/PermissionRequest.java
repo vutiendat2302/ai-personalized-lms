@@ -8,9 +8,6 @@ public class PermissionRequest {
     @NotBlank(message = "Name is required")
     private String name;
 
-    @NotBlank(message = "Code is required")
-    private String code;
-
     @NotBlank(message = "Entity is required")
     private String entity;
 

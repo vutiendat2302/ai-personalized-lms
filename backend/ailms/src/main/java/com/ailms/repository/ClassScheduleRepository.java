@@ -12,4 +12,6 @@ public interface ClassScheduleRepository extends BaseRepository<ClassScheduleEnt
     List<ClassScheduleEntity> findByClassEntity_Id(Long classId);
 
     List<ClassScheduleEntity> findByClassEntity_IdIn(List<Long> classIds);
+
+    void deleteByClassEntity_Id(Long classId);
 }

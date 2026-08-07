@@ -11,7 +11,8 @@ import java.time.LocalDateTime;
  */
 @Entity
 @Table(name = "learning_activity_log", indexes = {
-        @Index(name = "idx_learning_activity_user_id", columnList = "user_id")
+        @Index(name = "idx_learning_activity_user_id", columnList = "user_id"),
+        @Index(name = "idx_learning_activity_user_occurred", columnList = "user_id, occurred_at")
 })
 @Getter
 @Setter

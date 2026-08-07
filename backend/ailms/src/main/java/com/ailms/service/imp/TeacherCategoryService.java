@@ -5,19 +5,23 @@ import com.ailms.entity.CategoryEntity;
 import com.ailms.entity.EmployeeEntity;
 import com.ailms.entity.TeacherCategoryEntity;
 import com.ailms.entity.enums.BaseStatusEnum;
+import com.ailms.entity.enums.ClassMemberRole;
+import com.ailms.entity.enums.ClassMemberStatusEnum;
+import com.ailms.entity.enums.NotificationTypeEnum;
 import com.ailms.event.AuditLogEvent;
 import com.ailms.exception.BusinessException;
 import com.ailms.exception.DuplicateResourceException;
 import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.mapper.TeacherCategoryMapper;
 import com.ailms.repository.CategoryRepository;
+import com.ailms.repository.ClassMemberRepository;
 import com.ailms.repository.CourseRepository;
 import com.ailms.repository.EmployeeRepository;
 import com.ailms.repository.TeacherCategoryRepository;
 import com.ailms.request.CreateTeacherCategoryRequest;
 import com.ailms.request.UpdateTeacherCategoryRequest;
 import com.ailms.response.TeacherCategoryResponse;
-import com.ailms.service.IEmailService;
+import com.ailms.service.INotificationService;
 import com.ailms.service.ITeacherCategoryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,8 +42,9 @@ public class TeacherCategoryService implements ITeacherCategoryService {
     private final EmployeeRepository employeeRepository;
     private final CategoryRepository categoryRepository;
     private final CourseRepository courseRepository;
+    private final ClassMemberRepository classMemberRepository;
     private final TeacherCategoryMapper teacherCategoryMapper;
-    private final IEmailService emailService;
+    private final INotificationService notificationService;
     private final ApplicationEventPublisher applicationEventPublisher;
 
     private static final String RESOURCE_NAME = "TeacherCategory";
@@ -94,15 +99,17 @@ public class TeacherCategoryService implements ITeacherCategoryService {
 
         TeacherCategoryEntity saved = teacherCategoryRepository.save(tc);
 
-        // Async email notice to teacher/TA
-        if (employee.getUserEntity() != null && employee.getUserEntity().getEmail() != null) {
-            final String email = employee.getUserEntity().getEmail();
-            final String catName = category.getName();
-            try {
-                emailService.sendInviteEmail(email, "You have been assigned to teaching category: " + catName);
-            } catch (Exception e) {
-                log.error("Failed to send assignment notification email to {}", email, e);
-            }
+        // Thông báo nội bộ cho Teacher/TA; nghiệp vụ này không gửi email.
+        if (employee.getUserEntity() != null) {
+            notificationService.createSystemNotification(
+                    employee.getUserEntity(),
+                    NotificationTypeEnum.GENERAL,
+                    "Bạn được phân công chuyên môn mới",
+                    "Bạn đã được phân công phụ trách danh mục “" + category.getName()
+                            + "”. Bạn có thể xem và quản lý các khóa học thuộc chuyên môn này.",
+                    category.getId(),
+                    "/teacher/courses"
+            );
         }
 
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "ASSIGN_TEACHER_CATEGORY", "TEACHER_CATEGORY", saved.getId(), null, saved));
@@ -121,12 +128,22 @@ public class TeacherCategoryService implements ITeacherCategoryService {
             return;
         }
 
-        // Check if teacher has active courses/classes in this category
+        // Only block when this teacher (not merely another teacher in the same
+        // category) still owns an active course or teaches an active class.
         boolean hasActiveCourses = courseRepository.findAll().stream()
                 .anyMatch(c -> c.getCategoryEntity() != null && categoryId.equals(c.getCategoryEntity().getId())
-                        && (c.getStatus() != null && c.getStatus().name().equals("ACTIVE")));
+                        && employeeId.equals(c.getCreatedBy())
+                        && c.getStatus() != null && c.getStatus().name().equals("ACTIVE"));
 
-        if (hasActiveCourses) {
+        boolean hasActiveClasses = classMemberRepository.findById_UserId(employeeId).stream()
+                .anyMatch(member -> member.getStatus() == ClassMemberStatusEnum.ACTIVE
+                        && (member.getRoleInClass() == ClassMemberRole.TEACHER || member.getRoleInClass() == ClassMemberRole.TA)
+                        && member.getClassEntity() != null
+                        && member.getClassEntity().getCategoryEntity() != null
+                        && categoryId.equals(member.getClassEntity().getCategoryEntity().getId())
+                        && member.getClassEntity().getStatus() == BaseStatusEnum.ACTIVE);
+
+        if (hasActiveCourses || hasActiveClasses) {
             throw new BusinessException("Cannot unassign teacher " + employeeId + " from category " + categoryId + " because active courses/classes exist. Reassign or resolve courses first.");
         }
 

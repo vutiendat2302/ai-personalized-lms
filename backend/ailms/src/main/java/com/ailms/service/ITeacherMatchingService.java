@@ -20,6 +20,8 @@ public interface ITeacherMatchingService {
      */
     boolean checkScheduleCollision(Long teacherEmployeeId, List<CreateGroupClassRequest.ScheduleSlotRequest> requestedSlots);
 
+    String findScheduleCollisionDetail(Long teacherEmployeeId, List<CreateGroupClassRequest.ScheduleSlotRequest> requestedSlots);
+
     /**
      * Tìm kiếm giáo viên phù hợp cho lớp học kèm 1-1.
      *

@@ -54,4 +54,10 @@ public interface IReviewService {
      * @return trang kết quả chứa danh sách đã được phân trang
      */
     PageResponse<ReviewResponse> search(ReviewSearchRequest request);
+
+    /**
+     * Đánh giá trung bình: tính rating trung bình của tất cả các đánh giá active
+     */
+    Double getAverageRating();
 }
+

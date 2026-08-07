@@ -37,6 +37,12 @@ public class QuizResponse {
 
     private Byte status;
 
+    private Object questions;
+
+    private String createdBy;
+
+    private String updatedBy;
+
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime createdAt;
 

@@ -11,7 +11,8 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class DepartmentResponse {
+public class
+DepartmentResponse {
 
     private Long id;
     private String code;
@@ -27,4 +28,7 @@ public class DepartmentResponse {
 
     private Long createdBy;
     private Long updatedBy;
+
+    /** Số lượng nhân viên trực thuộc phòng ban. */
+    private Integer employeeCount;
 }

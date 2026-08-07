@@ -73,7 +73,13 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         try {
             // Lấy JWT từ Authorization Header
             String jwt = parseJwt(request);
-            if (jwt != null && jwtUtils.validateJwtToken(jwt)) {
+            if (jwt != null && !jwtUtils.validateJwtToken(jwt)) {
+                SecurityContextHolder.clearContext();
+                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Access token không hợp lệ");
+                return;
+            }
+
+            if (jwt != null) {
                 // Tải thông tin người dùng từ cơ sở dữ liệu
                 String username = jwtUtils.getUserNameFromJwtToken(jwt);
 
@@ -108,14 +114,23 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
                     // Lưu Authentication vào SecurityContext
                     SecurityContextHolder.getContext().setAuthentication(authentication);
+                } else {
+                    SecurityContextHolder.clearContext();
+                    response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Access token đã bị vô hiệu hóa");
+                    return;
                 }
             }
         } catch (UsernameNotFoundException e) {
-            throw UsernameNotFoundException.of("User authentication", e.getMessage());
+            log.warn("User not found during JWT authentication: {}", e.getMessage());
+            SecurityContextHolder.clearContext();
         } catch (TokenExpiredException e) {
-            throw TokenExpiredException.of("Token", e.getMessage());
+            log.warn("JWT token expired: {}", e.getMessage());
+            SecurityContextHolder.clearContext();
+            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Access token đã hết hạn");
+            return;
         } catch (Exception ex) {
             log.error("Cannot set user authentication: {}", ex.getMessage());
+            SecurityContextHolder.clearContext();
         }
 
         filterChain.doFilter(request, response);

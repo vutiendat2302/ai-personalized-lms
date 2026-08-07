@@ -9,6 +9,7 @@ import java.util.Optional;
 
 @Repository
 public interface ApprovalRequestRepository extends BaseRepository<ApprovalRequestEntity, Long> {
+    long countByStatus(ApprovalStatusEnum status);
     Optional<ApprovalRequestEntity> findFirstByTargetTypeAndTargetIdAndStatusOrderByLevelDesc(
             String targetType, Long targetId, ApprovalStatusEnum status);
 }

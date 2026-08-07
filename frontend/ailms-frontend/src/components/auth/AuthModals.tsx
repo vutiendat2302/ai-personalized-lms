@@ -736,15 +736,8 @@ export const AuthModals: React.FC = () => {
                         registerForm.setValue("gender", newV, { shouldValidate: true });
                       }}
                     >
-                      <SelectTrigger className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 py-2 text-sm focus-visible:ring-3 focus-visible:ring-primary/20 outline-none data-[size=default]:h-10 data-[size=sm]:h-10 text-foreground">
-                        <SelectValue placeholder="Chọn giới tính">
-                          {(value: string | null) => {
-                            if (value === "0") return "Nam";
-                            if (value === "1") return "Nữ";
-                            if (value === "2") return "Khác";
-                            return "";
-                          }}
-                        </SelectValue>
+                      <SelectTrigger className="flex h-10 w-full rounded-lg border border-input bg-background/50 px-3 py-2 text-sm focus-visible:ring-3 focus-visible:ring-primary/20 outline-none text-foreground">
+                        <SelectValue placeholder="Chọn giới tính" />
                       </SelectTrigger>
                       <SelectContent className="bg-popover border border-border rounded-lg shadow-xl text-foreground p-1">
                         <SelectItem value="0" className="hover:bg-foreground hover:text-foreground cursor-pointer rounded-md py-1.5 px-2 text-sm">Nam</SelectItem>
@@ -1209,3 +1202,4 @@ export const AuthModals: React.FC = () => {
     </>
   );
 };
+

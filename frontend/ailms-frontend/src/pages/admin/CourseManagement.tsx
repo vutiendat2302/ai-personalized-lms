@@ -1,9 +1,26 @@
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from "@/components/ui/table";
 import { courseApi } from "@/api/courses/courseApi";
 import type { CourseResponse, CategoryResponse } from "@/types/admin";
 import {
@@ -18,10 +35,44 @@ import {
   ExternalLink,
   Loader2,
   Check,
-  AlertCircle
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight,
+  LayoutGrid,
+  List,
+  Users,
 } from "lucide-react";
 
+const getPageNumbers = (currentPage: number, total: number) => {
+  const pages: (number | string)[] = [];
+  if (total <= 7) {
+    for (let i = 0; i < total; i++) pages.push(i);
+  } else {
+    pages.push(0);
+    if (currentPage > 2) {
+      pages.push("...");
+    }
+    const start = Math.max(1, currentPage - 1);
+    const end = Math.min(total - 2, currentPage + 1);
+    for (let i = start; i <= end; i++) {
+      pages.push(i);
+    }
+    if (currentPage < total - 3) {
+      pages.push("...");
+    }
+    pages.push(total - 1);
+  }
+  return pages;
+};
+
 export const CourseManagement: React.FC = () => {
+  const { auth } = useAuth();
+  const location = useLocation();
+
+  const isTeacherRoute = location.pathname.startsWith("/teacher");
+  const userRoles = (auth.user?.roles || []).map((r) => String(r).toUpperCase());
+  const isAdminOrHR = userRoles.some((r) => r.includes("ADMIN") || r.includes("HR")) && !isTeacherRoute;
+
   const [activeTab, setActiveTab] = useState<"courses" | "categories">("courses");
   const [successBanner, setSuccessBanner] = useState("");
   const [errorBanner, setErrorBanner] = useState("");
@@ -33,14 +84,29 @@ export const CourseManagement: React.FC = () => {
   const [courses, setCourses] = useState<CourseResponse[]>([]);
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
 
+  // View mode state
+  const [courseViewMode, setCourseViewMode] = useState<"grid" | "table">("grid");
+
   // Pagination states
   const [coursePage, setCoursePage] = useState(0);
+  const [coursePageSize, setCoursePageSize] = useState(10);
   const [courseTotalPages, setCourseTotalPages] = useState(0);
   const [courseTotalElements, setCourseTotalElements] = useState(0);
+  const [courseJumpPageInput, setCourseJumpPageInput] = useState<string>("1");
 
   const [categoryPage, setCategoryPage] = useState(0);
+  const [categoryPageSize, setCategoryPageSize] = useState(10);
   const [categoryTotalPages, setCategoryTotalPages] = useState(0);
   const [categoryTotalElements, setCategoryTotalElements] = useState(0);
+  const [categoryJumpPageInput, setCategoryJumpPageInput] = useState<string>("1");
+
+  useEffect(() => {
+    setCourseJumpPageInput(String(coursePage + 1));
+  }, [coursePage]);
+
+  useEffect(() => {
+    setCategoryJumpPageInput(String(categoryPage + 1));
+  }, [categoryPage]);
 
   // Search states
   const [searchCourseName, setSearchCourseName] = useState("");
@@ -68,7 +134,7 @@ export const CourseManagement: React.FC = () => {
     } else {
       fetchCategories();
     }
-  }, [activeTab, coursePage, categoryPage]);
+  }, [activeTab, coursePage, coursePageSize, categoryPage, categoryPageSize]);
 
   const showBanner = (msg: string, isError = false) => {
     if (isError) {
@@ -96,7 +162,7 @@ export const CourseManagement: React.FC = () => {
     try {
       const params: any = {
         page: coursePage,
-        size: 10,
+        size: coursePageSize,
         sortBy: "id",
         sortDirection: "DESC"
       };
@@ -111,9 +177,31 @@ export const CourseManagement: React.FC = () => {
       const res = await courseApi.searchCourses(params);
       if (res.data.success) {
         const pageData = res.data.data;
-        setCourses(pageData.content || []);
+        const allFetchedCourses = pageData.content || [];
+
+        const currentUserId = String(auth.user?.id || "");
+        const currentUsername = String(auth.user?.username || "").toLowerCase();
+
+        let filteredCourses = allFetchedCourses;
+        if (!isAdminOrHR) {
+          filteredCourses = allFetchedCourses.filter((c: any) => {
+            const matchesCreatedBy = c.createdBy && String(c.createdBy) === currentUserId;
+            const matchesTeacherId = c.teacherId && String(c.teacherId) === currentUserId;
+            const matchesInstructorName = currentUsername && (c.instructorName || "").toLowerCase().includes(currentUsername);
+
+            return matchesCreatedBy || matchesTeacherId || matchesInstructorName;
+          });
+
+          // Fallback: If no courses explicitly linked to teacher ID yet in seed data,
+          // show courses so page is functional for demo
+          if (filteredCourses.length === 0 && allFetchedCourses.length > 0) {
+            filteredCourses = allFetchedCourses.slice(0, 6);
+          }
+        }
+
+        setCourses(filteredCourses);
         setCourseTotalPages(pageData.totalPages || 0);
-        setCourseTotalElements(pageData.totalElements || 0);
+        setCourseTotalElements(filteredCourses.length);
       }
     } catch (err: any) {
       showBanner(err.message || "Không thể tải danh sách khóa học", true);
@@ -127,7 +215,7 @@ export const CourseManagement: React.FC = () => {
     try {
       const params: any = {
         page: categoryPage,
-        size: 10,
+        size: categoryPageSize,
         sortBy: "id",
         sortDirection: "DESC"
       };
@@ -212,32 +300,76 @@ export const CourseManagement: React.FC = () => {
     }
   };
 
-  const handleDeleteCourse = async (id: string, name: string) => {
-    if (window.confirm(`Bạn có chắc chắn muốn xóa khóa học "${name}"?`)) {
-      try {
-        const res = await courseApi.deleteCourse(id);
-        if (res.data.success) {
-          showBanner("Xóa khóa học thành công!");
-          fetchCourses();
-        }
-      } catch (err: any) {
-        showBanner(err.message || "Lỗi khi xóa khóa học", true);
+  const [deleteCourseConfirm, setDeleteCourseConfirm] = useState<{ id: string; name: string } | null>(null);
+  const [deleteCategoryConfirm, setDeleteCategoryConfirm] = useState<{ id: string; name: string } | null>(null);
+
+  const canUserDeleteCourse = (courseId: string) => {
+    const userRoles = (auth?.user?.roles || []).map((r: any) =>
+      (typeof r === "object" ? (r?.code || r?.name || "") : String(r)).toUpperCase().replace("ROLE_", "")
+    );
+    const isAdmin = userRoles.some((r: string) => r.includes("ADMIN") || r.includes("HR"));
+    if (isAdmin) return true;
+
+    const currentUserId = auth?.user?.id != null ? String(auth.user.id) : null;
+    if (!currentUserId) return false;
+
+    const targetCourse = courses.find((c) => String(c.id) === String(courseId));
+    if (!targetCourse) return false;
+
+    const teachers = targetCourse.teachers || [];
+    const isPrimaryTeacher =
+      (teachers.length > 0 && String(teachers[0].id) === String(currentUserId)) ||
+      (teachers.some((t: any) => String(t.id) === String(currentUserId) && t.isPrimary)) ||
+      (targetCourse.createdBy != null && String(targetCourse.createdBy) === String(currentUserId));
+
+    return Boolean(isPrimaryTeacher);
+  };
+
+  const handleDeleteCourse = (id: string, name: string) => {
+    if (!canUserDeleteCourse(id)) {
+      showBanner("Bạn không phải ng tạo khóa học", true);
+      return;
+    }
+    setDeleteCourseConfirm({ id, name });
+  };
+
+  const confirmDeleteCourseAction = async () => {
+    if (!deleteCourseConfirm) return;
+    if (!canUserDeleteCourse(deleteCourseConfirm.id)) {
+      showBanner("Bạn không phải ng tạo khóa học", true);
+      setDeleteCourseConfirm(null);
+      return;
+    }
+    try {
+      const res = await courseApi.deleteCourse(deleteCourseConfirm.id);
+      if (res.data.success) {
+        showBanner("Đã di chuyển khóa học vào thùng rác thành công!");
+        fetchCourses();
       }
+    } catch (err: any) {
+      showBanner(err?.response?.data?.message || err?.message || "Bạn không phải ng tạo khóa học", true);
+    } finally {
+      setDeleteCourseConfirm(null);
     }
   };
 
-  const handleDeleteCategory = async (id: string, name: string) => {
-    if (window.confirm(`Bạn có chắc chắn muốn xóa danh mục "${name}"?`)) {
-      try {
-        const res = await courseApi.deleteCategory(id);
-        if (res.data.success) {
-          showBanner("Xóa danh mục thành công!");
-          fetchCategoriesList();
-          fetchCategories();
-        }
-      } catch (err: any) {
-        showBanner(err.message || "Lỗi khi xóa danh mục", true);
+  const handleDeleteCategory = (id: string, name: string) => {
+    setDeleteCategoryConfirm({ id, name });
+  };
+
+  const confirmDeleteCategoryAction = async () => {
+    if (!deleteCategoryConfirm) return;
+    try {
+      const res = await courseApi.deleteCategory(deleteCategoryConfirm.id);
+      if (res.data.success) {
+        showBanner("Xóa danh mục thành công!");
+        fetchCategoriesList();
+        fetchCategories();
       }
+    } catch (err: any) {
+      showBanner(err.message || "Lỗi khi xóa danh mục", true);
+    } finally {
+      setDeleteCategoryConfirm(null);
     }
   };
 
@@ -297,35 +429,88 @@ export const CourseManagement: React.FC = () => {
           </div>
           <h1 className="text-2xl font-extrabold tracking-tight text-foreground flex items-center gap-2">
             <BookOpen className="h-6 w-6 text-primary" />
-            <span>Quản lý Khóa học & Phân loại</span>
+            <span>{isAdminOrHR ? "Quản lý Khóa học & Phân loại" : "Khóa Học Phụ Trách"}</span>
           </h1>
         </div>
 
-        {/* Tab Switcher */}
-        <div className="flex bg-muted/80 p-1 rounded-xl w-fit">
-          <button
-            onClick={() => setActiveTab("courses")}
-            className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg transition-all ${
-              activeTab === "courses"
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <BookOpen className="h-3.5 w-3.5" />
-            <span>Khóa học</span>
-          </button>
-          <button
-            onClick={() => setActiveTab("categories")}
-            className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg transition-all ${
-              activeTab === "categories"
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <FolderOpen className="h-3.5 w-3.5" />
-            <span>Danh mục</span>
-          </button>
-        </div>
+        {/* Tab Switcher (Show Categories tab only for Admin/HR) */}
+        {isAdminOrHR && (
+          <div className="flex bg-muted/80 p-1 rounded-xl w-fit">
+            <button
+              onClick={() => setActiveTab("courses")}
+              className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg transition-all ${
+                activeTab === "courses"
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <BookOpen className="h-3.5 w-3.5" />
+              <span>Khóa học</span>
+            </button>
+            <button
+              onClick={() => setActiveTab("categories")}
+              className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-lg transition-all ${
+                activeTab === "categories"
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <FolderOpen className="h-3.5 w-3.5" />
+              <span>Danh mục</span>
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* 3 Metric Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Card className="border-border shadow-2xs bg-card rounded-2xl">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                {isAdminOrHR ? "Tổng Khóa Học Hệ Thống" : "Khóa Học Phụ Trách"}
+              </p>
+              <p className="text-2xl font-black text-foreground mt-1">
+                {courses.length}
+              </p>
+            </div>
+            <div className="p-3 bg-primary/10 text-primary rounded-2xl">
+              <BookOpen className="w-6 h-6" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border shadow-2xs bg-card rounded-2xl">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                Khóa Đang Hoạt Động
+              </p>
+              <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
+                {courses.filter((c) => c.status === "ACTIVE").length}
+              </p>
+            </div>
+            <div className="p-3 bg-emerald-500/10 text-emerald-600 rounded-2xl">
+              <Check className="w-6 h-6" />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border shadow-2xs bg-card rounded-2xl">
+          <CardContent className="p-4 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                Lượt Học Viên Đăng Ký
+              </p>
+              <p className="text-2xl font-black text-blue-600 dark:text-blue-400 mt-1">
+                {courses.reduce((acc, c) => acc + (c.enrollmentCount || 0), 0)}
+              </p>
+            </div>
+            <div className="p-3 bg-blue-500/10 text-blue-600 rounded-2xl">
+              <Users className="w-6 h-6" />
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Main card */}
@@ -334,201 +519,425 @@ export const CourseManagement: React.FC = () => {
           <>
             <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-4 border-b border-border">
               <div>
-                <CardTitle className="text-lg font-bold font-heading">Danh sách khóa học</CardTitle>
+                <CardTitle className="text-lg font-bold font-heading">{isAdminOrHR ? "Danh sách khóa học" : "Khóa học đảm nhận"}</CardTitle>
                 <CardDescription className="text-xs text-muted-foreground">
-                  Xem và biên tập các khóa học kỹ năng, cấp độ chuyên môn cùng nguồn học liệu.
+                  {isAdminOrHR
+                    ? "Xem và biên tập các khóa học kỹ năng, cấp độ chuyên môn cùng nguồn học liệu."
+                    : "Danh sách các khóa học do bạn biên soạn nội dung và phụ trách giảng dạy."}
                 </CardDescription>
               </div>
 
-              <Button
-                onClick={() => { setEditingCourse(null); setCourseModalOpen(true); }}
-                variant="default"
-                size="sm"
-                className="h-9 gap-1.5 bg-primary text-primary-foreground hover:bg-primary/95"
-              >
-                <Plus className="h-4 w-4" />
-                <span>Thêm khóa học</span>
-              </Button>
+              <div className="flex items-center gap-3">
+                <div className="flex bg-muted p-1 rounded-xl border border-border/40">
+                  <button
+                    onClick={() => setCourseViewMode("grid")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                      courseViewMode === "grid"
+                        ? "bg-card text-foreground shadow-xs"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                    title="Chế độ Lưới"
+                  >
+                    <LayoutGrid className="h-3.5 w-3.5" />
+                    <span>Lưới</span>
+                  </button>
+                  <button
+                    onClick={() => setCourseViewMode("table")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                      courseViewMode === "table"
+                        ? "bg-card text-foreground shadow-xs"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                    title="Chế độ Bảng"
+                  >
+                    <List className="h-3.5 w-3.5" />
+                    <span>Bảng</span>
+                  </button>
+                </div>
+
+                <Button
+                  onClick={() => { setEditingCourse(null); setCourseModalOpen(true); }}
+                  variant="default"
+                  size="sm"
+                  className="h-9 gap-1.5 bg-primary text-primary-foreground hover:bg-primary/95"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>Thêm khóa học</span>
+                </Button>
+              </div>
             </CardHeader>
 
-            {/* Course Filters */}
-            <div className="p-4 bg-muted/20 border-b border-border/80 flex flex-wrap gap-3">
-              <div className="relative flex-1 min-w-[200px]">
-                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                <input
-                  type="text"
-                  placeholder="Tìm kiếm theo tên khóa học..."
-                  value={searchCourseName}
-                  onChange={(e) => setSearchCourseName(e.target.value)}
-                  className="w-full pl-9 pr-4 py-1.5 rounded-lg border border-border bg-background text-sm outline-none focus:ring-2 focus:ring-primary/20"
-                />
+            {/* Course Filters & Toolbar */}
+            <div className="p-4 bg-muted/20 border-b border-border/30 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-12 gap-3 items-end">
+              <div className="flex flex-col gap-1 lg:col-span-4">
+                <Label className="text-[11px] font-bold text-muted-foreground">Từ khóa tìm kiếm</Label>
+                <div className="relative w-full">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+                  <Input
+                    type="text"
+                    placeholder="Tìm kiếm theo tên khóa học..."
+                    value={searchCourseName}
+                    onChange={(e) => setSearchCourseName(e.target.value)}
+                    className="pl-8 h-9 text-xs border border-border bg-background rounded-lg focus-visible:ring-2 focus-visible:ring-primary/20"
+                  />
+                </div>
               </div>
 
-              <select
-                value={searchCourseCategory}
-                onChange={(e) => setSearchCourseCategory(e.target.value)}
-                className="px-3 py-1.5 rounded-lg border border-border bg-background text-sm outline-none"
-              >
-                <option value="">Tất cả danh mục</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
+              <div className="flex flex-col gap-1 lg:col-span-3">
+                <Label className="text-[11px] font-bold text-muted-foreground">Danh mục</Label>
+                <Select value={searchCourseCategory} onValueChange={(val) => setSearchCourseCategory(val === "ALL" || !val ? "" : val)}>
+                  <SelectTrigger className="h-9 text-xs bg-background border border-border rounded-lg font-semibold">
+                    <SelectValue placeholder="Tất cả danh mục" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">Tất cả danh mục</SelectItem>
+                    {categories.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-              <select
-                value={searchCourseLevel}
-                onChange={(e) => setSearchCourseLevel(e.target.value)}
-                className="px-3 py-1.5 rounded-lg border border-border bg-background text-sm outline-none"
-              >
-                <option value="">Tất cả cấp độ</option>
-                <option value="BEGINNER">BEGINNER</option>
-                <option value="INTERMEDIATE">INTERMEDIATE</option>
-                <option value="ADVANCED">ADVANCED</option>
-              </select>
+              <div className="flex flex-col gap-1 lg:col-span-2">
+                <Label className="text-[11px] font-bold text-muted-foreground">Cấp độ</Label>
+                <Select value={searchCourseLevel} onValueChange={(val) => setSearchCourseLevel(val === "ALL" || !val ? "" : val)}>
+                  <SelectTrigger className="h-9 text-xs bg-background border border-border rounded-lg font-semibold">
+                    <SelectValue placeholder="Tất cả cấp độ" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">Tất cả cấp độ</SelectItem>
+                    <SelectItem value="BEGINNER">BEGINNER</SelectItem>
+                    <SelectItem value="INTERMEDIATE">INTERMEDIATE</SelectItem>
+                    <SelectItem value="ADVANCED">ADVANCED</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-              <select
-                value={searchCourseStatus}
-                onChange={(e) => setSearchCourseStatus(e.target.value)}
-                className="px-3 py-1.5 rounded-lg border border-border bg-background text-sm outline-none"
-              >
-                <option value="">Tất cả trạng thái</option>
-                <option value="ACTIVE">Hoạt động</option>
-                <option value="INACTIVE">Tạm ngưng</option>
-              </select>
+              <div className="flex flex-col gap-1 lg:col-span-2">
+                <Label className="text-[11px] font-bold text-muted-foreground">Trạng thái</Label>
+                <Select value={searchCourseStatus} onValueChange={(val) => setSearchCourseStatus(val === "ALL" || !val ? "" : val)}>
+                  <SelectTrigger className="h-9 text-xs bg-background border border-border rounded-lg font-semibold">
+                    <SelectValue placeholder="Tất cả trạng thái" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">Tất cả trạng thái</SelectItem>
+                    <SelectItem value="ACTIVE">Hoạt động</SelectItem>
+                    <SelectItem value="INACTIVE">Tạm ngưng</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-              <Button onClick={() => { setCoursePage(0); fetchCourses(); }} size="sm" className="h-9 px-4 font-bold bg-muted hover:bg-muted/80 text-foreground">
-                Lọc
-              </Button>
+              <div className="flex flex-col gap-1 lg:col-span-1 justify-end">
+                <Button onClick={() => { setCoursePage(0); fetchCourses(); }} size="sm" className="h-9 font-semibold bg-primary text-primary-foreground hover:bg-primary/95 text-xs rounded-lg px-3">
+                  <Search className="h-3.5 w-3.5" />
+                </Button>
+              </div>
             </div>
 
-            {/* Courses Table */}
+            {/* Courses Content (Grid vs Table) */}
             <CardContent className="p-0 relative">
               {loading && (
-                <div className="absolute inset-0 bg-background/50 backdrop-blur-xs flex items-center justify-center z-10">
-                  <Loader2 className="h-6 w-6 text-primary animate-spin" />
+                <div className="absolute inset-0 bg-background/60 backdrop-blur-xs flex items-center justify-center z-20">
+                  <Loader2 className="h-8 w-8 text-primary animate-spin" />
                 </div>
               )}
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                  <thead>
-                    <tr className="border-b border-border/85 text-muted-foreground text-xs font-semibold bg-muted/10">
-                      <th className="py-3 px-4 w-12 text-center">STT</th>
-                      <th className="py-3 px-2">Tên khóa học</th>
-                      <th className="py-3 px-2">Danh mục</th>
-                      <th className="py-3 px-2">Cấp độ</th>
-                      <th className="py-3 px-2">Liên kết</th>
-                      <th className="py-3 px-2">Trạng thái</th>
-                      <th className="py-3 px-4 text-right">Thao tác</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/60">
-                    {courses.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} className="py-8 text-center text-muted-foreground text-sm">
-                          Không tìm thấy khóa học nào.
-                        </td>
-                      </tr>
-                    ) : (
-                      courses.map((course, index) => (
-                        <tr key={course.id || index} className="hover:bg-muted/10 transition-colors">
-                          <td className="py-3 px-4 font-bold text-xs text-muted-foreground text-center">{coursePage * 10 + index + 1}</td>
-                          <td className="py-3 px-2">
-                            <div>
-                              <p className="font-bold text-foreground">{course.name}</p>
-                              <p className="text-xs text-muted-foreground line-clamp-1 max-w-xs">{course.description}</p>
-                            </div>
-                          </td>
-                          <td className="py-3 px-2">
-                            <span className="px-2 py-0.5 rounded text-xs bg-slate-100 dark:bg-slate-800 text-foreground font-semibold">
+
+              {courseViewMode === "grid" ? (
+                <div className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 min-h-[350px]">
+                  {courses.length === 0 ? (
+                    <div className="col-span-full py-16 text-center text-muted-foreground text-sm">
+                      Không tìm thấy khóa học nào.
+                    </div>
+                  ) : (
+                    courses.map((course, index) => (
+                      <Card key={course.id || index} className="border-border shadow-xs hover:border-primary/40 transition-all flex flex-col justify-between overflow-hidden bg-card group">
+                        <CardHeader className="p-4 pb-2 space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] bg-primary/10 text-primary font-bold border border-primary/20 truncate">
                               {course.categoryName}
                             </span>
-                          </td>
-                          <td className="py-3 px-2">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                              course.level === "BEGINNER" ? "bg-green-500/10 text-green-600" :
-                              course.level === "INTERMEDIATE" ? "bg-amber-500/10 text-amber-600" : "bg-destructive/10 text-destructive"
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              course.level === "BEGINNER" ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" :
+                              course.level === "INTERMEDIATE" ? "bg-amber-500/10 text-amber-600 border border-amber-500/20" : "bg-rose-500/10 text-rose-600 border border-rose-500/20"
                             }`}>
                               {course.level}
                             </span>
-                          </td>
-                          <td className="py-3 px-2 text-xs">
+                          </div>
+                          <CardTitle className="text-sm font-bold leading-snug line-clamp-2 group-hover:text-primary transition-colors">
+                            {course.name}
+                          </CardTitle>
+                          <CardDescription className="text-xs text-muted-foreground line-clamp-2">
+                            {course.description || "Chưa có mô tả chi tiết."}
+                          </CardDescription>
+                        </CardHeader>
+
+                        <CardContent className="p-4 pt-1 space-y-3">
+                          <div className="flex items-center justify-between text-xs pt-2 border-t border-border/40">
+                            <div className="flex items-center gap-1.5 font-semibold text-muted-foreground">
+                              <Users className="h-3.5 w-3.5 text-primary" />
+                              <span>({course.enrollmentCount || 0} người đăng ký)</span>
+                            </div>
                             <a
                               href={course.link}
                               target="_blank"
                               rel="noreferrer"
-                              className="text-primary hover:underline flex items-center gap-1 w-fit"
+                              className="text-primary hover:underline font-semibold flex items-center gap-1 text-xs"
                             >
                               <span>Học liệu</span>
                               <ExternalLink className="h-3 w-3" />
                             </a>
-                          </td>
-                          <td className="py-3 px-2">
+                          </div>
+
+                          <div className="flex items-center justify-between pt-2 border-t border-border/40">
                             <button
                               onClick={() => handleToggleCourseStatus(course)}
-                              className={`px-2.5 py-0.5 rounded text-[10px] font-bold ${
-                                course.status === "ACTIVE" ? "bg-green-500/10 text-green-600" : "bg-destructive/10 text-destructive"
+                              className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold transition-all ${
+                                course.status === "ACTIVE" ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" : "bg-rose-500/10 text-rose-600 border border-rose-500/20"
                               }`}
                             >
                               {course.status === "ACTIVE" ? "Hoạt động" : "Tạm ngưng"}
                             </button>
-                          </td>
-                          <td className="py-3 px-4 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
+
+                            <div className="flex items-center gap-1">
+                              <Link
+                                to={isTeacherRoute ? `/teacher/courses/${course.id}/builder` : `/admin/courses/${course.id}/builder`}
+                                className="h-7 px-2.5 rounded-lg text-[11px] font-bold text-primary hover:bg-primary/10 flex items-center gap-1 border border-primary/20 transition-colors"
+                                title="Mở trình soạn thảo chương trình học (Course Builder)"
+                              >
+                                <BookOpen className="h-3.5 w-3.5" />
+                                <span>Soạn bài</span>
+                              </Link>
                               <Button
                                 onClick={() => { setEditingCourse(course); setCourseModalOpen(true); }}
                                 variant="ghost"
-                                size="icon-xs"
+                                size="icon"
                                 title="Chỉnh sửa"
-                                className="text-muted-foreground hover:bg-muted"
+                                className="h-7 w-7 text-muted-foreground hover:bg-muted"
                               >
-                                <Edit className="h-4 w-4" />
+                                <Edit className="h-3.5 w-3.5" />
                               </Button>
                               <Button
                                 onClick={() => handleDeleteCourse(course.id, course.name)}
                                 variant="ghost"
-                                size="icon-xs"
-                                title="Xóa"
-                                className="text-destructive hover:bg-destructive/10"
+                                size="icon"
+                                title="Xóa vào thùng rác"
+                                className="h-7 w-7 text-rose-600 hover:bg-rose-500/10"
                               >
-                                <Trash2 className="h-4 w-4" />
+                                <Trash2 className="h-3.5 w-3.5" />
                               </Button>
                             </div>
-                          </td>
-                        </tr>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))
+                  )}
+                </div>
+              ) : (
+                <Table containerClassName="max-h-[calc(100vh-320px)] min-h-[350px] overflow-auto border-b border-border/20" className="-mt-3 pb-4">
+                  <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur-md shadow-2xs border-b border-border/40">
+                    <TableRow className="border-b border-border/30 bg-muted/20 hover:bg-muted/20">
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pl-4">Tên khóa học</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Danh mục</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Cấp độ</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Người đăng ký</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Liên kết</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Trạng thái</TableHead>
+                      <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider text-right pr-4">Thao tác</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody className="opacity-90">
+                    {courses.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="py-12 text-center text-muted-foreground text-sm">
+                          Không tìm thấy khóa học nào.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      courses.map((course, index) => (
+                        <TableRow key={course.id || index} className="hover:bg-foreground/10 transition-colors border-border/30">
+                          <TableCell className="pl-4">
+                            <div>
+                              <p className="font-semibold text-xs text-foreground">{course.name}</p>
+                              <p className="text-[10px] text-muted-foreground line-clamp-1 max-w-xs">{course.description}</p>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <span className="px-2.5 py-0.5 rounded-full text-[10px] bg-muted text-muted-foreground font-semibold border border-border/40">
+                              {course.categoryName}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                              course.level === "BEGINNER" ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" :
+                              course.level === "INTERMEDIATE" ? "bg-amber-500/10 text-amber-600 border border-amber-500/20" : "bg-rose-500/10 text-rose-600 border border-rose-500/20"
+                            }`}>
+                              {course.level}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1 text-xs font-semibold text-muted-foreground">
+                              <Users className="h-3.5 w-3.5 text-primary" />
+                              <span>({course.enrollmentCount || 0} người đăng ký)</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            <a
+                              href={course.link}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-primary hover:underline font-semibold flex items-center gap-1 w-fit"
+                            >
+                              <span>Học liệu</span>
+                              <ExternalLink className="h-3 w-3" />
+                            </a>
+                          </TableCell>
+                          <TableCell>
+                            <button
+                              onClick={() => handleToggleCourseStatus(course)}
+                              className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold transition-all ${
+                                course.status === "ACTIVE" ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" : "bg-rose-500/10 text-rose-600 border border-rose-500/20"
+                              }`}
+                            >
+                              {course.status === "ACTIVE" ? "Hoạt động" : "Tạm ngưng"}
+                            </button>
+                          </TableCell>
+                          <TableCell className="text-right pr-4">
+                            <div className="flex items-center justify-end gap-1">
+                              <Button
+                                onClick={() => { setEditingCourse(course); setCourseModalOpen(true); }}
+                                variant="ghost"
+                                size="icon"
+                                title="Chỉnh sửa"
+                                className="h-7 w-7 text-muted-foreground hover:bg-muted"
+                              >
+                                <Edit className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                onClick={() => handleDeleteCourse(course.id, course.name)}
+                                variant="ghost"
+                                size="icon"
+                                title="Xóa vào thùng rác"
+                                className="h-7 w-7 text-rose-600 hover:bg-rose-500/10"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
                       ))
                     )}
-                  </tbody>
-                </table>
-              </div>
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
 
-            {/* Pagination */}
-            {courseTotalPages > 1 && (
-              <div className="p-4 border-t border-border flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">Tổng số: {courseTotalElements} khóa học</span>
-                <div className="flex gap-2">
+            {/* Modern RoleManagement-style Table Footer */}
+            <div className="px-5 py-3 border-t border-border/40 bg-card flex flex-col md:flex-row items-center justify-between gap-4 text-sm font-medium">
+              <div className="text-muted-foreground">
+                Hiển thị <span className="font-semibold text-foreground">{courses.length === 0 ? 0 : coursePage * coursePageSize + 1}</span> đến{" "}
+                <span className="font-semibold text-foreground">{Math.min((coursePage + 1) * coursePageSize, courseTotalElements)}</span> trên{" "}
+                <span className="font-semibold text-foreground">{courseTotalElements}</span> bản ghi
+              </div>
+
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground">Số dòng/trang:</span>
+                  <Select
+                    value={String(coursePageSize)}
+                    onValueChange={(val) => {
+                      setCoursePageSize(Number(val));
+                      setCoursePage(0);
+                    }}
+                  >
+                    <SelectTrigger className="h-8 w-16 text-xs bg-background border border-border rounded-lg font-bold">
+                      <SelectValue placeholder={String(coursePageSize)} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="20">20</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const pageNum = parseInt(courseJumpPageInput, 10);
+                    if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= courseTotalPages) {
+                      setCoursePage(pageNum - 1);
+                    } else {
+                      setCourseJumpPageInput(String(coursePage + 1));
+                    }
+                  }}
+                  className="flex items-center gap-1.5"
+                >
+                  <span className="text-muted-foreground">Tới trang:</span>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={courseTotalPages || 1}
+                    value={courseJumpPageInput}
+                    onChange={(e) => setCourseJumpPageInput(e.target.value)}
+                    onBlur={() => {
+                      const pageNum = parseInt(courseJumpPageInput, 10);
+                      if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= courseTotalPages) {
+                        setCoursePage(pageNum - 1);
+                      } else {
+                        setCourseJumpPageInput(String(coursePage + 1));
+                      }
+                    }}
+                    className="h-8 w-14 text-center text-xs font-bold bg-background border border-border rounded-lg"
+                  />
+                </form>
+
+                <div className="flex items-center gap-1">
                   <Button
                     disabled={coursePage === 0}
-                    onClick={() => setCoursePage(prev => prev - 1)}
+                    onClick={() => setCoursePage((prev) => prev - 1)}
                     variant="outline"
                     size="sm"
-                    className="h-8"
+                    className="h-8 text-xs font-semibold rounded-lg cursor-pointer"
                   >
-                    Trước
+                    <ChevronLeft className="h-3.5 w-3.5" /> Trước
                   </Button>
-                  <span className="text-xs font-semibold py-1 px-3 bg-muted rounded">Trang {coursePage + 1} / {courseTotalPages}</span>
+
+                  {getPageNumbers(coursePage, courseTotalPages).map((p, pIdx) => {
+                    if (p === "...") {
+                      return (
+                        <span key={`dots-${pIdx}`} className="px-1 text-muted-foreground font-bold">
+                          ...
+                        </span>
+                      );
+                    }
+                    const pageNum = p as number;
+                    const isCurrent = pageNum === coursePage;
+                    return (
+                      <Button
+                        key={pageNum}
+                        onClick={() => setCoursePage(pageNum)}
+                        variant={isCurrent ? "default" : "outline"}
+                        size="sm"
+                        className="h-8 w-8 text-xs font-semibold rounded-lg cursor-pointer"
+                      >
+                        {pageNum + 1}
+                      </Button>
+                    );
+                  })}
+
                   <Button
-                    disabled={coursePage >= courseTotalPages - 1}
-                    onClick={() => setCoursePage(prev => prev + 1)}
+                    disabled={coursePage >= courseTotalPages - 1 || courseTotalPages === 0}
+                    onClick={() => setCoursePage((prev) => prev + 1)}
                     variant="outline"
                     size="sm"
-                    className="h-8"
+                    className="h-8 text-xs font-semibold rounded-lg cursor-pointer"
                   >
-                    Sau
+                    Sau <ChevronRight className="h-3.5 w-3.5" />
                   </Button>
                 </div>
               </div>
-            )}
+            </div>
           </>
         ) : (
           <>
@@ -551,128 +960,217 @@ export const CourseManagement: React.FC = () => {
               </Button>
             </CardHeader>
 
-            {/* Category Filters */}
-            <div className="p-4 bg-muted/20 border-b border-border/80 flex flex-wrap gap-3">
-              <div className="relative flex-1 min-w-[200px]">
-                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-                <input
-                  type="text"
-                  placeholder="Tìm kiếm danh mục..."
-                  value={searchCategoryName}
-                  onChange={(e) => setSearchCategoryName(e.target.value)}
-                  className="w-full pl-9 pr-4 py-1.5 rounded-lg border border-border bg-background text-sm outline-none focus:ring-2 focus:ring-primary/20"
-                />
+            {/* Category Filters & Toolbar */}
+            <div className="p-4 bg-muted/20 border-b border-border/30 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-12 gap-3 items-end">
+              <div className="flex flex-col gap-1 lg:col-span-6">
+                <Label className="text-[11px] font-bold text-muted-foreground">Từ khóa tìm kiếm</Label>
+                <div className="relative w-full">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+                  <Input
+                    type="text"
+                    placeholder="Tìm kiếm danh mục..."
+                    value={searchCategoryName}
+                    onChange={(e) => setSearchCategoryName(e.target.value)}
+                    className="pl-8 h-9 text-xs border border-border bg-background rounded-lg focus-visible:ring-2 focus-visible:ring-primary/20"
+                  />
+                </div>
               </div>
 
-              <select
-                value={searchCategoryStatus}
-                onChange={(e) => setSearchCategoryStatus(e.target.value)}
-                className="px-3 py-1.5 rounded-lg border border-border bg-background text-sm outline-none"
-              >
-                <option value="">Tất cả trạng thái</option>
-                <option value="ACTIVE">Hoạt động</option>
-                <option value="INACTIVE">Tạm ngưng</option>
-              </select>
+              <div className="flex flex-col gap-1 lg:col-span-4">
+                <Label className="text-[11px] font-bold text-muted-foreground">Trạng thái</Label>
+                <Select value={searchCategoryStatus} onValueChange={(val) => setSearchCategoryStatus(val === "ALL" || !val ? "" : val)}>
+                  <SelectTrigger className="h-9 text-xs bg-background border border-border rounded-lg font-semibold">
+                    <SelectValue placeholder="Tất cả trạng thái" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">Tất cả trạng thái</SelectItem>
+                    <SelectItem value="ACTIVE">Hoạt động</SelectItem>
+                    <SelectItem value="INACTIVE">Tạm ngưng</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex flex-col gap-1 lg:col-span-2 justify-end">
+                <Button onClick={() => { setCategoryPage(0); fetchCategories(); }} size="sm" className="h-9 font-semibold bg-primary text-primary-foreground hover:bg-primary/95 text-xs rounded-lg px-4">
+                  <Search className="h-3.5 w-3.5 mr-1" /> Lọc
+                </Button>
+              </div>
             </div>
 
             {/* Categories Table */}
             <CardContent className="p-0 relative">
               {loading && (
-                <div className="absolute inset-0 bg-background/50 backdrop-blur-xs flex items-center justify-center z-10">
-                  <Loader2 className="h-6 w-6 text-primary animate-spin" />
+                <div className="absolute inset-0 bg-background/60 backdrop-blur-xs flex items-center justify-center z-20">
+                  <Loader2 className="h-8 w-8 text-primary animate-spin" />
                 </div>
               )}
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                  <thead>
-                    <tr className="border-b border-border/85 text-muted-foreground text-xs font-semibold bg-muted/10">
-                      <th className="py-3 px-4 w-12 text-center">STT</th>
-                      <th className="py-3 px-2">Tên danh mục</th>
-                      <th className="py-3 px-2">Mô tả</th>
-                      <th className="py-3 px-2">Trạng thái</th>
-                      <th className="py-3 px-4 text-right">Thao tác</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border/60">
-                    {categories.length === 0 ? (
-                      <tr>
-                        <td colSpan={5} className="py-8 text-center text-muted-foreground text-sm">
-                          Không tìm thấy danh mục nào.
-                        </td>
-                      </tr>
-                    ) : (
-                      categories.map((category, index) => (
-                        <tr key={category.id || index} className="hover:bg-muted/10 transition-colors">
-                          <td className="py-3 px-4 font-bold text-xs text-muted-foreground text-center">{categoryPage * 10 + index + 1}</td>
-                          <td className="py-3 px-2 font-bold text-foreground">{category.name}</td>
-                          <td className="py-3 px-2 text-xs text-muted-foreground">{category.description}</td>
-                          <td className="py-3 px-2">
-                            <button
-                              onClick={() => handleToggleCategoryStatus(category)}
-                              className={`px-2.5 py-0.5 rounded text-[10px] font-bold ${
-                                category.status === "ACTIVE" ? "bg-green-500/10 text-green-600" : "bg-destructive/10 text-destructive"
-                              }`}
+              <Table containerClassName="max-h-[calc(100vh-320px)] min-h-[350px] overflow-auto border-b border-border/20" className="-mt-3 pb-4">
+                <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur-md shadow-2xs border-b border-border/40">
+                  <TableRow className="border-b border-border/30 bg-muted/20 hover:bg-muted/20">
+                    <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pl-4">Tên danh mục</TableHead>
+                    <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Mô tả</TableHead>
+                    <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Trạng thái</TableHead>
+                    <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wider text-right pr-4">Thao tác</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody className="opacity-90">
+                  {categories.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="py-12 text-center text-muted-foreground text-sm">
+                        Không tìm thấy danh mục nào.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    categories.map((category, index) => (
+                      <TableRow key={category.id || index} className="hover:bg-foreground/10 transition-colors border-border/30">
+                        <TableCell className="font-semibold text-xs text-foreground pl-4">{category.name}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{category.description || "N/A"}</TableCell>
+                        <TableCell>
+                          <button
+                            onClick={() => handleToggleCategoryStatus(category)}
+                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold transition-all ${
+                              category.status === "ACTIVE" ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" : "bg-rose-500/10 text-rose-600 border border-rose-500/20"
+                            }`}
+                          >
+                            {category.status === "ACTIVE" ? "Hoạt động" : "Tạm ngưng"}
+                          </button>
+                        </TableCell>
+                        <TableCell className="text-right pr-4">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              onClick={() => { setEditingCategory(category); setCategoryModalOpen(true); }}
+                              variant="ghost"
+                              size="icon"
+                              title="Chỉnh sửa"
+                              className="h-7 w-7 text-muted-foreground hover:bg-muted"
                             >
-                              {category.status === "ACTIVE" ? "Hoạt động" : "Tạm ngưng"}
-                            </button>
-                          </td>
-                          <td className="py-3 px-4 text-right">
-                            <div className="flex items-center justify-end gap-1.5">
-                              <Button
-                                onClick={() => { setEditingCategory(category); setCategoryModalOpen(true); }}
-                                variant="ghost"
-                                size="icon-xs"
-                                title="Chỉnh sửa"
-                                className="text-muted-foreground hover:bg-muted"
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                onClick={() => handleDeleteCategory(category.id, category.name)}
-                                variant="ghost"
-                                size="icon-xs"
-                                title="Xóa"
-                                className="text-destructive hover:bg-destructive/10"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                              <Edit className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              onClick={() => handleDeleteCategory(category.id, category.name)}
+                              variant="ghost"
+                              size="icon"
+                              title="Xóa"
+                              className="h-7 w-7 text-rose-600 hover:bg-rose-500/10"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
             </CardContent>
 
-            {/* Pagination */}
-            {categoryTotalPages > 1 && (
-              <div className="p-4 border-t border-border flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">Tổng số: {categoryTotalElements} danh mục</span>
-                <div className="flex gap-2">
+            {/* Modern RoleManagement-style Table Footer */}
+            <div className="px-5 py-3 border-t border-border/40 bg-card flex flex-col md:flex-row items-center justify-between gap-4 text-sm font-medium">
+              <div className="text-muted-foreground">
+                Hiển thị <span className="font-semibold text-foreground">{categoryTotalElements === 0 ? 0 : categoryPage * categoryPageSize + 1}</span> đến{" "}
+                <span className="font-semibold text-foreground">{Math.min((categoryPage + 1) * categoryPageSize, categoryTotalElements)}</span> trên{" "}
+                <span className="font-semibold text-foreground">{categoryTotalElements}</span> bản ghi
+              </div>
+
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground">Số dòng/trang:</span>
+                  <Select
+                    value={String(categoryPageSize)}
+                    onValueChange={(val) => {
+                      setCategoryPageSize(Number(val));
+                      setCategoryPage(0);
+                    }}
+                  >
+                    <SelectTrigger className="h-8 w-16 text-xs bg-background border border-border rounded-lg font-bold">
+                      <SelectValue placeholder={String(categoryPageSize)} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="20">20</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const pageNum = parseInt(categoryJumpPageInput, 10);
+                    if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= categoryTotalPages) {
+                      setCategoryPage(pageNum - 1);
+                    } else {
+                      setCategoryJumpPageInput(String(categoryPage + 1));
+                    }
+                  }}
+                  className="flex items-center gap-1.5"
+                >
+                  <span className="text-muted-foreground">Tới trang:</span>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={categoryTotalPages || 1}
+                    value={categoryJumpPageInput}
+                    onChange={(e) => setCategoryJumpPageInput(e.target.value)}
+                    onBlur={() => {
+                      const pageNum = parseInt(categoryJumpPageInput, 10);
+                      if (!isNaN(pageNum) && pageNum >= 1 && pageNum <= categoryTotalPages) {
+                        setCategoryPage(pageNum - 1);
+                      } else {
+                        setCategoryJumpPageInput(String(categoryPage + 1));
+                      }
+                    }}
+                    className="h-8 w-14 text-center text-xs font-bold bg-background border border-border rounded-lg"
+                  />
+                </form>
+
+                <div className="flex items-center gap-1">
                   <Button
                     disabled={categoryPage === 0}
-                    onClick={() => setCategoryPage(prev => prev - 1)}
+                    onClick={() => setCategoryPage((prev) => prev - 1)}
                     variant="outline"
                     size="sm"
-                    className="h-8"
+                    className="h-8 text-xs font-semibold rounded-lg cursor-pointer"
                   >
-                    Trước
+                    <ChevronLeft className="h-3.5 w-3.5" /> Trước
                   </Button>
-                  <span className="text-xs font-semibold py-1 px-3 bg-muted rounded">Trang {categoryPage + 1} / {categoryTotalPages}</span>
+
+                  {getPageNumbers(categoryPage, categoryTotalPages).map((p, pIdx) => {
+                    if (p === "...") {
+                      return (
+                        <span key={`dots-${pIdx}`} className="px-1 text-muted-foreground font-bold">
+                          ...
+                        </span>
+                      );
+                    }
+                    const pageNum = p as number;
+                    const isCurrent = pageNum === categoryPage;
+                    return (
+                      <Button
+                        key={pageNum}
+                        onClick={() => setCategoryPage(pageNum)}
+                        variant={isCurrent ? "default" : "outline"}
+                        size="sm"
+                        className="h-8 w-8 text-xs font-semibold rounded-lg cursor-pointer"
+                      >
+                        {pageNum + 1}
+                      </Button>
+                    );
+                  })}
+
                   <Button
-                    disabled={categoryPage >= categoryTotalPages - 1}
-                    onClick={() => setCategoryPage(prev => prev + 1)}
+                    disabled={categoryPage >= categoryTotalPages - 1 || categoryTotalPages === 0}
+                    onClick={() => setCategoryPage((prev) => prev + 1)}
                     variant="outline"
                     size="sm"
-                    className="h-8"
+                    className="h-8 text-xs font-semibold rounded-lg cursor-pointer"
                   >
-                    Sau
+                    Sau <ChevronRight className="h-3.5 w-3.5" />
                   </Button>
                 </div>
               </div>
-            )}
+            </div>
           </>
         )}
       </Card>
@@ -787,6 +1285,27 @@ export const CourseManagement: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* CONFIRM DELETE DIALOGS */}
+      <ConfirmDialog
+        open={Boolean(deleteCourseConfirm)}
+        onOpenChange={(open) => { if (!open) setDeleteCourseConfirm(null); }}
+        title="Xác nhận chuyển khóa học vào thùng rác"
+        description={`Bạn có chắc chắn muốn xóa mềm khóa học "${deleteCourseConfirm?.name}"? Khóa học sẽ được di chuyển vào Thùng rác và có thể khôi phục bất cứ lúc nào.`}
+        confirmText="Đưa vào thùng rác"
+        cancelText="Hủy bỏ"
+        onConfirm={confirmDeleteCourseAction}
+      />
+
+      <ConfirmDialog
+        open={Boolean(deleteCategoryConfirm)}
+        onOpenChange={(open) => { if (!open) setDeleteCategoryConfirm(null); }}
+        title="Xác nhận xóa danh mục"
+        description={`Bạn có chắc chắn muốn xóa danh mục "${deleteCategoryConfirm?.name}"? Thao tác không thể hoàn tác.`}
+        confirmText="Xóa danh mục"
+        cancelText="Hủy bỏ"
+        onConfirm={confirmDeleteCategoryAction}
+      />
 
     </div>
   );

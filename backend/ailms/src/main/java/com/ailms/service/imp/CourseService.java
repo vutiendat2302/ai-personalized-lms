@@ -16,7 +16,7 @@ import com.ailms.response.CourseResponse;
 import com.ailms.response.PageResponse;
 import com.ailms.request.BaseSearchRequest;
 import com.ailms.service.ICourseService;
-import com.ailms.service.IEmailService;
+import com.ailms.service.INotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -29,7 +29,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.text.Normalizer;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
 
@@ -47,9 +46,13 @@ public class CourseService implements ICourseService {
     private final UserRepository userRepository;
     private final CourseMapper courseMapper;
     private final ClassMapper classMapper;
-    private final IEmailService emailService;
+    private final INotificationService notificationService;
     private final ApplicationEventPublisher applicationEventPublisher;
     private final EnrollmentRepository enrollmentRepository;
+    private final ApprovalRequestRepository approvalRequestRepository;
+    private final UserRoleRepository userRoleRepository;
+    private final CourseTeacherRepository courseTeacherRepository;
+    private final CoursePackageRepository coursePackageRepository;
 
     private static final String RESOURCE_NAME = "Course";
 
@@ -74,18 +77,14 @@ public class CourseService implements ICourseService {
             throw DuplicateResourceException.of(RESOURCE_NAME, "Category ID and name", request.getName());
         }
 
-        String link = request.getLink();
-        if (link == null || link.trim().isEmpty()) {
-            link = generateSlug(request.getName());
-        }
-
-        CourseEntity entity = courseMapper.toEntity(request);
-        entity.setCategoryEntity(category);
-        entity.setLink(link);
-        entity.setStatus(request.getStatus() != null ? request.getStatus() : CourseStatusEnum.DRAFT);
-        entity.setCertificateConditionType(request.getCertificateConditionType() != null ? request.getCertificateConditionType() : CertificateConditionTypeEnum.COMPLETION_RATE);
+        CourseEntity entity = prepareCourse(request, category, CourseStatusEnum.DRAFT);
 
         CourseEntity savedEntity = courseRepository.save(entity);
+        Long creatorId = savedEntity.getCreatedBy();
+        if (creatorId != null && userRoleRepository.hasActiveTeacherRole(creatorId, LocalDateTime.now())) {
+            assignCreatorAsCourseTeacher(savedEntity, creatorId);
+        }
+        
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CREATE", "COURSE", savedEntity.getId(), null, savedEntity));
         return courseMapper.toResponse(savedEntity);
     }
@@ -107,21 +106,33 @@ public class CourseService implements ICourseService {
         CategoryEntity category = categoryRepository.findById(request.getCategoryId())
                 .orElseThrow(() -> ResourceNotFoundException.of("Category", request.getCategoryId()));
 
-        String link = request.getLink();
-        if (link == null || link.trim().isEmpty()) {
-            link = generateSlug(request.getName());
-        }
-
-        CourseEntity entity = courseMapper.toEntity(request);
-        entity.setCategoryEntity(category);
-        entity.setLink(link);
-        entity.setStatus(request.getStatus() != null ? request.getStatus() : CourseStatusEnum.PENDING);
-        entity.setCertificateConditionType(request.getCertificateConditionType() != null ? request.getCertificateConditionType() : CertificateConditionTypeEnum.COMPLETION_RATE);
+        CourseEntity entity = prepareCourse(request, category, CourseStatusEnum.PENDING);
         entity.setCreatedBy(teacherUserId);
 
         CourseEntity savedEntity = courseRepository.save(entity);
+        if (userRoleRepository.hasActiveTeacherRole(teacherUserId, LocalDateTime.now())) {
+            assignCreatorAsCourseTeacher(savedEntity, teacherUserId);
+        }
+
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CREATE_BY_TEACHER", "COURSE", savedEntity.getId(), null, savedEntity));
         return courseMapper.toResponse(savedEntity);
+    }
+
+    private void assignCreatorAsCourseTeacher(CourseEntity course, Long userId) {
+        if (userId == null) return;
+        userRepository.findById(userId).ifPresent(user -> {
+            CourseTeacherId teacherId = new CourseTeacherId(course.getId(), user.getId());
+            if (!courseTeacherRepository.existsById(teacherId)) {
+                CourseTeacherEntity courseTeacher = CourseTeacherEntity.builder()
+                        .id(teacherId)
+                        .courseEntity(course)
+                        .userEntity(user)
+                        .assignedAt(LocalDateTime.now())
+                        .assignedBy(userId)
+                        .build();
+                courseTeacherRepository.save(courseTeacher);
+            }
+        });
     }
 
     @Transactional
@@ -132,15 +143,11 @@ public class CourseService implements ICourseService {
         CourseEntity existingEntity = courseRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
 
-        String link = request.getLink();
-        if (link == null || link.trim().isEmpty()) {
-            link = generateSlug(request.getName());
-        }
-
         courseMapper.updateEntityFromRequest(request, existingEntity);
-        existingEntity.setLink(link);
+        existingEntity.setLink(resolveLink(request.getLink(), request.getName()));
 
         CourseEntity updatedEntity = courseRepository.save(existingEntity);
+        deactivatePackagesIfCourseNotActive(updatedEntity);
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "UPDATE", "COURSE", id, null, updatedEntity));
         return courseMapper.toResponse(updatedEntity);
     }
@@ -156,6 +163,12 @@ public class CourseService implements ICourseService {
         existingEntity.setStatus(request.getStatus());
 
         CourseEntity updatedEntity = courseRepository.save(existingEntity);
+        deactivatePackagesIfCourseNotActive(updatedEntity);
+        notifyAssignedTeachers(
+                updatedEntity,
+                "Cập nhật trạng thái khóa học",
+                "Khóa học '" + updatedEntity.getName() + "' đã được chuyển sang trạng thái: " + getCourseStatusLabel(updatedEntity.getStatus())
+        );
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "UPDATE_STATUS", "COURSE", id, null, updatedEntity));
         return courseMapper.toResponse(updatedEntity);
     }
@@ -173,12 +186,39 @@ public class CourseService implements ICourseService {
             course.setRejectionReason(null);
             log.info("Course {} approved and activated for sale", id);
         } else {
+            if (request.getRejectionReason() == null || request.getRejectionReason().trim().length() < 5) {
+                throw new BusinessException("Lý do từ chối khóa học phải có ít nhất 5 ký tự.");
+            }
             course.setStatus(CourseStatusEnum.REJECTED);
-            course.setRejectionReason(request.getRejectionReason());
+            course.setRejectionReason(request.getRejectionReason().trim());
             log.info("Course {} rejected with reason: {}", id, request.getRejectionReason());
         }
 
         CourseEntity saved = courseRepository.save(course);
+        deactivatePackagesIfCourseNotActive(saved);
+        ApprovalRequestEntity approvalHistory = ApprovalRequestEntity.builder()
+                .targetType("COURSE")
+                .targetId(saved.getId())
+                .level(1)
+                .totalLevels(1)
+                .approverId(saved.getUpdatedBy())
+                .status(Boolean.TRUE.equals(request.getApprove())
+                        ? ApprovalStatusEnum.CONFIRMED
+                        : ApprovalStatusEnum.REJECTED)
+                .comment(Boolean.TRUE.equals(request.getApprove()) ? null : saved.getRejectionReason())
+                .decidedAt(LocalDateTime.now())
+                .createdBy(saved.getCreatedBy())
+                .createdAt(saved.getCreatedAt() != null ? saved.getCreatedAt() : LocalDateTime.now())
+                .build();
+        approvalRequestRepository.save(approvalHistory);
+
+        boolean isApproved = Boolean.TRUE.equals(request.getApprove());
+        String title = isApproved ? "Khóa học đã được phê duyệt" : "Khóa học đã bị từ chối";
+        String content = isApproved
+                ? "Khóa học “" + saved.getName() + "” đã được phê duyệt và kích hoạt."
+                : "Khóa học “" + saved.getName() + "” bị từ chối. Lý do: " + saved.getRejectionReason();
+        notifyAssignedTeachers(saved, title, content);
+
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "APPROVE_COURSE", "COURSE", id, null, saved));
         return courseMapper.toResponse(saved);
     }
@@ -186,19 +226,84 @@ public class CourseService implements ICourseService {
     @Transactional
     @Override
     public void delete(Long id) {
-        log.info("Deleting course with id: {}", id);
+        log.info("Soft deleting course with id: {}", id);
 
         CourseEntity entity = courseRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
 
+        entity.setStatus(CourseStatusEnum.DELETED);
+        CourseEntity saved = courseRepository.save(entity);
+        deactivatePackagesIfCourseNotActive(saved);
+
+        notifyAssignedTeachers(
+                saved,
+                "Khóa học đã bị xóa/lưu trữ",
+                "Khóa học '" + saved.getName() + "' đã bị chuyển sang trạng thái ngưng sử dụng."
+        );
+
+        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "SOFT_DELETE", "COURSE", id, null, null));
+    }
+
+    private void notifyAssignedTeachers(CourseEntity course, String title, String content) {
+        if (course == null || course.getId() == null) return;
         try {
-            courseRepository.delete(entity);
+            List<CourseTeacherEntity> teachers = courseTeacherRepository.findByCourseEntity_Id(course.getId());
+            java.util.Set<Long> notifiedUserIds = new java.util.HashSet<>();
+
+            for (CourseTeacherEntity ct : teachers) {
+                if (ct.getUserEntity() != null && ct.getUserEntity().getId() != null) {
+                    Long uid = ct.getUserEntity().getId();
+                    if (!notifiedUserIds.contains(uid)) {
+                        notifiedUserIds.add(uid);
+                        notificationService.createSystemNotification(
+                                ct.getUserEntity(),
+                                NotificationTypeEnum.GENERAL,
+                                title,
+                                content,
+                                course.getId(),
+                                "/teacher/courses"
+                        );
+                    }
+                }
+            }
+
+            if (course.getCreatedBy() != null && !notifiedUserIds.contains(course.getCreatedBy())) {
+                notifiedUserIds.add(course.getCreatedBy());
+                userRepository.findById(course.getCreatedBy()).ifPresent(creator ->
+                        notificationService.createSystemNotification(
+                                creator,
+                                NotificationTypeEnum.GENERAL,
+                                title,
+                                content,
+                                course.getId(),
+                                "/teacher/courses"
+                        )
+                );
+            }
         } catch (Exception e) {
-            log.warn("Hard delete failed for course id {}, setting INACTIVE instead: {}", id, e.getMessage());
-            entity.setStatus(CourseStatusEnum.INACTIVE);
-            courseRepository.save(entity);
+            log.warn("Could not send system notification to course teachers for course {}", course.getId(), e);
         }
-        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "DELETE", "COURSE", id, null, null));
+    }
+
+    private String getCourseStatusLabel(CourseStatusEnum status) {
+        if (status == null) return "Chưa xác định";
+        switch (status) {
+            case ACTIVE: return "Đang hoạt động (ACTIVE)";
+            case PENDING: return "Chờ duyệt (PENDING)";
+            case DRAFT: return "Bản nháp (DRAFT)";
+            case REJECTED: return "Từ chối (REJECTED)";
+            case INACTIVE: return "Đã ẩn / Lưu trữ (INACTIVE)";
+            case DELETED: return "Đã xóa (DELETED)";
+            default: return status.name();
+        }
+    }
+
+    private void deactivatePackagesIfCourseNotActive(CourseEntity course) {
+        if (course == null || course.getId() == null) return;
+        if (course.getStatus() != CourseStatusEnum.ACTIVE) {
+            log.info("Course {} status is {}, deactivating all its course packages", course.getId(), course.getStatus());
+            coursePackageRepository.deactivateAllByCourseId(course.getId());
+        }
     }
 
     @Transactional
@@ -209,10 +314,14 @@ public class CourseService implements ICourseService {
         CourseEntity entity = courseRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
 
-        entity.setViewCount((entity.getViewCount() != null ? entity.getViewCount() : 0) + 1);
-        CourseEntity savedEntity = courseRepository.save(entity);
+        try {
+            entity.setViewCount((entity.getViewCount() != null ? entity.getViewCount() : 0) + 1);
+            courseRepository.save(entity);
+        } catch (Exception e) {
+            log.warn("Could not update view count for course {}: {}", id, e.getMessage());
+        }
 
-        return courseMapper.toResponse(savedEntity);
+        return courseMapper.toResponse(entity);
     }
 
     @Override
@@ -361,6 +470,30 @@ public class CourseService implements ICourseService {
 
             courseRepository.save(course);
         }
+    }
+
+    @Override
+    public long countActiveCourses() {
+        log.info("Counting all active courses");
+        return courseRepository.countByStatus(CourseStatusEnum.ACTIVE);
+    }
+
+    private CourseEntity prepareCourse(
+            CreateCourseRequest request,
+            CategoryEntity category,
+            CourseStatusEnum defaultStatus) {
+        CourseEntity course = courseMapper.toEntity(request);
+        course.setCategoryEntity(category);
+        course.setLink(resolveLink(request.getLink(), request.getName()));
+        course.setStatus(request.getStatus() != null ? request.getStatus() : defaultStatus);
+        course.setCertificateConditionType(request.getCertificateConditionType() != null
+                ? request.getCertificateConditionType()
+                : CertificateConditionTypeEnum.COMPLETION_RATE);
+        return course;
+    }
+
+    private String resolveLink(String link, String courseName) {
+        return link == null || link.isBlank() ? generateSlug(courseName) : link;
     }
 
     private String generateSlug(String input) {

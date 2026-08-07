@@ -17,7 +17,13 @@ public final class EmployeeContractSpecification {
             return builder.build();
         }
 
-        builder.likeIfPresent("employee.employeeCode", request.getKeyword());
+        // LIKE %keyword% trên toàn bộ thông tin thường dùng, không chỉ riêng mã NV.
+        builder.likeAnyIfPresent(request.getKeyword(),
+                "employee.employeeCode",
+                "employee.userEntity.fullName",
+                "employee.userEntity.email",
+                "employee.department.name",
+                "employee.position");
         builder.greaterOrEqualIfPresent("createdAt", request.getCreatedFrom());
         builder.lessOrEqualIfPresent("createdAt", request.getCreatedTo());
 

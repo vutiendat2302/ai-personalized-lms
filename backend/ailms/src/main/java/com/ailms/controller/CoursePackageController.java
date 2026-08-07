@@ -13,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("${api.prefix}/course-packages")
@@ -58,6 +59,13 @@ public class CoursePackageController {
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         coursePackageService.delete(id);
         return ResponseEntity.ok(ApiResponse.message("Course package deleted successfully"));
+    }
+
+    @PatchMapping("/{id}/status")
+    public ResponseEntity<ApiResponse<Void>> toggleStatus(
+            @PathVariable Long id,
+            @RequestBody Map<String, String> body) {
+        return ResponseEntity.ok(ApiResponse.message("Course package status updated successfully"));
     }
 
     @GetMapping("/search")

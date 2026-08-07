@@ -22,7 +22,8 @@ import java.time.LocalDateTime;
         @Index(name = "idx_user_username", columnList = "username", unique = true),
         @Index(name = "idx_user_email", columnList = "email", unique = true)
 })
-public class UserEntity extends BaseEntity{
+public class
+UserEntity extends BaseEntity{
 
     /**
      * Mã định danh người dùng (Snowflake ID 64-bit).
@@ -96,15 +97,23 @@ public class UserEntity extends BaseEntity{
     /**
      * Trạng thái tài khoản.
      * Giá trị được lưu dưới dạng chuỗi (EnumType.STRING).
-     * INACTIVE
      * ACTIVE
      * LOCKED
-     * PENDING_VERIFICATION
+     * VERIFICATION
+     * DELETE
      */
     @Column(name = "status")
     @Enumerated(EnumType.STRING)
     @Builder.Default
-    private UserStatusEnum status = UserStatusEnum.INACTIVE;
+    private UserStatusEnum status = UserStatusEnum.ACTIVE;
+
+    /**
+     * Trạng thái cũ trước khi bị xóa mềm (Soft Delete).
+     * Phục vụ cho việc khôi phục (Restore) về trạng thái chính xác ban đầu.
+     */
+    @Column(name = "status_before_delete")
+    @Enumerated(EnumType.STRING)
+    private UserStatusEnum statusBeforeDelete;
 
     /**
      * Thời điểm người dùng đăng nhập gần nhất.

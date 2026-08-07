@@ -15,4 +15,8 @@ public interface StudentInterestRepository extends JpaRepository<StudentInterest
     List<StudentInterestEntity> findByInterest_Id(Long interestId);
 
     boolean existsByInterest_Id(Long interestId);
+
+    @org.springframework.data.jpa.repository.Query("SELECT i.name, COUNT(si) FROM StudentInterestEntity si JOIN si.interest i GROUP BY i.name ORDER BY COUNT(si) DESC")
+    List<Object[]> countInterestsGroupedByName();
 }
+

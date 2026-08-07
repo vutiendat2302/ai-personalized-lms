@@ -15,4 +15,5 @@ public class PermissionResponse {
     private Long createdBy;
     private Long updatedBy;
     private LocalDateTime updatedAt;
+    private Long roleCount;
 }

@@ -15,7 +15,7 @@ public class RoleSpecification {
         }
 
         builder.equalIfPresent("isSystem", request.getIsSystem());
-        builder.likeAnyIfPresent(request.getKeyword(), "name", "code");
+        builder.likeAnyIfPresent(request.getKeyword(), "name", "code", "description");
 
         return builder.build();
     }

@@ -40,8 +40,8 @@ public interface CourseMapper {
     @Mapping(target = "trendingScore", ignore = true)
     void updateEntityFromRequest(UpdateCourseRequest request, @MappingTarget CourseEntity entity);
 
-    @Mapping(target = "categoryId", source = "categoryEntity.id")
-    @Mapping(target = "categoryName", source = "categoryEntity.name")
+    @Mapping(target = "categoryId", expression = "java(entity.getCategoryEntity() != null ? entity.getCategoryEntity().getId() : null)")
+    @Mapping(target = "categoryName", expression = "java(entity.getCategoryEntity() != null ? entity.getCategoryEntity().getName() : null)")
     CourseResponse toResponse(CourseEntity entity);
 
 

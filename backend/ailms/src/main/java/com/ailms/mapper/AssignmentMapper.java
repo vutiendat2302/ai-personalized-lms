@@ -28,5 +28,12 @@ public interface AssignmentMapper {
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
+    AssignmentEntity toEntity(com.ailms.request.CreateAssignmentRequest request);
+
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "createdBy", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "updatedBy", ignore = true)
     void updateFromRequest(AssignmentRequest request, @MappingTarget AssignmentEntity entity);
 }

@@ -11,6 +11,9 @@ import lombok.*;
 @AllArgsConstructor
 @Builder
 public class UpdateDepartmentRequest {
+
+    @NotBlank(message = "Department name must not be blank")
+    @Size(max = 255, message = "Department name must not exceed 255 characters")
     private String name;
 
     @Size(max = 3000, message = "Description must not exceed 3000 characters")
