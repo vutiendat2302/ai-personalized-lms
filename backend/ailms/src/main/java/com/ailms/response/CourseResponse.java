@@ -16,6 +16,8 @@ import java.time.LocalDateTime;
 public class CourseResponse {
 
     private Long id;
+
+    private String code;
     
     private Long categoryId;
     

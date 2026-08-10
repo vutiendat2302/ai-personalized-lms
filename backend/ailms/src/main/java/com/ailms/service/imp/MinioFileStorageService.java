@@ -68,6 +68,7 @@ public class MinioFileStorageService implements IFileStorageService {
                 MinioClient.builder()
                         .endpoint(ep)
                         .credentials(accessKey, secretKey)
+			.region("us-east-1")
                         .build()
         );
     }

@@ -35,6 +35,10 @@ public class CourseEntity extends BaseEntity {
     @Column(name = "id", updatable = false, nullable = false)
     private Long id;
 
+    /** Mã khóa học do backend tự động sinh và không cho phép cập nhật. */
+    @Column(name = "code", unique = true, nullable = false, updatable = false, length = 30)
+    private String code;
+
     /** Danh mục mà khóa học trực thuộc. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "category_id")

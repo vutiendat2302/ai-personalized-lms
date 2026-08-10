@@ -7,12 +7,12 @@ import com.ailms.event.AuditLogEvent;
 import com.ailms.exception.BusinessException;
 import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.mapper.ClassMapper;
-import com.ailms.mapper.CoursePackageMapper;
 import com.ailms.repository.*;
 import com.ailms.request.*;
 import com.ailms.response.ClassResponse;
 import com.ailms.response.CoursePackageResponse;
 import com.ailms.service.IClassManagementService;
+import com.ailms.service.ICoursePackageService;
 import com.ailms.service.IEmailService;
 import com.ailms.service.ITeacherMatchingService;
 import tools.jackson.core.type.TypeReference;
@@ -47,13 +47,14 @@ public class ClassManagementService implements IClassManagementService {
     private final ApprovalRequestRepository approvalRequestRepository;
     private final ITeacherMatchingService teacherMatchingService;
     private final ClassMapper classMapper;
-    private final CoursePackageMapper coursePackageMapper;
+    private final ICoursePackageService coursePackageService;
     private final IEmailService emailService;
     private final ApplicationEventPublisher applicationEventPublisher;
     private final JsonMapper objectMapper;
 
     private static final String RESOURCE_NAME = "Class";
 
+    /** Tạo lớp nhóm mới và kiểm tra điều kiện giảng viên, lịch học. */
     @Transactional
     @Override
     public ClassResponse createGroupClass(CreateGroupClassRequest request) {
@@ -143,45 +144,11 @@ public class ClassManagementService implements IClassManagementService {
         return resp;
     }
 
+    /** Chuyển luồng tạo gói về service dùng chung để thống nhất mã, validation và audit. */
     @Transactional
     @Override
     public CoursePackageResponse createCoursePackage(CreateCoursePackageRequest request) {
-        log.info("Creating course package: {} for course: {}", request.getName(), request.getCourseId());
-
-        CourseEntity course = courseRepository.findById(request.getCourseId())
-                .orElseThrow(() -> ResourceNotFoundException.of("Course", request.getCourseId()));
-        if (course.getStatus() != CourseStatusEnum.ACTIVE) {
-            throw new BusinessException("Chỉ khóa học ở trạng thái ACTIVE mới được tạo gói bán.");
-        }
-
-        ClassEntity clazz = null;
-
-        if (request.getDeliveryMode() == DeliveryModeEnum.GROUP_CLASS) {
-            if (request.getClassId() == null) {
-                throw new BusinessException("GROUP_CLASS package requires a pre-created READY classId.");
-            }
-            clazz = classRepository.findById(request.getClassId())
-                    .orElseThrow(() -> ResourceNotFoundException.of("Class", request.getClassId()));
-
-            if (!clazz.getCourseEntity().getId().equals(request.getCourseId())) {
-                throw new BusinessException("Class does not belong to course: " + request.getCourseId());
-            }
-        }
-
-        CoursePackageEntity pkg = CoursePackageEntity.builder()
-                .courseEntity(course)
-                .classEntity(clazz)
-                .name(request.getName())
-                .description(request.getDescription())
-                .price(request.getPrice())
-                .durationDays(request.getDurationDays())
-                .deliveryMode(request.getDeliveryMode())
-                .status(CoursePackageStatusEnum.ACTIVE)
-                .build();
-
-        CoursePackageEntity saved = coursePackageRepository.save(pkg);
-        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CREATE_COURSE_PACKAGE", "COURSE_PACKAGE", saved.getId(), null, saved));
-        return coursePackageMapper.toResponse(saved);
+        return coursePackageService.create(request);
     }
 
     @Transactional

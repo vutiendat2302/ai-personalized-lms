@@ -17,6 +17,9 @@ import java.util.List;
 
 @Repository
 public interface CourseRepository extends BaseRepository<CourseEntity, Long> {
+    /** Kiểm tra mã khóa học đã tồn tại. */
+    boolean existsByCode(String code);
+
     boolean existsByLinkIgnoreCase(String link);
     boolean existsByLinkIgnoreCaseAndIdNot(String link, Long id);
 

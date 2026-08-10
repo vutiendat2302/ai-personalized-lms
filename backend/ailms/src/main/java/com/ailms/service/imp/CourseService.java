@@ -2,6 +2,7 @@ package com.ailms.service.imp;
 
 import com.ailms.entity.*;
 import com.ailms.entity.enums.*;
+import com.ailms.common.util.CodeGenerator;
 import com.ailms.event.AuditLogEvent;
 import com.ailms.exception.BusinessException;
 import com.ailms.exception.DuplicateResourceException;
@@ -55,6 +56,7 @@ public class CourseService implements ICourseService {
     private final CoursePackageRepository coursePackageRepository;
 
     private static final String RESOURCE_NAME = "Course";
+    private static final String CODE_PREFIX = "KH";
 
     @Override
     public List<CourseResponse> getAll() {
@@ -478,11 +480,13 @@ public class CourseService implements ICourseService {
         return courseRepository.countByStatus(CourseStatusEnum.ACTIVE);
     }
 
+    /** Chuẩn bị khóa học mới với mã tự sinh và các giá trị mặc định nghiệp vụ. */
     private CourseEntity prepareCourse(
             CreateCourseRequest request,
             CategoryEntity category,
             CourseStatusEnum defaultStatus) {
         CourseEntity course = courseMapper.toEntity(request);
+        course.setCode(CodeGenerator.generate(CODE_PREFIX, courseRepository::existsByCode));
         course.setCategoryEntity(category);
         course.setLink(resolveLink(request.getLink(), request.getName()));
         course.setStatus(request.getStatus() != null ? request.getStatus() : defaultStatus);

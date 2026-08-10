@@ -1,28 +1,26 @@
 package com.ailms.request;
 
-import com.ailms.entity.enums.DeliveryModeEnum;
-import jakarta.validation.constraints.NotBlank;
+import com.ailms.entity.enums.CoursePackageStatusEnum;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.math.BigDecimal;
 
-/** Dữ liệu bắt buộc để tạo gói khóa học với mã do backend tự sinh. */
+/** Dữ liệu được phép thay đổi của một gói khóa học, không bao gồm mã gói. */
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class CreateCoursePackageRequest {
-
-    @NotNull(message = "Course ID is required")
-    private Long courseId;
-
-    private Long classId;
-
+public class UpdateCoursePackageRequest {
     @NotBlank(message = "Package name is required")
     @Size(max = 100, message = "Package name must not exceed 100 characters")
     private String name;
@@ -37,9 +35,6 @@ public class CreateCoursePackageRequest {
     @DecimalMin(value = "0.0", inclusive = true, message = "Original price must be greater than or equal to 0")
     private BigDecimal originalPrice;
 
-    @NotNull(message = "Delivery mode is required")
-    private DeliveryModeEnum deliveryMode;
-
     @Min(value = 1, message = "Duration days must be greater than 0")
     private Integer durationDays;
 
@@ -48,4 +43,7 @@ public class CreateCoursePackageRequest {
 
     @Min(value = 1, message = "Maximum group size must be greater than 0")
     private Integer maxGroupSize;
+
+    @NotNull(message = "Status is required")
+    private CoursePackageStatusEnum status;
 }
