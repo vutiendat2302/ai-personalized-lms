@@ -9,7 +9,7 @@ import { CheckSquare, Clock, ArrowLeft, Send } from "lucide-react";
 export const StudentAssignmentsPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { success } = useToast();
+  const { success, error } = useToast();
 
   const [assignments, setAssignments] = useState<StudentAssignmentItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -33,7 +33,7 @@ export const StudentAssignmentsPage: React.FC = () => {
       setQuizTimerSeconds((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
-          alert("Hết thời gian làm bài Quiz! Hệ thống tự động nộp bài.");
+          error("Hết thời gian làm bài Quiz! Hệ thống tự động nộp bài.");
           navigate("/student/assignments");
           return 0;
         }
@@ -41,7 +41,7 @@ export const StudentAssignmentsPage: React.FC = () => {
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, [id, navigate]);
+  }, [id, navigate, error]);
 
   const handleSelectQuizAnswer = (qKey: string, ans: string) => {
     setQuizAnswers((prev) => ({ ...prev, [qKey]: ans }));
@@ -167,7 +167,7 @@ export const StudentAssignmentsPage: React.FC = () => {
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-foreground">{item.title}</span>
                 <span className="px-2 py-0.5 text-[9px] font-extrabold bg-primary/10 text-primary rounded">
-                  {item.itemType}
+                  ASSIGNMENT
                 </span>
                 {item.status === "RETURNED" && (
                   <span className="px-2 py-0.5 text-[9px] font-extrabold bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 rounded border border-amber-300 dark:border-amber-800 animate-pulse">

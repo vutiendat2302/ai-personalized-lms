@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { courseApi } from "@/api/courses/courseApi";
 import { studentApi } from "@/api/students/studentApi";
+import { studentApi as studentPortalApi } from "@/api/student/studentApi";
 import { userApi } from "@/api/users/userApi";
 import { interestApi, type InterestResponse } from "@/api/interests/interestApi";
 import type {
@@ -165,9 +166,8 @@ export const StudentOnboardingModal: React.FC<StudentOnboardingModalProps> = ({
   useEffect(() => {
     if (!isOpen) return;
 
-    // Set initial step based on prop or user completed status
-    const isCompleted = localStorage.getItem(`hasGoal_${userId}`) === "true";
-    const startStep = initialStep ? initialStep : isCompleted ? 3 : 1;
+    // Always start at step 1 or initialStep if passed
+    const startStep = initialStep ? initialStep : 1;
     setStep(startStep);
 
     const initModalData = async () => {
@@ -189,6 +189,36 @@ export const StudentOnboardingModal: React.FC<StudentOnboardingModalProps> = ({
         }
       } catch (err) {
         console.error("Error fetching interests for onboarding:", err);
+      }
+
+      // Pre-fill personalization data if already created (for Update flow)
+      try {
+        const personalization = await studentPortalApi.getPersonalization();
+        if (personalization) {
+          if (personalization.educationLevel) {
+            setEducationLevel(personalization.educationLevel);
+          }
+          if (personalization.goal) {
+            setGoal(personalization.goal);
+          }
+          if (personalization.description) {
+            setDescription(personalization.description);
+          }
+          if (personalization.schoolName) {
+            setSchoolName(personalization.schoolName);
+          }
+          if (personalization.interests && Array.isArray(personalization.interests)) {
+            const ids = personalization.interests.map((i: any) => String(i.id));
+            if (ids.length > 0) setSelectedInterestIds(ids);
+          }
+          if (personalization.studyGoals && personalization.studyGoals.length > 0) {
+            const firstGoal = personalization.studyGoals[0];
+            if (firstGoal.studyGoalTypeEnum) setStudyGoalType(firstGoal.studyGoalTypeEnum as StudyGoalTypeEnum);
+            if (firstGoal.targetValue) setTargetValue(firstGoal.targetValue);
+          }
+        }
+      } catch (pErr) {
+        console.warn("Could not fetch existing personalization data for prefill:", pErr);
       }
 
       try {

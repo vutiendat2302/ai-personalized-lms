@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
+import { interestApi, type InterestResponse } from "@/api/interests/interestApi";
 import { Button } from "@/components/ui/button";
 import { Sparkles, Target, Check, ArrowRight, X } from "lucide-react";
 
@@ -16,28 +17,24 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
   const [step, setStep] = useState<1 | 2>(1);
   const [goalType, setGoalType] = useState<string>("DAILY_STREAK");
   const [targetValue, setTargetValue] = useState<number>(30);
-  const [selectedInterests, setSelectedInterests] = useState<string[]>([
-    "Lập trình Web",
-    "Trí tuệ nhân tạo",
-  ]);
+  const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
+  const [interests, setInterests] = useState<InterestResponse[]>([]);
+  const [interestError, setInterestError] = useState("");
+
+  useEffect(() => {
+    if (!isOpen) return;
+    interestApi.getInterests()
+      .then((response) => setInterests(response.data.data))
+      .catch(() => setInterestError("Không thể tải danh sách sở thích."));
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const allInterests = [
-    "Lập trình Web",
-    "Trí tuệ nhân tạo",
-    "Mobile App",
-    "Data Science",
-    "Cloud & DevOps",
-    "UI/UX Design",
-    "Cyber Security",
-  ];
-
-  const toggleInterest = (name: string) => {
-    if (selectedInterests.includes(name)) {
-      setSelectedInterests(selectedInterests.filter((i) => i !== name));
+  const toggleInterest = (id: string) => {
+    if (selectedInterests.includes(id)) {
+      setSelectedInterests(selectedInterests.filter((item) => item !== id));
     } else {
-      setSelectedInterests([...selectedInterests, name]);
+      setSelectedInterests([...selectedInterests, id]);
     }
   };
 
@@ -105,13 +102,13 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
           <div className="space-y-3">
             <label className="text-xs font-bold text-foreground block">Chọn các chủ đề yêu thích:</label>
             <div className="flex flex-wrap gap-2">
-              {allInterests.map((item) => {
-                const isSelected = selectedInterests.includes(item);
+              {interests.map((item) => {
+                const isSelected = selectedInterests.includes(item.id);
                 return (
                   <button
-                    key={item}
+                    key={item.id}
                     type="button"
-                    onClick={() => toggleInterest(item)}
+                    onClick={() => toggleInterest(item.id)}
                     className={`px-3 py-1.5 text-xs font-semibold rounded-xl border transition cursor-pointer flex items-center gap-1.5 ${
                       isSelected
                         ? "bg-primary text-primary-foreground border-primary shadow-xs"
@@ -119,11 +116,13 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                     }`}
                   >
                     {isSelected && <Check className="h-3.5 w-3.5" />}
-                    {item}
+                    {item.name}
                   </button>
                 );
               })}
             </div>
+            {interestError && <p className="text-xs text-destructive">{interestError}</p>}
+            {!interestError && interests.length === 0 && <p className="text-xs text-muted-foreground">Chưa có lĩnh vực sở thích.</p>}
           </div>
         )}
 

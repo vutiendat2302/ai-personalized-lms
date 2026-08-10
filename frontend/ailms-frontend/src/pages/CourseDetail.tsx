@@ -282,18 +282,32 @@ export const CourseDetail: React.FC = () => {
         <div className="absolute right-24 top-1/4 w-80 h-80 rounded-full border-[10px] border-white/5 opacity-30 pointer-events-none"></div>
         
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          {/* Breadcrumbs */}
-          <nav className="flex items-center space-y-0 space-x-2 text-xs text-indigo-200/80 mb-6 font-medium">
-            <Link to="/" className="hover:text-white transition-colors">Trang chủ</Link>
-            <span>/</span>
-            <Link to="/categories" className="hover:text-white transition-colors">Danh mục</Link>
-            <span>/</span>
-            <Link to={`/categories/${course.categoryId}`} className="hover:text-white transition-colors">
-              {course.categoryName}
-            </Link>
-            <span>/</span>
-            <span className="text-white font-semibold line-clamp-1">{course.name}</span>
-          </nav>
+          {/* Back Button & Breadcrumbs */}
+          <div className="flex items-center gap-3 mb-6">
+            <button
+              onClick={() => {
+                if (window.history.length > 1) {
+                  navigate(-1);
+                } else {
+                  navigate("/student/dashboard");
+                }
+              }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all border border-white/20 cursor-pointer backdrop-blur-sm shadow-xs"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span>Quay lại</span>
+            </button>
+
+            <nav className="flex items-center space-x-2 text-xs text-indigo-200/80 font-medium">
+              <Link to="/" className="hover:text-white transition-colors">Trang chủ</Link>
+              <span>/</span>
+              <Link to={`/categories/${course.categoryId}`} className="hover:text-white transition-colors">
+                {course.categoryName}
+              </Link>
+              <span>/</span>
+              <span className="text-white font-semibold line-clamp-1">{course.name}</span>
+            </nav>
+          </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
             {/* Left Hero Content */}

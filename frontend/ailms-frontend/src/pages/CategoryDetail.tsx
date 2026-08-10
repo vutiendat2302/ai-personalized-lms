@@ -368,14 +368,30 @@ export const CategoryDetail: React.FC = () => {
       <div className="bg-gradient-to-b from-muted/30 to-background border-b border-border py-12 md:py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           
-          {/* Breadcrumbs */}
-          <nav className="flex items-center space-y-0 space-x-2 text-xs text-muted-foreground mb-6 font-medium">
-            <Link to="/" className="hover:text-primary transition-colors">Trang chủ</Link>
-            <ChevronRight className="h-3 w-3" />
-            <Link to="/categories" className="hover:text-primary transition-colors">Danh mục</Link>
-            <ChevronRight className="h-3 w-3" />
-            <span className="text-foreground font-semibold">{category.name}</span>
-          </nav>
+          {/* Back Button & Breadcrumbs */}
+          <div className="flex items-center gap-3 mb-6">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (window.history.length > 1) {
+                  navigate(-1);
+                } else {
+                  navigate("/student/dashboard");
+                }
+              }}
+              className="rounded-xl gap-1.5 text-xs font-bold border-border/70 bg-card hover:bg-muted text-foreground cursor-pointer shadow-2xs"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span>Quay lại</span>
+            </Button>
+
+            <nav className="flex items-center space-x-2 text-xs text-muted-foreground font-medium">
+              <Link to="/" className="hover:text-primary transition-colors">Trang chủ</Link>
+              <ChevronRight className="h-3 w-3" />
+              <span className="text-foreground font-semibold">{category.name}</span>
+            </nav>
+          </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
             {/* Title & Description */}

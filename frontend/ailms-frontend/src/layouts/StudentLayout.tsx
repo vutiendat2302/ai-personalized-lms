@@ -63,9 +63,6 @@ export const StudentLayout: React.FC = () => {
         { label: "Khóa học của tôi", path: "/student/courses", icon: Sparkles },
         { label: "Lịch học & Thi", path: "/student/schedule", icon: Calendar },
         { label: "Bài tập cần nộp", path: "/student/assignments", icon: CheckSquare, badgeCount: 2 },
-        { label: "Chứng chỉ & Kết quả", path: "/student/certificates", icon: Award },
-        { label: "Tiến độ học tập", path: "/student/progress", icon: BarChart2 },
-        { label: "Mục tiêu & Streak", path: "/student/goals", icon: Target },
       ],
     },
     {

@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigationType } from "react-router-dom";
 import { AuthProvider } from "./hooks/AuthProvider";
 import { useAuth } from "./hooks/useAuth";
 import { Landing } from "./pages/Landing";
@@ -102,14 +102,29 @@ import { UserRole } from "./config/roles";
 import { getPortalHomePath } from "./utils/workspaceUtils";
 import { useModalStore } from "./store/useModalStore";
 
-// Component to reset scroll position to top on route change
+// Component to manage smart scroll position restoration on route change
 const ScrollToTop: React.FC = () => {
-  const { pathname, search, hash } = useLocation();
+  const location = useLocation();
+  const navType = useNavigationType();
 
+  // Save scroll position for current route key and pathname
   useEffect(() => {
-    if (hash) {
+    const handleScroll = () => {
+      if (window.scrollY > 0) {
+        sessionStorage.setItem(`scroll_key_${location.key}`, String(window.scrollY));
+        sessionStorage.setItem(`scroll_path_${location.pathname}`, String(window.scrollY));
+      }
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [location.key, location.pathname]);
+
+  // Restore scroll position or scroll to top
+  useEffect(() => {
+    if (location.hash) {
       const timer = setTimeout(() => {
-        const id = hash.replace("#", "");
+        const id = location.hash.replace("#", "");
         const el = document.getElementById(id);
         if (el) {
           el.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -117,8 +132,32 @@ const ScrollToTop: React.FC = () => {
       }, 100);
       return () => clearTimeout(timer);
     }
-    window.scrollTo(0, 0);
-  }, [pathname, search, hash]);
+
+    const savedByKey = sessionStorage.getItem(`scroll_key_${location.key}`);
+    const savedByPath = sessionStorage.getItem(`scroll_path_${location.pathname}`);
+    const targetScrollY = savedByKey ?? savedByPath;
+
+    if (navType === "POP" && targetScrollY !== null) {
+      const targetY = parseInt(targetScrollY, 10);
+      if (!isNaN(targetY) && targetY > 0) {
+        let attempts = 0;
+        const maxAttempts = 30; // 30 * 50ms = 1500ms window for async page load
+        const interval = setInterval(() => {
+          attempts++;
+          window.scrollTo(0, targetY);
+          if (Math.abs(window.scrollY - targetY) < 15 || attempts >= maxAttempts) {
+            clearInterval(interval);
+          }
+        }, 50);
+        return () => clearInterval(interval);
+      }
+    }
+
+    // Default for PUSH: scroll to top for new pages
+    if (navType === "PUSH") {
+      window.scrollTo(0, 0);
+    }
+  }, [location.key, location.pathname, location.search, location.hash, navType]);
 
   return null;
 };
@@ -193,7 +232,6 @@ function App() {
               <Route path="/no-workspace" element={<NoWorkspacePage />} />
               <Route path="/dashboard" element={<PortalResolver />} />
               <Route path="/profile" element={<Profile />} />
-              <Route path="/activity-log" element={<ActivityLog />} />
             </Route>
 
             {/* 1. MANAGEMENT PORTAL (ADMIN & HR) */}
@@ -309,6 +347,7 @@ function App() {
                 <Route path="/student/cart" element={<StudentCartPage />} />
                 <Route path="/student/vouchers" element={<StudentVouchersPage />} />
                 <Route path="/student/orders" element={<StudentOrdersPage />} />
+                <Route path="/activity-log" element={<ActivityLog />} />
               </Route>
             </Route>
 

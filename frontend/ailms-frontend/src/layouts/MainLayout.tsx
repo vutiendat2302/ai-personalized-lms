@@ -15,7 +15,8 @@ export const MainLayout: React.FC = () => {
     location.pathname.startsWith("/admin") ||
     location.pathname.startsWith("/management") ||
     location.pathname.startsWith("/sales") ||
-    location.pathname.startsWith("/student");
+    location.pathname.startsWith("/student") ||
+    location.pathname.startsWith("/activity-log");
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground transition-colors duration-200">

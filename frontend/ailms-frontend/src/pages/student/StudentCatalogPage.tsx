@@ -10,20 +10,23 @@ import { ShoppingBag, Star, ArrowLeft, ShoppingCart, CheckCircle2 } from "lucide
 export const StudentCatalogPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { success } = useToast();
+  const { success, error } = useToast();
 
   const [catalog, setCatalog] = useState<CatalogCourseItem[]>([]);
   const [selectedCourse, setSelectedCourse] = useState<CatalogCourseItem | null>(null);
-  const [selectedPackageId, setSelectedPackageId] = useState<string>("pkg-2");
+  const [selectedPackageId, setSelectedPackageId] = useState<string>("");
   const [selectedSlots, setSelectedSlots] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    studentApi.getCatalog().then((res) => {
-      setCatalog(res);
+    studentApi.getCatalog({ page: 0, size: 100 }).then((res) => {
+      setCatalog(res.content);
       if (id) {
-        const found = res.find((c) => c.id === id);
-        if (found) setSelectedCourse(found);
+        const found = res.content.find((c) => c.id === id);
+        if (found) {
+          setSelectedCourse(found);
+          setSelectedPackageId(found.packages[0]?.id ?? "");
+        }
       }
       setLoading(false);
     });
@@ -33,12 +36,17 @@ export const StudentCatalogPage: React.FC = () => {
     return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(val);
   };
 
-  const handleAddToCart = () => {
+  const handleAddToCart = async () => {
     const pkg = selectedCourse?.packages.find((p) => p.id === selectedPackageId);
     if (pkg?.deliveryMode === "ONE_ON_ONE" && selectedSlots.length < 2) {
-      alert("Vui lòng chọn ít nhất 2 khung giờ mong muốn khi mua gói kèm 1-1!");
+      error("Vui lòng chọn ít nhất 2 khung giờ mong muốn khi mua gói kèm 1-1!");
       return;
     }
+    if (!pkg) {
+      error("Vui lòng chọn một gói học đang mở bán.");
+      return;
+    }
+    await studentApi.addToCart(pkg.id);
     success(`Đã thêm gói [${pkg?.name}] vào giỏ hàng thành công!`);
     navigate("/student/cart");
   };
@@ -62,13 +70,17 @@ export const StudentCatalogPage: React.FC = () => {
           variant="outline"
           size="sm"
           onClick={() => {
-            setSelectedCourse(null);
-            navigate("/student/catalog");
+            if (window.history.length > 1) {
+              navigate(-1);
+            } else {
+              setSelectedCourse(null);
+              navigate("/student/catalog");
+            }
           }}
           className="rounded-lg gap-1.5 text-xs border-border text-foreground cursor-pointer"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          Quay lại danh mục khóa học
+          Quay lại
         </Button>
 
         <Card className="bg-card border-border/40 p-6 space-y-6 shadow-md">
@@ -142,7 +154,7 @@ export const StudentCatalogPage: React.FC = () => {
                 <span className="text-[10px] font-bold uppercase text-primary tracking-wider">{crs.categoryName}</span>
                 <h3 className="text-base font-bold text-foreground mt-0.5">{crs.title}</h3>
               </div>
-              {crs.isEnrolled && (
+              {crs.enrolled && (
                 <span className="px-2.5 py-0.5 text-[9px] font-extrabold bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 rounded border border-emerald-300 dark:border-emerald-800 flex items-center gap-1">
                   <CheckCircle2 className="h-3 w-3" />
                   Đã sở hữu
@@ -162,7 +174,10 @@ export const StudentCatalogPage: React.FC = () => {
 
             <Button
               size="sm"
-              onClick={() => setSelectedCourse(crs)}
+              onClick={() => {
+                setSelectedCourse(crs);
+                setSelectedPackageId(crs.packages[0]?.id ?? "");
+              }}
               className="w-full bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold rounded-lg cursor-pointer"
             >
               Xem chi tiết & Chọn gói học

@@ -50,6 +50,21 @@ def _generate_class_online_code(cursor):
     raise RuntimeError("Tao ma code that bai BH sau 10 lan")
 
 
+def _package_code_exists(cursor, code):
+    """Kiểm tra mã gói đã tồn tại trong dữ liệu hiện hành."""
+    return _exists(cursor, "SELECT 1 FROM course_package WHERE code=%s LIMIT 1", (code,))
+
+
+def _generate_package_code(cursor):
+    """Sinh mã gói tương thích CodeGenerator của backend."""
+    yy_mm = datetime.now().strftime("%y%m")
+    for _ in range(10):
+        candidate = f"CP-{yy_mm}-{uuid.uuid4().hex[:6].upper()}"
+        if not _package_code_exists(cursor, candidate):
+            return candidate
+    raise RuntimeError("Tao ma code that bai CP sau 10 lan")
+
+
 def _backfill_class_online_codes(cursor):
     cursor.execute("SELECT id FROM class_online WHERE code IS NULL OR TRIM(code) = ''")
     rows = cursor.fetchall()
@@ -83,13 +98,13 @@ def _insert_package(cursor, course, name, mode, price, duration, class_id=None):
     cursor.execute(
         """
         INSERT INTO course_package (
-            id, course_id, class_id, name, description, delivery_mode,
+            id, code, course_id, class_id, name, description, delivery_mode,
             price, original_price, duration_days, included_tutor_sessions,
             max_group_size, status, created_at, updated_at, created_by, updated_by
-        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'ACTIVE',%s,%s,%s,%s)
+        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'ACTIVE',%s,%s,%s,%s)
         """,
         (
-            snowflake.next_id(), course["id"], class_id, name,
+            snowflake.next_id(), _generate_package_code(cursor), course["id"], class_id, name,
             f"Gói {name} dành cho khóa học {course['name']}", mode,
             price, (price * Decimal("1.15")).quantize(Decimal("1")), duration,
             8 if mode == "ONE_ON_ONE" else 0,

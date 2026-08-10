@@ -14,9 +14,73 @@ import {
   Video,
   FileCode,
   ArrowLeft,
-  VideoIcon,
   RefreshCcw,
+  Users,
+  UserCheck,
+  Layers,
+  BookOpen,
+  Calendar,
 } from "lucide-react";
+
+const getCourseImage = (categoryName?: string) => {
+  const images = [
+    "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800&auto=format&fit=crop&q=80",
+    "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=800&auto=format&fit=crop&q=80",
+    "https://images.unsplash.com/photo-1531482615713-2afd69097998?w=800&auto=format&fit=crop&q=80",
+    "https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=800&auto=format&fit=crop&q=80",
+  ];
+  if (!categoryName) return images[0];
+  const charCodeSum = categoryName.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  return images[charCodeSum % images.length];
+};
+
+const renderDeliveryBadge = (mode?: string) => {
+  switch (mode) {
+    case "GROUP_CLASS":
+      return (
+        <span className="px-2.5 py-1 text-[11px] font-extrabold bg-blue-500/90 text-white rounded-lg backdrop-blur-sm shadow-xs flex items-center gap-1.5">
+          <Users className="h-3 w-3" />
+          Lớp học nhóm
+        </span>
+      );
+    case "ONE_ON_ONE":
+      return (
+        <span className="px-2.5 py-1 text-[11px] font-extrabold bg-purple-500/90 text-white rounded-lg backdrop-blur-sm shadow-xs flex items-center gap-1.5">
+          <UserCheck className="h-3 w-3" />
+          Kèm 1:1
+        </span>
+      );
+    case "COMBO":
+      return (
+        <span className="px-2.5 py-1 text-[11px] font-extrabold bg-amber-500/90 text-white rounded-lg backdrop-blur-sm shadow-xs flex items-center gap-1.5">
+          <Layers className="h-3 w-3" />
+          Gói Combo
+        </span>
+      );
+    default:
+      return (
+        <span className="px-2.5 py-1 text-[11px] font-extrabold bg-emerald-500/90 text-white rounded-lg backdrop-blur-sm shadow-xs flex items-center gap-1.5">
+          <BookOpen className="h-3 w-3" />
+          Tự học linh hoạt
+        </span>
+      );
+  }
+};
+
+const formatExpiryDate = (isoStr?: string) => {
+  if (!isoStr) return "Không giới hạn";
+  try {
+    const date = new Date(isoStr);
+    if (isNaN(date.getTime())) return isoStr;
+    return date.toLocaleDateString("vi-VN", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  } catch {
+    return isoStr;
+  }
+};
 
 export const StudentMyCoursesPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -70,7 +134,7 @@ export const StudentMyCoursesPage: React.FC = () => {
             <ArrowLeft className="h-3.5 w-3.5" />
             Quay lại danh sách khóa học
           </Button>
-          <span className="text-xs font-bold text-primary">{courseDetail.title}</span>
+          <span className="text-xs font-bold text-primary">{courseDetail.courseName}</span>
         </div>
 
         {/* Learning Player 2-Column Grid */}
@@ -82,31 +146,27 @@ export const StudentMyCoursesPage: React.FC = () => {
               <div className="space-y-3">
                 {courseDetail.sections.map((sec) => (
                   <div key={sec.id} className="space-y-1.5">
-                    <h4 className="text-xs font-bold text-foreground">{sec.title}</h4>
+                    <h4 className="text-xs font-bold text-foreground">{sec.name}</h4>
                     <div className="space-y-1 pl-1">
                       {sec.lessons.map((les) => (
                         <div
                           key={les.id}
                           onClick={() => {
-                            if (!les.isLocked) setActiveLessonId(les.id);
+                            setActiveLessonId(les.id);
                           }}
                           className={`p-2.5 rounded-xl border text-xs flex items-center justify-between transition cursor-pointer ${
                             les.id === activeLessonId
                               ? "bg-primary text-primary-foreground border-primary shadow-xs font-bold"
-                              : les.isLocked
-                              ? "bg-muted/30 border-border/40 text-muted-foreground opacity-60 cursor-not-allowed"
                               : "bg-background border-border/40 text-foreground hover:bg-muted"
                           }`}
                         >
                           <div className="flex items-center gap-2 truncate">
-                            {les.isCompleted ? (
+                            {les.completed ? (
                               <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                            ) : les.isLocked ? (
-                              <Lock className="h-3.5 w-3.5 shrink-0" />
                             ) : (
                               <Video className="h-3.5 w-3.5 shrink-0" />
                             )}
-                            <span className="truncate">{les.title}</span>
+                            <span className="truncate">{les.name}</span>
                           </div>
                         </div>
                       ))}
@@ -120,33 +180,19 @@ export const StudentMyCoursesPage: React.FC = () => {
           {/* Main Area: Player & Content */}
           <div className="md:col-span-8 space-y-4">
             <Card className="bg-card border-border/40 p-5 space-y-4 shadow-xs">
-              <h2 className="text-base font-bold text-foreground">{currentLesson?.title || "Đang tải bài học..."}</h2>
+              <h2 className="text-base font-bold text-foreground">{currentLesson?.name || "Đang tải bài học..."}</h2>
 
               {/* Video Player Box */}
               {currentLesson?.contentType === "VIDEO" && (
                 <div className="aspect-video bg-black rounded-xl overflow-hidden flex items-center justify-center border border-border/40">
-                  <video src={currentLesson.videoUrl} controls className="w-full h-full object-contain" />
+                  <video src={currentLesson.contentUrl} controls className="w-full h-full object-contain" />
                 </div>
               )}
 
               {/* Text Content Box */}
               {currentLesson?.contentType === "TEXT" && (
                 <div className="p-4 bg-muted/30 border border-border/40 rounded-xl text-xs leading-relaxed text-foreground space-y-2">
-                  <p>{currentLesson.textContent}</p>
-                </div>
-              )}
-
-              {/* Inline Quiz / Assignment Section */}
-              {currentLesson?.hasQuiz && (
-                <div className="p-4 bg-primary/10 border border-primary/20 rounded-xl space-y-2">
-                  <h4 className="text-xs font-bold text-primary">Bài tập Quiz đi kèm bài học này</h4>
-                  <Button
-                    size="sm"
-                    onClick={() => navigate("/student/assignments")}
-                    className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold rounded-lg cursor-pointer"
-                  >
-                    Bắt đầu làm Quiz ngay
-                  </Button>
+                  <p>{currentLesson.description}</p>
                 </div>
               )}
             </Card>
@@ -155,6 +201,8 @@ export const StudentMyCoursesPage: React.FC = () => {
       </div>
     );
   }
+
+  const activeCoursesList = courses.filter((c) => c.status === activeTab);
 
   // MAIN MY COURSES LIST VIEW
   return (
@@ -204,47 +252,112 @@ export const StudentMyCoursesPage: React.FC = () => {
       </div>
 
       {/* Courses Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {courses
-          .filter((c) => c.status === activeTab)
-          .map((crs) => (
-            <Card key={crs.id} className="bg-card border-border/40 p-5 space-y-4 shadow-xs">
-              <div className="flex items-start justify-between gap-3">
-                <div className="space-y-1">
-                  <span className="px-2 py-0.5 text-[9px] font-extrabold bg-primary/10 text-primary rounded border border-primary/20">
-                    {crs.deliveryMode}
-                  </span>
-                  <h3 className="text-sm font-bold text-foreground line-clamp-2">{crs.title}</h3>
-                  <p className="text-[11px] text-muted-foreground">{crs.categoryName}</p>
-                </div>
-                <CourseProgressRing percent={crs.progressPercent} size={44} />
-              </div>
+      {activeCoursesList.length === 0 ? (
+        <div className="py-16 text-center text-muted-foreground space-y-3 bg-card rounded-2xl border border-border/40">
+          <BookOpen className="h-10 w-10 text-muted-foreground/50 mx-auto" />
+          <p className="text-sm font-semibold">Chưa có khóa học nào ở trạng thái này.</p>
+          <Button
+            onClick={() => navigate("/student/catalog")}
+            size="sm"
+            className="rounded-xl text-xs font-bold"
+          >
+            Khám phá catalog khóa học ngay
+          </Button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+          {activeCoursesList.map((crs) => {
+            const progress = crs.progressPercent || 0;
+            return (
+              <div
+                key={crs.id}
+                onClick={() => navigate(`/learn/courses/${crs.id}`)}
+                className="flex flex-col bg-card rounded-2xl border border-border/70 shadow-sm hover:shadow-xl hover:border-primary/40 hover:-translate-y-1.5 cursor-pointer overflow-hidden group transition-all duration-300"
+              >
+                {/* Cover Image Thumbnail */}
+                <div className="relative aspect-video overflow-hidden bg-muted">
+                  <img
+                    src={crs.coverImage || getCourseImage(crs.categoryName)}
+                    alt={crs.title}
+                    className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300"
+                  />
 
-              <div className="pt-2 border-t border-border/40 flex items-center justify-between text-xs">
-                <span className="text-[11px] text-muted-foreground">Hạn: {crs.expiresAt}</span>
-                {crs.status === "EXPIRED" ? (
-                  <Button
-                    size="sm"
-                    onClick={() => navigate("/student/catalog")}
-                    className="bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-lg h-8 px-3 gap-1 cursor-pointer"
-                  >
-                    <RefreshCcw className="h-3.5 w-3.5" />
-                    Gia hạn ngay
-                  </Button>
-                ) : (
-                  <Button
-                    size="sm"
-                    onClick={() => navigate(`/learn/courses/${crs.id}`)}
-                    className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold rounded-lg h-8 px-3 gap-1 cursor-pointer"
-                  >
-                    <Play className="h-3.5 w-3.5 fill-primary-foreground" />
-                    Vào học
-                  </Button>
-                )}
+                  {/* Delivery Mode Badge (Top-left) */}
+                  <div className="absolute top-3 left-3">
+                    {renderDeliveryBadge(crs.deliveryMode)}
+                  </div>
+
+                  {/* Progress Ring / Percentage Pill (Top-right) */}
+                  <div className="absolute top-3 right-3 bg-card/90 backdrop-blur-md px-2.5 py-1 rounded-lg text-xs font-extrabold text-primary shadow-sm flex items-center gap-1 font-mono">
+                    <span>{progress}%</span>
+                  </div>
+                </div>
+
+                {/* Card Content */}
+                <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
+                  <div className="space-y-2">
+                    <span className="text-[11px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-primary/10 text-primary inline-block">
+                      {crs.categoryName || "Khóa học AILMS"}
+                    </span>
+
+                    <h3 className="font-bold text-foreground text-sm leading-snug line-clamp-2 group-hover:text-primary transition-colors">
+                      {crs.title}
+                    </h3>
+                  </div>
+
+                  {/* Progress Bar */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between items-center text-[11px]">
+                      <span className="text-muted-foreground font-medium">Tiến độ học</span>
+                      <span className="font-bold font-mono text-primary">{progress}%</span>
+                    </div>
+                    <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className="h-2 bg-primary rounded-full transition-all duration-500"
+                        style={{ width: `${progress}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Footer Action */}
+                  <div className="pt-3 border-t border-border/60 flex items-center justify-between">
+                    <div className="flex items-center gap-1 text-[11px] text-muted-foreground font-medium">
+                      <Calendar className="h-3.5 w-3.5 text-primary shrink-0" />
+                      <span>Hạn: {formatExpiryDate(crs.expiresAt)}</span>
+                    </div>
+
+                    {crs.status === "EXPIRED" ? (
+                      <Button
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate("/student/catalog");
+                        }}
+                        className="bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl h-8 px-3 gap-1 cursor-pointer shadow-xs"
+                      >
+                        <RefreshCcw className="h-3.5 w-3.5" />
+                        Gia hạn
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/learn/courses/${crs.id}`);
+                        }}
+                        className="bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-bold rounded-xl h-8 px-3.5 gap-1.5 cursor-pointer shadow-xs group-hover:translate-x-0.5 transition-transform"
+                      >
+                        <Play className="h-3.5 w-3.5 fill-white" />
+                        Vào học
+                      </Button>
+                    )}
+                  </div>
+                </div>
               </div>
-            </Card>
-          ))}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };

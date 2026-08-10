@@ -92,7 +92,7 @@ export const StudentOrdersPage: React.FC = () => {
               <div className="flex items-start justify-between gap-3 border-b border-border/40 pb-3">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-foreground font-mono">{ord.snowflakeId}</span>
+                    <span className="text-sm font-bold text-foreground font-mono">{ord.id}</span>
                     <span
                       className={`px-2.5 py-0.5 text-[10px] font-extrabold rounded-full ${
                         ord.status === "PAID"
@@ -175,7 +175,7 @@ export const StudentOrdersPage: React.FC = () => {
         <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
           <div className="bg-popover border border-border rounded-2xl p-6 max-w-md w-full space-y-4 shadow-xl">
             <div className="flex items-center justify-between border-b border-border/40 pb-3">
-              <h3 className="text-base font-bold text-foreground">Yêu cầu hoàn tiền đơn {selectedOrder.snowflakeId}</h3>
+              <h3 className="text-base font-bold text-foreground">Yêu cầu hoàn tiền đơn {selectedOrder.id}</h3>
               <button onClick={() => setShowRefundModal(false)} className="text-muted-foreground hover:text-foreground">
                 <X className="h-5 w-5" />
               </button>

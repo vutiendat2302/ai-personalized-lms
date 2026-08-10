@@ -2874,5 +2874,37 @@ flowchart TD
 
 ## 15. AI
 
+---
 
+## 16. Student portal API
 
+Các API bên dưới yêu cầu JWT có `ROLE_STUDENT`. Backend luôn suy ra học viên từ JWT, không nhận `userId` từ client.
+
+| Method | Endpoint | Chức năng |
+|---|---|---|
+| `GET` | `/api/v1/student/activities/learning?page=0&size=20&action=LESSON_VIEW&from=2026-01-01T00:00:00&to=2026-01-31T23:59:59` | Lịch sử learning phân trang, lọc theo hành động/khoảng thời gian và trả tên đối tượng |
+| `GET` | `/api/v1/student/activities/learning/{id}` | Chi tiết lịch sử learning thuộc học viên |
+| `DELETE` | `/api/v1/student/activities/learning/{id}` | Xóa lịch sử learning thuộc học viên |
+| `GET` | `/api/v1/student/activities/system?page=0&size=20&action=LOGIN&from=2026-01-01T00:00:00&to=2026-01-31T23:59:59` | Lịch sử hệ thống phân trang và lọc theo hành động/khoảng thời gian |
+| `GET` | `/api/v1/student/activities/system/{id}` | Chi tiết lịch sử hệ thống thuộc học viên |
+| `DELETE` | `/api/v1/student/activities/system/{id}` | Xóa lịch sử hệ thống thuộc học viên |
+| `GET` | `/api/v1/student/dashboard/metrics` | Streak, số khóa học, điểm quiz và bài tập đến hạn trong 14 ngày |
+| `GET` | `/api/v1/student/catalog?page=0&size=12&keyword=java` | Catalog khóa học mở bán phân trang, tìm theo tên/mã/danh mục và ưu tiên sở thích |
+| `GET` | `/api/v1/student/courses?status=ACTIVE` | Khóa học học viên đã ghi danh kèm tiến độ, lọc `ACTIVE`, `COMPLETED` hoặc `EXPIRED` |
+| `GET` | `/api/v1/student/courses/{courseId}` | Cây nội dung và tiến độ cá nhân của khóa học |
+| `GET` | `/api/v1/student/schedule` | Lịch học trực tuyến sắp tới |
+| `GET` | `/api/v1/student/assignments` | Bài tập và trạng thái bài nộp |
+| `GET` | `/api/v1/student/certificates` | Chứng chỉ đã cấp |
+| `GET` | `/api/v1/student/progress` | Phân tích hoạt động 30 ngày và tiến độ khóa học |
+| `GET` | `/api/v1/student/goals` | Mục tiêu học tập |
+| `POST` | `/api/v1/student/goals` | Tạo mục tiêu cho học viên hiện tại |
+| `PUT` | `/api/v1/student/goals/{goalId}` | Cập nhật mục tiêu chung hiện tại |
+| `GET` | `/api/v1/student/cart` | Các gói học trong giỏ hàng |
+| `POST` | `/api/v1/student/cart/coupon` | Kiểm tra và tính tiền giảm từ coupon |
+| `GET` | `/api/v1/student/orders` | Lịch sử đơn hàng và chi tiết sản phẩm |
+| `POST` | `/api/v1/student/cart` | Thêm gói học đang mở bán vào giỏ |
+| `POST` | `/api/v1/student/orders/{orderId}/refund` | Hoàn tiền đơn thuộc học viên hiện tại |
+| `POST` | `/api/v1/student/onboarding` | Hoàn tất mục tiêu và sở thích ban đầu |
+| `GET` | `/api/v1/student/profile` hoặc `/api/v1/student/profile/personalization` | Trình độ học vấn, mục tiêu đến AILMS, nền tảng, trường học, mục tiêu học tập và chủ đề/sở thích đã chọn |
+
+Streak được tính từ các ngày có `learning_activity_log`. Job `StudentStreakRefreshJob` chạy lúc `00:05` theo múi giờ `Asia/Bangkok` để đánh giá và đồng bộ lại các mục tiêu học tập. Catalog ưu tiên khóa học có danh mục khớp sở thích; khi học viên chưa có sở thích phù hợp, thứ tự fallback dựa trên lượt ghi danh, số đánh giá 5 sao và điểm đánh giá trung bình. Trường `deliveryMode` giữ nguyên enum backend: `SELF_STUDY`, `GROUP_CLASS`, `ONE_ON_ONE`, `COMBO`.

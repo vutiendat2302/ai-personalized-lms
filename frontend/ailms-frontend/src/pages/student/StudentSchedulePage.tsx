@@ -23,6 +23,11 @@ import { useNavigate } from "react-router-dom";
 type CalendarViewMode = "WEEK" | "MONTH" | "TIMELINE";
 
 export const StudentSchedulePage: React.FC = () => {
+  const eventDate = (event: ScheduleEventItem) => event.startAt.slice(0, 10);
+  const eventDay = (event: ScheduleEventItem) => new Date(event.startAt).getDay() || 7;
+  const eventTime = (event: ScheduleEventItem) => new Date(event.startAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+  const eventStartHour = (event: ScheduleEventItem) => new Date(event.startAt).getHours();
+  const eventEndHour = (event: ScheduleEventItem) => event.endAt ? new Date(event.endAt).getHours() : eventStartHour(event) + 1;
   const navigate = useNavigate();
   const { success } = useToast();
 
@@ -185,7 +190,7 @@ export const StudentSchedulePage: React.FC = () => {
             {/* Week Grid Slots */}
             <div className="grid grid-cols-7 gap-2 pt-3 min-h-[420px]">
               {daysOfWeekLabels.map((d) => {
-                const dayEvents = filteredEvents.filter((ev) => ev.dayOfWeek === d.dayIdx);
+                const dayEvents = filteredEvents.filter((ev) => eventDay(ev) === d.dayIdx);
                 return (
                   <div key={d.dayIdx} className="bg-muted/30 border border-border/40 rounded-xl p-2 space-y-2 min-h-[380px]">
                     {dayEvents.length === 0 ? (
@@ -206,7 +211,7 @@ export const StudentSchedulePage: React.FC = () => {
                           }`}
                         >
                           <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-bold font-mono text-primary">{ev.timeStr}</span>
+                            <span className="text-[10px] font-bold font-mono text-primary">{eventTime(ev)}</span>
                             <span className={`px-1.5 py-0.5 text-[8px] font-black rounded border ${getEventBadgeClasses(ev.type)}`}>
                               {ev.type === "ONLINE_CLASS" ? "Lớp" : ev.type === "ASSIGNMENT_DUE" ? "Bài tập" : "Quiz"}
                             </span>
@@ -254,7 +259,7 @@ export const StudentSchedulePage: React.FC = () => {
             {Array.from({ length: 31 }).map((_, idx) => {
               const dayNum = idx + 1;
               const dateString = `2026-08-${dayNum < 10 ? "0" + dayNum : dayNum}`;
-              const dayEvents = filteredEvents.filter((ev) => ev.dateStr === dateString);
+              const dayEvents = filteredEvents.filter((ev) => eventDate(ev) === dateString);
 
               return (
                 <div
@@ -268,7 +273,7 @@ export const StudentSchedulePage: React.FC = () => {
                       onClick={() => setSelectedEvent(ev)}
                       className={`p-1 rounded text-[10px] font-bold truncate border ${getEventBadgeClasses(ev.type)}`}
                     >
-                      {ev.timeStr} {ev.title.substring(0, 15)}...
+                      {eventTime(ev)} {ev.title.substring(0, 15)}...
                     </div>
                   ))}
                 </div>
@@ -291,9 +296,9 @@ export const StudentSchedulePage: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <h4 className="text-sm font-bold text-foreground">{ev.title}</h4>
-                    <p className="text-xs text-muted-foreground">{ev.className || "Tự học cá nhân"} ({ev.dateStr})</p>
+                    <p className="text-xs text-muted-foreground">{ev.className || "Tự học cá nhân"} ({eventDate(ev)})</p>
                   </div>
-                  <span className="text-xs font-mono font-bold text-primary">{ev.timeStr}</span>
+                  <span className="text-xs font-mono font-bold text-primary">{eventTime(ev)}</span>
                 </div>
 
                 {/* Timeline Bar */}
@@ -306,9 +311,9 @@ export const StudentSchedulePage: React.FC = () => {
                         ? "bg-amber-500 text-white"
                         : "bg-purple-600 text-white"
                     }`}
-                    style={{ left: `${((ev.startHour - 8) / 16) * 100}%`, width: `${Math.max(12, ((ev.endHour - ev.startHour) / 16) * 100)}%` }}
+                    style={{ left: `${((eventStartHour(ev) - 8) / 16) * 100}%`, width: `${Math.max(12, ((eventEndHour(ev) - eventStartHour(ev)) / 16) * 100)}%` }}
                   >
-                    {ev.timeStr}
+                    {eventTime(ev)}
                   </div>
                 </div>
               </div>
@@ -334,7 +339,7 @@ export const StudentSchedulePage: React.FC = () => {
             </div>
 
             <div className="space-y-2 text-xs text-foreground bg-muted/30 p-3 rounded-xl border border-border/40">
-              <p><strong>Thời gian:</strong> {selectedEvent.timeStr} ({selectedEvent.dateStr})</p>
+              <p><strong>Thời gian:</strong> {eventTime(selectedEvent)} ({eventDate(selectedEvent)})</p>
               {selectedEvent.className && <p><strong>Lớp học:</strong> {selectedEvent.className}</p>}
               {selectedEvent.teacherName && <p><strong>Giảng viên phụ trách:</strong> {selectedEvent.teacherName}</p>}
             </div>

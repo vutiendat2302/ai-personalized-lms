@@ -10,7 +10,7 @@ export const StudentCartPage: React.FC = () => {
   const navigate = useNavigate();
   const { success, error } = useToast();
 
-  const [cartItems, setCartItems] = useState<StudentCartItem[]>([]);
+  const [cartItems, setCartItems] = useState<Array<StudentCartItem & { isSelected: boolean }>>([]);
   const [couponCode, setCouponCode] = useState("");
   const [discountAmount, setDiscountAmount] = useState(0);
   const [couponError, setCouponError] = useState("");
@@ -19,7 +19,7 @@ export const StudentCartPage: React.FC = () => {
 
   useEffect(() => {
     studentApi.getCart().then((res) => {
-      setCartItems(res);
+      setCartItems(res.map((item) => ({ ...item, isSelected: true })));
       setLoading(false);
     });
   }, []);
@@ -40,7 +40,7 @@ export const StudentCartPage: React.FC = () => {
     if (!couponCode.trim()) return;
 
     const res = await studentApi.validateCoupon(couponCode);
-    if (res.isValid) {
+    if (res.valid) {
       setDiscountAmount(res.discountAmount);
       setCouponApplied(true);
       success(res.message);
