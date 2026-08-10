@@ -4,13 +4,13 @@ import com.ailms.dto.CourseSuggestion;
 import com.ailms.entity.CourseEntity;
 import com.ailms.entity.enums.CourseStatusEnum;
 import com.ailms.repository.base.BaseRepository;
-import io.lettuce.core.dynamic.annotation.Param;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -55,4 +55,22 @@ public interface CourseRepository extends BaseRepository<CourseEntity, Long> {
         ORDER BY c.trendingScore DESC, c.reviewCount DESC, c.avgRating DESC
         """)
     List<CourseSuggestion> findTopActiveCourses(Pageable pageable);
+
+    /** Lấy khóa học đang bán, hỗ trợ tìm kiếm theo tên, mã hoặc danh mục. */
+    @Query("""
+        SELECT c FROM CourseEntity c
+        WHERE c.status = com.ailms.entity.enums.CourseStatusEnum.ACTIVE
+          AND EXISTS (SELECT p.id FROM CoursePackageEntity p
+                      WHERE p.courseEntity.id = c.id
+                        AND p.status = com.ailms.entity.enums.CoursePackageStatusEnum.ACTIVE)
+          AND (:keyword IS NULL OR LOWER(c.name) LIKE LOWER(CONCAT('%', :keyword, '%'))
+               OR LOWER(c.code) LIKE LOWER(CONCAT('%', :keyword, '%'))
+               OR LOWER(c.categoryEntity.name) LIKE LOWER(CONCAT('%', :keyword, '%')))
+        ORDER BY c.enrollmentCount DESC,
+          (SELECT COUNT(r.id) FROM ReviewEntity r
+           WHERE r.courseId = c.id AND r.rating = 5
+             AND r.status = com.ailms.entity.enums.ReviewStatusEnum.ACTIVE) DESC,
+          c.avgRating DESC
+        """)
+    Page<CourseEntity> findActiveCoursesForSale(@Param("keyword") String keyword, Pageable pageable);
 }

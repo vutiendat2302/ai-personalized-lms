@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.time.LocalDateTime;
 
 @Repository
 public interface AssignmentRepository extends BaseRepository<AssignmentEntity, Long> {
@@ -15,4 +16,8 @@ public interface AssignmentRepository extends BaseRepository<AssignmentEntity, L
     List<AssignmentEntity> findByCourseId(Long courseId);
 
     List<AssignmentEntity> findBySectionId(Long sectionId);
+
+    /** Lấy bài tập sắp đến hạn của các khóa học đã ghi danh. */
+    List<AssignmentEntity> findByCourseIdInAndDueDateBetweenOrderByDueDateAsc(
+            List<Long> courseIds, LocalDateTime from, LocalDateTime to);
 }
