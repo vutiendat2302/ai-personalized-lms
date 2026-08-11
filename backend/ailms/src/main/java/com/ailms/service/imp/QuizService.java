@@ -1,5 +1,7 @@
 package com.ailms.service.imp;
 
+import com.ailms.entity.ClassEntity;
+import com.ailms.exception.BusinessException;
 import com.ailms.repository.specification.QuizSpecification;
 import com.ailms.request.QuizSearchRequest;
 import com.ailms.service.IQuizService;
@@ -8,6 +10,7 @@ import com.ailms.entity.QuizEntity;
 import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.mapper.QuizMapper;
 import com.ailms.repository.QuizRepository;
+import com.ailms.repository.ClassRepository;
 import com.ailms.request.QuizRequest;
 import com.ailms.response.QuizResponse;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +40,7 @@ public class QuizService implements IQuizService {
 
     private final QuizRepository quizRepository;
     private final QuizMapper quizMapper;
+    private final ClassRepository classRepository;
 
     private static final String RESOURCE_NAME = "Quiz";
 
@@ -67,9 +71,16 @@ public class QuizService implements IQuizService {
         return quizMapper.toResponseList(quizRepository.findBySectionId(sectionId));
     }
 
+    /** Lấy quiz của lớp theo thời hạn tăng dần. */
+    @Override
+    public List<QuizResponse> getByClassId(Long classId) {
+        return quizMapper.toResponseList(quizRepository.findByClassIdOrderByDueAtAsc(classId));
+    }
+
     @Transactional
     public QuizResponse create(QuizRequest request) {
         log.info("Creating quiz: {}", request.getTitle());
+        normalizeClassCourse(request);
         QuizEntity entity = quizMapper.toEntity(request);
         QuizEntity saved = quizRepository.save(entity);
         return quizMapper.toResponse(saved);
@@ -80,6 +91,7 @@ public class QuizService implements IQuizService {
         log.info("Updating quiz: {}", id);
         QuizEntity existing = quizRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
+        normalizeClassCourse(request);
         quizMapper.updateFromRequest(request, existing);
         QuizEntity updated = quizRepository.save(existing);
         return quizMapper.toResponse(updated);
@@ -92,5 +104,17 @@ public class QuizService implements IQuizService {
             throw ResourceNotFoundException.of(RESOURCE_NAME, id);
         }
         quizRepository.deleteById(id);
+    }
+
+    /** Đồng bộ courseId từ lớp để quiz không thể trỏ sang khóa học khác. */
+    private void normalizeClassCourse(QuizRequest request) {
+        if (request.getClassId() == null) return;
+        ClassEntity clazz;
+        clazz = classRepository.findById(request.getClassId())
+                .orElseThrow(() -> ResourceNotFoundException.of("Class", request.getClassId()));
+        if (clazz.getCourseEntity() == null) {
+            throw new BusinessException("Lớp chưa được gắn với khóa học.");
+        }
+        request.setCourseId(clazz.getCourseEntity().getId());
     }
 }

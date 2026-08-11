@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { studentApi } from "@/api/student/studentApi";
 
 export interface SubmissionBlock {
   id: string;
@@ -42,12 +43,14 @@ export const LearningAssignmentPanel: React.FC<LearningAssignmentPanelProps> = (
   const [fileUrl, setFileUrl] = useState("");
   const [uploading, setUploading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   // Multi-block submission state for BLOCK_EDITOR mode
   const [blocks, setBlocks] = useState<SubmissionBlock[]>([
     { id: "b1", type: "paragraph", content: "" },
   ]);
 
+  /** Thêm một khối nội dung cục bộ vào trình soạn bài làm. */
   const addBlock = (type: SubmissionBlock["type"]) => {
     const newBlock: SubmissionBlock = {
       id: "b_" + Date.now() + "_" + Math.random().toString(36).substring(2, 6),
@@ -57,12 +60,14 @@ export const LearningAssignmentPanel: React.FC<LearningAssignmentPanelProps> = (
     setBlocks((prev) => [...prev, newBlock]);
   };
 
+  /** Cập nhật nội dung của một khối bài làm. */
   const updateBlock = (id: string, newContent: string) => {
     setBlocks((prev) =>
       prev.map((b) => (b.id === id ? { ...b, content: newContent } : b))
     );
   };
 
+  /** Xóa một khối nhưng luôn giữ tối thiểu một khối soạn thảo. */
   const removeBlock = (id: string) => {
     if (blocks.length <= 1) {
       toast.error("Bài làm phải có ít nhất 1 block nội dung.");
@@ -71,6 +76,7 @@ export const LearningAssignmentPanel: React.FC<LearningAssignmentPanelProps> = (
     setBlocks((prev) => prev.filter((b) => b.id !== id));
   };
 
+  /** Tải tệp lên kho tệp trước khi gửi tham chiếu cho API nộp bài. */
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -81,17 +87,18 @@ export const LearningAssignmentPanel: React.FC<LearningAssignmentPanelProps> = (
       const keyOrUrl = (res as any).fileUrl || res.fileKey;
       setFileUrl(keyOrUrl);
       toast.success("Tải tệp nộp bài lên thành công!");
-    } catch (err: any) {
+    } catch {
       toast.error("Không thể tải tệp nộp bài.");
     } finally {
       setUploading(false);
     }
   };
 
+  /** Đọc cấu hình hình thức nộp bài từ mô tả do backend trả về. */
   const parseAssignmentMeta = () => {
     if (!assignment.description) {
       return {
-        instructions: "Thực hiện bài tập tự luận theo hướng dẫn của giảng viên.",
+        instructions: "",
         submissionMode: "FILE_UPLOAD" as "FILE_UPLOAD" | "BLOCK_EDITOR",
       };
     }
@@ -100,10 +107,12 @@ export const LearningAssignmentPanel: React.FC<LearningAssignmentPanelProps> = (
         const parsed = JSON.parse(assignment.description);
         const mode = parsed.submissionMode;
         return {
-          instructions: parsed.instructions || "Thực hiện bài tập tự luận theo hướng dẫn của giảng viên.",
+          instructions: typeof parsed.instructions === "string" ? parsed.instructions : "",
           submissionMode: (mode === "BLOCK_EDITOR" || mode === "TEXT_ONLY" ? "BLOCK_EDITOR" : "FILE_UPLOAD") as "FILE_UPLOAD" | "BLOCK_EDITOR",
         };
-      } catch (e) {}
+      } catch {
+        return { instructions: assignment.description, submissionMode: "FILE_UPLOAD" as const };
+      }
     }
     return {
       instructions: assignment.description,
@@ -113,7 +122,8 @@ export const LearningAssignmentPanel: React.FC<LearningAssignmentPanelProps> = (
 
   const { instructions, submissionMode } = parseAssignmentMeta();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  /** Gửi bài làm thật lên backend rồi mới đánh dấu đã nộp trên giao diện. */
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submissionMode === "FILE_UPLOAD" && !fileUrl) {
       toast.error("Vui lòng chọn tệp bài làm hoặc dán đường dẫn đính kèm.");
@@ -126,11 +136,21 @@ export const LearningAssignmentPanel: React.FC<LearningAssignmentPanelProps> = (
         return;
       }
     }
-    setSubmitted(true);
-    toast.success("Đã gửi bài tập tự luận thành công!");
-    onComplete();
+    setSubmitting(true);
+    try {
+      const contentText = submissionMode === "BLOCK_EDITOR" ? JSON.stringify(blocks) : undefined;
+      await studentApi.submitAssignment(assignment.id, { contentText, fileUrl: fileUrl || undefined });
+      setSubmitted(true);
+      toast.success("Đã gửi bài tập tự luận thành công!");
+      onComplete();
+    } catch {
+      toast.error("Không thể nộp bài. Vui lòng kiểm tra hạn nộp hoặc trạng thái ghi danh.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
+  /** Định dạng thời hạn nộp bài theo múi giờ trình duyệt. */
   const formatVietnameseDate = (dateStr?: string) => {
     if (!dateStr) return "Không giới hạn";
     try {
@@ -158,9 +178,9 @@ export const LearningAssignmentPanel: React.FC<LearningAssignmentPanelProps> = (
           <div>
             <h2 className="text-xl font-bold text-gray-900">{assignment.title}</h2>
             <div className="flex items-center gap-4 text-xs text-gray-500 mt-1 font-medium">
-              <span className="flex items-center gap-1">
-                <Award className="w-3.5 h-3.5 text-purple-600" /> Điểm tối đa: <strong>{assignment.maxScore || 10.0} điểm</strong>
-              </span>
+              {assignment.maxScore != null && <span className="flex items-center gap-1">
+                <Award className="w-3.5 h-3.5 text-purple-600" /> Điểm tối đa: <strong>{assignment.maxScore} điểm</strong>
+              </span>}
               <span className="flex items-center gap-1 text-purple-700">
                 <Calendar className="w-3.5 h-3.5" /> Hạn nộp: <strong>{formatVietnameseDate(assignment.dueDate)}</strong>
               </span>
@@ -182,14 +202,14 @@ export const LearningAssignmentPanel: React.FC<LearningAssignmentPanelProps> = (
       </div>
 
       {/* Assignment Prompt */}
-      <div className="p-5 bg-purple-50/50 border border-purple-100 rounded-2xl space-y-2">
+      {instructions && <div className="p-5 bg-purple-50/50 border border-purple-100 rounded-2xl space-y-2">
         <h4 className="text-xs font-bold text-purple-950 uppercase tracking-wider flex items-center gap-1.5">
           <FileText className="w-4 h-4 text-purple-700" /> Đề bài & Hướng dẫn tự luận:
         </h4>
         <p className="whitespace-pre-wrap text-xs text-gray-700 leading-relaxed font-sans">
           {instructions}
         </p>
-      </div>
+      </div>}
 
       {submitted ? (
         <div className="p-8 bg-emerald-50/70 border border-emerald-200 rounded-2xl text-center space-y-4 shadow-2xs">
@@ -379,9 +399,11 @@ export const LearningAssignmentPanel: React.FC<LearningAssignmentPanelProps> = (
 
           <button
             type="submit"
+            disabled={submitting || uploading}
             className="w-full py-3.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-md cursor-pointer transition"
           >
-            <Send className="w-4 h-4" /> Nộp bài tập tự luận cho Giảng viên
+            {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            {submitting ? "Đang nộp bài..." : "Nộp bài tập cho giảng viên"}
           </button>
         </form>
       )}

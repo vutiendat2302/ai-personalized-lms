@@ -37,4 +37,8 @@ public interface ClassMemberRepository extends BaseRepository<ClassMemberEntity,
     // Tìm danh sách thành viên thuộc nhiều lớp học theo trạng thái (Eager load để tối ưu hiệu năng)
     @EntityGraph(attributePaths = {"classEntity", "userEntity"})
     List<ClassMemberEntity> findById_ClassIdInAndStatus(List<Long> classIds, ClassMemberStatusEnum status);
+
+    /** Lấy giáo viên và trợ giảng của lớp theo vai trò. */
+    List<ClassMemberEntity> findById_ClassIdAndRoleInClassInAndStatus(
+            Long classId, List<ClassMemberRole> roles, ClassMemberStatusEnum status);
 }

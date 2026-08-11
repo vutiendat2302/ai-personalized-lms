@@ -5,10 +5,7 @@ import com.ailms.entity.ClassOnlineEntity;
 import com.ailms.entity.EmployeeEntity;
 import com.ailms.entity.TeachingRateEntity;
 import com.ailms.entity.TeachingSessionPaymentEntity;
-import com.ailms.entity.enums.BaseStatusEnum;
-import com.ailms.entity.enums.EmployeeStatusEnum;
-import com.ailms.entity.enums.SessionPaymentStatusEnum;
-import com.ailms.entity.enums.UserStatusEnum;
+import com.ailms.entity.enums.*;
 import com.ailms.event.AuditLogEvent;
 import com.ailms.exception.BusinessException;
 import com.ailms.exception.ResourceNotFoundException;
@@ -102,6 +99,11 @@ public class TeachingSessionPaymentService implements ITeachingSessionPaymentSer
 
         ClassOnlineEntity classOnline = classOnlineRepository.findById(classOnlineId)
                 .orElseThrow(() -> ResourceNotFoundException.of("ClassOnline", classOnlineId));
+
+        if (!Boolean.TRUE.equals(classOnline.getPayable())
+                || classOnline.getSessionKind() == SessionKindEnum.TRIAL) {
+            throw new BusinessException("Buổi học thử 1-1 không được tính lương.");
+        }
 
         if (teachingSessionPaymentRepository.findByClassOnlineIdAndEmployee_UserId(classOnlineId, employeeId).isPresent()) {
             throw new BusinessException("Payment already exists for this employee and online class session.");

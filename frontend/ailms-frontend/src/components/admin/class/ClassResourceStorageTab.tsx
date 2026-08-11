@@ -39,13 +39,16 @@ interface ClassResourceStorageTabProps {
   className: string;
   membersCount?: number;
   currentUserName?: string;
+  currentUserRole?: "TEACHER" | "STUDENT" | "ADMIN";
 }
 
 export const ClassResourceStorageTab: React.FC<ClassResourceStorageTabProps> = ({
   classId,
   className,
   currentUserName = "Giảng viên",
+  currentUserRole = "TEACHER",
 }) => {
+  const canManageResources = currentUserRole !== "STUDENT";
   const [resources, setResources] = useState<ClassResourceItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState("");
@@ -263,17 +266,17 @@ export const ClassResourceStorageTab: React.FC<ClassResourceStorageTabProps> = (
           </p>
         </div>
 
-        <Button
+        {canManageResources && <Button
           onClick={() => setShowUploadForm(!showUploadForm)}
           className="rounded-2xl font-bold text-xs bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs gap-1.5 cursor-pointer"
         >
           <Plus className="h-4 w-4" />
           {showUploadForm ? "Đóng Form" : "Tải Lên Tài Liệu Mới"}
-        </Button>
+        </Button>}
       </div>
 
       {/* Form Upload Slide Down */}
-      {showUploadForm && (
+      {canManageResources && showUploadForm && (
         <Card className="border-indigo-100 bg-indigo-50/40 rounded-3xl overflow-hidden animate-in fade-in duration-200">
           <CardContent className="p-6 space-y-4">
             <h3 className="text-sm font-bold text-indigo-950 flex items-center gap-2">
@@ -417,7 +420,7 @@ export const ClassResourceStorageTab: React.FC<ClassResourceStorageTabProps> = (
                     <Download className="h-4 w-4" />
                   </Button>
 
-                  <Button
+                  {canManageResources && <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => handleDeleteResource(item.id)}
@@ -425,7 +428,7 @@ export const ClassResourceStorageTab: React.FC<ClassResourceStorageTabProps> = (
                     title="Xóa tài liệu"
                   >
                     <Trash2 className="h-4 w-4" />
-                  </Button>
+                  </Button>}
                 </div>
               </CardContent>
             </Card>

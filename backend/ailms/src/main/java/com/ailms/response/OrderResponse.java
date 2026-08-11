@@ -16,6 +16,7 @@ public class OrderResponse {
     private Long id;
     private Long userId;
     private String userName;
+    private String userEmail;
     private OrderStatusEnum status;
     private BigDecimal totalAmount;
     private BigDecimal discountAmount;

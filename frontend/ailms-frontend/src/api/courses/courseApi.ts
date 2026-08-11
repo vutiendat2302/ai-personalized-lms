@@ -9,7 +9,142 @@ import type {
   UpdateCategoryRequest
 } from "@/types/admin";
 
+export interface CourseMetrics {
+  courseId: string;
+  moduleCount: number;
+  averageRating: number;
+  reviewCount: number;
+  level?: string;
+  deliveryMode?: "SELF_STUDY" | "GROUP_CLASS" | "ONE_ON_ONE" | "COMBO";
+  satisfactionPercent: number;
+}
+
+export interface CourseDetailLesson {
+  id: string;
+  name: string;
+  title: string;
+  contentType: string;
+  durationMin?: number | null;
+  duration?: number | null;
+  orderIndex: number;
+  preview: boolean;
+  accessible: boolean;
+  locked: boolean;
+}
+
+export interface CourseDetailSection {
+  id: string;
+  name: string;
+  orderIndex: number;
+  lessons: CourseDetailLesson[];
+}
+
+export interface CourseClassPerson {
+  id: string;
+  fullName: string;
+  avatarUrl?: string | null;
+}
+
+export interface CourseClassDetail {
+  id: string;
+  code: string;
+  name: string;
+  description?: string | null;
+  courseId: string;
+  courseName: string;
+  timeZone: string;
+  deliveryMode: "GROUP_CLASS";
+  teacher?: CourseClassPerson | null;
+  teachingAssistants: CourseClassPerson[];
+  startDate?: string | null;
+  endDate?: string | null;
+  schedules: Array<{
+    id: string;
+    classId: string;
+    dayOfWeek: number;
+    startTime: string;
+    endTime: string;
+    status: string;
+  }>;
+  currentStudents: number;
+  maxMembers: number;
+  remainingSlots: number;
+  status: string;
+  registrationOpen: boolean;
+  allowLateEnrollment: boolean;
+  purchasable: boolean;
+  unavailableReason?: string | null;
+}
+
+export interface CourseDetailPackage {
+  id: string;
+  code: string;
+  name: string;
+  description?: string | null;
+  deliveryMode: "SELF_STUDY" | "GROUP_CLASS" | "ONE_ON_ONE" | "COMBO";
+  price: number;
+  originalPrice?: number | null;
+  durationDays?: number | null;
+  includedTutorSessions?: number | null;
+  maxGroupSize?: number | null;
+  classDetail?: CourseClassDetail | null;
+  owned: boolean;
+  purchasable: boolean;
+  unavailableReason?: string | null;
+}
+
+export interface CourseDetailResponse {
+  id: string;
+  code: string;
+  name: string;
+  link: string;
+  description?: string | null;
+  thumbnailUrl?: string | null;
+  learningObjectives?: string | null;
+  prerequisites?: string | null;
+  level?: string | null;
+  status: string;
+  category?: { id: string; name: string } | null;
+  creator?: {
+    id: string;
+    fullName?: string | null;
+    avatarUrl?: string | null;
+    title?: string | null;
+    bio?: string | null;
+  } | null;
+  curriculum: {
+    courseId: string;
+    courseName: string;
+    totalLessons: number;
+    totalDurationMin: number;
+    sections: CourseDetailSection[];
+  };
+  packages: CourseDetailPackage[];
+  enrollment: {
+    enrollmentId?: string | null;
+    authenticated: boolean;
+    hasCourseAccess: boolean;
+    ownedPackageIds: string[];
+    purchasablePackageIds: string[];
+  };
+}
+
 export const courseApi = {
+  /** Lấy response tổng hợp duy nhất cho trang chi tiết khóa học. */
+  getCourseDetail: async (id: string): Promise<CourseDetailResponse> => {
+    const response = await httpClient.get<ApiResponse<CourseDetailResponse>>(`/v1/courses/${id}/detail`);
+    return response.data.data;
+  },
+  /** Lấy chi tiết lớp nhóm theo package khi người dùng chủ động mở phần xem lớp. */
+  getCoursePackageClassDetail: async (packageId: string): Promise<CourseClassDetail> => {
+    const response = await httpClient.get<ApiResponse<CourseClassDetail>>(
+      `/v1/course-packages/${packageId}/class-detail`,
+    );
+    return response.data.data;
+  },
+  /** Lấy các chỉ số tổng quan thực tế của khóa học. */
+  getCourseMetrics: (id: string) =>
+    httpClient.get<ApiResponse<CourseMetrics>>(`/v1/courses/${id}/metrics`),
   // Course Endpoints
   createCourse: (payload: CreateCourseRequest) =>
     httpClient.post<ApiResponse<CourseResponse>>("/v1/courses", payload),

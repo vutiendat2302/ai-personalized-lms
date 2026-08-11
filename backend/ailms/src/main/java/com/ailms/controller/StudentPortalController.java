@@ -1,6 +1,7 @@
 package com.ailms.controller;
 
 import com.ailms.response.ApiResponse;
+import com.ailms.response.UserCouponResponse;
 import com.ailms.response.PageResponse;
 import com.ailms.response.StudentActivityHistoryResponse;
 import com.ailms.response.StudentCatalogCourseResponse;
@@ -15,14 +16,22 @@ import com.ailms.request.StudentCartAddRequest;
 import com.ailms.request.OnboardingRequest;
 import com.ailms.response.StudentProfileResponse;
 import com.ailms.response.StudentPersonalizationResponse;
+import com.ailms.response.OrderResponse;
 import com.ailms.request.RefundRequest;
 import jakarta.validation.Valid;
 import com.ailms.security.CustomUserDetails;
 import com.ailms.service.IStudentPortalService;
+import com.ailms.service.IOrderService;
+import com.ailms.service.IInvoiceService;
+import com.ailms.service.IAssessmentService;
+import com.ailms.request.SubmitAssignmentRequest;
+import com.ailms.request.SubmitQuizAttemptRequest;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
@@ -48,6 +57,9 @@ import java.util.List;
 @PreAuthorize("hasAuthority('ROLE_STUDENT')")
 public class StudentPortalController {
     private final IStudentPortalService studentPortalService;
+    private final IOrderService orderService;
+    private final IInvoiceService invoiceService;
+    private final IAssessmentService assessmentService;
 
     /** Hoàn tất onboarding cho học viên hiện tại mà không nhận userId từ client. */
     @PostMapping("/onboarding")
@@ -143,6 +155,17 @@ public class StudentPortalController {
                 studentPortalService.getCatalog(currentUser.getUser().getId(), page, size, keyword)));
     }
 
+    /** Lấy toàn bộ khóa học đủ điều kiện mở bán, tách khỏi catalog cá nhân hóa. */
+    @GetMapping("/catalog/all")
+    public ResponseEntity<ApiResponse<PageResponse<StudentCatalogCourseResponse>>> getAllCatalogCourses(
+            @AuthenticationPrincipal CustomUserDetails currentUser,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "12") @Min(1) @Max(100) int size,
+            @RequestParam(required = false) String keyword) {
+        return ResponseEntity.ok(ApiResponse.of("Lấy tất cả khóa học đang mở bán thành công",
+                studentPortalService.getAllCatalogCourses(currentUser.getUser().getId(), page, size, keyword)));
+    }
+
     /** Lấy danh sách khóa học mà học viên đã ghi danh. */
     @GetMapping("/courses")
     public ResponseEntity<ApiResponse<List<StudentPortalItemResponse.CourseCard>>> getCourses(
@@ -174,6 +197,40 @@ public class StudentPortalController {
             @AuthenticationPrincipal CustomUserDetails currentUser) {
         return ResponseEntity.ok(ApiResponse.of("Lấy bài tập thành công",
                 studentPortalService.getAssignments(currentUser.getUser().getId())));
+    }
+
+    /** Lấy quiz/bài thi cần làm và kết quả của chính học viên. */
+    @GetMapping("/quizzes")
+    public ResponseEntity<ApiResponse<List<StudentPortalItemResponse.QuizItem>>> getQuizzes(
+            @AuthenticationPrincipal CustomUserDetails currentUser) {
+        return ResponseEntity.ok(ApiResponse.of("Lấy quiz cần làm thành công",
+                studentPortalService.getQuizzes(currentUser.getUser().getId())));
+    }
+
+    /** Bắt đầu một lượt quiz bằng danh tính học viên từ JWT. */
+    @PostMapping("/quizzes/{quizId}/attempts")
+    public ResponseEntity<ApiResponse<Long>> startQuizAttempt(
+            @AuthenticationPrincipal CustomUserDetails currentUser, @PathVariable Long quizId) {
+        return ResponseEntity.ok(ApiResponse.of("Bắt đầu làm quiz thành công",
+                assessmentService.startQuizAttempt(currentUser.getUser().getId(), quizId)));
+    }
+
+    /** Nộp quiz sau khi backend xác minh attempt thuộc học viên hiện tại. */
+    @PostMapping("/quiz-attempts/{attemptId}/submit")
+    public ResponseEntity<ApiResponse<Void>> submitQuizAttempt(
+            @AuthenticationPrincipal CustomUserDetails currentUser, @PathVariable Long attemptId,
+            @Valid @RequestBody SubmitQuizAttemptRequest request) {
+        assessmentService.submitQuizAttemptForUser(currentUser.getUser().getId(), attemptId, request);
+        return ResponseEntity.ok(ApiResponse.message("Nộp quiz thành công"));
+    }
+
+    /** Nộp bài tập bằng danh tính học viên JWT và kiểm tra deadline ở backend. */
+    @PostMapping("/assignments/{assignmentId}/submissions")
+    public ResponseEntity<ApiResponse<Long>> submitAssignment(
+            @AuthenticationPrincipal CustomUserDetails currentUser, @PathVariable Long assignmentId,
+            @Valid @RequestBody SubmitAssignmentRequest request) {
+        return ResponseEntity.ok(ApiResponse.of("Nộp bài tập thành công",
+                assessmentService.submitAssignment(currentUser.getUser().getId(), assignmentId, request)));
     }
 
     /** Lấy chứng chỉ đã cấp cho học viên. */
@@ -233,7 +290,24 @@ public class StudentPortalController {
             @AuthenticationPrincipal CustomUserDetails currentUser,
             @Valid @RequestBody StudentCartAddRequest request) {
         return ResponseEntity.ok(ApiResponse.of("Thêm gói học vào giỏ hàng thành công",
-                studentPortalService.addToCart(currentUser.getUser().getId(), request.getCoursePackageId())));
+                studentPortalService.addToCart(currentUser.getUser().getId(), request.getCoursePackageId(),
+                        request.getOneOnOneNeeds())));
+    }
+
+    /** Xóa một gói khỏi giỏ hàng của chính học viên. */
+    @DeleteMapping("/cart/{cartItemId}")
+    public ResponseEntity<ApiResponse<Void>> removeFromCart(
+            @AuthenticationPrincipal CustomUserDetails currentUser, @PathVariable Long cartItemId) {
+        studentPortalService.removeFromCart(currentUser.getUser().getId(), cartItemId);
+        return ResponseEntity.ok(ApiResponse.message("Xóa gói khỏi giỏ hàng thành công"));
+    }
+
+    /** Lấy danh sách voucher đã được cấp cho học viên hiện tại. */
+    @GetMapping("/vouchers")
+    public ResponseEntity<ApiResponse<List<UserCouponResponse>>> getVouchers(
+            @AuthenticationPrincipal CustomUserDetails currentUser) {
+        return ResponseEntity.ok(ApiResponse.of("Lấy voucher của học viên thành công",
+                studentPortalService.getVouchers(currentUser.getUser().getId())));
     }
 
     /** Kiểm tra coupon dựa trên giỏ hàng hiện tại. */
@@ -242,7 +316,8 @@ public class StudentPortalController {
             @AuthenticationPrincipal CustomUserDetails currentUser,
             @Valid @RequestBody StudentCouponValidationRequest request) {
         return ResponseEntity.ok(ApiResponse.of("Kiểm tra coupon thành công",
-                studentPortalService.validateCoupon(currentUser.getUser().getId(), request.getCode(), request.getCourseId())));
+                studentPortalService.validateCoupon(
+                        currentUser.getUser().getId(), request.getCode(), request.getCoursePackageIds())));
     }
 
     /** Lấy lịch sử đơn hàng của học viên. */
@@ -253,12 +328,42 @@ public class StudentPortalController {
                 studentPortalService.getOrders(currentUser.getUser().getId())));
     }
 
+    /** Lấy chi tiết một đơn hàng thuộc chính học viên. */
+    @GetMapping("/orders/{orderId}")
+    public ResponseEntity<ApiResponse<OrderResponse>> getOrderDetail(
+            @AuthenticationPrincipal CustomUserDetails currentUser, @PathVariable Long orderId) {
+        return ResponseEntity.ok(ApiResponse.of("Lấy chi tiết đơn hàng thành công",
+                orderService.getOwnedOrderById(currentUser.getUser().getId(), orderId)));
+    }
+
+    /** Tải hóa đơn PDF của đơn hàng đã thanh toán thuộc chính học viên. */
+    @GetMapping(value = "/orders/{orderId}/invoice.pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<byte[]> downloadInvoice(
+            @AuthenticationPrincipal CustomUserDetails currentUser, @PathVariable Long orderId) {
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=AILMS-invoice-" + orderId + ".pdf")
+                .contentType(MediaType.APPLICATION_PDF)
+                .body(invoiceService.downloadPaymentForOwner(currentUser.getUser().getId(), orderId));
+    }
+
+    /** Tải chứng từ hoàn tiền đã lưu trên MinIO của đúng học viên. */
+    @GetMapping(value = "/orders/{orderId}/refund-invoice.pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<byte[]> downloadRefundInvoice(
+            @AuthenticationPrincipal CustomUserDetails currentUser, @PathVariable Long orderId) {
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=AILMS-refund-" + orderId + ".pdf")
+                .contentType(MediaType.APPLICATION_PDF)
+                .body(invoiceService.getRefundForOwner(currentUser.getUser().getId(), orderId));
+    }
+
     /** Hoàn tiền đơn hàng thuộc chính học viên hiện tại. */
     @PostMapping("/orders/{orderId}/refund")
     public ResponseEntity<ApiResponse<Void>> refundOrder(
             @AuthenticationPrincipal CustomUserDetails currentUser, @PathVariable Long orderId,
             @Valid @RequestBody RefundRequest request) {
         studentPortalService.refundOrder(currentUser.getUser().getId(), orderId, request);
-        return ResponseEntity.ok(ApiResponse.message("Hoàn tiền đơn hàng thành công"));
+        return ResponseEntity.ok(ApiResponse.message("Đã gửi yêu cầu hoàn tiền, chờ HR/Admin phê duyệt"));
     }
 }

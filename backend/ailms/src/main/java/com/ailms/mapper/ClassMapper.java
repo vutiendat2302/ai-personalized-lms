@@ -30,6 +30,7 @@ public interface ClassMapper {
     @Mapping(target = "updatedBy", ignore = true)
     @Mapping(target = "currentMemberCount", ignore = true)
     @Mapping(target = "code", ignore = true)
+    @Mapping(target = "classKind", ignore = true)
     ClassEntity toEntity(CreateClassRequest request);
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
@@ -41,5 +42,6 @@ public interface ClassMapper {
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
     @Mapping(target = "code", ignore = true)
+    @Mapping(target = "classKind", ignore = true)
     void updateFromRequest(UpdateClassRequest request, @MappingTarget ClassEntity entity);
 }

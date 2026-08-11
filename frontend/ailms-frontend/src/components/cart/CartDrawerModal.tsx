@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useCartStore } from "@/store/useCartStore";
-import { orderApi, type CouponResponse } from "@/api/orders/orderApi";
+import { orderApi } from "@/api/orders/orderApi";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -66,44 +66,7 @@ export const CartDrawerModal: React.FC<CartDrawerModalProps> = ({
           setCouponCode("");
           return;
         }
-      } catch (err: any) {
-        console.log("Backend coupon check note:", err);
-      }
-
-      // Mock validation fallback for instant demonstration
-      if (code === "AILMS20" || code === "WELCOME20") {
-        const disc = Math.round(totalAmount * 0.2);
-        const mockCoupon: CouponResponse = {
-          id: "cp-1",
-          code,
-          discountType: "PERCENT",
-          value: 20,
-          usedCount: 15,
-          maxUsage: 100,
-          validFrom: "2026-01-01",
-          validTo: "2026-12-31",
-          status: "ACTIVE",
-        };
-        setAppliedCoupon(mockCoupon, disc);
-        setCouponSuccess(`Áp dụng thành công mã ${code}: Giảm 20% (-${disc.toLocaleString()} đ)`);
-        setCouponCode("");
-      } else if (code === "STUDENT500K" || code === "500K") {
-        const disc = Math.min(500000, totalAmount);
-        const mockCoupon: CouponResponse = {
-          id: "cp-2",
-          code,
-          discountType: "FIXED",
-          value: 500000,
-          usedCount: 42,
-          maxUsage: 200,
-          validFrom: "2026-01-01",
-          validTo: "2026-12-31",
-          status: "ACTIVE",
-        };
-        setAppliedCoupon(mockCoupon, disc);
-        setCouponSuccess(`Áp dụng thành công mã ${code}: Giảm ${disc.toLocaleString()} đ`);
-        setCouponCode("");
-      } else {
+      } catch {
         setCouponError("Mã giảm giá không hợp lệ hoặc đã hết hạn sử dụng.");
       }
     } finally {
@@ -140,20 +103,15 @@ export const CartDrawerModal: React.FC<CartDrawerModalProps> = ({
           {items.length > 0 ? (
             items.map((item) => (
               <div key={item.id} className="pt-4 first:pt-0 flex gap-4 items-start group">
-                <img
-                  src={
-                    item.image ||
-                    "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=300&auto=format&fit=crop&q=60"
-                  }
-                  alt={item.courseName}
-                  className="w-20 h-16 rounded-xl object-cover border border-border shrink-0"
-                />
+                <div className="flex h-16 w-20 shrink-0 items-center justify-center rounded-xl border bg-primary/10">
+                  <ShoppingBag className="h-6 w-6 text-primary" />
+                </div>
                 <div className="flex-1 min-w-0 space-y-1">
                   <span className="text-[9px] font-extrabold uppercase text-primary tracking-wider block">
-                    {item.categoryName || "Khóa học AILMS"}
+                    Gói học AILMS
                   </span>
                   <h4 className="font-bold text-foreground text-xs leading-snug line-clamp-2">
-                    {item.courseName}
+                    {item.courseTitle}
                   </h4>
                   <p className="text-[11px] text-muted-foreground font-semibold">
                     {item.packageName}
@@ -163,7 +121,7 @@ export const CartDrawerModal: React.FC<CartDrawerModalProps> = ({
                   </span>
                 </div>
                 <button
-                  onClick={() => removeFromCart(item.id)}
+                  onClick={() => void removeFromCart(item.id)}
                   className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors shrink-0"
                   title="Xóa khỏi giỏ hàng"
                 >
@@ -267,7 +225,7 @@ export const CartDrawerModal: React.FC<CartDrawerModalProps> = ({
                 <ArrowRight className="h-4 w-4" />
               </Button>
               <button
-                onClick={clearCart}
+                onClick={() => void clearCart()}
                 className="w-full text-center text-[11px] font-bold text-muted-foreground hover:text-destructive transition-colors py-1"
               >
                 Xóa tất cả sản phẩm

@@ -6,18 +6,25 @@ import com.ailms.entity.CourseEntity;
 import com.ailms.entity.CoursePackageEntity;
 import com.ailms.entity.CourseProgressEntity;
 import com.ailms.entity.EnrollmentEntity;
+import com.ailms.entity.EnrollmentPackageEntity;
 import com.ailms.entity.LearningActivityLogEntity;
-import com.ailms.entity.StudentInterestEntity;
 import com.ailms.entity.SubmissionEntity;
 import com.ailms.entity.CertificateEntity;
 import com.ailms.entity.CartItemEntity;
 import com.ailms.entity.OrderEntity;
 import com.ailms.entity.ClassOnlineEntity;
+import com.ailms.entity.ClassEntity;
+import com.ailms.entity.QuizEntity;
+import com.ailms.entity.QuizAttemptEntity;
+import com.ailms.entity.enums.BaseStatusEnum;
+import com.ailms.entity.enums.ClassMemberRole;
+import com.ailms.entity.enums.ClassMemberStatusEnum;
 import com.ailms.entity.StudyGoalEntity;
 import com.ailms.entity.enums.DeliveryModeEnum;
 import com.ailms.entity.enums.OrderStatusEnum;
 import com.ailms.entity.enums.CoursePackageStatusEnum;
 import com.ailms.event.AuditLogEvent;
+import com.ailms.exception.BusinessException;
 import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.repository.AssignmentRepository;
 import com.ailms.repository.AuditLogRepository;
@@ -36,7 +43,10 @@ import com.ailms.repository.ClassOnlineRepository;
 import com.ailms.repository.LearningSessionRepository;
 import com.ailms.repository.LessonRepository;
 import com.ailms.repository.QuizRepository;
-import com.ailms.repository.UserRepository;
+import com.ailms.repository.QuizAttemptRepository;
+import com.ailms.repository.ClassMemberRepository;
+import com.ailms.repository.ClassRepository;
+import com.ailms.repository.EnrollmentPackageRepository;
 import com.ailms.response.PageResponse;
 import com.ailms.response.StudentActivityHistoryResponse;
 import com.ailms.response.StudentCatalogCourseResponse;
@@ -50,13 +60,17 @@ import com.ailms.request.UpdateStudyGoalRequest;
 import com.ailms.request.OnboardingRequest;
 import com.ailms.response.StudentProfileResponse;
 import com.ailms.response.StudentPersonalizationResponse;
+import com.ailms.response.UserCouponResponse;
 import com.ailms.service.IStudentPortalService;
 import com.ailms.service.IStudentLearningService;
 import com.ailms.service.ICouponService;
 import com.ailms.service.IStudyGoalService;
 import com.ailms.service.IStudentProfileService;
 import com.ailms.service.IOrderService;
+import com.ailms.service.IApprovalRequestService;
+import com.ailms.service.ICartService;
 import com.ailms.request.RefundRequest;
+import com.ailms.request.OneOnOneNeedsRequest;
 import com.ailms.service.calculator.LearningStreakCalculator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -69,14 +83,12 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Set;
-import java.util.Map;
+import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
+import tools.jackson.databind.ObjectMapper;
 
 /** Triển khai các truy vấn tổng hợp chỉ đọc và lịch sử cho cổng học viên. */
 @Service
@@ -106,11 +118,17 @@ public class StudentPortalService implements IStudentPortalService {
     private final IStudentLearningService studentLearningService;
     private final ICouponService couponService;
     private final IStudyGoalService studyGoalService;
-    private final UserRepository userRepository;
     private final IStudentProfileService studentProfileService;
     private final IOrderService orderService;
+    private final IApprovalRequestService approvalRequestService;
+    private final ICartService cartService;
     private final LessonRepository lessonRepository;
     private final QuizRepository quizRepository;
+    private final QuizAttemptRepository quizAttemptRepository;
+    private final ClassMemberRepository classMemberRepository;
+    private final ClassRepository classRepository;
+    private final EnrollmentPackageRepository enrollmentPackageRepository;
+    private final ObjectMapper objectMapper;
 
     /** Lấy dữ liệu onboarding, mục tiêu học tập và chủ đề học viên quan tâm. */
     @Override
@@ -212,22 +230,34 @@ public class StudentPortalService implements IStudentPortalService {
                 .build();
     }
 
-    /** Lấy catalog ưu tiên sở thích, sau đó giữ thứ tự phổ biến từ repository. */
+    /** Lấy catalog chỉ thuộc các danh mục khớp sở thích thật của học viên. */
     @Override
     public PageResponse<StudentCatalogCourseResponse> getCatalog(Long userId, int page, int size, String keyword) {
-        List<StudentInterestEntity> interests = studentInterestRepository.findByStudentProfile_UserId(userId);
-        Set<String> keywords = new HashSet<>();
-        interests.forEach(item -> {
-            keywords.add(normalize(item.getInterest().getName()));
-            keywords.add(normalize(item.getInterest().getCode()));
-        });
-        Set<Long> enrolledCourseIds = enrollmentRepository.findByUserEntity_Id(userId).stream()
-                .map(item -> item.getCourseEntity().getId()).collect(java.util.stream.Collectors.toSet());
-        Page<CourseEntity> courses = courseRepository.findActiveCoursesForSale(normalizeFilter(keyword), pageRequest(page, size));
+        List<Long> matchingCategoryIds = studentInterestRepository.findActiveCategoryIdsByStudentUserId(userId);
+        if (matchingCategoryIds.isEmpty()) {
+            return emptyCatalogPage(page, size);
+        }
+        Set<Long> enrolledCourseIds = getActiveCourseIds(userId);
+        Page<CourseEntity> courses = courseRepository.findPersonalizedCoursesForSale(
+                normalizeFilter(keyword), matchingCategoryIds, pageRequest(page, size));
         List<StudentCatalogCourseResponse> content = courses.getContent().stream()
-                .sorted(Comparator.comparing((CourseEntity course) -> !matchesInterest(course, keywords)))
-                .map(course -> mapCatalogCourse(course, enrolledCourseIds, matchesInterest(course, keywords)))
+                .map(course -> mapCatalogCourse(course, enrolledCourseIds, true))
                 .toList();
+        return PageResponse.<StudentCatalogCourseResponse>builder().content(content)
+                .pageNumber(courses.getNumber()).pageSize(courses.getSize())
+                .totalElements(courses.getTotalElements()).totalPages(courses.getTotalPages())
+                .first(courses.isFirst()).last(courses.isLast()).build();
+    }
+
+    /** Lấy mọi khóa học có gói tự học đang hoạt động và đủ điều kiện bán công khai. */
+    @Override
+    public PageResponse<StudentCatalogCourseResponse> getAllCatalogCourses(
+            Long userId, int page, int size, String keyword) {
+        Set<Long> enrolledCourseIds = getActiveCourseIds(userId);
+        Page<CourseEntity> courses = courseRepository.findActiveCoursesForSale(
+                normalizeFilter(keyword), null, null, pageRequest(page, size));
+        List<StudentCatalogCourseResponse> content = courses.getContent().stream()
+                .map(course -> mapCatalogCourse(course, enrolledCourseIds, false)).toList();
         return PageResponse.<StudentCatalogCourseResponse>builder().content(content)
                 .pageNumber(courses.getNumber()).pageSize(courses.getSize())
                 .totalElements(courses.getTotalElements()).totalPages(courses.getTotalPages())
@@ -247,22 +277,29 @@ public class StudentPortalService implements IStudentPortalService {
         final String statusFilter = requestedStatus;
         Map<Long, CourseProgressEntity> progressByEnrollment = courseProgressRepository.findByUserId(userId).stream()
                 .collect(Collectors.toMap(CourseProgressEntity::getEnrollmentId, Function.identity(), (a, b) -> a));
+        LocalDateTime now = LocalDateTime.now();
         return enrollmentRepository.findByUserEntity_Id(userId).stream().map(enrollment -> {
+            List<EnrollmentPackageEntity> activePackages = enrollmentPackageRepository
+                    .findActiveByEnrollment(enrollment.getId(), now);
+            if (activePackages.isEmpty()) return null;
             CourseEntity course = enrollment.getCourseEntity();
             CourseProgressEntity progress = progressByEnrollment.get(enrollment.getId());
-            LocalDateTime expiresAt = enrollment.getClassEntity() != null ? enrollment.getClassEntity().getEndDate() : null;
-            DeliveryModeEnum mode = enrollment.getClassEntity() != null
-                    ? enrollment.getClassEntity().getPackageType() : DeliveryModeEnum.SELF_STUDY;
+            LocalDateTime expiresAt = activePackages.stream().map(EnrollmentPackageEntity::getExpiresAt)
+                    .filter(Objects::nonNull).max(LocalDateTime::compareTo).orElse(null);
+            DeliveryModeEnum mode = activePackages.stream().map(item -> item.getCoursePackageEntity().getDeliveryMode())
+                    .max(Comparator.comparingInt(this::deliveryPriority)).orElse(DeliveryModeEnum.SELF_STUDY);
             String enrollmentStatus = Byte.valueOf((byte) 1).equals(enrollment.getStatus()) ? "COMPLETED"
                     : Byte.valueOf((byte) 2).equals(enrollment.getStatus()) ? "EXPIRED" : "ACTIVE";
             return StudentPortalItemResponse.CourseCard.builder().id(course.getId()).title(course.getName())
                     .courseCode(course.getCode()).courseLink(course.getLink()).description(course.getDescription())
                     .level(course.getLevel() != null ? course.getLevel().name() : null)
                     .categoryName(course.getCategoryEntity() != null ? course.getCategoryEntity().getName() : null)
+                    .coverImage(course.getThumbnailUrl())
                     .deliveryMode(mode).progressPercent(progress != null ? progress.getProgressPercent() : 0)
                     .expiresAt(expiresAt).expired("EXPIRED".equals(enrollmentStatus)).status(enrollmentStatus)
                     .lastAccessedAt(progress != null ? progress.getLastAccessedAt() : enrollment.getEnrolledAt()).build();
-        }).filter(card -> statusFilter == null || statusFilter.equals(card.getStatus())).toList();
+        }).filter(Objects::nonNull)
+                .filter(card -> statusFilter == null || statusFilter.equals(card.getStatus())).toList();
     }
 
     /** Lấy curriculum sau khi xác nhận học viên sở hữu khóa học. */
@@ -270,32 +307,75 @@ public class StudentPortalService implements IStudentPortalService {
     public CourseCurriculumResponse getCourseDetail(Long userId, Long courseId) {
         enrollmentRepository.findByUserEntity_IdAndCourseEntity_Id(userId, courseId)
                 .orElseThrow(() -> ResourceNotFoundException.of("EnrollmentCourse", courseId));
+        if (!enrollmentPackageRepository.existsActiveCourseAccess(userId, courseId, LocalDateTime.now())) {
+            throw ResourceNotFoundException.of("ActiveEnrollmentPackage", courseId);
+        }
         return studentLearningService.getCourseTree(courseId, userId);
+    }
+
+    /** Ưu tiên hình thức nhiều quyền lợi hơn khi một khóa học có nhiều package còn hiệu lực. */
+    private int deliveryPriority(DeliveryModeEnum mode) {
+        if (mode == DeliveryModeEnum.ONE_ON_ONE) return 4;
+        if (mode == DeliveryModeEnum.COMBO) return 3;
+        if (mode == DeliveryModeEnum.GROUP_CLASS) return 2;
+        return 1;
     }
 
     /** Lấy các buổi học online tương lai thuộc lớp học đã ghi danh. */
     @Override
     public List<StudentPortalItemResponse.ScheduleItem> getSchedule(Long userId) {
-        Set<Long> classIds = enrollmentRepository.findByUserEntity_Id(userId).stream()
-                .map(EnrollmentEntity::getClassEntity).filter(value -> value != null)
-                .map(value -> value.getId()).collect(Collectors.toSet());
-        if (classIds.isEmpty()) return List.of();
+        Set<Long> classIds = getActiveStudentClassIds(userId);
+        Set<Long> courseIds = getActiveCourseIds(userId);
         LocalDateTime now = LocalDateTime.now();
-        return classOnlineRepository.findByScheduledAtGreaterThanEqualAndScheduledAtLessThanOrderByScheduledAtAsc(
-                        now, now.plusMonths(3)).stream().filter(item -> classIds.contains(item.getClassEntity().getId()))
-                .map(this::mapSchedule).toList();
+        LocalDateTime horizon = now.plusMonths(3);
+        List<StudentPortalItemResponse.ScheduleItem> result = new ArrayList<>();
+        if (!classIds.isEmpty()) {
+            result.addAll(classOnlineRepository.findStudentSchedule(
+                    new ArrayList<>(classIds), now, horizon).stream().map(this::mapSchedule).toList());
+        }
+        result.addAll(findVisibleAssignmentDeadlines(courseIds, classIds, now, horizon).stream()
+                .map(item -> StudentPortalItemResponse.ScheduleItem.builder().id(item.getId()).title(item.getTitle())
+                        .type("ASSIGNMENT_DEADLINE").className(resolveClassName(item.getClassId()))
+                        .startAt(item.getDueDate()).endAt(item.getDueDate()).build()).toList());
+        result.addAll(findVisibleQuizDeadlines(courseIds, classIds, now, horizon).stream()
+                .map(item -> StudentPortalItemResponse.ScheduleItem.builder().id(item.getId()).title(item.getTitle())
+                        .type("QUIZ_DEADLINE").className(resolveClassName(item.getClassId()))
+                        .startAt(item.getDueAt()).endAt(item.getDueAt()).build()).toList());
+        return result.stream().sorted(Comparator.comparing(StudentPortalItemResponse.ScheduleItem::getStartAt)).toList();
     }
 
     /** Lấy bài tập và trạng thái bài nộp của học viên. */
     @Override
     public List<StudentPortalItemResponse.AssignmentItem> getAssignments(Long userId) {
-        Set<Long> courseIds = enrollmentRepository.findByUserEntity_Id(userId).stream()
-                .map(item -> item.getCourseEntity().getId()).collect(Collectors.toSet());
+        Set<Long> courseIds = getActiveCourseIds(userId);
+        Set<Long> classIds = getActiveStudentClassIds(userId);
         Map<Long, SubmissionEntity> submissions = submissionRepository.findByUserId(userId).stream()
                 .collect(Collectors.toMap(SubmissionEntity::getAssignmentId, Function.identity(), (a, b) -> a));
-        return assignmentRepository.findAll().stream().filter(item -> courseIds.contains(item.getCourseId()))
-                .sorted(Comparator.comparing(AssignmentEntity::getDueDate, Comparator.nullsLast(Comparator.naturalOrder())))
+        List<AssignmentEntity> assignments = new ArrayList<>();
+        if (!courseIds.isEmpty()) assignments.addAll(assignmentRepository
+                .findByStatusAndClassIdIsNullAndCourseIdInOrderByDueDateAsc(
+                        BaseStatusEnum.ACTIVE, new ArrayList<>(courseIds)));
+        if (!classIds.isEmpty()) assignments.addAll(assignmentRepository
+                .findByStatusAndClassIdInOrderByDueDateAsc(BaseStatusEnum.ACTIVE, new ArrayList<>(classIds)));
+        return assignments.stream()
                 .map(item -> mapAssignment(item, submissions.get(item.getId()))).toList();
+    }
+
+    /** Lấy quiz được giao và tổng hợp số lần làm, điểm cao nhất của học viên. */
+    @Override
+    public List<StudentPortalItemResponse.QuizItem> getQuizzes(Long userId) {
+        Set<Long> courseIds = getActiveCourseIds(userId);
+        Set<Long> classIds = getActiveStudentClassIds(userId);
+        Map<Long, List<QuizAttemptEntity>> attempts = quizAttemptRepository.findByUserId(userId).stream()
+                .collect(Collectors.groupingBy(QuizAttemptEntity::getQuizId));
+        List<QuizEntity> quizzes = new ArrayList<>();
+        if (!courseIds.isEmpty()) quizzes.addAll(quizRepository
+                .findByStatusAndClassIdIsNullAndCourseIdInOrderByDueAtAsc(
+                        BaseStatusEnum.ACTIVE, new ArrayList<>(courseIds)));
+        if (!classIds.isEmpty()) quizzes.addAll(quizRepository
+                .findByStatusAndClassIdInOrderByDueAtAsc(BaseStatusEnum.ACTIVE, new ArrayList<>(classIds)));
+        return quizzes.stream()
+                .map(item -> mapQuiz(item, attempts.getOrDefault(item.getId(), List.of()))).toList();
     }
 
     /** Lấy chứng chỉ thật đã cấp cho học viên. */
@@ -308,7 +388,7 @@ public class StudentPortalService implements IStudentPortalService {
     @Override
     public StudentPortalItemResponse.ProgressAnalytics getProgress(Long userId) {
         LocalDate today = LocalDate.now();
-        List<StudentPortalItemResponse.ActivityPoint> activities = java.util.stream.IntStream.rangeClosed(0, 29)
+        List<StudentPortalItemResponse.ActivityPoint> activities = IntStream.rangeClosed(0, 29)
                 .mapToObj(offset -> today.minusDays(29L - offset)).map(date -> {
                     Long seconds = learningSessionRepository.sumActiveSecondsForUserInPeriod(userId,
                             date.atStartOfDay(), date.plusDays(1).atStartOfDay());
@@ -367,33 +447,52 @@ public class StudentPortalService implements IStudentPortalService {
     /** Lấy các gói thật trong giỏ hàng của học viên. */
     @Override
     public List<StudentPortalItemResponse.CartItem> getCart(Long userId) {
-        return cartItemRepository.findByUserEntity_Id(userId).stream().map(this::mapCartItem).toList();
+        Set<Long> visibleCartItemIds = cartService.getCart(userId).stream()
+                .map(item -> item.getId()).collect(Collectors.toSet());
+        return cartItemRepository.findByUserEntity_Id(userId).stream()
+                .filter(item -> visibleCartItemIds.contains(item.getId()))
+                .map(this::mapCartItem).toList();
     }
 
     /** Thêm gói đang mở bán vào giỏ và không cho tạo dòng trùng. */
     @Override
     @Transactional
-    public StudentPortalItemResponse.CartItem addToCart(Long userId, Long coursePackageId) {
-        if (cartItemRepository.existsByUserEntity_IdAndCoursePackageEntity_Id(userId, coursePackageId)) {
-            throw new com.ailms.exception.DuplicateResourceException("Course package already exists in cart");
-        }
-        CoursePackageEntity pack = coursePackageRepository.findById(coursePackageId)
-                .filter(item -> item.getStatus() == CoursePackageStatusEnum.ACTIVE)
-                .orElseThrow(() -> ResourceNotFoundException.of("ActiveCoursePackage", coursePackageId));
-        CartItemEntity saved = cartItemRepository.save(CartItemEntity.builder()
-                .userEntity(userRepository.findById(userId).orElseThrow(() -> ResourceNotFoundException.of("User", userId)))
-                .coursePackageEntity(pack).build());
-        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CREATE", "CART_ITEM", saved.getId(), null,
-                mapCartItem(saved)));
-        return mapCartItem(saved);
+    public StudentPortalItemResponse.CartItem addToCart(
+            Long userId, Long coursePackageId, OneOnOneNeedsRequest needs) {
+        Long cartItemId = cartService.addToCart(userId, coursePackageId, needs).getId();
+        return cartItemRepository.findById(cartItemId).map(this::mapCartItem)
+                .orElseThrow(() -> ResourceNotFoundException.of("StudentCartItem", cartItemId));
+    }
+
+    /** Xóa dòng giỏ hàng sau khi xác nhận đúng chủ sở hữu. */
+    @Override
+    @Transactional
+    public void removeFromCart(Long userId, Long cartItemId) {
+        cartService.removeFromCart(userId, cartItemId);
+    }
+
+    /** Lấy đúng các voucher đã được cấp cho học viên. */
+    @Override
+    public List<UserCouponResponse> getVouchers(Long userId) {
+        return couponService.getUserCoupons(userId);
     }
 
     /** Kiểm tra coupon và tính giảm giá trên tổng giỏ hàng phù hợp. */
     @Override
-    public StudentPortalItemResponse.CouponValidation validateCoupon(Long userId, String code, Long courseId) {
-        CouponResponse coupon = couponService.validateCoupon(code, courseId);
-        BigDecimal subtotal = cartItemRepository.findByUserEntity_Id(userId).stream()
-                .filter(item -> courseId == null || item.getCoursePackageEntity().getCourseEntity().getId().equals(courseId))
+    public StudentPortalItemResponse.CouponValidation validateCoupon(
+            Long userId, String code, List<Long> coursePackageIds) {
+        Set<Long> selectedIds = coursePackageIds == null ? Set.of() : Set.copyOf(coursePackageIds);
+        List<CartItemEntity> cartItems = cartItemRepository.findByUserEntity_Id(userId).stream()
+                .filter(item -> selectedIds.isEmpty()
+                        || selectedIds.contains(item.getCoursePackageEntity().getId())).toList();
+        if (cartItems.isEmpty()) throw new IllegalArgumentException("Vui lòng chọn ít nhất một gói học để áp dụng voucher.");
+        List<Long> courseIds = cartItems.stream().map(item -> item.getCoursePackageEntity().getCourseEntity().getId())
+                .distinct().toList();
+        UserCouponResponse coupon = couponService.validateUserCoupon(userId, code, courseIds);
+        Long applicableCourseId = coupon.getApplicableCourseId();
+        BigDecimal subtotal = cartItems.stream()
+                .filter(item -> applicableCourseId == null
+                        || item.getCoursePackageEntity().getCourseEntity().getId().equals(applicableCourseId))
                 .map(item -> item.getCoursePackageEntity().getPrice()).filter(value -> value != null)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal discount = coupon.getDiscountType().name().equals("PERCENT")
@@ -420,13 +519,13 @@ public class StudentPortalService implements IStudentPortalService {
         return studentProfileService.completeOnboarding(request);
     }
 
-    /** Xác nhận đơn thuộc học viên trước khi chuyển nghiệp vụ hoàn tiền cho OrderService. */
+    /** Xác nhận đơn thuộc học viên rồi tạo yêu cầu chờ HR/Admin duyệt, chưa hoàn tiền ngay. */
     @Override
     @Transactional
     public void refundOrder(Long userId, Long orderId, RefundRequest request) {
         orderRepository.findById(orderId).filter(order -> order.getUserEntity().getId().equals(userId))
                 .orElseThrow(() -> ResourceNotFoundException.of("StudentOrder", orderId));
-        orderService.refundOrder(orderId, request);
+        approvalRequestService.createRefundRequest(orderId, request);
     }
 
     /** Chuẩn hóa tham số phân trang và giới hạn kích thước truy vấn. */
@@ -449,9 +548,78 @@ public class StudentPortalService implements IStudentPortalService {
         String status = submission == null ? (item.getDueDate() != null && item.getDueDate().isBefore(LocalDateTime.now()) ? "LATE" : "NOT_STARTED")
                 : submission.getGradedAt() != null ? "GRADED" : "SUBMITTED";
         return StudentPortalItemResponse.AssignmentItem.builder().id(item.getId()).title(item.getTitle())
-                .courseId(item.getCourseId()).courseName(courseRepository.findById(item.getCourseId()).map(CourseEntity::getName).orElse(null))
+                .courseId(item.getCourseId()).classId(item.getClassId())
+                .courseName(courseRepository.findById(item.getCourseId()).map(CourseEntity::getName).orElse(null))
                 .dueDate(item.getDueDate()).status(status).score(submission != null ? submission.getScore() : null)
                 .maxScore(item.getMaxScore()).feedback(submission != null ? submission.getFeedback() : null).build();
+    }
+
+    /** Chuyển quiz và lịch sử attempts thành trạng thái cần làm của học viên. */
+    private StudentPortalItemResponse.QuizItem mapQuiz(QuizEntity quiz, List<QuizAttemptEntity> attempts) {
+        BigDecimal bestScore = attempts.stream().map(QuizAttemptEntity::getScore).filter(Objects::nonNull)
+                .max(BigDecimal::compareTo).orElse(null);
+        boolean passed = attempts.stream().anyMatch(item -> Boolean.TRUE.equals(item.getIsPassed()));
+        String status = passed ? "PASSED" : quiz.getDueAt() != null && quiz.getDueAt().isBefore(LocalDateTime.now())
+                ? "EXPIRED" : attempts.stream().anyMatch(item -> Byte.valueOf((byte) 0).equals(item.getStatus()))
+                ? "IN_PROGRESS" : attempts.isEmpty() ? "NOT_STARTED" : "SUBMITTED";
+        return StudentPortalItemResponse.QuizItem.builder().id(quiz.getId()).title(quiz.getTitle())
+                .courseId(quiz.getCourseId()).classId(quiz.getClassId())
+                .courseName(courseRepository.findById(quiz.getCourseId()).map(CourseEntity::getName).orElse(null))
+                .dueAt(quiz.getDueAt()).timeLimitMin(quiz.getTimeLimitMin()).maxAttempts(quiz.getMaxAttempts())
+                .status(status).attemptsUsed(attempts.size()).bestScore(bestScore).passed(passed).build();
+    }
+
+    /** Lấy ID các lớp mà học viên đang là thành viên ACTIVE. */
+    private Set<Long> getActiveStudentClassIds(Long userId) {
+        Set<Long> activeCourseIds = getActiveCourseIds(userId);
+        return classMemberRepository.findById_UserId(userId).stream()
+                .filter(item -> item.getStatus() == ClassMemberStatusEnum.ACTIVE)
+                .filter(item -> item.getRoleInClass() == ClassMemberRole.STUDENT)
+                .filter(item -> item.getClassEntity().getCourseEntity() != null
+                        && activeCourseIds.contains(item.getClassEntity().getCourseEntity().getId()))
+                .map(item -> item.getClassEntity().getId()).collect(Collectors.toSet());
+    }
+
+    /** Lấy khóa học đang sở hữu từ package ACTIVE thay vì enrollment lịch sử. */
+    private Set<Long> getActiveCourseIds(Long userId) {
+        return new HashSet<>(enrollmentPackageRepository.findActiveCourseIdsByUser(userId, LocalDateTime.now()));
+    }
+
+    /** Truy vấn deadline assignment trong SQL theo đúng khóa học/lớp và khoảng thời gian. */
+    private List<AssignmentEntity> findVisibleAssignmentDeadlines(
+            Set<Long> courseIds, Set<Long> classIds, LocalDateTime from, LocalDateTime to) {
+        List<AssignmentEntity> result = new ArrayList<>();
+        if (!courseIds.isEmpty()) result.addAll(assignmentRepository
+                .findByStatusAndClassIdIsNullAndCourseIdInAndDueDateBetweenOrderByDueDateAsc(
+                        BaseStatusEnum.ACTIVE, new ArrayList<>(courseIds), from, to));
+        if (!classIds.isEmpty()) result.addAll(assignmentRepository
+                .findByStatusAndClassIdInAndDueDateBetweenOrderByDueDateAsc(
+                        BaseStatusEnum.ACTIVE, new ArrayList<>(classIds), from, to));
+        return result;
+    }
+
+    /** Truy vấn deadline quiz trong SQL theo đúng khóa học/lớp và khoảng thời gian. */
+    private List<QuizEntity> findVisibleQuizDeadlines(
+            Set<Long> courseIds, Set<Long> classIds, LocalDateTime from, LocalDateTime to) {
+        List<QuizEntity> result = new ArrayList<>();
+        if (!courseIds.isEmpty()) result.addAll(quizRepository
+                .findByStatusAndClassIdIsNullAndCourseIdInAndDueAtBetweenOrderByDueAtAsc(
+                        BaseStatusEnum.ACTIVE, new ArrayList<>(courseIds), from, to));
+        if (!classIds.isEmpty()) result.addAll(quizRepository
+                .findByStatusAndClassIdInAndDueAtBetweenOrderByDueAtAsc(
+                        BaseStatusEnum.ACTIVE, new ArrayList<>(classIds), from, to));
+        return result;
+    }
+
+    /** Chỉ hiển thị nội dung chung khóa học hoặc nội dung của đúng lớp học viên. */
+    private boolean isLearningItemVisible(
+            Long courseId, Long classId, Set<Long> courseIds, Set<Long> classIds) {
+        return classId != null ? classIds.contains(classId) : courseId != null && courseIds.contains(courseId);
+    }
+
+    /** Tra tên lớp cho mục lịch nếu nội dung được giao theo lớp. */
+    private String resolveClassName(Long classId) {
+        return classId == null ? null : classRepository.findById(classId).map(ClassEntity::getName).orElse(null);
     }
 
     /** Chuyển chứng chỉ sang DTO và bổ sung tên khóa học. */
@@ -475,8 +643,22 @@ public class StudentPortalService implements IStudentPortalService {
     private StudentPortalItemResponse.CartItem mapCartItem(CartItemEntity item) {
         CoursePackageEntity pack = item.getCoursePackageEntity();
         return StudentPortalItemResponse.CartItem.builder().id(item.getId()).coursePackageId(pack.getId())
-                .courseTitle(pack.getCourseEntity().getName()).packageName(pack.getName())
-                .deliveryMode(pack.getDeliveryMode()).price(pack.getPrice()).build();
+                .courseId(pack.getCourseEntity().getId()).courseTitle(pack.getCourseEntity().getName()).packageName(pack.getName())
+                .deliveryMode(pack.getDeliveryMode()).price(pack.getPrice())
+                .requiresTutorNeeds(pack.getDeliveryMode() == DeliveryModeEnum.ONE_ON_ONE
+                        || (pack.getDeliveryMode() == DeliveryModeEnum.COMBO
+                        && pack.getIncludedTutorSessions() != null && pack.getIncludedTutorSessions() > 0))
+                .oneOnOneNeeds(deserializeCartNeeds(item.getOneOnOneNeeds())).build();
+    }
+
+    /** Khôi phục draft nhu cầu 1-1 từ cart item cho checkout. */
+    private OneOnOneNeedsRequest deserializeCartNeeds(String value) {
+        if (value == null || value.isBlank()) return null;
+        try {
+            return objectMapper.readValue(value, OneOnOneNeedsRequest.class);
+        } catch (Exception exception) {
+            throw new BusinessException("Bản nháp nhu cầu học tập 1-1 không hợp lệ.");
+        }
     }
 
     /** Chuyển đơn hàng cùng các dòng sản phẩm sang DTO. */
@@ -546,7 +728,8 @@ public class StudentPortalService implements IStudentPortalService {
                 .min(BigDecimal::compareTo).orElse(course.getSuggestedPrice());
         return StudentCatalogCourseResponse.builder().id(course.getId()).title(course.getName())
                 .categoryName(course.getCategoryEntity() != null ? course.getCategoryEntity().getName() : null)
-                .description(course.getDescription()).rating(course.getAvgRating() != null ? course.getAvgRating() : 0)
+                .description(course.getDescription()).thumbnailUrl(course.getThumbnailUrl())
+                .rating(course.getAvgRating() != null ? course.getAvgRating() : 0)
                 .reviewCount(course.getReviewCount() != null ? course.getReviewCount() : 0)
                 .enrollmentCount(course.getEnrollmentCount() != null ? course.getEnrollmentCount() : 0)
                 .originalPrice(originalPrice).sellingPrice(sellingPrice).enrolled(enrolledIds.contains(course.getId()))
@@ -559,16 +742,11 @@ public class StudentPortalService implements IStudentPortalService {
                 .deliveryMode(item.getDeliveryMode()).price(item.getPrice()).build();
     }
 
-    /** Kiểm tra danh mục khóa học có khớp sở thích đã khai báo hay không. */
-    private boolean matchesInterest(CourseEntity course, Set<String> keywords) {
-        if (keywords.isEmpty() || course.getCategoryEntity() == null) return false;
-        String category = normalize(course.getCategoryEntity().getName());
-        return keywords.stream().anyMatch(keyword -> !keyword.isBlank()
-                && (category.contains(keyword) || keyword.contains(category)));
+    /** Tạo trang rỗng khi học viên chưa có sở thích hoặc không có danh mục phù hợp. */
+    private PageResponse<StudentCatalogCourseResponse> emptyCatalogPage(int page, int size) {
+        return PageResponse.<StudentCatalogCourseResponse>builder().content(List.of())
+                .pageNumber(Math.max(page, 0)).pageSize(Math.min(Math.max(size, 1), MAX_PAGE_SIZE))
+                .totalElements(0).totalPages(0).first(true).last(true).build();
     }
 
-    /** Chuẩn hóa chuỗi phục vụ so khớp sở thích không phân biệt hoa thường. */
-    private String normalize(String value) {
-        return value == null ? "" : value.trim().toLowerCase(Locale.ROOT).replace('_', ' ');
-    }
 }

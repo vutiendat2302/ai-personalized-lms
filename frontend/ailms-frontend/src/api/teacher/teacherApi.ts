@@ -98,12 +98,25 @@ export interface TeacherCourseItem {
 
 export interface SuggestedClassMatchingItem {
   id: string;
+  studentId: string;
+  studentName: string;
+  courseId: string;
   courseName: string;
+  categoryId: string;
   categoryName: string;
-  classType: "GROUP_CLASS" | "ONE_ON_ONE";
-  requestedSchedule?: string;
-  remainingSlots: number;
-  isExpiringSoon: boolean;
+  coursePackageId: string;
+  packageName: string;
+  includedTutorSessions: number;
+  status: string;
+  availablePeriod: string;
+  availableDays: string;
+  preferredTimes: string;
+  currentLevel: string;
+  learningSituation: string;
+  learningGoals: string;
+  weakAreas: string;
+  instructorPreferences?: string | null;
+  additionalNotes?: string | null;
 }
 
 export interface FillBlankQuestionItem {
@@ -356,26 +369,6 @@ const MOCK_TEACHER_COURSES: TeacherCourseItem[] = [
   },
 ];
 
-const MOCK_SUGGESTED_CLASSES: SuggestedClassMatchingItem[] = [
-  {
-    id: "sug-1",
-    courseName: "Fullstack Web Pro 1-1",
-    categoryName: "Lập trình Web",
-    classType: "ONE_ON_ONE",
-    requestedSchedule: "Tối T2-T4 19:30 - 21:00",
-    remainingSlots: 1,
-    isExpiringSoon: true,
-  },
-  {
-    id: "sug-2",
-    courseName: "AI Application Specialist",
-    categoryName: "Trí tuệ nhân tạo",
-    classType: "GROUP_CLASS",
-    remainingSlots: 5,
-    isExpiringSoon: false,
-  },
-];
-
 const MOCK_ASSIGNMENT_SUBMISSIONS: SubmissionItem[] = [
   {
     id: "sub-1",
@@ -560,21 +553,13 @@ export const teacherApi = {
   },
 
   getSuggestedClasses: async (): Promise<SuggestedClassMatchingItem[]> => {
-    try {
-      const res = await httpClient.get<ApiResponse<SuggestedClassMatchingItem[]>>("/v1/teacher/suggested-classes");
-      return res.data?.data || MOCK_SUGGESTED_CLASSES;
-    } catch {
-      return MOCK_SUGGESTED_CLASSES;
-    }
+    const res = await httpClient.get<ApiResponse<SuggestedClassMatchingItem[]>>("/v1/instructors/one-on-one/suggestions");
+    return res.data.data || [];
   },
 
-  acceptSuggestedClass: async (id: string): Promise<boolean> => {
-    try {
-      await httpClient.post(`/v1/teacher/suggested-classes/${id}/accept`);
-      return true;
-    } catch {
-      return true;
-    }
+  acceptSuggestedClass: async (id: string): Promise<SuggestedClassMatchingItem> => {
+    const res = await httpClient.post<ApiResponse<SuggestedClassMatchingItem>>(`/v1/instructors/one-on-one/requests/${id}/accept`);
+    return res.data.data;
   },
 
   getAssignmentSubmissions: async (): Promise<SubmissionItem[]> => {

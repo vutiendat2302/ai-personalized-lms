@@ -58,6 +58,11 @@ public class OrderEntity extends BaseEntity {
     @Column(name = "coupon_code", length = 50)
     private String couponCode;
 
+    /** Quyền voucher cụ thể đã được học viên áp dụng cho đơn hàng. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_coupon_id")
+    private UserCouponEntity userCouponEntity;
+
     /** Thời điểm đơn hàng hết hạn chờ thanh toán. */
     @Column(name = "expired_at")
     private LocalDateTime expiredAt;
@@ -65,6 +70,14 @@ public class OrderEntity extends BaseEntity {
     /** Thời điểm đơn hàng được thanh toán thành công. */
     @Column(name = "paid_at")
     private LocalDateTime paidAt;
+
+    /** Object key hóa đơn thanh toán PDF đã tự động lưu trên MinIO. */
+    @Column(name = "payment_invoice_key", length = 255)
+    private String paymentInvoiceKey;
+
+    /** Object key chứng từ hoàn tiền PDF đã tự động lưu trên MinIO. */
+    @Column(name = "refund_invoice_key", length = 255)
+    private String refundInvoiceKey;
 
     /** Danh sách các sản phẩm / gói học nằm trong đơn hàng. */
     @OneToMany(mappedBy = "orderEntity", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)

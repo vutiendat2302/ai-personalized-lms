@@ -8,6 +8,7 @@ import com.ailms.response.MemberDetailResponse;
 import com.ailms.response.PageResponse;
 import com.ailms.service.IClassMemberService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -21,6 +22,7 @@ public class ClassMemberController {
     private final IClassMemberService classMemberService;
 
     @PostMapping("/{classId}/members/{userId}/join")
+    @PreAuthorize("@classAccess.canManage(#classId, authentication)")
     public ResponseEntity<ApiResponse<ClassMemberResponse>> join(
             @PathVariable Long classId,
             @PathVariable Long userId,
@@ -30,6 +32,7 @@ public class ClassMemberController {
     }
 
     @PostMapping("/{classId}/members/{userId}/leave")
+    @PreAuthorize("@classAccess.canManage(#classId, authentication)")
     public ResponseEntity<ApiResponse<ClassMemberResponse>> leave(
             @PathVariable Long classId,
             @PathVariable Long userId,
@@ -39,6 +42,7 @@ public class ClassMemberController {
     }
 
     @PostMapping("/{classId}/members/{userId}/transfer")
+    @PreAuthorize("@classAccess.canManage(#classId, authentication)")
     public ResponseEntity<ApiResponse<Void>> transfer(
             @PathVariable Long classId,
             @PathVariable Long userId,
@@ -48,6 +52,7 @@ public class ClassMemberController {
     }
 
     @PostMapping("/{classId}/members/{userId}/rejoin")
+    @PreAuthorize("@classAccess.canManage(#classId, authentication)")
     public ResponseEntity<ApiResponse<ClassMemberResponse>> rejoin(
             @PathVariable Long classId,
             @PathVariable Long userId) {
@@ -56,12 +61,14 @@ public class ClassMemberController {
     }
 
     @GetMapping("/members/user/{userId}")
+    @PreAuthorize("@classAccess.isSelfOrSystemStaff(#userId, authentication)")
     public ResponseEntity<ApiResponse<List<ClassMemberResponse>>> getByUserId(@PathVariable Long userId) {
         List<ClassMemberResponse> members = classMemberService.getByUserId(userId);
         return ResponseEntity.ok(ApiResponse.of("Class memberships retrieved successfully", members));
     }
 
     @GetMapping("/{classId}/members")
+    @PreAuthorize("@classAccess.canView(#classId, authentication)")
     public ResponseEntity<ApiResponse<List<ClassMemberResponse>>> getByClassId(@PathVariable Long classId) {
         return ResponseEntity.ok(ApiResponse.of(
                 "Class members retrieved successfully",
@@ -70,6 +77,7 @@ public class ClassMemberController {
     }
 
     @GetMapping("/{classId}/members/{userId}/detail")
+    @PreAuthorize("@classAccess.canViewMemberDetail(#classId, #userId, authentication)")
     public ResponseEntity<ApiResponse<MemberDetailResponse>> getMemberDetail(
             @PathVariable Long classId,
             @PathVariable Long userId) {
@@ -80,6 +88,7 @@ public class ClassMemberController {
     }
 
     @GetMapping("/{classId}/members/page")
+    @PreAuthorize("@classAccess.canView(#classId, authentication)")
     public ResponseEntity<ApiResponse<PageResponse<ClassMemberResponse>>> getMembersPage(
             @PathVariable Long classId,
             @RequestParam(required = false) String keyword,

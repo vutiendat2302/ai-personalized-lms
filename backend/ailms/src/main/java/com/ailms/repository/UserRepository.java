@@ -57,4 +57,9 @@ public interface UserRepository extends BaseRepository<UserEntity, Long> {
 
     List<UserEntity> findByStatus(UserStatusEnum userStatusEnum);
 
+    /** Khóa người dùng để tuần tự hóa việc tạo enrollment từ các IPN đồng thời. */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT u FROM UserEntity u WHERE u.id = :id")
+    Optional<UserEntity> findByIdForUpdate(@Param("id") Long id);
+
 }

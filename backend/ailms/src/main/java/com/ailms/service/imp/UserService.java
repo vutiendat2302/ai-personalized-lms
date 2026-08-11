@@ -58,6 +58,9 @@ import java.util.stream.Collectors;
 public class
 UserService implements IUserService {
 
+    @Value("${api.prefix}")
+    private String apiPrefix;
+
     private final UserRepository userRepository;
     private final UserRoleRepository userRoleRepository;
     private final RoleRepository roleRepository;
@@ -941,7 +944,7 @@ UserService implements IUserService {
         if (value.startsWith("http://") || value.startsWith("https://") || value.startsWith("/v1/users/")) {
             return value;
         }
-        return "/v1/users/" + user.getId() + "/avatar";
+        return apiPrefix + "/users/" + user.getId() + "/avatar";
     }
 
     private String normalizeAvatarFileKey(String avatarUrl) {

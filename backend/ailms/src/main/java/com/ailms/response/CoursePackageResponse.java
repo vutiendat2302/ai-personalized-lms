@@ -19,9 +19,11 @@ public class CoursePackageResponse {
     private String courseName;
     private Long classId;
     private String className;
+    private CourseClassDetailResponse classDetail;
     private Integer currentMemberCount;
     private Integer maxMembers;
     private String name;
+    private String description;
     private DeliveryModeEnum deliveryMode;
     private BigDecimal price;
     private BigDecimal originalPrice;

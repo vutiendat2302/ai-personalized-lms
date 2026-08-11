@@ -1,6 +1,7 @@
 package com.ailms.response;
 
 import com.ailms.entity.enums.BaseStatusEnum;
+import com.ailms.entity.enums.SessionKindEnum;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.*;
 
@@ -60,6 +61,12 @@ public class ClassOnlineResponse {
     private String teacherNotes;
 
     private String nextSessionNotes;
+
+    private SessionKindEnum sessionKind;
+
+    private Boolean countsTowardPackage;
+
+    private Boolean payable;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime createdAt;

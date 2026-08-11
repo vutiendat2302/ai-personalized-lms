@@ -22,5 +22,8 @@ public enum BaseStatusEnum {
     DELETE,
     TERMINATED,
     ARCHIVED,
-    DELETED
+    DELETED,
+    TRIAL,
+    COMPLETED,
+    CANCELLED
 }

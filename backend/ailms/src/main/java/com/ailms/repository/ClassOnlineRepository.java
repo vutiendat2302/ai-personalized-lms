@@ -21,6 +21,24 @@ public interface ClassOnlineRepository extends BaseRepository<ClassOnlineEntity,
     List<ClassOnlineEntity> findByScheduledAtGreaterThanEqualAndScheduledAtLessThanOrderByScheduledAtAsc(
             LocalDateTime from, LocalDateTime to);
 
+    /** Lấy buổi học của đúng các lớp còn quyền và nằm trong thời hạn lớp. */
+    @EntityGraph(attributePaths = {"classEntity", "classEntity.courseEntity", "teacherEntity"})
+    @Query("""
+        SELECT session FROM ClassOnlineEntity session
+        WHERE session.classEntity.id IN :classIds
+          AND session.status = com.ailms.entity.enums.BaseStatusEnum.ACTIVE
+          AND session.classEntity.status = com.ailms.entity.enums.BaseStatusEnum.ACTIVE
+          AND session.scheduledAt >= :from
+          AND session.scheduledAt < :to
+          AND (session.classEntity.startDate IS NULL OR session.scheduledAt >= session.classEntity.startDate)
+          AND (session.classEntity.endDate IS NULL OR session.scheduledAt <= session.classEntity.endDate)
+        ORDER BY session.scheduledAt ASC
+        """)
+    List<ClassOnlineEntity> findStudentSchedule(
+            @Param("classIds") List<Long> classIds,
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to);
+
     @Query("""
             select session from ClassOnlineEntity session
             where session.id <> :excludedId

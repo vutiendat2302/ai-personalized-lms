@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useModalStore } from "@/store/useModalStore";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { LogOut, ChevronDown, Bell, Globe, Search, User, Settings, BookOpen, Shield, Activity, Clock, Trash2, Sparkles, Target, ShoppingBag, BarChart, Loader2, Award } from "lucide-react";
+import { LogOut, ChevronDown, Bell, Search, User, Settings, BookOpen, Shield, Activity, Clock, Trash2, Sparkles, Target, ShoppingBag, BarChart, Loader2, Award } from "lucide-react";
 import { searchApi, type SearchHistoryResponse, type PopularSearchResponse, type SuggestionResponse } from "@/api/search/searchApi";
 import { StudentOnboardingModal } from "@/components/student/StudentOnboardingModal";
 import { studentApi } from "@/api/students/studentApi";
@@ -21,7 +21,7 @@ export const Header: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { openLogin, openRegister, openChangePassword } = useModalStore();
-  const { items: cartItems, toggleCart } = useCartStore();
+  const { items: cartItems, fetchCart, resetCart } = useCartStore();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -118,6 +118,12 @@ export const Header: React.FC = () => {
       );
     })
   );
+
+  /** Đồng bộ badge giỏ hàng từ cùng API được trang giỏ ở sidebar sử dụng. */
+  useEffect(() => {
+    if (auth.accessToken && isStudent) void fetchCart();
+    else resetCart();
+  }, [auth.accessToken, auth.user?.id, isStudent, fetchCart, resetCart]);
 
   useEffect(() => {
     if (myCoursesDropdownOpen && isStudent && auth.accessToken) {
@@ -740,15 +746,10 @@ export const Header: React.FC = () => {
                 </button>
               )}
 
-              {/* Globe Icon */}
-              <button className="p-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title="Ngôn ngữ">
-                <Globe className="h-4.5 w-4.5" />
-              </button>
-
               {/* Shopping Cart Trigger (Chỉ hiển thị cho Học Viên / Khách vãng lai, ẩn hoàn toàn đối với Nhân Viên & Admin) */}
               {(!auth.accessToken || isStudent) && !isEmployee && (
                 <button
-                  onClick={toggleCart}
+                  onClick={() => auth.accessToken ? navigate("/student/cart") : openLogin()}
                   className="p-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors relative"
                   title="Giỏ hàng"
                 >

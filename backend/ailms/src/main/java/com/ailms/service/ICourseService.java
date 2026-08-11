@@ -8,6 +8,7 @@ import com.ailms.request.CreateCourseRequest;
 import com.ailms.request.UpdateCourseRequest;
 import com.ailms.response.ClassResponse;
 import com.ailms.response.CourseResponse;
+import com.ailms.response.CourseMetricResponse;
 import com.ailms.response.PageResponse;
 
 import java.util.List;
@@ -75,6 +76,9 @@ public interface ICourseService {
      * @return đối tượng chứa thông tin chi tiết kết quả
      */
     CourseResponse getById(Long id);
+
+    /** Lấy các chỉ số tổng quan theo khóa học để hiển thị ở trang chi tiết. */
+    CourseMetricResponse getMetrics(Long id);
 
     /**
      * Lấy danh sách tất cả các bản ghi.

@@ -3,6 +3,7 @@ import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
@@ -67,9 +68,10 @@ export const ClassDetailPage: React.FC = () => {
   const location = useLocation();
   const { auth } = useAuth();
   const isTeacherRoute = location.pathname.startsWith("/teacher");
+  const isStudentRoute = location.pathname.startsWith("/student");
   const userRoles = (auth.user?.roles || []).map((role) => String(role).toUpperCase());
   const isAdminOrHR = userRoles.some((role) => role.includes("ADMIN") || role.includes("HR")) && !isTeacherRoute;
-  const backPath = isAdminOrHR ? "/admin/classrooms" : "/teacher/classes";
+  const backPath = isStudentRoute ? "/student/classes" : isAdminOrHR ? "/admin/classrooms" : "/teacher/classes";
 
   const [cls, setCls] = useState<Classroom | null>(null);
   const [loading, setLoading] = useState(true);
@@ -122,9 +124,9 @@ export const ClassDetailPage: React.FC = () => {
         }),
         adminCourseClassApi.getClassSchedules(id),
         isAdminOrHR ? adminCourseClassApi.getEmployees() : Promise.resolve([]),
-        adminCourseClassApi.getClassEnrollments(id),
-        adminCourseClassApi.getTeachingRates(),
-        adminCourseClassApi.getTeachingPayments(),
+        isStudentRoute ? Promise.resolve([]) : adminCourseClassApi.getClassEnrollments(id),
+        isStudentRoute ? Promise.resolve([]) : adminCourseClassApi.getTeachingRates(),
+        isStudentRoute ? Promise.resolve([]) : adminCourseClassApi.getTeachingPayments(),
       ]);
 
       const employeeById = new Map(employees.map((employee: any) => [String(employee.id || employee.userId), employee]));
@@ -132,7 +134,10 @@ export const ClassDetailPage: React.FC = () => {
       if (!isAdminOrHR) {
         const currentUserId = String(auth.user?.id || "");
         const currentUsername = String(auth.user?.username || "").toLowerCase();
-        const canView = staffMembers.some((member: any) => {
+        const eligibleMembers = isStudentRoute
+          ? memberRows.filter((member: any) => member.status === "ACTIVE")
+          : staffMembers;
+        const canView = eligibleMembers.some((member: any) => {
           const memberUserId = String(member.userId || "");
           const memberUsername = String(member.username || "").toLowerCase();
           return (currentUserId && memberUserId === currentUserId) || (currentUsername && memberUsername === currentUsername);
@@ -280,7 +285,7 @@ export const ClassDetailPage: React.FC = () => {
 
   useEffect(() => {
     loadClass();
-  }, [id, membersPage, membersSize, sessionsPage, sessionsSize, sessionSearchKeyword, sessionStatusFilter, sessionSortDirection, isAdminOrHR, auth.user?.id, auth.user?.username]);
+  }, [id, membersPage, membersSize, sessionsPage, sessionsSize, sessionSearchKeyword, sessionStatusFilter, sessionSortDirection, isAdminOrHR, isStudentRoute, auth.user?.id, auth.user?.username]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -323,8 +328,11 @@ export const ClassDetailPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="py-20 flex items-center justify-center gap-2 text-sm text-slate-500">
-        <Loader2 className="h-5 w-5 animate-spin text-primary" /> Đang tải thông tin chi tiết lớp học...
+      <div className="mx-auto max-w-7xl space-y-6" aria-label="Đang tải chi tiết lớp học">
+        <Skeleton className="h-20" />
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{[0, 1, 2, 3].map((item) => <Skeleton key={item} className="h-28" />)}</div>
+        <Skeleton className="h-12" />
+        <Skeleton className="h-96" />
       </div>
     );
   }
@@ -426,7 +434,7 @@ export const ClassDetailPage: React.FC = () => {
         )}
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      {!isStudentRoute && <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
           { label: "Enrollment", value: enrollmentCount, hint: "Ghi danh trỏ tới lớp", icon: GraduationCap, tone: "text-blue-600 bg-blue-50" },
           { label: "Học viên đang học", value: `${cls.members.length}/${cls.maxCapacity}`, hint: `${cls.waitlist.length} đang chờ`, icon: Users, tone: "text-emerald-600 bg-emerald-50" },
@@ -446,7 +454,7 @@ export const ClassDetailPage: React.FC = () => {
             </CardContent>
           </Card>
         ))}
-      </div>
+      </div>}
 
       {/* Tabs Layout */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
@@ -476,8 +484,8 @@ export const ClassDetailPage: React.FC = () => {
           <ClassroomStreamTab
             classId={cls.id}
             className={cls.name}
-            currentUserName={cls.teacher?.name || "Giảng viên / Quản trị viên"}
-            currentUserRole="TEACHER"
+            currentUserName={isStudentRoute ? auth.user?.fullName || auth.user?.username || "Học viên" : cls.teacher?.name || "Giảng viên / Quản trị viên"}
+            currentUserRole={isStudentRoute ? "STUDENT" : isAdminOrHR ? "ADMIN" : "TEACHER"}
           />
         </TabsContent>
 
@@ -488,6 +496,7 @@ export const ClassDetailPage: React.FC = () => {
             className={cls.name}
             membersCount={cls.members.length}
             currentUserName={cls.teacher?.name || "Giảng viên"}
+            currentUserRole={isStudentRoute ? "STUDENT" : isAdminOrHR ? "ADMIN" : "TEACHER"}
           />
         </TabsContent>
 
@@ -526,7 +535,7 @@ export const ClassDetailPage: React.FC = () => {
                         <Badge className={person.roleInClass === "TEACHER" ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-violet-50 text-violet-700 border-violet-200"}>
                           {person.roleInClass === "TEACHER" ? "Giảng viên" : "Trợ giảng"}
                         </Badge>
-                        <Button
+                        {!isStudentRoute && <Button
                           variant="ghost"
                           size="sm"
                           disabled={!person.userId}
@@ -534,7 +543,7 @@ export const ClassDetailPage: React.FC = () => {
                           className="h-8 text-xs text-indigo-600 hover:bg-indigo-50 rounded-lg gap-1"
                         >
                           <Eye className="h-3.5 w-3.5" /> Chi Tiết
-                        </Button>
+                        </Button>}
                       </div>
                     </CardContent>
                   </Card>
@@ -590,7 +599,7 @@ export const ClassDetailPage: React.FC = () => {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1.5">
-                            <Button
+                            {(!isStudentRoute || String(member.studentId) === String(auth.user?.id)) && <Button
                               variant="ghost"
                               size="sm"
                               disabled={!member.studentId}
@@ -598,7 +607,7 @@ export const ClassDetailPage: React.FC = () => {
                               onClick={() => setDetailUserId(member.studentId)}
                             >
                               <Eye className="h-3.5 w-3.5" /> Xem Chi Tiết
-                            </Button>
+                            </Button>}
                             {isAdminOrHR && (
                             <Button
                               variant="ghost"

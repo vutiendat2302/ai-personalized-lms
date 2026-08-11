@@ -59,11 +59,11 @@ def seed(cursor):
         cursor.execute(
             """
             INSERT INTO order_item (
-                id, order_id, course_package_id, price_snapshot, item_type,
+                id, order_id, course_package_id, price_snapshot, discount_snapshot, final_price, item_type,
                 created_at, updated_at
-            ) VALUES (%s, %s, %s, %s, 'NEW_PURCHASE', %s, %s)
+            ) VALUES (%s, %s, %s, %s, %s, %s, 'NEW_PURCHASE', %s, %s)
             """,
-            (snowflake.next_id(), order_id, package["id"], price, created_at, created_at),
+            (snowflake.next_id(), order_id, package["id"], price, discount, final_amount, created_at, created_at),
         )
 
         transaction_status = "SUCCESS" if status == "PAID" else ("FAILED" if status == "CANCELLED" else "PENDING")

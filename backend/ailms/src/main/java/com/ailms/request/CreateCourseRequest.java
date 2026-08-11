@@ -32,6 +32,12 @@ public class CreateCourseRequest {
 
     private String description;
 
+    private String thumbnailUrl;
+
+    private String learningObjectives;
+
+    private String prerequisites;
+
     private BigDecimal suggestedPrice;
 
     private CourseLevelEnum level;

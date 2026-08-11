@@ -1,372 +1,264 @@
-import React, { useState, useEffect } from "react";
-import { studentApi, type ScheduleEventItem } from "@/api/student/studentApi";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { studentApi, type ScheduleEventItem, type StudentOneOnOneRequest } from "@/api/student/studentApi";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { useToast } from "@/hooks/useToast";
+import { StudentPageSkeleton } from "@/components/student/StudentPageSkeleton";
 import {
   Calendar as CalendarIcon,
-  Clock,
-  Video,
-  Info,
-  X,
+  CalendarDays,
   ChevronLeft,
   ChevronRight,
-  Filter,
-  CalendarDays,
   Columns,
+  Filter,
+  Info,
   ListOrdered,
-  CheckSquare,
-  FileCheck,
+  Video,
+  X,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 
 type CalendarViewMode = "WEEK" | "MONTH" | "TIMELINE";
 
-export const StudentSchedulePage: React.FC = () => {
-  const eventDate = (event: ScheduleEventItem) => event.startAt.slice(0, 10);
-  const eventDay = (event: ScheduleEventItem) => new Date(event.startAt).getDay() || 7;
-  const eventTime = (event: ScheduleEventItem) => new Date(event.startAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
-  const eventStartHour = (event: ScheduleEventItem) => new Date(event.startAt).getHours();
-  const eventEndHour = (event: ScheduleEventItem) => event.endAt ? new Date(event.endAt).getHours() : eventStartHour(event) + 1;
+/** Giữ bố cục lịch cũ và hiển thị sự kiện thật thuộc học viên hiện tại. */
+export const StudentSchedulePage = () => {
   const navigate = useNavigate();
-  const { success } = useToast();
-
   const [events, setEvents] = useState<ScheduleEventItem[]>([]);
+  const [matchingRequests, setMatchingRequests] = useState<StudentOneOnOneRequest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [viewMode, setViewMode] = useState<CalendarViewMode>("WEEK");
   const [selectedEvent, setSelectedEvent] = useState<ScheduleEventItem | null>(null);
   const [typeFilter, setTypeFilter] = useState<string>("ALL");
+  const [anchorDate, setAnchorDate] = useState(() => new Date());
 
-  const daysOfWeekLabels = [
-    { dayIdx: 0, label: "Thứ 2", dateStr: "03/08" },
-    { dayIdx: 1, label: "Thứ 3", dateStr: "04/08" },
-    { dayIdx: 2, label: "Thứ 4", dateStr: "05/08" },
-    { dayIdx: 3, label: "Thứ 5", dateStr: "06/08" },
-    { dayIdx: 4, label: "Thứ 6", dateStr: "07/08" },
-    { dayIdx: 5, label: "Thứ 7", dateStr: "08/08" },
-    { dayIdx: 6, label: "Chủ Nhật", dateStr: "09/08" },
-  ];
-
+  /** Tải lịch đã được backend giới hạn theo enrollment và membership của JWT. */
   useEffect(() => {
-    studentApi.getSchedule().then((res) => {
-      setEvents(res);
-      setLoading(false);
-    });
+    Promise.all([studentApi.getSchedule(), studentApi.getOneOnOneRequests()])
+      .then(([schedule, requests]) => {
+        setEvents(schedule);
+        setMatchingRequests(requests.filter((request) => request.status !== "CANCELLED"));
+      })
+      .catch(() => setError("Không thể tải lịch học, lịch thi và hạn nộp bài."))
+      .finally(() => setLoading(false));
   }, []);
 
-  const filteredEvents = events.filter(
-    (ev) => typeFilter === "ALL" || ev.type === typeFilter
+  const filteredEvents = useMemo(
+    () => events.filter((event) => typeFilter === "ALL" || event.type === typeFilter),
+    [events, typeFilter],
   );
 
-  const getEventBadgeClasses = (type: string) => {
-    switch (type) {
-      case "ONLINE_CLASS":
-        return "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border-blue-300 dark:border-blue-800";
-      case "ASSIGNMENT_DUE":
-        return "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border-amber-300 dark:border-amber-800";
-      case "QUIZ_DUE":
-        return "bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 border-purple-300 dark:border-purple-800";
-      default:
-        return "bg-muted text-muted-foreground";
-    }
+  const weekStart = useMemo(() => {
+    const value = new Date(anchorDate);
+    const day = value.getDay() || 7;
+    value.setHours(0, 0, 0, 0);
+    value.setDate(value.getDate() - day + 1);
+    return value;
+  }, [anchorDate]);
+
+  const weekDays = useMemo(() => Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(weekStart);
+    date.setDate(date.getDate() + index);
+    return {
+      date,
+      key: toDateKey(date),
+      label: index === 6 ? "Chủ Nhật" : `Thứ ${index + 2}`,
+      dateStr: new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "2-digit" }).format(date),
+    };
+  }), [weekStart]);
+
+  const monthCells = useMemo(() => {
+    const year = anchorDate.getFullYear();
+    const month = anchorDate.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const firstDayOffset = (new Date(year, month, 1).getDay() + 6) % 7;
+    return [
+      ...Array.from({ length: firstDayOffset }, () => null),
+      ...Array.from({ length: daysInMonth }, (_, index) => new Date(year, month, index + 1)),
+    ];
+  }, [anchorDate]);
+
+  const pendingMatching = matchingRequests.some((request) =>
+    ["WAITING_INSTRUCTOR", "REMATCHING", "INSTRUCTOR_ACCEPTED", "CONTACTED", "TRIAL_SCHEDULED"].includes(request.status),
+  );
+
+  /** Hiển thị trạng thái matching dễ hiểu thay cho mã enum backend. */
+  const matchingStatusLabel = (status: StudentOneOnOneRequest["status"]) => ({
+    WAITING_INSTRUCTOR: "Đang tìm người dạy phù hợp",
+    REMATCHING: "Đang tìm người dạy khác",
+    INSTRUCTOR_ACCEPTED: "Đã có người dạy nhận yêu cầu",
+    CONTACTED: "Đang liên hệ để xác nhận lịch",
+    TRIAL_SCHEDULED: "Đã có lịch học thử",
+    TRIAL_COMPLETED: "Đã hoàn tất học thử",
+    MATCHED: "Đã ghép người dạy chính thức",
+    CANCELLED: "Đã hủy",
+  }[status]);
+
+  /** Dịch mốc hiển thị một tuần hoặc một tháng theo chế độ hiện tại. */
+  const movePeriod = (direction: number) => {
+    setAnchorDate((current) => {
+      const next = new Date(current);
+      if (viewMode === "MONTH") next.setMonth(next.getMonth() + direction);
+      else next.setDate(next.getDate() + direction * 7);
+      return next;
+    });
+  };
+
+  /** Trả màu riêng cho lớp học, bài tập và quiz. */
+  const getEventBadgeClasses = (type: ScheduleEventItem["type"]) => {
+    if (type === "ONLINE_CLASS") return "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border-blue-300 dark:border-blue-800";
+    if (type === "ASSIGNMENT_DEADLINE") return "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border-amber-300 dark:border-amber-800";
+    return "bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 border-purple-300 dark:border-purple-800";
+  };
+
+  /** Trả tên ngắn cho loại sự kiện backend. */
+  const eventTypeLabel = (type: ScheduleEventItem["type"]) =>
+    type === "ONLINE_CLASS" ? "Lớp" : type === "ASSIGNMENT_DEADLINE" ? "Bài tập" : "Quiz";
+
+  /** Định dạng giờ sự kiện theo trình duyệt. */
+  const eventTime = (event: ScheduleEventItem) =>
+    new Date(event.startAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+
+  /** Định dạng ngày sự kiện thành khóa yyyy-MM-dd theo local time. */
+  const eventDate = (event: ScheduleEventItem) => toDateKey(new Date(event.startAt));
+
+  /** Tính giờ bắt đầu dùng để đặt thanh timeline. */
+  const eventStartHour = (event: ScheduleEventItem) => {
+    const value = new Date(event.startAt);
+    return value.getHours() + value.getMinutes() / 60;
+  };
+
+  /** Tính giờ kết thúc; deadline không có endAt được hiển thị bằng một mốc ngắn. */
+  const eventEndHour = (event: ScheduleEventItem) => {
+    if (!event.endAt) return eventStartHour(event) + 1;
+    const value = new Date(event.endAt);
+    return value.getHours() + value.getMinutes() / 60;
   };
 
   if (loading) {
-    return (
-      <div className="p-12 text-center text-muted-foreground">
-        <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-3" />
-        <p className="text-xs font-semibold">Đang tải lịch học & deadline thi...</p>
-      </div>
-    );
+    return <StudentPageSkeleton cards={2} columns={2} />;
   }
+
+  if (error) return <Card className="p-10 text-center text-sm text-destructive">{error}</Card>;
 
   return (
     <div className="space-y-6 pb-16">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
-            <CalendarIcon className="h-6 w-6 text-primary" />
-            Lịch học & Deadline thi
-          </h1>
-          <p className="text-xs text-muted-foreground mt-1">
-            Xem lịch hợp nhất buổi học trực tuyến, hạn nộp bài tập và deadline làm Quiz theo Week, Month hoặc Timeline.
-          </p>
+          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-foreground"><CalendarIcon className="h-6 w-6 text-primary" />Lịch học & Deadline thi</h1>
+          <p className="mt-1 text-xs text-muted-foreground">Xem lịch hợp nhất buổi học trực tuyến, hạn nộp bài tập và deadline làm Quiz theo Week, Month hoặc Timeline.</p>
         </div>
 
-        {/* View Switcher Controls */}
-        <div className="flex items-center gap-2 bg-card border border-border/40 p-1.5 rounded-xl shadow-xs">
-          <button
-            onClick={() => setViewMode("WEEK")}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition cursor-pointer ${
-              viewMode === "WEEK"
-                ? "bg-primary text-primary-foreground shadow-xs"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted"
-            }`}
-          >
-            <Columns className="h-3.5 w-3.5" />
-            Week View
-          </button>
-          <button
-            onClick={() => setViewMode("MONTH")}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition cursor-pointer ${
-              viewMode === "MONTH"
-                ? "bg-primary text-primary-foreground shadow-xs"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted"
-            }`}
-          >
-            <CalendarDays className="h-3.5 w-3.5" />
-            Month View
-          </button>
-          <button
-            onClick={() => setViewMode("TIMELINE")}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition cursor-pointer ${
-              viewMode === "TIMELINE"
-                ? "bg-primary text-primary-foreground shadow-xs"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted"
-            }`}
-          >
-            <ListOrdered className="h-3.5 w-3.5" />
-            Timeline View
-          </button>
+        <div className="flex items-center gap-2 rounded-xl border border-border/40 bg-card p-1.5 shadow-xs">
+          <ViewButton active={viewMode === "WEEK"} onClick={() => setViewMode("WEEK")} icon={Columns} label="Week View" />
+          <ViewButton active={viewMode === "MONTH"} onClick={() => setViewMode("MONTH")} icon={CalendarDays} label="Month View" />
+          <ViewButton active={viewMode === "TIMELINE"} onClick={() => setViewMode("TIMELINE")} icon={ListOrdered} label="Timeline View" />
         </div>
       </div>
 
-      {/* Pending Matching Banner */}
-      <div className="p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl flex items-center gap-3 text-xs text-amber-700 dark:text-amber-300">
-        <Info className="h-5 w-5 shrink-0" />
-        <div>
-          <strong className="block">Đang ghép Gia sư 1-1 cho gói học của bạn:</strong>
-          <span>Đang tìm giáo viên phù hợp với khung giờ bạn chọn, chúng tôi sẽ thông báo ngay khi ghép xong.</span>
+      {pendingMatching && (
+        <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-700 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+          <div className="flex items-center gap-3"><Info className="h-5 w-5 shrink-0" /><div><strong className="block">Đang ghép người dạy 1-1 cho gói học của bạn</strong><span>Lịch học sẽ xuất hiện sau khi yêu cầu matching có lịch chính thức.</span></div></div>
+          {matchingRequests.map((request) => <div key={request.id} className="rounded-lg border border-amber-200/70 bg-background/60 p-3 dark:border-amber-800/70">
+            <div className="flex flex-wrap items-center justify-between gap-2"><strong>{request.courseName} · {request.packageName}</strong><span className="font-semibold">{matchingStatusLabel(request.status)}</span></div>
+            <p className="mt-1">{request.includedTutorSessions ?? 0} buổi chính thức · {request.assignedInstructorName ? `Người dạy: ${request.assignedInstructorName}` : "Chưa phân công người dạy"}</p>
+          </div>)}
         </div>
-      </div>
+      )}
 
-      {/* Filter & Date Navigation Bar */}
-      <Card className="bg-card border-border/40 p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xs">
+      <Card className="flex flex-col items-center justify-between gap-4 border-border/40 bg-card p-4 shadow-xs sm:flex-row">
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="h-8 text-xs border-border text-foreground hover:bg-muted cursor-pointer">
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <span className="text-xs font-bold text-foreground px-2">
-            {viewMode === "MONTH" ? "Tháng 08 / 2026" : "03/08/2026 - 09/08/2026"}
+          <Button variant="outline" size="sm" className="h-8" onClick={() => movePeriod(-1)}><ChevronLeft className="h-4 w-4" /></Button>
+          <span className="px-2 text-xs font-bold text-foreground">
+            {viewMode === "MONTH"
+              ? new Intl.DateTimeFormat("vi-VN", { month: "long", year: "numeric" }).format(anchorDate)
+              : `${weekDays[0].dateStr}/${weekDays[0].date.getFullYear()} - ${weekDays[6].dateStr}/${weekDays[6].date.getFullYear()}`}
           </span>
-          <Button variant="outline" size="sm" className="h-8 text-xs border-border text-foreground hover:bg-muted cursor-pointer">
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-          <Button variant="outline" size="sm" className="h-8 text-xs border-border text-primary font-bold hover:bg-muted cursor-pointer ml-2">
-            Hôm nay
-          </Button>
+          <Button variant="outline" size="sm" className="h-8" onClick={() => movePeriod(1)}><ChevronRight className="h-4 w-4" /></Button>
+          <Button variant="outline" size="sm" className="ml-2 h-8 text-xs font-bold text-primary" onClick={() => setAnchorDate(new Date())}>Hôm nay</Button>
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto">
+        <div className="flex w-full items-center gap-2 sm:w-auto">
           <Filter className="h-3.5 w-3.5 text-muted-foreground" />
-          <select
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            className="bg-background border border-border rounded-xl px-3 py-1.5 text-xs text-foreground w-full sm:w-60"
-          >
+          <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} className="w-full rounded-xl border border-border bg-background px-3 py-1.5 text-xs text-foreground sm:w-60">
             <option value="ALL">Tất cả loại sự kiện</option>
-            <option value="ONLINE_CLASS">🔵 Buổi học Online</option>
-            <option value="ASSIGNMENT_DUE">🟠 Hạn nộp Bài tập</option>
-            <option value="QUIZ_DUE">🟣 Hạn làm Quiz</option>
+            <option value="ONLINE_CLASS">Buổi học Online</option>
+            <option value="ASSIGNMENT_DEADLINE">Hạn nộp Bài tập</option>
+            <option value="QUIZ_DEADLINE">Hạn làm Quiz</option>
           </select>
         </div>
       </Card>
 
-      {/* VIEW 1: WEEK VIEW */}
       {viewMode === "WEEK" && (
-        <Card className="bg-card border-border/40 p-4 overflow-x-auto shadow-xs">
+        <Card className="overflow-x-auto border-border/40 bg-card p-4 shadow-xs">
           <div className="min-w-[800px]">
-            {/* Days Header */}
             <div className="grid grid-cols-7 border-b border-border/40 pb-3 text-center">
-              {daysOfWeekLabels.map((d) => (
-                <div key={d.dayIdx} className="space-y-0.5">
-                  <span className="text-[11px] font-bold text-muted-foreground uppercase">{d.label}</span>
-                  <span className="text-xs font-extrabold text-foreground block">{d.dateStr}</span>
-                </div>
-              ))}
+              {weekDays.map((day) => <div key={day.key} className="space-y-0.5"><span className="text-[11px] font-bold uppercase text-muted-foreground">{day.label}</span><span className="block text-xs font-extrabold text-foreground">{day.dateStr}</span></div>)}
             </div>
-
-            {/* Week Grid Slots */}
-            <div className="grid grid-cols-7 gap-2 pt-3 min-h-[420px]">
-              {daysOfWeekLabels.map((d) => {
-                const dayEvents = filteredEvents.filter((ev) => eventDay(ev) === d.dayIdx);
-                return (
-                  <div key={d.dayIdx} className="bg-muted/30 border border-border/40 rounded-xl p-2 space-y-2 min-h-[380px]">
-                    {dayEvents.length === 0 ? (
-                      <div className="h-full flex items-center justify-center text-[10px] text-muted-foreground/60 italic">
-                        Không có sự kiện
-                      </div>
-                    ) : (
-                      dayEvents.map((ev) => (
-                        <div
-                          key={ev.id}
-                          onClick={() => setSelectedEvent(ev)}
-                          className={`p-2.5 rounded-lg border text-xs space-y-1.5 cursor-pointer transition shadow-xs hover:border-primary ${
-                            ev.type === "ONLINE_CLASS"
-                              ? "bg-blue-50 dark:bg-blue-950/40 border-blue-300 dark:border-blue-800"
-                              : ev.type === "ASSIGNMENT_DUE"
-                              ? "bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-800"
-                              : "bg-purple-50 dark:bg-purple-950/40 border-purple-300 dark:border-purple-800"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-bold font-mono text-primary">{eventTime(ev)}</span>
-                            <span className={`px-1.5 py-0.5 text-[8px] font-black rounded border ${getEventBadgeClasses(ev.type)}`}>
-                              {ev.type === "ONLINE_CLASS" ? "Lớp" : ev.type === "ASSIGNMENT_DUE" ? "Bài tập" : "Quiz"}
-                            </span>
-                          </div>
-                          <p className="font-bold text-foreground line-clamp-2 text-[11px] leading-tight">{ev.title}</p>
-                          <p className="text-[10px] text-muted-foreground line-clamp-1">{ev.className}</p>
-
-                          {ev.type === "ONLINE_CLASS" && ev.roomUrl && (
-                            <a
-                              href={ev.roomUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="w-full flex items-center justify-center gap-1 py-1 bg-blue-600 text-white text-[10px] font-bold rounded"
-                            >
-                              <Video className="h-3 w-3" />
-                              Vào lớp
-                            </a>
-                          )}
-                        </div>
-                      ))
-                    )}
-                  </div>
-                );
+            <div className="grid min-h-[420px] grid-cols-7 gap-2 pt-3">
+              {weekDays.map((day) => {
+                const dayEvents = filteredEvents.filter((event) => eventDate(event) === day.key);
+                return <div key={day.key} className="min-h-[380px] space-y-2 rounded-xl border border-border/40 bg-muted/30 p-2">
+                  {dayEvents.length === 0 ? <div className="flex h-full items-center justify-center text-[10px] italic text-muted-foreground/60">Không có sự kiện</div> : dayEvents.map((event) => (
+                    <div key={`${event.type}-${event.id}`} onClick={() => setSelectedEvent(event)} className={`cursor-pointer space-y-1.5 rounded-lg border p-2.5 text-xs shadow-xs transition hover:border-primary ${getEventBadgeClasses(event.type)}`}>
+                      <div className="flex items-center justify-between"><span className="font-mono text-[10px] font-bold">{eventTime(event)}</span><span className="rounded border border-current/20 px-1.5 py-0.5 text-[8px] font-black">{eventTypeLabel(event.type)}</span></div>
+                      <p className="line-clamp-2 text-[11px] font-bold leading-tight">{event.title}</p>
+                      {event.className && <p className="line-clamp-1 text-[10px] opacity-75">{event.className}</p>}
+                      {event.type === "ONLINE_CLASS" && event.roomUrl && <a href={event.roomUrl} target="_blank" rel="noreferrer" onClick={(click) => click.stopPropagation()} className="flex w-full items-center justify-center gap-1 rounded bg-blue-600 py-1 text-[10px] font-bold text-white"><Video className="h-3 w-3" />Vào lớp</a>}
+                    </div>
+                  ))}
+                </div>;
               })}
             </div>
           </div>
         </Card>
       )}
 
-      {/* VIEW 2: MONTH VIEW */}
       {viewMode === "MONTH" && (
-        <Card className="bg-card border-border/40 p-5 space-y-4 shadow-xs">
-          <div className="grid grid-cols-7 border-b border-border/40 pb-2 text-center text-xs font-bold text-muted-foreground uppercase">
-            <span>T2</span>
-            <span>T3</span>
-            <span>T4</span>
-            <span>T5</span>
-            <span>T6</span>
-            <span>T7</span>
-            <span>CN</span>
-          </div>
-
+        <Card className="space-y-4 border-border/40 bg-card p-5 shadow-xs">
+          <div className="grid grid-cols-7 border-b border-border/40 pb-2 text-center text-xs font-bold uppercase text-muted-foreground">{["T2", "T3", "T4", "T5", "T6", "T7", "CN"].map((label) => <span key={label}>{label}</span>)}</div>
           <div className="grid grid-cols-7 gap-1 text-xs">
-            {Array.from({ length: 31 }).map((_, idx) => {
-              const dayNum = idx + 1;
-              const dateString = `2026-08-${dayNum < 10 ? "0" + dayNum : dayNum}`;
-              const dayEvents = filteredEvents.filter((ev) => eventDate(ev) === dateString);
-
-              return (
-                <div
-                  key={idx}
-                  className="min-h-[90px] p-2 bg-background border border-border/40 rounded-xl space-y-1 hover:border-primary/50 transition cursor-pointer"
-                >
-                  <span className="text-[11px] font-extrabold text-muted-foreground block">{dayNum}</span>
-                  {dayEvents.map((ev) => (
-                    <div
-                      key={ev.id}
-                      onClick={() => setSelectedEvent(ev)}
-                      className={`p-1 rounded text-[10px] font-bold truncate border ${getEventBadgeClasses(ev.type)}`}
-                    >
-                      {eventTime(ev)} {ev.title.substring(0, 15)}...
-                    </div>
-                  ))}
-                </div>
-              );
+            {monthCells.map((date, index) => {
+              if (!date) return <div key={`blank-${index}`} className="min-h-[90px]" />;
+              const dateKey = toDateKey(date);
+              const dayEvents = filteredEvents.filter((event) => eventDate(event) === dateKey);
+              return <div key={dateKey} className="min-h-[90px] space-y-1 rounded-xl border border-border/40 bg-background p-2 transition hover:border-primary/50">
+                <span className="block text-[11px] font-extrabold text-muted-foreground">{date.getDate()}</span>
+                {dayEvents.map((event) => <button type="button" key={`${event.type}-${event.id}`} onClick={() => setSelectedEvent(event)} className={`block w-full truncate rounded border p-1 text-left text-[10px] font-bold ${getEventBadgeClasses(event.type)}`}>{eventTime(event)} {event.title}</button>)}
+              </div>;
             })}
           </div>
         </Card>
       )}
 
-      {/* VIEW 3: TIMELINE VIEW */}
       {viewMode === "TIMELINE" && (
-        <Card className="bg-card border-border/40 p-5 space-y-4 shadow-xs">
-          <div className="flex items-center justify-between border-b border-border/40 pb-3">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Khung giờ Timeline Sự kiện</h3>
-          </div>
-
-          <div className="space-y-4">
-            {filteredEvents.map((ev) => (
-              <div key={ev.id} className="p-4 bg-background border border-border/40 rounded-xl space-y-2">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="text-sm font-bold text-foreground">{ev.title}</h4>
-                    <p className="text-xs text-muted-foreground">{ev.className || "Tự học cá nhân"} ({eventDate(ev)})</p>
-                  </div>
-                  <span className="text-xs font-mono font-bold text-primary">{eventTime(ev)}</span>
-                </div>
-
-                {/* Timeline Bar */}
-                <div className="relative h-6 bg-muted/40 rounded-lg overflow-hidden flex items-center">
-                  <div
-                    className={`absolute h-full rounded-lg flex items-center px-3 text-[10px] font-bold ${
-                      ev.type === "ONLINE_CLASS"
-                        ? "bg-blue-600 text-white"
-                        : ev.type === "ASSIGNMENT_DUE"
-                        ? "bg-amber-500 text-white"
-                        : "bg-purple-600 text-white"
-                    }`}
-                    style={{ left: `${((eventStartHour(ev) - 8) / 16) * 100}%`, width: `${Math.max(12, ((eventEndHour(ev) - eventStartHour(ev)) / 16) * 100)}%` }}
-                  >
-                    {eventTime(ev)}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+        <Card className="space-y-4 border-border/40 bg-card p-5 shadow-xs">
+          <div className="flex items-center justify-between border-b border-border/40 pb-3"><h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Khung giờ Timeline Sự kiện</h3></div>
+          {filteredEvents.length === 0 ? <p className="py-12 text-center text-sm text-muted-foreground">Không có sự kiện phù hợp.</p> : <div className="space-y-4">{filteredEvents.map((event) => (
+            <div key={`${event.type}-${event.id}`} className="space-y-2 rounded-xl border border-border/40 bg-background p-4">
+              <div className="flex items-center justify-between"><div><h4 className="text-sm font-bold text-foreground">{event.title}</h4><p className="text-xs text-muted-foreground">{event.className ?? eventTypeLabel(event.type)} ({new Date(event.startAt).toLocaleDateString("vi-VN")})</p></div><span className="font-mono text-xs font-bold text-primary">{eventTime(event)}</span></div>
+              <div className="relative flex h-6 items-center overflow-hidden rounded-lg bg-muted/40"><div className={`absolute flex h-full items-center rounded-lg px-3 text-[10px] font-bold text-white ${event.type === "ONLINE_CLASS" ? "bg-blue-600" : event.type === "ASSIGNMENT_DEADLINE" ? "bg-amber-500" : "bg-purple-600"}`} style={{ left: `${Math.max(0, ((eventStartHour(event) - 8) / 16) * 100)}%`, width: `${Math.max(12, ((eventEndHour(event) - eventStartHour(event)) / 16) * 100)}%` }}>{eventTime(event)}</div></div>
+            </div>
+          ))}</div>}
         </Card>
       )}
 
-      {/* Event Detail Modal */}
       {selectedEvent && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-popover border border-border rounded-2xl p-6 max-w-md w-full space-y-4 shadow-xl">
-            <div className="flex items-center justify-between border-b border-border/40 pb-3">
-              <div>
-                <h3 className="text-base font-bold text-foreground">{selectedEvent.title}</h3>
-                <span className={`px-2 py-0.5 text-[9px] font-black rounded border mt-1 inline-block ${getEventBadgeClasses(selectedEvent.type)}`}>
-                  {selectedEvent.type}
-                </span>
-              </div>
-              <button onClick={() => setSelectedEvent(null)} className="text-muted-foreground hover:text-foreground">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="space-y-2 text-xs text-foreground bg-muted/30 p-3 rounded-xl border border-border/40">
-              <p><strong>Thời gian:</strong> {eventTime(selectedEvent)} ({eventDate(selectedEvent)})</p>
-              {selectedEvent.className && <p><strong>Lớp học:</strong> {selectedEvent.className}</p>}
-              {selectedEvent.teacherName && <p><strong>Giảng viên phụ trách:</strong> {selectedEvent.teacherName}</p>}
-            </div>
-
-            <div className="flex justify-end pt-2 border-t border-border/40">
-              {selectedEvent.type === "ONLINE_CLASS" && selectedEvent.roomUrl ? (
-                <a
-                  href={selectedEvent.roomUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="w-full flex items-center justify-center gap-1.5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition"
-                >
-                  <Video className="h-4 w-4" />
-                  Mở phòng học trực tuyến (Jitsi Meet)
-                </a>
-              ) : (
-                <Button
-                  onClick={() => navigate("/student/assignments")}
-                  className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold rounded-lg cursor-pointer"
-                >
-                  Làm bài ngay
-                </Button>
-              )}
-            </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
+          <div className="w-full max-w-md space-y-4 rounded-2xl border border-border bg-popover p-6 shadow-xl">
+            <div className="flex items-center justify-between border-b border-border/40 pb-3"><div><h3 className="text-base font-bold text-foreground">{selectedEvent.title}</h3><span className={`mt-1 inline-block rounded border px-2 py-0.5 text-[9px] font-black ${getEventBadgeClasses(selectedEvent.type)}`}>{eventTypeLabel(selectedEvent.type)}</span></div><button type="button" onClick={() => setSelectedEvent(null)} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button></div>
+            <div className="space-y-2 rounded-xl border border-border/40 bg-muted/30 p-3 text-xs text-foreground"><p><strong>Thời gian:</strong> {new Date(selectedEvent.startAt).toLocaleString("vi-VN")}</p>{selectedEvent.className && <p><strong>Lớp học:</strong> {selectedEvent.className}</p>}{selectedEvent.teacherName && <p><strong>Giảng viên phụ trách:</strong> {selectedEvent.teacherName}</p>}</div>
+            <div className="flex justify-end border-t border-border/40 pt-2">{selectedEvent.type === "ONLINE_CLASS" && selectedEvent.roomUrl ? <a href={selectedEvent.roomUrl} target="_blank" rel="noreferrer" className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-blue-600 py-2.5 text-xs font-bold text-white transition hover:bg-blue-700"><Video className="h-4 w-4" />Mở phòng học trực tuyến</a> : <Button onClick={() => navigate("/student/assignments")} className="text-xs font-bold">Làm bài ngay</Button>}</div>
           </div>
         </div>
       )}
     </div>
   );
 };
+
+/** Chuẩn hóa ngày local thành khóa yyyy-MM-dd để ghép sự kiện vào ô lịch. */
+const toDateKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+
+/** Nút chuyển chế độ hiển thị giữ nguyên kiểu điều khiển của bố cục cũ. */
+const ViewButton = ({ active, onClick, icon: Icon, label }: { active: boolean; onClick: () => void; icon: typeof Columns; label: string }) => (
+  <button type="button" onClick={onClick} className={`flex cursor-pointer items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${active ? "bg-primary text-primary-foreground shadow-xs" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}><Icon className="h-3.5 w-3.5" />{label}</button>
+);

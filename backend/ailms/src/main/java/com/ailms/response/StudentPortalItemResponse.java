@@ -4,6 +4,7 @@ import com.ailms.entity.enums.DeliveryModeEnum;
 import com.ailms.entity.enums.OrderStatusEnum;
 import com.ailms.entity.enums.StudyGoalStatusEnum;
 import com.ailms.entity.enums.StudyGoalTypeEnum;
+import com.ailms.request.OneOnOneNeedsRequest;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -22,7 +23,8 @@ public final class StudentPortalItemResponse {
     @Getter @Builder @NoArgsConstructor @AllArgsConstructor
     public static class CourseCard {
         private Long id; private String title; private String courseCode; private String courseLink;
-        private String description; private String level; private String categoryName; private DeliveryModeEnum deliveryMode;
+        private String description; private String level; private String categoryName; private String coverImage;
+        private DeliveryModeEnum deliveryMode;
         private Integer progressPercent; private LocalDateTime expiresAt; private boolean expired;
         private String status; private LocalDateTime lastAccessedAt;
     }
@@ -35,8 +37,15 @@ public final class StudentPortalItemResponse {
 
     @Getter @Builder @NoArgsConstructor @AllArgsConstructor
     public static class AssignmentItem {
-        private Long id; private String title; private Long courseId; private String courseName; private LocalDateTime dueDate;
+        private Long id; private String title; private Long courseId; private Long classId; private String courseName; private LocalDateTime dueDate;
         private String status; private BigDecimal score; private BigDecimal maxScore; private String feedback;
+    }
+
+    @Getter @Builder @NoArgsConstructor @AllArgsConstructor
+    public static class QuizItem {
+        private Long id; private String title; private Long courseId; private Long classId; private String courseName;
+        private LocalDateTime dueAt; private Integer timeLimitMin; private Integer maxAttempts;
+        private String status; private Integer attemptsUsed; private BigDecimal bestScore; private Boolean passed;
     }
 
     @Getter @Builder @NoArgsConstructor @AllArgsConstructor
@@ -65,8 +74,9 @@ public final class StudentPortalItemResponse {
 
     @Getter @Builder @NoArgsConstructor @AllArgsConstructor
     public static class CartItem {
-        private Long id; private Long coursePackageId; private String courseTitle; private String packageName;
-        private DeliveryModeEnum deliveryMode; private BigDecimal price;
+        private Long id; private Long coursePackageId; private Long courseId; private String courseTitle; private String packageName;
+        private DeliveryModeEnum deliveryMode; private BigDecimal price; private Boolean requiresTutorNeeds;
+        private OneOnOneNeedsRequest oneOnOneNeeds;
     }
 
     @Getter @Builder @NoArgsConstructor @AllArgsConstructor

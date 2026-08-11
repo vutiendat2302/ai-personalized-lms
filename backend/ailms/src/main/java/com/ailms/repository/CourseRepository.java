@@ -3,6 +3,7 @@ package com.ailms.repository;
 import com.ailms.dto.CourseSuggestion;
 import com.ailms.entity.CourseEntity;
 import com.ailms.entity.enums.CourseStatusEnum;
+import com.ailms.entity.enums.CourseLevelEnum;
 import com.ailms.repository.base.BaseRepository;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -37,7 +38,14 @@ public interface CourseRepository extends BaseRepository<CourseEntity, Long> {
         )
         FROM CourseEntity c
         JOIN c.categoryEntity cat
-        WHERE c.status != com.ailms.entity.enums.CourseStatusEnum.INACTIVE
+        WHERE c.status = com.ailms.entity.enums.CourseStatusEnum.ACTIVE
+          AND EXISTS (SELECT p.id FROM CoursePackageEntity p
+                      WHERE p.courseEntity.id = c.id
+                        AND p.status = com.ailms.entity.enums.CoursePackageStatusEnum.ACTIVE)
+          AND EXISTS (SELECT p.id FROM CoursePackageEntity p
+                      WHERE p.courseEntity.id = c.id
+                        AND p.status = com.ailms.entity.enums.CoursePackageStatusEnum.ACTIVE
+                        AND p.deliveryMode = com.ailms.entity.enums.DeliveryModeEnum.SELF_STUDY)
           AND (LOWER(c.name) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(cat.name) LIKE LOWER(CONCAT('%', :keyword, '%')))
         ORDER BY
           CASE WHEN LOWER(c.name) LIKE LOWER(CONCAT(:keyword, '%')) THEN 0 ELSE 1 END,
@@ -52,6 +60,13 @@ public interface CourseRepository extends BaseRepository<CourseEntity, Long> {
         FROM CourseEntity c
         JOIN c.categoryEntity cat
         WHERE c.status = com.ailms.entity.enums.CourseStatusEnum.ACTIVE
+          AND EXISTS (SELECT p.id FROM CoursePackageEntity p
+                      WHERE p.courseEntity.id = c.id
+                        AND p.status = com.ailms.entity.enums.CoursePackageStatusEnum.ACTIVE)
+          AND EXISTS (SELECT p.id FROM CoursePackageEntity p
+                      WHERE p.courseEntity.id = c.id
+                        AND p.status = com.ailms.entity.enums.CoursePackageStatusEnum.ACTIVE
+                        AND p.deliveryMode = com.ailms.entity.enums.DeliveryModeEnum.SELF_STUDY)
         ORDER BY c.trendingScore DESC, c.reviewCount DESC, c.avgRating DESC
         """)
     List<CourseSuggestion> findTopActiveCourses(Pageable pageable);
@@ -63,14 +78,57 @@ public interface CourseRepository extends BaseRepository<CourseEntity, Long> {
           AND EXISTS (SELECT p.id FROM CoursePackageEntity p
                       WHERE p.courseEntity.id = c.id
                         AND p.status = com.ailms.entity.enums.CoursePackageStatusEnum.ACTIVE)
+          AND EXISTS (SELECT selfStudy.id FROM CoursePackageEntity selfStudy
+                      WHERE selfStudy.courseEntity.id = c.id
+                        AND selfStudy.status = com.ailms.entity.enums.CoursePackageStatusEnum.ACTIVE
+                        AND selfStudy.deliveryMode = com.ailms.entity.enums.DeliveryModeEnum.SELF_STUDY)
           AND (:keyword IS NULL OR LOWER(c.name) LIKE LOWER(CONCAT('%', :keyword, '%'))
                OR LOWER(c.code) LIKE LOWER(CONCAT('%', :keyword, '%'))
                OR LOWER(c.categoryEntity.name) LIKE LOWER(CONCAT('%', :keyword, '%')))
-        ORDER BY c.enrollmentCount DESC,
-          (SELECT COUNT(r.id) FROM ReviewEntity r
-           WHERE r.courseId = c.id AND r.rating = 5
-             AND r.status = com.ailms.entity.enums.ReviewStatusEnum.ACTIVE) DESC,
-          c.avgRating DESC
+          AND (:categoryId IS NULL OR c.categoryEntity.id = :categoryId)
+          AND (:level IS NULL OR c.level = :level)
         """)
-    Page<CourseEntity> findActiveCoursesForSale(@Param("keyword") String keyword, Pageable pageable);
+    Page<CourseEntity> findActiveCoursesForSale(
+            @Param("keyword") String keyword,
+            @Param("categoryId") Long categoryId,
+            @Param("level") CourseLevelEnum level,
+            Pageable pageable);
+
+    /** Lấy khóa học công khai thuộc đúng các danh mục khớp sở thích học viên. */
+    @Query("""
+        SELECT c FROM CourseEntity c
+        WHERE c.status = com.ailms.entity.enums.CourseStatusEnum.ACTIVE
+          AND c.categoryEntity.id IN :categoryIds
+          AND EXISTS (SELECT p.id FROM CoursePackageEntity p
+                      WHERE p.courseEntity.id = c.id
+                        AND p.status = com.ailms.entity.enums.CoursePackageStatusEnum.ACTIVE)
+          AND EXISTS (SELECT selfStudy.id FROM CoursePackageEntity selfStudy
+                      WHERE selfStudy.courseEntity.id = c.id
+                        AND selfStudy.status = com.ailms.entity.enums.CoursePackageStatusEnum.ACTIVE
+                        AND selfStudy.deliveryMode = com.ailms.entity.enums.DeliveryModeEnum.SELF_STUDY)
+          AND (:keyword IS NULL OR LOWER(c.name) LIKE LOWER(CONCAT('%', :keyword, '%'))
+               OR LOWER(c.code) LIKE LOWER(CONCAT('%', :keyword, '%'))
+               OR LOWER(c.categoryEntity.name) LIKE LOWER(CONCAT('%', :keyword, '%')))
+        ORDER BY c.enrollmentCount DESC, c.avgRating DESC, c.reviewCount DESC
+        """)
+    Page<CourseEntity> findPersonalizedCoursesForSale(
+            @Param("keyword") String keyword,
+            @Param("categoryIds") List<Long> categoryIds,
+            Pageable pageable);
+
+    /** Kiểm tra khóa học đủ điều kiện hiển thị công khai và mở bán. */
+    @Query("""
+        SELECT CASE WHEN COUNT(c) > 0 THEN true ELSE false END
+        FROM CourseEntity c
+        WHERE c.id = :courseId
+          AND c.status = com.ailms.entity.enums.CourseStatusEnum.ACTIVE
+          AND EXISTS (SELECT p.id FROM CoursePackageEntity p
+                      WHERE p.courseEntity.id = c.id
+                        AND p.status = com.ailms.entity.enums.CoursePackageStatusEnum.ACTIVE)
+          AND EXISTS (SELECT p.id FROM CoursePackageEntity p
+                      WHERE p.courseEntity.id = c.id
+                        AND p.status = com.ailms.entity.enums.CoursePackageStatusEnum.ACTIVE
+                        AND p.deliveryMode = com.ailms.entity.enums.DeliveryModeEnum.SELF_STUDY)
+        """)
+    boolean isPubliclySellable(@Param("courseId") Long courseId);
 }

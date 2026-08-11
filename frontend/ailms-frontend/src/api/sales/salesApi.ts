@@ -3,7 +3,7 @@ import type { ApiResponse, PageResponse } from "@/types/base";
 
 export type OrderStatusEnum = "PENDING" | "PAID" | "CANCELLED" | "EXPIRED" | "REFUNDED";
 export type OrderItemTypeEnum = "NEW_PURCHASE" | "UPGRADE" | "RENEWAL";
-export type PaymentMethodEnum = "VNPAY" | "MOMO" | "BANK_TRANSFER" | "MOCK";
+export type PaymentMethodEnum = "PAYPAL" | "VNPAY" | "MOMO" | "BANK_TRANSFER" | "MOCK";
 export type PaymentStatusEnum = "PENDING" | "SUCCESS" | "FAILED" | "REFUNDED";
 export type DeliveryModeEnum = "SELF_STUDY" | "GROUP_CLASS" | "ONE_ON_ONE" | "COMBO";
 
@@ -65,6 +65,11 @@ export interface PaymentTransaction {
   paymentMethod: PaymentMethodEnum;
   amount: number;
   status: PaymentStatusEnum;
+  paypalRefundId?: string | null;
+  refundAmount?: number | null;
+  refundCurrency?: string | null;
+  refundReason?: string | null;
+  refundedAt?: string | null;
   isReconciled: boolean;
   reconciledAt?: string | null;
   createdAt: string;

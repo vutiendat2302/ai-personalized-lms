@@ -22,6 +22,8 @@ public class AssignmentResponse {
 
     private Long sectionId;
 
+    private Long classId;
+
     private String title;
 
     private String description;

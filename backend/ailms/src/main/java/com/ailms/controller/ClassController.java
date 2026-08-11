@@ -12,6 +12,12 @@ import com.ailms.response.ClassScheduleResponse;
 import com.ailms.response.ApiResponse;
 import com.ailms.security.CustomUserDetails;
 import com.ailms.service.IClassService;
+import com.ailms.service.IAssignmentService;
+import com.ailms.service.IQuizService;
+import com.ailms.request.AssignmentRequest;
+import com.ailms.request.QuizRequest;
+import com.ailms.response.AssignmentResponse;
+import com.ailms.response.QuizResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -28,14 +34,18 @@ import java.util.List;
 public class ClassController {
 
     private final IClassService classService;
+    private final IAssignmentService assignmentService;
+    private final IQuizService quizService;
 
     @PostMapping
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_HR', 'ROLE_TEACHER', 'ROLE_TA')")
     public ResponseEntity<ApiResponse<ClassResponse>> create(@Valid @RequestBody CreateClassRequest request) {
         ClassResponse response = classService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of("Class created successfully", response));
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("@classAccess.canManage(#id, authentication)")
     public ResponseEntity<ApiResponse<ClassResponse>> update(
             @PathVariable Long id,
             @Valid @RequestBody UpdateClassRequest request) {
@@ -44,12 +54,14 @@ public class ClassController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("@classAccess.canView(#id, authentication)")
     public ResponseEntity<ApiResponse<ClassResponse>> getById(@PathVariable Long id) {
         ClassResponse response = classService.getById(id);
         return ResponseEntity.ok(ApiResponse.of("Class retrieved successfully", response));
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_HR', 'ROLE_TEACHER', 'ROLE_TA')")
     public ResponseEntity<ApiResponse<List<ClassResponse>>> getAll() {
         List<ClassResponse> response = classService.getAll();
         return ResponseEntity.ok(ApiResponse.of("Classes retrieved successfully", response));
@@ -64,31 +76,81 @@ public class ClassController {
         return ResponseEntity.ok(ApiResponse.of("Teaching classes retrieved successfully", response));
     }
 
+    /** Lấy danh sách lớp của chính học viên từ membership trong JWT. */
+    @GetMapping("/enrolled/me")
+    @PreAuthorize("hasAnyAuthority('ROLE_STUDENT', 'ROLE_ADMIN')")
+    public ResponseEntity<ApiResponse<List<ClassResponse>>> getMyEnrolledClasses(
+            @AuthenticationPrincipal CustomUserDetails currentUser) {
+        List<ClassResponse> response = classService.getStudentClassesByUserId(currentUser.getUser().getId());
+        return ResponseEntity.ok(ApiResponse.of("Enrolled classes retrieved successfully", response));
+    }
+
     @GetMapping("/course/{courseId}")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_HR', 'ROLE_TEACHER', 'ROLE_TA')")
     public ResponseEntity<ApiResponse<List<ClassResponse>>> getByCourseId(@PathVariable Long courseId) {
         List<ClassResponse> response = classService.getByCourseId(courseId);
         return ResponseEntity.ok(ApiResponse.of("Classes retrieved successfully", response));
     }
 
     @GetMapping("/{id}/schedules")
+    @PreAuthorize("@classAccess.canView(#id, authentication)")
     public ResponseEntity<ApiResponse<List<ClassScheduleResponse>>> getSchedules(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.of("Class schedules retrieved successfully", classService.getSchedules(id)));
     }
 
     @PutMapping("/{id}/schedules")
+    @PreAuthorize("@classAccess.canManage(#id, authentication)")
     public ResponseEntity<ApiResponse<List<ClassScheduleResponse>>> updateSchedules(
             @PathVariable Long id,
             @RequestBody List<UpdateClassScheduleSlotRequest> schedules) {
         return ResponseEntity.ok(ApiResponse.of("Class schedules updated successfully", classService.updateSchedules(id, schedules)));
     }
 
+    /** Giáo viên/trợ giảng giao bài tập có hạn cho đúng lớp mình quản lý. */
+    @PostMapping("/{id}/assignments")
+    @PreAuthorize("@classAccess.canManage(#id, authentication)")
+    public ResponseEntity<ApiResponse<AssignmentResponse>> createClassAssignment(
+            @PathVariable Long id, @Valid @RequestBody AssignmentRequest request) {
+        request.setClassId(id);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(
+                "Class assignment created successfully", assignmentService.create(request)));
+    }
+
+    /** Thành viên lớp xem danh sách bài tập được giao cho lớp. */
+    @GetMapping("/{id}/assignments")
+    @PreAuthorize("@classAccess.canView(#id, authentication)")
+    public ResponseEntity<ApiResponse<List<AssignmentResponse>>> getClassAssignments(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.of(
+                "Class assignments retrieved successfully", assignmentService.getByClassId(id)));
+    }
+
+    /** Giáo viên/trợ giảng giao quiz hoặc lịch thi có hạn cho đúng lớp. */
+    @PostMapping("/{id}/quizzes")
+    @PreAuthorize("@classAccess.canManage(#id, authentication)")
+    public ResponseEntity<ApiResponse<QuizResponse>> createClassQuiz(
+            @PathVariable Long id, @Valid @RequestBody QuizRequest request) {
+        request.setClassId(id);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(
+                "Class quiz created successfully", quizService.create(request)));
+    }
+
+    /** Thành viên lớp xem quiz và lịch thi được giao cho lớp. */
+    @GetMapping("/{id}/quizzes")
+    @PreAuthorize("@classAccess.canView(#id, authentication)")
+    public ResponseEntity<ApiResponse<List<QuizResponse>>> getClassQuizzes(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.of(
+                "Class quizzes retrieved successfully", quizService.getByClassId(id)));
+    }
+
     @DeleteMapping("/{id}")
+    @PreAuthorize("@classAccess.canManage(#id, authentication)")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         classService.delete(id);
         return ResponseEntity.ok(ApiResponse.message("Class deleted successfully"));
     }
 
     @GetMapping("/search")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_HR', 'ROLE_TEACHER', 'ROLE_TA')")
     public ResponseEntity<ApiResponse<PageResponse<ClassResponse>>> search(ClassSearchRequest request) {
         PageResponse<ClassResponse> result = classService.search(request);
         return ResponseEntity.ok(ApiResponse.of("Search Class successfully", result));

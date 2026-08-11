@@ -1,38 +1,22 @@
-import React, { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
+import axios from "axios";
+import {
+  adminCourseClassApi,
+  type StreamPostComment,
+  type StreamPostItem,
+  type StreamPostType,
+} from "@/api/courses/adminCourseClassApi";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/useToast";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
-import {
-  MessageSquare,
-  Send,
-  Paperclip,
-  Loader2,
-  Trash2,
-  FileText,
-  Calendar,
-  Eye,
-  Download,
-} from "lucide-react";
-import { adminCourseClassApi } from "@/api/courses/adminCourseClassApi";
-import httpClient from "@/api/httpClient";
-import { fileAdminApi } from "@/api/file/fileAdminApi";
-
-export interface StreamPost {
-  id: string;
-  authorUserId: string;
-  authorName: string;
-  authorAvatar?: string;
-  title?: string;
-  content: string;
-  fileKey?: string;
-  fileName?: string;
-  fileType?: string;
-  fileSize?: number;
-  fileUrl?: string;
-  createdAt: string;
-}
+import { ChevronLeft, ChevronRight, Edit3, Loader2, Lock, MessageCircle, MessageSquare, Pin, Send, Trash2 } from "lucide-react";
 
 interface ClassroomStreamTabProps {
   classId: string;
@@ -41,403 +25,340 @@ interface ClassroomStreamTabProps {
   currentUserRole?: "TEACHER" | "STUDENT" | "ADMIN";
 }
 
-export const ClassroomStreamTab: React.FC<ClassroomStreamTabProps> = ({
+interface CommentPageState {
+  rows: StreamPostComment[];
+  loading: boolean;
+  loaded: boolean;
+  error: string;
+}
+
+/** Đổi loại bài thành nhãn ngắn gọn cho thành viên lớp. */
+const typeLabel = (type: StreamPostType) => ({
+  QUESTION: "Câu hỏi",
+  DISCUSSION: "Thảo luận",
+  ANNOUNCEMENT: "Thông báo",
+})[type];
+
+/** Hiển thị thời gian bài đăng hoặc bình luận theo múi giờ trình duyệt. */
+const formatDateTime = (value: string) => new Intl.DateTimeFormat("vi-VN", {
+  dateStyle: "short",
+  timeStyle: "short",
+}).format(new Date(value));
+
+/** Ưu tiên thông báo nghiệp vụ backend và dùng fallback khi lỗi mạng. */
+const axiosErrorMessage = (requestError: unknown, fallback: string) => axios.isAxiosError(requestError)
+  ? String(requestError.response?.data?.message || fallback)
+  : fallback;
+
+/** Khu vực thảo luận/hỏi đáp dùng chung cho học viên, giáo viên và quản trị lớp. */
+export const ClassroomStreamTab = ({
   classId,
   className,
-  currentUserName = "Giảng viên / Quản trị viên",
-}) => {
-  const [posts, setPosts] = useState<StreamPost[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [uploadingFile, setUploadingFile] = useState(false);
+  currentUserName = "Thành viên lớp",
+  currentUserRole = "TEACHER",
+}: ClassroomStreamTabProps) => {
+  const { auth } = useAuth();
+  const { success, error: showError } = useToast();
+  const canModerate = currentUserRole !== "STUDENT";
+  const currentUserId = String(auth.user?.id || "");
+  const [posts, setPosts] = useState<StreamPostItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [showComposer, setShowComposer] = useState(false);
-
-  // New post form state
+  const [postType, setPostType] = useState<StreamPostType>("DISCUSSION");
   const [postTitle, setPostTitle] = useState("");
   const [postContent, setPostContent] = useState("");
-  const [uploadedFile, setUploadedFile] = useState<{
-    fileKey: string;
-    fileName: string;
-    fileType?: string;
-    fileSize?: number;
-  } | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [busyPostId, setBusyPostId] = useState("");
+  const [comments, setComments] = useState<Record<string, CommentPageState>>({});
+  const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
+  const [commentBusyPostId, setCommentBusyPostId] = useState("");
+  const [editingPost, setEditingPost] = useState<StreamPostItem | null>(null);
+  const [editingPostTitle, setEditingPostTitle] = useState("");
+  const [editingPostContent, setEditingPostContent] = useState("");
+  const [editingCommentId, setEditingCommentId] = useState("");
+  const [editingCommentContent, setEditingCommentContent] = useState("");
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (classId) {
-      fetchPosts();
-    }
-  }, [classId]);
-
-  const fetchPosts = async () => {
+  /** Tải một trang bài đăng và giữ riêng loading/error/empty state. */
+  const loadPosts = async () => {
     setLoading(true);
+    setLoadError("");
     try {
-      const res = await adminCourseClassApi.getStreamPosts(classId, 0, 50);
-      if (res && res.content) {
-        setPosts(
-          res.content.map((p: any) => ({
-            id: String(p.id),
-            authorUserId: String(p.authorUserId),
-            authorName: p.authorName || "Người dùng",
-            authorAvatar: p.authorAvatar,
-            title: p.title,
-            content: p.content,
-            fileKey: p.fileKey,
-            fileName: p.fileName,
-            fileType: p.fileType,
-            fileSize: p.fileSize,
-            fileUrl: p.fileUrl || (p.fileKey ? `/api/v1/files/download?fileKey=${encodeURIComponent(p.fileKey)}` : undefined),
-            createdAt: p.createdAt ? new Date(p.createdAt).toLocaleDateString("vi-VN") : "Hôm nay",
-          }))
-        );
-      } else {
-        setPosts([]);
-      }
-    } catch (err) {
-      console.warn("Could not fetch stream posts:", err);
+      const result = await adminCourseClassApi.getStreamPosts(classId, page, 10);
+      setPosts(result?.content || []);
+      setTotalPages(Math.max(1, Number(result?.totalPages || 1)));
+    } catch (requestError) {
       setPosts([]);
+      setLoadError(axiosErrorMessage(requestError, "Không thể tải bài đăng trong lớp."));
     } finally {
       setLoading(false);
     }
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  /** Tải lại feed khi đổi lớp hoặc trang. */
+  useEffect(() => {
+    void loadPosts();
+  }, [classId, page]);
 
-    setUploadingFile(true);
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("referenceEntityType", "CLASS_STREAM");
-
-      const res = await httpClient.post("/v1/files/upload", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-
-      const fileData = res.data?.data;
-      if (fileData) {
-        setUploadedFile({
-          fileKey: fileData.fileKey || fileData.key,
-          fileName: fileData.originalName || fileData.fileName || file.name,
-          fileType: fileData.fileType || file.type,
-          fileSize: fileData.fileSize || file.size,
-        });
-      }
-    } catch (err) {
-      console.error("File upload error:", err);
-    } finally {
-      setUploadingFile(false);
-    }
-  };
-
-  const handleCreatePost = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!postContent.trim()) return;
-
+  /** Tạo bài theo loại được phép và ngăn gửi request trùng. */
+  const createPost = async () => {
+    if (!postContent.trim() || submitting) return;
     setSubmitting(true);
     try {
       await adminCourseClassApi.createStreamPost(classId, {
+        type: postType,
         title: postTitle.trim() || undefined,
         content: postContent.trim(),
-        fileKey: uploadedFile?.fileKey,
-        fileName: uploadedFile?.fileName,
-        fileType: uploadedFile?.fileType,
-        fileSize: uploadedFile?.fileSize,
       });
-
       setPostTitle("");
       setPostContent("");
-      setUploadedFile(null);
+      setPostType("DISCUSSION");
       setShowComposer(false);
-      await fetchPosts();
-    } catch (err) {
-      console.error("Could not create stream post:", err);
+      setPage(0);
+      await loadPosts();
+      success("Đã đăng bài trong lớp.");
+    } catch (requestError) {
+      showError(axiosErrorMessage(requestError, "Không thể đăng bài."));
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleDeletePost = async (postId: string) => {
+  /** Mở dialog sửa với nội dung hiện tại của bài. */
+  const openEditPost = (post: StreamPostItem) => {
+    setEditingPost(post);
+    setEditingPostTitle(post.title || "");
+    setEditingPostContent(post.content);
+  };
+
+  /** Lưu nội dung bài đã sửa qua API quyền sở hữu. */
+  const savePost = async () => {
+    if (!editingPost || !editingPostContent.trim() || busyPostId) return;
+    setBusyPostId(editingPost.id);
+    try {
+      const updated = await adminCourseClassApi.updateStreamPost(classId, editingPost.id, {
+        title: editingPostTitle.trim() || undefined,
+        content: editingPostContent.trim(),
+      });
+      setPosts((rows) => rows.map((row) => row.id === updated.id ? updated : row));
+      setEditingPost(null);
+      success("Đã cập nhật bài đăng.");
+    } catch (requestError) {
+      showError(axiosErrorMessage(requestError, "Không thể cập nhật bài đăng."));
+    } finally {
+      setBusyPostId("");
+    }
+  };
+
+  /** Xóa bài theo quyền tác giả hoặc staff và cập nhật feed ngay. */
+  const deletePost = async (postId: string) => {
+    if (busyPostId) return;
+    setBusyPostId(postId);
     try {
       await adminCourseClassApi.deleteStreamPost(classId, postId);
-      setPosts((prev) => prev.filter((p) => p.id !== postId));
-    } catch (err) {
-      console.error("Could not delete post:", err);
+      setPosts((rows) => rows.filter((row) => row.id !== postId));
+      success("Đã xóa bài đăng.");
+    } catch (requestError) {
+      showError(axiosErrorMessage(requestError, "Không thể xóa bài đăng."));
+    } finally {
+      setBusyPostId("");
     }
   };
 
-  const canPreviewInBrowser = (fileType?: string, fileName?: string) => {
-    const text = `${fileType || ""} ${fileName || ""}`.toLowerCase();
-    if (text.match(/\.(doc|docx|xls|xlsx|ppt|pptx|zip|rar|7z)$/)) return false;
-    return (
-      text.includes("pdf") ||
-      text.includes("image") ||
-      text.includes("video") ||
-      text.includes("audio") ||
-      text.includes("text") ||
-      text.includes("csv")
-    );
+  /** Đổi trạng thái ghim hoặc khóa bình luận của một bài. */
+  const moderatePost = async (post: StreamPostItem, payload: { pinned?: boolean; commentLocked?: boolean }) => {
+    if (busyPostId) return;
+    setBusyPostId(post.id);
+    try {
+      const updated = await adminCourseClassApi.moderateStreamPost(classId, post.id, payload);
+      setPosts((rows) => rows.map((row) => row.id === updated.id ? updated : row));
+    } catch (requestError) {
+      showError(axiosErrorMessage(requestError, "Không thể cập nhật trạng thái bài đăng."));
+    } finally {
+      setBusyPostId("");
+    }
   };
 
-  const handleViewFile = async (post: StreamPost) => {
-    const { fileKey, fileUrl, fileType, fileName } = post;
-    if (!fileKey && !fileUrl) return;
-    if (!canPreviewInBrowser(fileType, fileName)) {
+  /** Tải bình luận lần đầu khi thành viên mở một bài. */
+  const toggleComments = async (postId: string) => {
+    if (comments[postId]?.loaded) {
+      setComments((state) => {
+        const copy = { ...state };
+        delete copy[postId];
+        return copy;
+      });
       return;
     }
-
+    setComments((state) => ({ ...state, [postId]: { rows: [], loading: true, loaded: false, error: "" } }));
     try {
-      const previewUrl = fileKey ? await fileAdminApi.getPreviewUrl(fileKey) : fileUrl;
-      if (previewUrl) {
-        window.open(previewUrl, "_blank", "noopener,noreferrer");
-      }
-    } catch {
-      const fallbackUrl = fileKey
-        ? `/api/v1/files/download?fileKey=${encodeURIComponent(fileKey)}`
-        : fileUrl;
-      if (fallbackUrl) {
-        window.open(fallbackUrl, "_blank", "noopener,noreferrer");
-      }
+      const result = await adminCourseClassApi.getStreamComments(classId, postId);
+      setComments((state) => ({ ...state, [postId]: { rows: result?.content || [], loading: false, loaded: true, error: "" } }));
+    } catch (requestError) {
+      setComments((state) => ({ ...state, [postId]: { rows: [], loading: false, loaded: true, error: axiosErrorMessage(requestError, "Không thể tải bình luận.") } }));
     }
   };
 
-  const getDownloadFileName = (contentDisposition?: string, fallback?: string) => {
-    const utf8Match = contentDisposition?.match(/filename\*=UTF-8''([^;]+)/i);
-    if (utf8Match?.[1]) return decodeURIComponent(utf8Match[1]);
-    const plainMatch = contentDisposition?.match(/filename="?([^"]+)"?/i);
-    return plainMatch?.[1] || fallback || "download";
+  /** Đăng bình luận mới và chèn ngay vào danh sách đang mở. */
+  const createComment = async (post: StreamPostItem) => {
+    const content = commentDrafts[post.id]?.trim();
+    if (!content || commentBusyPostId) return;
+    setCommentBusyPostId(post.id);
+    try {
+      const created = await adminCourseClassApi.createStreamComment(classId, post.id, content);
+      setComments((state) => ({
+        ...state,
+        [post.id]: { rows: [...(state[post.id]?.rows || []), created], loading: false, loaded: true, error: "" },
+      }));
+      setPosts((rows) => rows.map((row) => row.id === post.id ? { ...row, commentCount: row.commentCount + 1 } : row));
+      setCommentDrafts((drafts) => ({ ...drafts, [post.id]: "" }));
+    } catch (requestError) {
+      showError(axiosErrorMessage(requestError, "Không thể đăng bình luận."));
+    } finally {
+      setCommentBusyPostId("");
+    }
   };
 
-  const handleDownloadFile = async (post: StreamPost) => {
-    if (!post.fileKey) return;
+  /** Bắt đầu sửa một bình luận của người dùng hiện tại. */
+  const openEditComment = (comment: StreamPostComment) => {
+    setEditingCommentId(comment.id);
+    setEditingCommentContent(comment.content);
+  };
+
+  /** Lưu bình luận đang sửa và cập nhật đúng bài chứa nó. */
+  const saveComment = async (postId: string) => {
+    if (!editingCommentId || !editingCommentContent.trim() || commentBusyPostId) return;
+    setCommentBusyPostId(postId);
     try {
-      const response = await httpClient.get("/v1/files/download", {
-        params: { fileKey: post.fileKey },
-        responseType: "blob",
-      });
-      const blobUrl = URL.createObjectURL(response.data);
-      const link = document.createElement("a");
-      link.href = blobUrl;
-      link.download = getDownloadFileName(response.headers["content-disposition"], post.fileName);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(blobUrl);
-    } catch (err) {
-      console.error("Could not download post file:", err);
-      window.alert("KhÃ´ng thá»ƒ táº£i file, vui lÃ²ng thá»­ láº¡i.");
+      const updated = await adminCourseClassApi.updateStreamComment(
+        classId, postId, editingCommentId, editingCommentContent.trim(),
+      );
+      setComments((state) => ({
+        ...state,
+        [postId]: { ...state[postId], rows: state[postId].rows.map((row) => row.id === updated.id ? updated : row) },
+      }));
+      setEditingCommentId("");
+      setEditingCommentContent("");
+    } catch (requestError) {
+      showError(axiosErrorMessage(requestError, "Không thể cập nhật bình luận."));
+    } finally {
+      setCommentBusyPostId("");
+    }
+  };
+
+  /** Xóa bình luận theo quyền backend và giảm bộ đếm trên bài. */
+  const deleteComment = async (postId: string, commentId: string) => {
+    if (commentBusyPostId) return;
+    setCommentBusyPostId(postId);
+    try {
+      await adminCourseClassApi.deleteStreamComment(classId, postId, commentId);
+      setComments((state) => ({
+        ...state,
+        [postId]: { ...state[postId], rows: state[postId].rows.filter((row) => row.id !== commentId) },
+      }));
+      setPosts((rows) => rows.map((row) => row.id === postId ? { ...row, commentCount: Math.max(0, row.commentCount - 1) } : row));
+    } catch (requestError) {
+      showError(axiosErrorMessage(requestError, "Không thể xóa bình luận."));
+    } finally {
+      setCommentBusyPostId("");
     }
   };
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
-      {/* Stream Welcome Hero Banner */}
-      <div className="rounded-3xl bg-linear-to-r from-blue-600 via-indigo-600 to-purple-600 p-6 sm:p-8 text-white shadow-lg relative overflow-hidden">
-        <div className="absolute right-0 bottom-0 opacity-10 p-6">
-          <MessageSquare className="h-48 w-48" />
-        </div>
-        <div className="relative z-10 space-y-2">
-          <div className="flex items-center gap-2">
-            <Badge className="bg-white/20 text-white border-white/30 backdrop-blur-md">
-              Google Classroom Stream
-            </Badge>
-            <span className="text-xs opacity-80">Mã Lớp: #{classId}</span>
-          </div>
-          <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-            Kênh Thảo Luận & Bảng Tin Lớp Học
-          </h2>
-          <p className="text-xs sm:text-sm opacity-90 max-w-xl">
-            Đăng thông báo, trao đổi bài học, đính kèm file tài liệu và thông tin tương tác với học viên và giảng viên.
-          </p>
-        </div>
-      </div>
-
-      {!showComposer && (
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => setShowComposer(true)}
-          className="w-full h-auto justify-start rounded-3xl border-slate-200 bg-white p-4 text-left shadow-xs"
-        >
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-2xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-sm">
-              {currentUserName.substring(0, 2).toUpperCase()}
-            </div>
-            <span className="text-sm font-semibold text-slate-500">Viết bài trao đổi với lớp...</span>
-          </div>
-        </Button>
-      )}
-
-      {showComposer && (
-      <Card className="border-border shadow-xs rounded-3xl overflow-hidden">
-        <CardContent className="p-5 sm:p-6 space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-2xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-sm">
-              {currentUserName.substring(0, 2).toUpperCase()}
-            </div>
-            <div>
-              <p className="text-sm font-bold text-foreground">{currentUserName}</p>
-              <p className="text-[11px] text-muted-foreground">Đăng bài thông báo tới cả lớp học</p>
-            </div>
-          </div>
-
-          <form onSubmit={handleCreatePost} className="space-y-3">
-            <Input
-              placeholder="Tiêu đề bài đăng (Tùy chọn)..."
-              value={postTitle}
-              onChange={(e) => setPostTitle(e.target.value)}
-              className="text-xs font-semibold rounded-xl bg-slate-50 border-slate-200"
-            />
-            <Textarea
-              placeholder="Thông báo hoặc trao đổi nội dung bài học..."
-              value={postContent}
-              onChange={(e) => setPostContent(e.target.value)}
-              rows={3}
-              className="text-xs rounded-xl bg-slate-50 border-slate-200 resize-none"
-            />
-
-            {/* Hidden file input */}
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileUpload}
-              className="hidden"
-            />
-
-            {/* Uploaded File Chip */}
-            {uploadedFile && (
-              <div className="flex items-center justify-between p-2.5 rounded-xl bg-indigo-50 border border-indigo-100 text-xs text-indigo-900 font-medium">
-                <div className="flex items-center gap-2 truncate">
-                  <FileText className="h-4 w-4 text-indigo-600 shrink-0" />
-                  <span className="truncate">{uploadedFile.fileName}</span>
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setUploadedFile(null)}
-                  className="h-6 w-6 p-0 text-red-500 hover:bg-red-100 rounded-lg"
-                >
-                  ✕
-                </Button>
-              </div>
-            )}
-
-            <div className="flex items-center justify-between pt-2 border-t border-border/40">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={uploadingFile}
-                onClick={() => fileInputRef.current?.click()}
-                className="text-xs font-semibold text-slate-700 border-slate-200 rounded-xl gap-1.5"
-              >
-                {uploadingFile ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-indigo-600" />
-                ) : (
-                  <Paperclip className="h-3.5 w-3.5 text-indigo-600" />
-                )}
-                Đính kèm File từ máy tính
-              </Button>
-
-              <Button
-                type="submit"
-                size="sm"
-                disabled={submitting || !postContent.trim()}
-                className="rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs gap-1.5 cursor-pointer"
-              >
-                {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-                Đăng bài
-              </Button>
-            </div>
-          </form>
+    <div className="mx-auto max-w-4xl space-y-5">
+      <Card className="overflow-hidden border-primary/20 bg-primary/5">
+        <CardContent className="p-6">
+          <div className="flex items-center gap-2"><MessageSquare className="h-5 w-5 text-primary" /><Badge>Thảo luận và hỏi đáp</Badge></div>
+          <h2 className="mt-3 text-xl font-bold">{className}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Đặt câu hỏi, trao đổi bài học và theo dõi thông báo của lớp.</p>
         </CardContent>
       </Card>
+
+      {!showComposer ? (
+        <Button variant="outline" className="h-12 w-full justify-start" onClick={() => setShowComposer(true)}>
+          <MessageSquare className="mr-2 h-4 w-4" />{currentUserName}, bạn muốn trao đổi điều gì?
+        </Button>
+      ) : (
+        <Card><CardContent className="space-y-3 p-5">
+          <Select value={postType} onValueChange={(value) => setPostType(value as StreamPostType)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="QUESTION">Câu hỏi</SelectItem>
+              <SelectItem value="DISCUSSION">Thảo luận</SelectItem>
+              {canModerate && <SelectItem value="ANNOUNCEMENT">Thông báo</SelectItem>}
+            </SelectContent>
+          </Select>
+          <Input value={postTitle} onChange={(event) => setPostTitle(event.target.value)} placeholder="Tiêu đề (không bắt buộc)" />
+          <Textarea value={postContent} onChange={(event) => setPostContent(event.target.value)} placeholder="Nội dung bài đăng" rows={4} />
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setShowComposer(false)} disabled={submitting}>Hủy</Button>
+            <Button onClick={() => void createPost()} disabled={!postContent.trim() || submitting}>
+              {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}{submitting ? "Đang đăng..." : "Đăng bài"}
+            </Button>
+          </div>
+        </CardContent></Card>
       )}
 
-      {/* Stream Posts Feed */}
-      <div className="space-y-4">
-        {loading ? (
-          <div className="py-12 text-center text-xs text-muted-foreground flex items-center justify-center gap-2">
-            <Loader2 className="h-4 w-4 animate-spin text-indigo-600" /> Đang tải danh sách bài đăng...
-          </div>
-        ) : posts.length === 0 ? (
-          <Card className="border-dashed border-slate-200 shadow-none">
-            <CardContent className="p-8 text-center space-y-2">
-              <MessageSquare className="h-10 w-10 text-slate-300 mx-auto" />
-              <p className="text-sm font-bold text-slate-700">Chưa có bài đăng thông báo nào</p>
-              <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                Lớp học chưa có bài đăng trao đổi. Bạn hãy đăng thông báo đầu tiên ở khung phía trên!
-              </p>
+      {loading ? (
+        <div className="space-y-3"><Skeleton className="h-44" /><Skeleton className="h-44" /></div>
+      ) : loadError ? (
+        <Card className="border-destructive/30"><CardContent className="space-y-3 p-8 text-center text-sm text-destructive"><p>{loadError}</p><Button variant="outline" onClick={() => void loadPosts()}>Thử lại</Button></CardContent></Card>
+      ) : posts.length === 0 ? (
+        <Card className="border-dashed"><CardContent className="p-10 text-center"><MessageSquare className="mx-auto mb-3 h-10 w-10 text-muted-foreground/40" /><p className="font-semibold">Chưa có bài đăng</p><p className="mt-1 text-sm text-muted-foreground">Hãy bắt đầu câu hỏi hoặc cuộc thảo luận đầu tiên.</p></CardContent></Card>
+      ) : posts.map((post) => {
+        const ownPost = post.authorId === currentUserId;
+        const commentState = comments[post.id];
+        return (
+          <Card key={post.id} className={post.pinned ? "border-primary/40" : ""}>
+            <CardContent className="space-y-4 p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 font-bold text-primary">{post.authorName.slice(0, 2).toUpperCase()}</div>
+                  <div><p className="font-semibold">{post.authorName}</p><p className="text-xs text-muted-foreground">{formatDateTime(post.createdAt)}</p></div>
+                </div>
+                <div className="flex flex-wrap items-center justify-end gap-1">
+                  <Badge variant="secondary">{typeLabel(post.type)}</Badge>
+                  {post.pinned && <Badge variant="outline"><Pin className="mr-1 h-3 w-3" />Đã ghim</Badge>}
+                  {post.commentLocked && <Badge variant="outline"><Lock className="mr-1 h-3 w-3" />Đã khóa</Badge>}
+                </div>
+              </div>
+              {post.title && <h3 className="text-lg font-bold">{post.title}</h3>}
+              <p className="whitespace-pre-line text-sm leading-6 text-foreground/90">{post.content}</p>
+              <div className="flex flex-wrap items-center gap-2 border-t pt-3">
+                <Button variant="ghost" size="sm" onClick={() => void toggleComments(post.id)}><MessageCircle className="mr-1 h-4 w-4" />{post.commentCount} bình luận</Button>
+                {ownPost && <Button variant="ghost" size="sm" onClick={() => openEditPost(post)}><Edit3 className="mr-1 h-4 w-4" />Sửa</Button>}
+                {(ownPost || canModerate) && <Button variant="ghost" size="sm" className="text-destructive" disabled={busyPostId === post.id} onClick={() => void deletePost(post.id)}><Trash2 className="mr-1 h-4 w-4" />Xóa</Button>}
+                {canModerate && <>
+                  <Button variant="ghost" size="sm" disabled={busyPostId === post.id} onClick={() => void moderatePost(post, { pinned: !post.pinned })}><Pin className="mr-1 h-4 w-4" />{post.pinned ? "Bỏ ghim" : "Ghim"}</Button>
+                  <Button variant="ghost" size="sm" disabled={busyPostId === post.id} onClick={() => void moderatePost(post, { commentLocked: !post.commentLocked })}><Lock className="mr-1 h-4 w-4" />{post.commentLocked ? "Mở bình luận" : "Khóa bình luận"}</Button>
+                </>}
+              </div>
+
+              {commentState && <div className="space-y-3 rounded-xl bg-muted/30 p-4">
+                {commentState.loading ? <div className="space-y-2"><Skeleton className="h-14" /><Skeleton className="h-14" /></div>
+                  : commentState.error ? <p className="text-sm text-destructive">{commentState.error}</p>
+                  : commentState.rows.length === 0 ? <p className="text-sm text-muted-foreground">Chưa có bình luận.</p>
+                  : commentState.rows.map((comment) => {
+                    const ownComment = comment.authorId === currentUserId;
+                    return <div key={comment.id} className="rounded-lg border bg-background p-3">
+                      <div className="flex items-center justify-between gap-2"><p className="text-sm font-semibold">{comment.authorName}</p><p className="text-xs text-muted-foreground">{formatDateTime(comment.createdAt)}</p></div>
+                      {editingCommentId === comment.id ? <div className="mt-2 space-y-2"><Textarea value={editingCommentContent} onChange={(event) => setEditingCommentContent(event.target.value)} /><div className="flex justify-end gap-2"><Button size="sm" variant="outline" onClick={() => setEditingCommentId("")}>Hủy</Button><Button size="sm" onClick={() => void saveComment(post.id)} disabled={!editingCommentContent.trim() || commentBusyPostId === post.id}>Lưu</Button></div></div>
+                        : <><p className="mt-2 whitespace-pre-line text-sm">{comment.content}</p><div className="mt-2 flex gap-1">{ownComment && <Button size="sm" variant="ghost" onClick={() => openEditComment(comment)}>Sửa</Button>}{(ownComment || canModerate) && <Button size="sm" variant="ghost" className="text-destructive" onClick={() => void deleteComment(post.id, comment.id)} disabled={commentBusyPostId === post.id}>Xóa</Button>}</div></>}
+                    </div>;
+                  })}
+                {!post.commentLocked && <div className="flex gap-2"><Input value={commentDrafts[post.id] || ""} onChange={(event) => setCommentDrafts((drafts) => ({ ...drafts, [post.id]: event.target.value }))} placeholder="Viết bình luận hoặc câu trả lời..." disabled={commentBusyPostId === post.id} /><Button size="icon" onClick={() => void createComment(post)} disabled={!commentDrafts[post.id]?.trim() || commentBusyPostId === post.id}>{commentBusyPostId === post.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}</Button></div>}
+              </div>}
             </CardContent>
           </Card>
-        ) : (
-          posts.map((post) => (
-            <Card key={post.id} className="border-slate-200 shadow-none rounded-3xl">
-              <CardContent className="p-5 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    {post.authorAvatar ? (
-                      <img src={post.authorAvatar} alt={post.authorName} className="w-10 h-10 rounded-2xl object-cover" />
-                    ) : (
-                      <div className="w-10 h-10 rounded-2xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-sm">
-                        {post.authorName.substring(0, 2).toUpperCase()}
-                      </div>
-                    )}
-                    <div>
-                      <p className="text-sm font-bold text-slate-900">{post.authorName}</p>
-                      <p className="text-[11px] text-slate-400 flex items-center gap-1">
-                        <Calendar className="h-3 w-3" /> {post.createdAt}
-                      </p>
-                    </div>
-                  </div>
+        );
+      })}
 
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleDeletePost(post.id)}
-                    className="h-8 w-8 p-0 text-red-500 hover:bg-red-50 rounded-xl"
-                    title="Xóa bài đăng"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
+      {!loading && !loadError && totalPages > 1 && <div className="flex items-center justify-center gap-3"><Button size="icon" variant="outline" disabled={page === 0} onClick={() => setPage((value) => value - 1)}><ChevronLeft className="h-4 w-4" /></Button><span className="text-sm">Trang {page + 1}/{totalPages}</span><Button size="icon" variant="outline" disabled={page >= totalPages - 1} onClick={() => setPage((value) => value + 1)}><ChevronRight className="h-4 w-4" /></Button></div>}
 
-                {post.title && (
-                  <h3 className="font-bold text-base text-slate-900">{post.title}</h3>
-                )}
-                <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-line">{post.content}</p>
-
-                {post.fileKey && (
-                  <div className="pt-2 flex flex-wrap items-center gap-2">
-                    {canPreviewInBrowser(post.fileType, post.fileName) && (
-                    <button
-                      type="button"
-                      onClick={() => handleViewFile(post)}
-                      className="inline-flex items-center gap-2 p-3 rounded-2xl bg-indigo-50/60 border border-indigo-100 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 transition-colors"
-                    >
-                      <FileText className="h-4 w-4 text-indigo-600" />
-                      <span>{post.fileName || "Tài liệu đính kèm"}</span>
-                      <Eye className="h-3.5 w-3.5" />
-                    </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => handleDownloadFile(post)}
-                      className="inline-flex items-center gap-2 p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition-colors"
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                      <span>{canPreviewInBrowser(post.fileType, post.fileName) ? "Tải về" : post.fileName || "Tải tài liệu"}</span>
-                    </button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ))
-        )}
-      </div>
+      <Dialog open={Boolean(editingPost)} onOpenChange={(open) => !open && setEditingPost(null)}>
+        <DialogContent><DialogHeader><DialogTitle>Sửa bài đăng</DialogTitle></DialogHeader><div className="space-y-3"><Input value={editingPostTitle} onChange={(event) => setEditingPostTitle(event.target.value)} placeholder="Tiêu đề" /><Textarea value={editingPostContent} onChange={(event) => setEditingPostContent(event.target.value)} rows={5} /></div><DialogFooter><Button variant="outline" onClick={() => setEditingPost(null)}>Hủy</Button><Button onClick={() => void savePost()} disabled={!editingPostContent.trim() || Boolean(busyPostId)}>{busyPostId ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Lưu thay đổi</Button></DialogFooter></DialogContent>
+      </Dialog>
     </div>
   );
 };

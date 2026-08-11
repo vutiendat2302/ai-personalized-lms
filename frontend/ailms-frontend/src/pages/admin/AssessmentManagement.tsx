@@ -317,7 +317,7 @@ export const AssessmentManagement: React.FC = () => {
           shuffleQuestions,
           code: formData.code,
           questions: quizQuestions,
-          status: 1,
+          status: "ACTIVE",
         };
 
         if (editingItem) {
@@ -622,8 +622,8 @@ export const AssessmentManagement: React.FC = () => {
                       </TableCell>
 
                       <TableCell className="text-center">
-                        <Badge className={quiz.status === 1 ? "bg-emerald-600 text-white font-bold text-[10px]" : "bg-amber-600 text-white font-bold text-[10px]"}>
-                          {quiz.status === 1 ? "Đang hoạt động" : "Bài nháp"}
+                        <Badge className={quiz.status === "ACTIVE" ? "bg-emerald-600 text-white font-bold text-[10px]" : "bg-amber-600 text-white font-bold text-[10px]"}>
+                          {quiz.status === "ACTIVE" ? "Đang hoạt động" : "Bài nháp"}
                         </Badge>
                       </TableCell>
 

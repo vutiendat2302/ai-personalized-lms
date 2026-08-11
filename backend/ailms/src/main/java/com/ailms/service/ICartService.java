@@ -1,6 +1,7 @@
 package com.ailms.service;
 
 import com.ailms.response.CartItemResponse;
+import com.ailms.request.OneOnOneNeedsRequest;
 
 import java.util.List;
 
@@ -16,7 +17,7 @@ public interface ICartService {
      * @param coursePackageId ID của gói học phí khóa học
      * @return đối tượng chứa thông tin chi tiết kết quả
      */
-    CartItemResponse addToCart(Long userId, Long coursePackageId);
+    CartItemResponse addToCart(Long userId, Long coursePackageId, OneOnOneNeedsRequest needs);
 
     /**
      * Lấy danh sách các sản phẩm hiện có trong giỏ hàng.

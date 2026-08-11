@@ -25,6 +25,7 @@ public interface CoursePackageMapper {
     @Mapping(target = "updatedAt", source = "updatedAt")
     @Mapping(target = "updatedBy", source = "updatedBy")
     @Mapping(target = "discountPercentage", ignore = true)
+    @Mapping(target = "classDetail", ignore = true)
     CoursePackageResponse toResponse(CoursePackageEntity entity);
 
     /** Chuyển danh sách entity thành danh sách response. */

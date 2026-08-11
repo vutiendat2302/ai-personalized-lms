@@ -67,6 +67,9 @@ public interface IAssignmentService {
      */
     List<AssignmentResponse> getBySectionId(Long sectionId);
 
+    /** Lấy bài tập đã giao cho một lớp cụ thể. */
+    List<AssignmentResponse> getByClassId(Long classId);
+
     /**
      * Tạo mới bản ghi từ dữ liệu yêu cầu.
      *

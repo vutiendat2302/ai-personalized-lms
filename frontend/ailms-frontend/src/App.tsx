@@ -82,6 +82,7 @@ import { StudentCatalogPage } from "./pages/student/StudentCatalogPage";
 import { StudentCartPage } from "./pages/student/StudentCartPage";
 import { StudentOrdersPage } from "./pages/student/StudentOrdersPage";
 import { StudentVouchersPage } from "./pages/student/StudentVouchersPage";
+import { StudentClassesPage } from "./pages/student/StudentClassesPage";
 
 import { LearningAnalytics } from "./pages/LearningAnalytics";
 import { CertificateVerifyPage } from "./pages/CertificateVerifyPage";
@@ -89,6 +90,7 @@ import { ActivityLog } from "./pages/ActivityLog";
 import { Terms } from "./pages/Terms";
 import { ExplorePathways } from "./pages/ExplorePathways";
 import { CourseDetail } from "./pages/CourseDetail";
+import { PaymentResultPage } from "./pages/PaymentResultPage";
 import { CategoryDetail } from "./pages/CategoryDetail";
 import { SetPassword } from "./pages/SetPassword";
 
@@ -215,6 +217,7 @@ function App() {
             <Route path="/explore" element={<ExplorePathways />} />
             <Route path="/categories" element={<ExplorePathways />} />
             <Route path="/courses/:id" element={<CourseDetail />} />
+            <Route path="/payment/result" element={<PaymentResultPage />} />
             <Route path="/categories/:id" element={<CategoryDetail />} />
             <Route path="/set-password" element={<SetPassword />} />
             <Route path="/contracts/sign/:token" element={<ContractSigningPage />} />
@@ -324,7 +327,7 @@ function App() {
             </Route>
 
             {/* Student Learning Experience Fullscreen Page */}
-            <Route element={<ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.STUDENT, UserRole.TEACHER]} />}>
+            <Route element={<ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.STUDENT, UserRole.TEACHER, UserRole.TA]} />}>
               <Route path="/learn/courses/:courseId" element={<StudentLearningPage />} />
               <Route path="/learn/courses/:courseId/lessons/:lessonId" element={<StudentLearningPage />} />
             </Route>
@@ -337,6 +340,8 @@ function App() {
                 <Route path="/student/courses" element={<StudentMyCoursesPage />} />
                 <Route path="/student/courses/:id" element={<StudentMyCoursesPage />} />
                 <Route path="/student/schedule" element={<StudentSchedulePage />} />
+                <Route path="/student/classes" element={<StudentClassesPage />} />
+                <Route path="/student/classes/:id" element={<ClassDetailPage />} />
                 <Route path="/student/assignments" element={<StudentAssignmentsPage />} />
                 <Route path="/student/quizzes/:id/attempt" element={<StudentAssignmentsPage />} />
                 <Route path="/student/certificates" element={<StudentCertificatesPage />} />

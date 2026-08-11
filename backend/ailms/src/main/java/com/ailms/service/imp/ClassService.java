@@ -24,6 +24,7 @@ import com.ailms.mapper.ClassScheduleMapper;
 import com.ailms.repository.ClassRepository;
 import com.ailms.repository.CourseRepository;
 import com.ailms.repository.ClassScheduleRepository;
+import com.ailms.repository.EnrollmentPackageRepository;
 import com.ailms.response.ClassResponse;
 import com.ailms.response.ClassScheduleResponse;
 import com.ailms.response.PageResponse;
@@ -37,6 +38,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.time.LocalDateTime;
+import java.util.Set;
+import java.util.HashSet;
 
 @Service
 @RequiredArgsConstructor
@@ -50,6 +54,7 @@ public class ClassService implements IClassService {
     private final ClassMapper classMapper;
     private final ClassScheduleRepository classScheduleRepository;
     private final ClassScheduleMapper classScheduleMapper;
+    private final EnrollmentPackageRepository enrollmentPackageRepository;
 
     private static final String RESOURCE_NAME = "Class";
 
@@ -114,6 +119,23 @@ public class ClassService implements IClassService {
                 .distinct()
                 .map(this::enrichClassResponse)
                 .toList();
+    }
+
+    /** Lấy duy nhất các lớp ACTIVE mà người dùng là học viên ACTIVE. */
+    @Override
+    public List<ClassResponse> getStudentClassesByUserId(Long userId) {
+        log.info("Getting enrolled classes for student user: {}", userId);
+        Set<Long> activeCourseIds = new HashSet<>(
+                enrollmentPackageRepository.findActiveCourseIdsByUser(userId, LocalDateTime.now()));
+        return classMemberRepository.findById_UserId(userId).stream()
+                .filter(member -> member.getStatus() == ClassMemberStatusEnum.ACTIVE)
+                .filter(member -> member.getRoleInClass() == ClassMemberRole.STUDENT)
+                .map(ClassMemberEntity::getClassEntity)
+                .filter(entity -> entity.getCourseEntity() != null
+                        && activeCourseIds.contains(entity.getCourseEntity().getId()))
+                .filter(entity -> entity.getStatus() != BaseStatusEnum.DELETED
+                        && entity.getStatus() != BaseStatusEnum.DELETE)
+                .distinct().map(this::enrichClassResponse).toList();
     }
 
     public ClassResponse getById(Long id) {

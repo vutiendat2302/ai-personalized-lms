@@ -102,8 +102,8 @@ public class CoursePackageService implements ICoursePackageService {
         log.info("Creating course package for course: {}", request.getCourseId());
         CourseEntity course = courseRepository.findById(request.getCourseId())
                 .orElseThrow(() -> ResourceNotFoundException.of("Course", request.getCourseId()));
-        if (course.getStatus() != CourseStatusEnum.ACTIVE) {
-            throw new BusinessException("Khóa học đang ở trạng thái Ẩn/Chưa hoạt động. Không thể tạo hoặc mở bán bất kỳ gói học nào.");
+        if (course.getStatus() == CourseStatusEnum.DELETED) {
+            throw new BusinessException("Không thể tạo gói cho khóa học đã bị xóa.");
         }
 
         validatePricing(request.getPrice(), request.getOriginalPrice());
@@ -111,7 +111,8 @@ public class CoursePackageService implements ICoursePackageService {
         CoursePackageEntity entity = coursePackageMapper.toEntity(request);
         entity.setCode(CodeGenerator.generate(CODE_PREFIX, coursePackageRepository::existsByCode));
         entity.setCourseEntity(course);
-        entity.setClassEntity(resolveClass(request.getDeliveryMode(), request.getClassId(), course, null));
+        entity.setClassEntity(resolveClass(
+                request.getDeliveryMode(), request.getClassId(), request.getMaxGroupSize(), course));
 
         CoursePackageEntity saved = coursePackageRepository.saveAndFlush(entity);
         CoursePackageResponse response = coursePackageMapper.toResponse(saved);
@@ -129,13 +130,12 @@ public class CoursePackageService implements ICoursePackageService {
         CoursePackageResponse oldValue = coursePackageMapper.toResponse(existing);
         CourseEntity course = existing.getCourseEntity();
 
-        if (request.getStatus() == CoursePackageStatusEnum.ACTIVE && course.getStatus() != CourseStatusEnum.ACTIVE) {
-            throw new BusinessException("Khóa học đang ở trạng thái Ẩn/Chưa hoạt động. Không thể kích hoạt hoặc hiển thị bất kỳ gói học nào.");
-        }
-
         validateStatusForDeliveryMode(request.getStatus(), existing.getDeliveryMode());
+        preventRemovingLastSelfStudy(existing, request.getStatus());
         validatePricing(request.getPrice(), request.getOriginalPrice());
         coursePackageMapper.updateFromRequest(request, existing);
+        existing.setClassEntity(resolveClass(
+                existing.getDeliveryMode(), request.getClassId(), request.getMaxGroupSize(), course));
 
         CoursePackageEntity updated = coursePackageRepository.saveAndFlush(existing);
         CoursePackageResponse response = coursePackageMapper.toResponse(updated);
@@ -151,30 +151,30 @@ public class CoursePackageService implements ICoursePackageService {
         CoursePackageEntity existing = coursePackageRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
         CoursePackageResponse oldValue = coursePackageMapper.toResponse(existing);
+        preventRemovingLastSelfStudy(existing, CoursePackageStatusEnum.INACTIVE);
         coursePackageRepository.delete(existing);
         publishAudit("DELETE", id, oldValue, null);
     }
 
-    /** Kiểm tra và lấy lớp cho gói lớp nhóm; gói tự học và 1-1 không gắn lớp. */
-    private ClassEntity resolveClass(DeliveryModeEnum deliveryMode, Long classId, CourseEntity course, Long existingPackageId) {
-        if (deliveryMode != DeliveryModeEnum.GROUP_CLASS) {
+    /** Kiểm tra và lấy lớp cho GROUP_CLASS hoặc COMBO có thành phần lớp nhóm. */
+    private ClassEntity resolveClass(
+            DeliveryModeEnum deliveryMode, Long classId, Integer maxGroupSize,
+            CourseEntity course) {
+        boolean requiresClass = deliveryMode == DeliveryModeEnum.GROUP_CLASS
+                || (deliveryMode == DeliveryModeEnum.COMBO && maxGroupSize != null && maxGroupSize > 1);
+        if (!requiresClass) {
+            if (classId != null) {
+                throw new BusinessException("Chỉ gói có thành phần lớp nhóm mới được gắn classId");
+            }
             return null;
         }
         if (classId == null) {
-            throw new BusinessException("GROUP_CLASS package requires a classId");
+            throw new BusinessException("Gói có thành phần lớp nhóm bắt buộc phải có classId");
         }
         ClassEntity classEntity = classRepository.findById(classId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Class", classId));
         if (classEntity.getCourseEntity() == null || !course.getId().equals(classEntity.getCourseEntity().getId())) {
             throw new BusinessException("Selected class does not belong to course " + course.getId());
-        }
-
-        boolean isAlreadyAssigned = existingPackageId == null
-                ? coursePackageRepository.existsByClassEntity_Id(classId)
-                : coursePackageRepository.existsByClassEntity_IdAndIdNot(classId, existingPackageId);
-
-        if (isAlreadyAssigned) {
-            throw new BusinessException("Lớp học nhóm này đã được gắn với một gói bán khác.");
         }
 
         return classEntity;
@@ -191,6 +191,23 @@ public class CoursePackageService implements ICoursePackageService {
     private void validateStatusForDeliveryMode(CoursePackageStatusEnum status, DeliveryModeEnum deliveryMode) {
         if (status == CoursePackageStatusEnum.OUT_OF_STOCK && deliveryMode != DeliveryModeEnum.GROUP_CLASS) {
             throw new BusinessException("OUT_OF_STOCK status is only valid for GROUP_CLASS packages");
+        }
+    }
+
+    /** Không cho vô hiệu hóa hoặc xóa gói tự học cuối cùng khi khóa học đang bán. */
+    private void preventRemovingLastSelfStudy(
+            CoursePackageEntity existing, CoursePackageStatusEnum requestedStatus) {
+        if (existing.getDeliveryMode() != DeliveryModeEnum.SELF_STUDY
+                || existing.getStatus() != CoursePackageStatusEnum.ACTIVE
+                || requestedStatus == CoursePackageStatusEnum.ACTIVE
+                || existing.getCourseEntity().getStatus() != CourseStatusEnum.ACTIVE) {
+            return;
+        }
+        long activeCount = coursePackageRepository.countByCourseEntity_IdAndDeliveryModeAndStatus(
+                existing.getCourseEntity().getId(), DeliveryModeEnum.SELF_STUDY, CoursePackageStatusEnum.ACTIVE);
+        if (activeCount <= 1) {
+            throw new BusinessException(
+                    "Không thể xóa hoặc vô hiệu hóa gói tự học cuối cùng của khóa học đang được bán.");
         }
     }
 

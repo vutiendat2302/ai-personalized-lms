@@ -2,6 +2,7 @@ package com.ailms.entity;
 
 import com.ailms.common.snowflake.SnowflakeId;
 import com.ailms.entity.enums.BaseStatusEnum;
+import com.ailms.entity.enums.ClassKindEnum;
 import com.ailms.entity.enums.DeliveryModeEnum;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -63,6 +64,26 @@ public class ClassEntity extends BaseEntity {
     /** Phân loại kỹ thuật lớp học. */
     @Column(name = "type")
     private Byte type; // Loại lớp học
+
+    /** Phân loại nghiệp vụ chi tiết của lớp học. */
+    @Column(name = "class_kind", length = 30)
+    @Enumerated(EnumType.STRING)
+    @Builder.Default
+    private ClassKindEnum classKind = ClassKindEnum.STANDARD;
+
+    /** Mô tả hoặc yêu cầu tham gia lớp. */
+    @Column(name = "description", columnDefinition = "TEXT")
+    private String description;
+
+    /** Cho biết lớp còn nhận thêm học viên hay không. */
+    @Column(name = "registration_open", nullable = false)
+    @Builder.Default
+    private Boolean registrationOpen = true;
+
+    /** Cho phép đăng ký sau ngày khai giảng. */
+    @Column(name = "allow_late_enrollment", nullable = false)
+    @Builder.Default
+    private Boolean allowLateEnrollment = false;
 
     /** Sức chứa / số lượng thành viên tối đa trong lớp học. */
     @Column(name = "max_members")

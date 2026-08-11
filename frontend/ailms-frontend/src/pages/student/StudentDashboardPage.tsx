@@ -6,6 +6,8 @@ import {
   type StudentCourseCard,
   type CatalogCourseItem,
   type StudentPersonalization,
+  type StudyGoalItem,
+  type StudentProgressAnalytics,
 } from "@/api/student/studentApi";
 import { courseApi } from "@/api/courses/courseApi";
 import type { CategoryResponse } from "@/types/admin";
@@ -23,18 +25,6 @@ import {
   Sparkles,
 } from "lucide-react";
 
-const getCourseImage = (categoryName?: string) => {
-  const images = [
-    "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800&auto=format&fit=crop&q=80",
-    "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=800&auto=format&fit=crop&q=80",
-    "https://images.unsplash.com/photo-1531482615713-2afd69097998?w=800&auto=format&fit=crop&q=80",
-    "https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=800&auto=format&fit=crop&q=80",
-  ];
-  if (!categoryName) return images[0];
-  const charCodeSum = categoryName.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  return images[charCodeSum % images.length];
-};
-
 export const StudentDashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const { auth } = useAuth();
@@ -45,7 +35,11 @@ export const StudentDashboardPage: React.FC = () => {
   const [myCourses, setMyCourses] = useState<StudentCourseCard[]>([]);
   const [recommendedCourses, setRecommendedCourses] = useState<CatalogCourseItem[]>([]);
   const [personalization, setPersonalization] = useState<StudentPersonalization | null>(null);
+  const [goals, setGoals] = useState<StudyGoalItem[]>([]);
+  const [progressAnalytics, setProgressAnalytics] = useState<StudentProgressAnalytics | null>(null);
+  const [nextLessonTitle, setNextLessonTitle] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   // Category states from Landing page
@@ -186,11 +180,13 @@ export const StudentDashboardPage: React.FC = () => {
     const loadDashboardData = async () => {
       setLoading(true);
       try {
-        const [metricsData, coursesData, catalogData, personalizationData] = await Promise.all([
+        const [metricsData, coursesData, catalogData, personalizationData, goalsData, progressData] = await Promise.all([
           studentApi.getDashboardMetrics().catch(() => null),
           studentApi.getCourses().catch(() => []),
           studentApi.getCatalog({ page: 0, size: 6 }).catch(() => null),
           studentApi.getPersonalization().catch(() => null),
+          studentApi.getGoals().catch(() => []),
+          studentApi.getProgressAnalytics().catch(() => null),
         ]);
 
         if (metricsData) {
@@ -202,11 +198,19 @@ export const StudentDashboardPage: React.FC = () => {
 
         setMyCourses(coursesData || []);
         setPersonalization(personalizationData);
+        setGoals(goalsData);
+        setProgressAnalytics(progressData);
+
+        const recentCourse = [...(coursesData || [])].filter((course) => course.status === "ACTIVE")
+          .sort((left, right) => new Date(right.lastAccessedAt || 0).getTime() - new Date(left.lastAccessedAt || 0).getTime())[0];
+        if (recentCourse) {
+          const detail = await studentApi.getCourseDetail(recentCourse.id).catch(() => null);
+          const nextLesson = detail?.sections.flatMap((section) => section.lessons).find((lesson) => !lesson.completed);
+          setNextLessonTitle(nextLesson?.name || null);
+        }
 
         // Filter personalized / recommended courses from catalog
-        const catalogItems = catalogData?.content || [];
-        const recList = catalogItems.filter((c) => c.personalized === true);
-        setRecommendedCourses(recList.length > 0 ? recList : catalogItems.slice(0, 6));
+        setRecommendedCourses((catalogData?.content || []).filter((course) => course.personalized));
 
         // Fetch categories & featured courses using exact Landing page logic
         await Promise.all([
@@ -215,6 +219,7 @@ export const StudentDashboardPage: React.FC = () => {
         ]);
       } catch (err) {
         console.error("Lỗi khi tải dữ liệu dashboard:", err);
+        setLoadError("Không thể tải bảng học tập của bạn.");
       } finally {
         setLoading(false);
       }
@@ -238,14 +243,31 @@ export const StudentDashboardPage: React.FC = () => {
     );
   }
 
+  if (loadError) return <div className="rounded-2xl border p-10 text-center text-sm text-destructive">{loadError}</div>;
+
   // Active course for Section 2
-  const activeCourse = myCourses.length > 0 ? myCourses[0] : null;
+  const activeCourse = [...myCourses].filter((course) => course.status === "ACTIVE")
+    .sort((left, right) => new Date(right.lastAccessedAt || 0).getTime() - new Date(left.lastAccessedAt || 0).getTime())[0] || null;
   const progressPercent = activeCourse ? activeCourse.progressPercent || 0 : 0;
 
   // Streak & Days logic
-  const currentStreak = metrics?.currentStreak || 0;
+  const currentStreak = metrics?.currentStreak ?? 0;
   const daysOfWeek = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
-  const todayIndex = (new Date().getDay() + 6) % 7; // Monday = 0
+  const todayIndex = (new Date().getDay() + 6) % 7;
+  const weekStart = new Date();
+  weekStart.setHours(0, 0, 0, 0);
+  weekStart.setDate(weekStart.getDate() - todayIndex);
+  const activeDateKeys = new Set((progressAnalytics?.contributionHeatmap || [])
+    .filter((point) => point.count > 0).map((point) => point.date));
+
+  /** Đổi loại mục tiêu backend thành nhãn tiếng Việt dễ đọc. */
+  const goalLabel = (goal: StudyGoalItem) => ({
+    DAILY_STREAK: "Duy trì chuỗi ngày học",
+    WEEKLY_STUDY_DAYS: "Số ngày học trong tuần",
+    COURSE_COMPLETION: "Hoàn thành khóa học",
+    LESSON_COMPLETION: "Hoàn thành bài học",
+    STUDY_HOURS: "Thời lượng học tập",
+  }[goal.studyGoalTypeEnum]);
 
   return (
     <div className="w-full bg-background text-foreground space-y-0 pb-16">
@@ -301,8 +323,8 @@ export const StudentDashboardPage: React.FC = () => {
               </div>
 
               <div className="space-y-2.5 text-xs">
-                {personalization?.studyGoals && personalization.studyGoals.length > 0 ? (
-                  personalization.studyGoals.map((g) => (
+                {goals.length > 0 ? (
+                  goals.map((g) => (
                     <div key={g.id} className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
                       {g.status === "COMPLETED" ? (
                         <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
@@ -310,37 +332,12 @@ export const StudentDashboardPage: React.FC = () => {
                         <Circle className="h-4 w-4 text-amber-500 shrink-0" />
                       )}
                       <span className={g.status === "COMPLETED" ? "line-through text-gray-400" : "font-medium"}>
-                        {g.studyGoalTypeEnum} ({g.currentValue}/{g.targetValue})
+                        {goalLabel(g)} ({g.currentValue}/{g.targetValue})
                       </span>
                     </div>
                   ))
                 ) : (
-                  <>
-                    <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                      <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                      <span className="line-through text-gray-400">Duy trì Streak học tập hôm nay</span>
-                    </div>
-
-                    <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                      {activeCourse ? (
-                        <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                      ) : (
-                        <Circle className="h-4 w-4 text-gray-300 dark:text-gray-600 shrink-0" />
-                      )}
-                      <span className="truncate font-medium">
-                        {activeCourse ? `Học tiếp khóa: ${activeCourse.title}` : "Tham gia 1 khóa học mới"}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                      {metrics?.upcomingAssignments && metrics.upcomingAssignments.length > 0 ? (
-                        <Circle className="h-4 w-4 text-amber-500 shrink-0" />
-                      ) : (
-                        <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
-                      )}
-                      <span className="font-medium">Hoàn thành bài tập & Quiz</span>
-                    </div>
-                  </>
+                  <p className="rounded-xl bg-muted/50 p-3 text-xs text-muted-foreground">Bạn chưa thiết lập mục tiêu học tập.</p>
                 )}
               </div>
 
@@ -367,8 +364,10 @@ export const StudentDashboardPage: React.FC = () => {
               {/* Hàng 7 ô vuông đại diện 7 ngày trong tuần */}
               <div className="flex gap-1.5 justify-between items-center my-1">
                 {daysOfWeek.map((day, idx) => {
-                  const isPastOrToday = idx <= todayIndex;
-                  const isStudied = isPastOrToday && (currentStreak >= (todayIndex - idx + 1));
+                  const date = new Date(weekStart);
+                  date.setDate(weekStart.getDate() + idx);
+                  const dateKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+                  const isStudied = activeDateKeys.has(dateKey);
                   return (
                     <div key={day} className="flex flex-col items-center gap-1 flex-1">
                       <div
@@ -431,7 +430,7 @@ export const StudentDashboardPage: React.FC = () => {
                       Bài học tiếp theo:
                     </span>
                     <h3 className="text-xl font-bold text-gray-900 dark:text-foreground line-clamp-2">
-                      {activeCourse.title}
+                      {nextLessonTitle || activeCourse.title}
                     </h3>
                     <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
                       Danh mục: {activeCourse.categoryName || "Khóa học AILMS"}
@@ -515,18 +514,14 @@ export const StudentDashboardPage: React.FC = () => {
                   className="flex flex-col bg-card rounded-2xl border border-border/70 shadow-sm hover:shadow-lg hover:border-primary/40 hover:-translate-y-1.5 cursor-pointer overflow-hidden group transition-all duration-300"
                 >
                   <div className="relative aspect-video overflow-hidden bg-muted">
-                    {course.image ? (
+                    {course.thumbnailUrl ? (
                       <img
-                        src={course.image}
-                        alt={course.name || course.title}
+                        src={course.thumbnailUrl}
+                        alt={course.title}
                         className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300"
                       />
                     ) : (
-                      <img
-                        src={getCourseImage(course.categoryName)}
-                        alt={course.name || course.title}
-                        className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300"
-                      />
+                      <div className="flex h-full w-full items-center justify-center bg-primary/8"><BookOpen className="h-10 w-10 text-primary/35" /></div>
                     )}
                     {course.level && (
                       <div className="absolute top-3 left-3 bg-card/90 backdrop-blur-sm px-2.5 py-1 rounded-lg text-sm font-bold text-primary shadow">
@@ -543,22 +538,18 @@ export const StudentDashboardPage: React.FC = () => {
                         </span>
                       </div>
                       <h3 className="font-bold text-foreground text-sm leading-snug line-clamp-2 group-hover:text-primary transition-colors">
-                        {course.name || course.title}
+                        {course.title}
                       </h3>
                     </div>
 
                     <div className="mt-4 pt-4 border-t border-border/80 flex items-center justify-between text-sm text-muted-foreground">
                       <div className="flex items-center gap-1.5">
                         <Star className="h-4 w-4 fill-amber-400 stroke-amber-400" />
-                        <span className="font-bold text-foreground">{course.avgRating || course.rating || 5}</span>
-                        <span>({course.enrollmentCount || course.reviewCount || 0} học viên)</span>
+                        <span className="font-bold text-foreground">{course.rating}</span>
+                        <span>({course.reviewCount} đánh giá)</span>
                       </div>
                       <span className="font-medium text-primary">
-                        {course.suggestedPrice
-                          ? `${course.suggestedPrice.toLocaleString()}đ`
-                          : course.sellingPrice
-                          ? `${course.sellingPrice.toLocaleString()}đ`
-                          : "Miễn phí"}
+                        {course.sellingPrice != null ? `${course.sellingPrice.toLocaleString()}đ` : "Chưa có giá"}
                       </span>
                     </div>
                   </div>
@@ -686,11 +677,7 @@ export const StudentDashboardPage: React.FC = () => {
                               className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300"
                             />
                           ) : (
-                            <img
-                              src={getCourseImage(course.categoryName)}
-                              alt={course.name || course.title}
-                              className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300"
-                            />
+                            <div className="flex h-full w-full items-center justify-center bg-primary/8"><BookOpen className="h-10 w-10 text-primary/35" /></div>
                           )}
                           {course.level && (
                             <div className="absolute top-3 left-3 bg-card/90 backdrop-blur-sm px-2.5 py-1 rounded-lg text-sm font-bold text-primary shadow">
@@ -714,15 +701,15 @@ export const StudentDashboardPage: React.FC = () => {
                           <div className="mt-4 pt-4 border-t border-border/80 flex items-center justify-between text-sm text-muted-foreground">
                             <div className="flex items-center gap-1.5">
                               <Star className="h-4 w-4 fill-amber-400 stroke-amber-400" />
-                              <span className="font-bold text-foreground">{course.avgRating || course.rating || 5}</span>
-                              <span>({course.enrollmentCount || course.reviewCount || 0} học viên)</span>
+                              <span className="font-bold text-foreground">{course.avgRating ?? course.rating ?? 0}</span>
+                              <span>({course.reviewCount ?? 0} đánh giá)</span>
                             </div>
                             <span className="font-medium text-primary">
-                              {course.suggestedPrice
+                              {course.suggestedPrice != null
                                 ? `${course.suggestedPrice.toLocaleString()}đ`
-                                : course.sellingPrice
-                                ? `${course.sellingPrice.toLocaleString()}đ`
-                                : "Miễn phí"}
+                                : course.sellingPrice != null
+                                  ? `${course.sellingPrice.toLocaleString()}đ`
+                                  : "Chưa có giá"}
                             </span>
                           </div>
                         </div>

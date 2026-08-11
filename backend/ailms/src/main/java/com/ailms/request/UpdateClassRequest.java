@@ -14,6 +14,12 @@ import java.time.LocalDateTime;
 public class UpdateClassRequest {
     private String name;
 
+    private String description;
+
+    private Boolean registrationOpen;
+
+    private Boolean allowLateEnrollment;
+
     private Byte type;
 
     private DeliveryModeEnum packageType;

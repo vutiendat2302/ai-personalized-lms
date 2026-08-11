@@ -19,6 +19,7 @@ public class StudentCatalogCourseResponse {
     private String title;
     private String categoryName;
     private String description;
+    private String thumbnailUrl;
     private double rating;
     private int reviewCount;
     private int enrollmentCount;

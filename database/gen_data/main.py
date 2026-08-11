@@ -22,6 +22,7 @@ import role_permission
 import interest
 import coupon
 import category
+import interest_category
 import user
 import user_role
 import file_metadata
@@ -65,6 +66,7 @@ def main():
             interest.seed(cursor)
             coupon.seed(cursor)
             category.seed(cursor)
+            interest_category.seed(cursor)
             user.seed(cursor)
             user_role.seed(cursor)
             file_metadata.seed(cursor)

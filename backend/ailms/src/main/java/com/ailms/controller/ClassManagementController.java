@@ -7,6 +7,7 @@ import com.ailms.response.CoursePackageResponse;
 import com.ailms.service.IClassManagementService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -16,6 +17,7 @@ import java.time.LocalDateTime;
 @RestController
 @RequestMapping("${api.prefix}/class_managements")
 @RequiredArgsConstructor
+@PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_HR', 'ROLE_TEACHER', 'ROLE_TA')")
 public class ClassManagementController {
 
     private final IClassManagementService classManagementService;

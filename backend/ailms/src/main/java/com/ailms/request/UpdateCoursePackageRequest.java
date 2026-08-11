@@ -21,6 +21,9 @@ import java.math.BigDecimal;
 @AllArgsConstructor
 @Builder
 public class UpdateCoursePackageRequest {
+    /** Lớp nhóm đính kèm; bắt buộc cho GROUP_CLASS và COMBO có sĩ số lớn hơn một. */
+    private Long classId;
+
     @NotBlank(message = "Package name is required")
     @Size(max = 100, message = "Package name must not exceed 100 characters")
     private String name;

@@ -12,24 +12,30 @@ import { PdfViewer } from "../../components/common/PdfViewer";
 import { ArrowLeft, BookOpen, PanelRightClose, PanelRightOpen, Clock, CheckCircle, HelpCircle, Lock, CheckSquare, Sparkles } from "lucide-react";
 import { Badge } from "../../components/ui/badge";
 import { useAuth } from "../../hooks/useAuth";
+import { useToast } from "../../hooks/useToast";
+import { Skeleton } from "../../components/ui/skeleton";
 
 export const StudentLearningPage: React.FC = () => {
   const { courseId, lessonId } = useParams<{ courseId: string; lessonId?: string }>();
   const navigate = useNavigate();
   const { auth } = useAuth();
   const user = auth.user;
+  const { error: showError } = useToast();
 
   const [curriculum, setCurriculum] = useState<CourseCurriculumResponse | null>(null);
   const [activeLesson, setActiveLesson] = useState<LessonCurriculumItem | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [showRightPanel, setShowRightPanel] = useState(true);
   const [currentWatchPercent, setCurrentWatchPercent] = useState<number>(0);
 
+  /** Tải cây bài học và chỉ chọn bài được backend đánh dấu có quyền mở. */
   const fetchTree = async () => {
     if (!courseId) return;
     try {
       setLoading(true);
-      const data = await studentLearningApi.getCourseTree(courseId, user?.id);
+      setLoadError(null);
+      const data = await studentLearningApi.getEnrolledCourseTree(courseId);
       setCurriculum(data);
 
       if (data.sections && data.sections.length > 0) {
@@ -38,21 +44,23 @@ export const StudentLearningPage: React.FC = () => {
         if (lessonId) {
           for (const s of data.sections) {
             const found = s.lessons?.find((l) => l.id === lessonId);
-            if (found) {
+            if (found?.accessible && !found.locked) {
               targetLesson = found;
               break;
             }
           }
         }
 
-        if (!targetLesson && data.sections[0].lessons && data.sections[0].lessons.length > 0) {
-          targetLesson = data.sections[0].lessons[0];
+        if (!targetLesson) {
+          targetLesson = data.sections.flatMap((section) => section.lessons || [])
+            .find((lesson) => lesson.accessible && !lesson.locked) || null;
         }
 
         setActiveLesson(targetLesson);
       }
     } catch (err) {
       console.error("Failed to load course learning tree:", err);
+      setLoadError("Không thể tải không gian học tập. Vui lòng kiểm tra quyền truy cập và thử lại.");
     } finally {
       setLoading(false);
     }
@@ -62,16 +70,27 @@ export const StudentLearningPage: React.FC = () => {
     fetchTree();
   }, [courseId, lessonId, user]);
 
-  const handleSelectLesson = (lesson: LessonCurriculumItem) => {
-    setActiveLesson(lesson);
-    navigate(`/learn/courses/${courseId}/lessons/${lesson.id}`, { replace: true });
+  /** Gọi API nội dung để backend kiểm tra lại quyền trước khi mở bài. */
+  const handleSelectLesson = async (lesson: LessonCurriculumItem) => {
+    try {
+      const accessible = await studentLearningApi.getAccessibleLesson(lesson.id);
+      setActiveLesson({
+        ...lesson,
+        contentUrl: accessible.contentUrl ?? lesson.contentUrl,
+        description: accessible.description ?? lesson.description,
+        durationMin: accessible.durationMin ?? lesson.durationMin,
+      });
+      navigate(`/learn/courses/${courseId}/lessons/${lesson.id}`, { replace: true });
+    } catch {
+      showError("Bạn cần đăng ký khóa học để mở bài học này.");
+    }
   };
 
   const handleProgressUpdate = async (watchPercent: number, positionSec: number) => {
     setCurrentWatchPercent(watchPercent);
-    if (!activeLesson || !user?.id) return;
+    if (!activeLesson || !user?.id || !curriculum?.enrollmentId) return;
     try {
-      await studentLearningApi.updateProgress(activeLesson.id, user.id, "1", {
+      await studentLearningApi.updateProgress(activeLesson.id, curriculum.enrollmentId, {
         watchPercent,
         lastPositionSec: positionSec,
       });
@@ -81,9 +100,9 @@ export const StudentLearningPage: React.FC = () => {
   };
 
   const handleCompleteLesson = async () => {
-    if (!activeLesson || !user?.id) return;
+    if (!activeLesson || !user?.id || !curriculum?.enrollmentId) return;
     try {
-      await studentLearningApi.completeLesson(activeLesson.id, user.id, "1");
+      await studentLearningApi.completeLesson(activeLesson.id, curriculum.enrollmentId);
       setActiveLesson((prev) => (prev ? { ...prev, completed: true } : null));
       fetchTree();
     } catch (err) {
@@ -154,6 +173,7 @@ export const StudentLearningPage: React.FC = () => {
   };
 
   const renderCompletionButton = () => {
+    if (!curriculum?.enrollmentId) return null;
     if (activeLesson?.completed) {
       return (
         <div className="flex items-center gap-2 px-4 py-2 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-700 font-bold text-xs">
@@ -244,8 +264,19 @@ export const StudentLearningPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="h-screen w-screen flex items-center justify-center bg-gray-900 text-white">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+      <div className="grid h-screen w-screen grid-cols-[280px_1fr] bg-gray-950" aria-label="Đang tải không gian học tập">
+        <div className="space-y-4 border-r border-gray-800 p-4"><Skeleton className="h-10 bg-gray-800" /><Skeleton className="h-16 bg-gray-800" /><Skeleton className="h-16 bg-gray-800" /><Skeleton className="h-16 bg-gray-800" /></div>
+        <div className="space-y-5 p-6"><Skeleton className="h-12 bg-gray-800" /><Skeleton className="aspect-video w-full bg-gray-800" /><Skeleton className="h-24 bg-gray-800" /></div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="h-screen w-screen flex flex-col gap-4 items-center justify-center bg-gray-900 text-white px-4 text-center">
+        <BookOpen className="h-12 w-12 text-gray-400" />
+        <p className="text-sm text-gray-300">{loadError}</p>
+        <button onClick={() => void fetchTree()} className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold">Thử lại</button>
       </div>
     );
   }
@@ -310,7 +341,8 @@ export const StudentLearningPage: React.FC = () => {
           curriculum={curriculum}
           activeLessonId={activeLesson?.id || null}
           onSelectLesson={handleSelectLesson}
-          isCanBypassLock={canBypassLock}
+          onLockedLesson={() => showError("Bạn cần đăng ký khóa học để mở bài học này.")}
+          isCanBypassLock={canBypassLock || Boolean(curriculum?.enrollmentId)}
         />
 
         <div className="flex-1 flex flex-col overflow-y-auto bg-gray-50 p-4 md:p-6">
@@ -336,6 +368,7 @@ export const StudentLearningPage: React.FC = () => {
                           <LearningQuizPlayer
                             quiz={activeLesson.linkedQuiz}
                             onComplete={handleCompleteLesson}
+                            persistAttempt
                           />
                         </div>
                       ) : (
@@ -393,34 +426,15 @@ export const StudentLearningPage: React.FC = () => {
               )}
 
               {activeLesson.contentType === "QUIZ" && (
-                <LearningQuizPlayer
-                  quiz={
-                    activeLesson.linkedQuiz || {
-                      id: String(activeLesson.id),
-                      title: activeLesson.name,
-                      description: activeLesson.description || "",
-                      timeLimitMin: activeLesson.durationMin || 15,
-                      passScore: 8.0,
-                      maxAttempts: 3,
-                      shuffleQuestions: true,
-                    }
-                  }
-                  onComplete={handleCompleteLesson}
-                />
+                activeLesson.linkedQuiz
+                  ? <LearningQuizPlayer quiz={activeLesson.linkedQuiz} onComplete={handleCompleteLesson} persistAttempt />
+                  : <div className="m-auto text-sm text-gray-500">Bài học chưa có dữ liệu quiz.</div>
               )}
 
               {activeLesson.contentType === "ASSIGNMENT" && (
-                <LearningAssignmentPanel
-                  assignment={
-                    activeLesson.linkedAssignment || {
-                      id: String(activeLesson.id),
-                      title: activeLesson.name,
-                      description: activeLesson.description || "",
-                      maxScore: 10.0,
-                    }
-                  }
-                  onComplete={handleCompleteLesson}
-                />
+                activeLesson.linkedAssignment
+                  ? <LearningAssignmentPanel assignment={activeLesson.linkedAssignment} onComplete={handleCompleteLesson} />
+                  : <div className="m-auto text-sm text-gray-500">Bài học chưa có dữ liệu bài tập.</div>
               )}
 
               {/* PDF / Document Lesson */}
@@ -471,7 +485,7 @@ export const StudentLearningPage: React.FC = () => {
                         <HelpCircle className="w-5 h-5 text-amber-600" />
                         <span>🎯 Bài kiểm tra Quiz đính kèm theo bài đọc PDF này:</span>
                       </div>
-                      <LearningQuizPlayer quiz={activeLesson.linkedQuiz} onComplete={handleCompleteLesson} />
+                      <LearningQuizPlayer quiz={activeLesson.linkedQuiz} onComplete={handleCompleteLesson} persistAttempt />
                     </div>
                   )}
 
@@ -512,7 +526,7 @@ export const StudentLearningPage: React.FC = () => {
                         <HelpCircle className="w-5 h-5 text-amber-600" />
                         <span>🎯 Bài kiểm tra Quiz đính kèm theo bài đọc này:</span>
                       </div>
-                      <LearningQuizPlayer quiz={activeLesson.linkedQuiz} onComplete={handleCompleteLesson} />
+                      <LearningQuizPlayer quiz={activeLesson.linkedQuiz} onComplete={handleCompleteLesson} persistAttempt />
                     </div>
                   )}
 

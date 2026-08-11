@@ -69,7 +69,7 @@ def _generate_package_code(cursor):
 
 
 def _backfill_package_data(cursor):
-    """Bổ sung mã và audit user cho các gói cũ do seeder tạo thiếu dữ liệu."""
+    """Bổ sung mã, audit và liên kết lớp cho các gói cũ do seeder tạo thiếu dữ liệu."""
     cursor.execute("SELECT id FROM course_package WHERE code IS NULL OR TRIM(code) = ''")
     rows = cursor.fetchall()
     for row in rows:
@@ -87,13 +87,57 @@ def _backfill_package_data(cursor):
         WHERE cp.created_by IS NULL OR cp.updated_by IS NULL
         """
     )
-    return len(rows)
+
+    cursor.execute(
+        """
+        SELECT id, course_id, delivery_mode, status
+        FROM course_package
+        WHERE class_id IS NULL
+          AND (delivery_mode='GROUP_CLASS'
+               OR (delivery_mode='COMBO' AND COALESCE(max_group_size, 0) > 1))
+        ORDER BY created_at, id
+        """
+    )
+    malformed_packages = cursor.fetchall()
+    repaired_count = 0
+    deactivated_count = 0
+    for package in malformed_packages:
+        cursor.execute(
+            """
+            SELECT c.id
+            FROM class c
+            WHERE c.course_id=%s
+              AND c.status='ACTIVE'
+            ORDER BY COALESCE(c.registration_open, 0) DESC, c.start_date, c.id
+            LIMIT 1
+            """,
+            (package["course_id"],),
+        )
+        available_class = cursor.fetchone()
+        if available_class:
+            cursor.execute(
+                "UPDATE course_package SET class_id=%s, updated_at=NOW() WHERE id=%s",
+                (available_class["id"], package["id"]),
+            )
+            repaired_count += 1
+        elif package["delivery_mode"] == "COMBO":
+            cursor.execute(
+                "UPDATE course_package SET max_group_size=NULL, updated_at=NOW() WHERE id=%s",
+                (package["id"],),
+            )
+        elif package["status"] == "ACTIVE":
+            cursor.execute(
+                "UPDATE course_package SET status='INACTIVE', updated_at=NOW() WHERE id=%s",
+                (package["id"],),
+            )
+            deactivated_count += 1
+    return len(rows), repaired_count, deactivated_count
 
 
 def seed(cursor):
     """Tạo và bổ sung dữ liệu gói học hợp lệ theo schema hiện tại."""
     print("→ Seeding course_package...")
-    backfilled_count = _backfill_package_data(cursor)
+    backfilled_count, repaired_class_count, deactivated_count = _backfill_package_data(cursor)
     cursor.execute("SELECT id, name, created_by, updated_by FROM course LIMIT 50")
     courses = cursor.fetchall()
 
@@ -113,8 +157,29 @@ def seed(cursor):
 
         base_price = random.choice([2500000, 3500000, 4500000, 5500000, 6500000])
 
-        # Sinh 2-3 gói học cho mỗi khóa học
-        chosen_templates = random.sample(PACKAGE_TEMPLATES, k=random.randint(2, 3))
+        cursor.execute(
+            """
+            SELECT c.id
+            FROM class c
+            WHERE c.course_id=%s AND c.status='ACTIVE'
+            ORDER BY COALESCE(c.registration_open, 0) DESC, c.start_date, c.id
+            LIMIT 1
+            """,
+            (course_id,),
+        )
+        available_class = cursor.fetchone()
+        class_id = available_class["id"] if available_class else None
+        independent_templates = [
+            tpl for tpl in PACKAGE_TEMPLATES
+            if tpl["delivery_mode"] in ("SELF_STUDY", "ONE_ON_ONE")
+        ]
+        class_backed_templates = [
+            tpl for tpl in PACKAGE_TEMPLATES
+            if tpl["delivery_mode"] in ("GROUP_CLASS", "COMBO")
+        ]
+        chosen_templates = random.sample(independent_templates, k=len(independent_templates))
+        if class_id is not None:
+            chosen_templates.extend(class_backed_templates)
         for tpl in chosen_templates:
             pkg_id = snowflake.next_id()
             package_code = _generate_package_code(cursor)
@@ -125,16 +190,17 @@ def seed(cursor):
             cursor.execute(
                 """
                 INSERT INTO course_package (
-                    id, code, course_id, name, description, delivery_mode,
+                    id, code, course_id, class_id, name, description, delivery_mode,
                     price, original_price, duration_days, included_tutor_sessions,
                     max_group_size, status, created_at, updated_at, created_by, updated_by
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW(), %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW(), %s, %s)
                 """,
                 (
                     pkg_id,
                     package_code,
                     course_id,
+                    class_id if tpl["delivery_mode"] in ("GROUP_CLASS", "COMBO") else None,
                     f"{tpl['name']} - {course_name[:30]}",
                     tpl["description"],
                     tpl["delivery_mode"],
@@ -151,4 +217,5 @@ def seed(cursor):
             inserted_count += 1
 
     print(f"   [backfill] Đã bổ sung mã cho {backfilled_count} gói học cũ")
+    print(f"   [repair] Đã gắn lớp cho {repaired_class_count} gói và vô hiệu hóa {deactivated_count} gói thiếu lớp")
     print(f"   [insert] Đã tạo thành công {inserted_count} gói học trong `course_package`")

@@ -21,6 +21,8 @@ public class CreateAssignmentRequest {
 
     private Long sectionId;
 
+    private Long classId;
+
     @NotBlank(message = "Title is required")
     private String title;
 

@@ -1,6 +1,7 @@
 package com.ailms.service;
 
 import com.ailms.entity.ApprovalRequestEntity;
+import com.ailms.request.RefundRequest;
 import java.util.List;
 
 /**
@@ -18,6 +19,9 @@ public interface IApprovalRequestService {
      * @return đối tượng chứa thông tin chi tiết kết quả
      */
     ApprovalRequestEntity createRequest(String targetType, Long targetId, int totalLevels, Long approverId);
+
+    /** Tạo yêu cầu hoàn tiền chờ HR/Admin duyệt, chưa gọi cổng thanh toán. */
+    ApprovalRequestEntity createRefundRequest(Long orderId, RefundRequest request);
 
     /**
      * Phê duyệt yêu cầu dựa trên ID.

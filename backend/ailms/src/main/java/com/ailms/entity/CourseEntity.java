@@ -58,6 +58,18 @@ public class CourseEntity extends BaseEntity {
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
+    /** Ảnh đại diện hiển thị công khai của khóa học. */
+    @Column(name = "thumbnail_url", length = 500)
+    private String thumbnailUrl;
+
+    /** Mục tiêu đầu ra của khóa học. */
+    @Column(name = "learning_objectives", columnDefinition = "TEXT")
+    private String learningObjectives;
+
+    /** Kiến thức hoặc điều kiện đầu vào của khóa học. */
+    @Column(name = "prerequisites", columnDefinition = "TEXT")
+    private String prerequisites;
+
     /**
      * Giá bán gợi ý do giảng viên đề xuất.
      */
