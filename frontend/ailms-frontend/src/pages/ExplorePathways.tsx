@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { courseApi } from "@/api/courses/courseApi";
@@ -152,6 +152,7 @@ const CATEGORY_LIST = [
 
 const INSTRUCTORS = [
   {
+    id: "nam-nguyen",
     name: "GS. TS. Nguyễn Hải Nam",
     role: "Giảng viên AI & Học Máy",
     bio: "Cựu nghiên cứu sinh sau tiến sĩ tại Stanford University. Hơn 10 năm kinh nghiệm phát triển mô hình NLP tại Thung lũng Silicon.",
@@ -161,6 +162,7 @@ const INSTRUCTORS = [
     rating: "4.95★"
   },
   {
+    id: "duong-le",
     name: "ThS. Lê Thùy Dương",
     role: "Chuyên gia Thiết kế UI/UX",
     bio: "Senior Product Designer tại Grab Singapore. Đam mê xây dựng các sản phẩm thân thiện với người dùng và hệ thống Design System chuẩn mực.",
@@ -170,6 +172,7 @@ const INSTRUCTORS = [
     rating: "4.8★"
   },
   {
+    id: "dat-tran",
     name: "Kỹ sư Trần Tiến Đạt",
     role: "Kiến trúc sư Web Fullstack",
     bio: "Tech Lead tại VNG Corporation. Tác giả nhiều thư viện mã nguồn mở Javascript/TypeScript với hàng chục ngàn lượt tải xuống.",
@@ -541,10 +544,11 @@ export const ExplorePathways: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {INSTRUCTORS.map((ins, idx) => (
-            <div 
-              key={idx} 
-              className="p-6 bg-card border border-border/40 rounded-2xl shadow-sm space-y-4 hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between"
+          {INSTRUCTORS.map((ins) => (
+            <Link 
+              key={ins.id} 
+              to={`/teachers/${ins.id}`}
+              className="p-6 bg-card border border-border/40 rounded-2xl shadow-sm space-y-4 hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between group cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/50"
             >
               <div className="space-y-4">
                 {/* Header: Photo, Name & Title */}
@@ -553,11 +557,11 @@ export const ExplorePathways: React.FC = () => {
                     <img
                       src={ins.avatar}
                       alt={ins.name}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                     />
                   </div>
                   <div className="space-y-1">
-                    <h3 className="font-bold text-foreground text-base leading-tight">{ins.name}</h3>
+                    <h3 className="font-bold text-foreground text-base leading-tight group-hover:text-primary transition-colors">{ins.name}</h3>
                     <p className="text-sm font-bold text-primary">{ins.role}</p>
                     <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                       <GraduationCap className="h-3.5 w-3.5" />
@@ -582,7 +586,7 @@ export const ExplorePathways: React.FC = () => {
                   <span>Giảng dạy: <strong>{ins.coursesCount} khóa học</strong></span>
                 </div>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       </div>

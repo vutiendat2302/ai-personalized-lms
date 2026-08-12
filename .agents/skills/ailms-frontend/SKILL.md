@@ -1,6 +1,6 @@
 ---
 name: ailms-frontend
-description: Phát triển, sửa lỗi, refactor, review và kiểm thử Frontend AILMS tại frontend/ailms-frontend sử dụng React, TypeScript, Vite, Tailwind CSS, shadcn, Axios, React Router, Zustand, React Hook Form và Zod. Sử dụng khi làm page, component, hook, layout, form, routing, API client, TypeScript type, state, UI, responsive, loading/error/empty state, permission, lint hoặc frontend build. Không sử dụng cho Backend-only, AI Service, SQL, Docker hoặc tài liệu. Khong dung cua so mac dinh cua window, phai dung shadcn. 
+description: Phát triển, sửa lỗi, refactor, review và kiểm thử Frontend AILMS tại frontend/ailms-frontend sử dụng React, TypeScript, Vite, Tailwind CSS, shadcn, Axios, React Router, Zustand, React Hook Form và Zod. Sử dụng khi làm page, component, hook, layout, form, routing, API client, TypeScript type, state, UI, responsive, loading/error/empty state, permission, lint hoặc frontend build. Không sử dụng cho Backend-only, AI Service, SQL, Docker hoặc tài liệu. Không dùng cửa sổ mặc định của window, phải dùng của shadcn. Mọi button, drowdown, select, ... dùng của shadcn. 
 ---
 
 # AILMS Frontend

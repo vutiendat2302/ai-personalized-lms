@@ -17,8 +17,12 @@ import {
   Zap,
   ChevronDown,
   Search,
-  BookOpen
+  BookOpen,
+  GraduationCap,
+  Award
 } from "lucide-react";
+import { CourseScrollContainer } from "@/components/courses/CourseScrollContainer";
+import { INSTRUCTORS_LIST } from "@/pages/TeacherDetail";
 
 const getCourseImage = (categoryName: string) => {
   const name = categoryName?.toLowerCase() || "";
@@ -162,12 +166,10 @@ export const Landing: React.FC = () => {
     if (isLoadingCoursesRef.current || loadingCourses) return;
     try {
       isLoadingCoursesRef.current = true;
-      setLoadingCourses(true);
       console.log(`[loadMoreCourses] tabVal: ${tabVal}, popularPage: ${popularPage}, trendingPage: ${trendingPage}, newPage: ${newPage}`);
       if (tabVal === "popular") {
         const nextPage = popularPage + 1;
         const res = await courseApi.getOutstandingCourses({ page: nextPage, size: 6 });
-        // console.log(`[loadMoreCourses] popular API Response:`, res.data);
         if (res.data.success) {
           const pageData = res.data.data;
           setOutstandingCourses(prev => [...prev, ...(pageData.content || [])]);
@@ -177,7 +179,6 @@ export const Landing: React.FC = () => {
       } else if (tabVal === "trending") {
         const nextPage = trendingPage + 1;
         const res = await courseApi.getTrendingCourses({ page: nextPage, size: 6 });
-        // console.log(`[loadMoreCourses] trending API Response:`, res.data);
         if (res.data.success) {
           const pageData = res.data.data;
           setTrendingCourses(prev => [...prev, ...(pageData.content || [])]);
@@ -187,7 +188,6 @@ export const Landing: React.FC = () => {
       } else if (tabVal === "new") {
         const nextPage = newPage + 1;
         const res = await courseApi.getLatestCourses({ page: nextPage, size: 6 });
-        // console.log(`[loadMoreCourses] new API Response:`, res.data);
         if (res.data.success) {
           const pageData = res.data.data;
           setLatestCourses(prev => [...prev, ...(pageData.content || [])]);
@@ -199,7 +199,6 @@ export const Landing: React.FC = () => {
       console.error("Failed to load more courses:", e);
     } finally {
       isLoadingCoursesRef.current = false;
-      setLoadingCourses(false);
     }
   };
 
@@ -569,12 +568,13 @@ export const Landing: React.FC = () => {
           
           <div className="flex flex-wrap justify-center gap-3 max-w-4xl mx-auto">
             {categories.map((cat) => (
-              <span
+              <Link
                 key={cat.id}
-                className="px-4 py-2 cursor-pointer hover:scale-105 rounded-full border border-border/70 bg-card text-sm font-bold text-foreground hover:border-primary hover:text-primary transition-all shadow-sm animate-in fade-in duration-200"
+                to={`/categories/${cat.id}`}
+                className="px-4 py-2 cursor-pointer hover:scale-105 rounded-full border border-border/70 bg-card text-sm font-bold text-foreground hover:border-primary hover:text-primary transition-all shadow-sm animate-in fade-in duration-200 focus:outline-none focus:ring-2 focus:ring-primary/50"
               >
                 {cat.name}
-              </span>
+              </Link>
             ))}
           </div>
 
@@ -634,17 +634,23 @@ export const Landing: React.FC = () => {
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                     </div>
                   ) : currentCourses.length > 0 ? (
-                    <div 
+                    <CourseScrollContainer
+                      itemCount={currentCourses.length}
                       onScroll={(e) => handleScroll(e, tabVal as "popular" | "trending" | "new")}
+                      /* 
+                       * Cấu hình căn lề responsive:
+                       * - Khi có ít hơn 3 thẻ khóa học: mobile dùng justify-start để người dùng cuộn mượt từ góc trái qua,
+                       *   còn desktop (md) dùng md:justify-center để căn giữa gọn gàng trên màn hình rộng.
+                       */
                       className={`flex gap-6 overflow-x-auto pb-6 scrollbar-thin scrollbar-thumb-primary/10 scrollbar-track-transparent snap-x snap-mandatory -mx-6 px-6 md:-mx-12 md:px-12 ${
-                        currentCourses.length < 3 ? "justify-center" : "justify-start"
+                        currentCourses.length < 3 ? "justify-start" : "justify-start"
                       } ${currentCourses.length <= 3 ? "md:justify-center" : "md:justify-start"}`}
                     >
                       {currentCourses.map((course) => (
-                        <div
+                        <Link
                           key={course.id}
-                          onClick={() => navigate(`/courses/${course.id}`)}
-                          className="flex-none w-65 sm:w-72.5 snap-start flex flex-col bg-card rounded-2xl border border-border/70 shadow-sm hover:shadow-lg hover:border-primary/40 hover:-translate-y-1.5 cursor-pointer overflow-hidden group transition-all duration-300"
+                          to={`/courses/${course.id}`}
+                          className="flex-none w-65 sm:w-72.5 snap-start flex flex-col bg-card rounded-2xl border border-border/70 shadow-sm hover:shadow-lg hover:border-primary/40 hover:-translate-y-1.5 cursor-pointer overflow-hidden group transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-primary/50"
                         >
                           <div className="relative aspect-video overflow-hidden bg-muted">
                             {course.image ? (
@@ -678,19 +684,23 @@ export const Landing: React.FC = () => {
                             </div>
 
                             <div className="mt-4 pt-4 border-t border-border/80 flex items-center justify-between text-sm text-muted-foreground">
-                              <div className="flex items-center gap-1.5">
-                                <Star className="h-4 w-4 fill-amber-400 stroke-amber-400" />
-                                <span className="font-bold text-foreground">{course.avgRating || 4.5}</span>
-                                <span>({course.enrollmentCount || 0} học viên)</span>
-                              </div>
+                              {course.avgRating ? (
+                                <div className="flex items-center gap-1.5">
+                                  <Star className="h-4 w-4 fill-amber-400 stroke-amber-400" />
+                                  <span className="font-bold text-foreground">{course.avgRating}</span>
+                                  <span>({course.enrollmentCount || 0} học viên)</span>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-muted-foreground/70">Chưa có đánh giá</span>
+                              )}
                               <span className="font-medium text-primary">
                                 {course.suggestedPrice ? `${course.suggestedPrice.toLocaleString()}đ` : "Miễn phí"}
                               </span>
                             </div>
                           </div>
-                        </div>
+                        </Link>
                       ))}
-                    </div>
+                    </CourseScrollContainer>
                   ) : (
                     <div className="text-center py-12 text-muted-foreground text-sm">
                       Không có khóa học nào thuộc nhóm này.
@@ -700,6 +710,63 @@ export const Landing: React.FC = () => {
               );
             })}
           </Tabs>
+        </section>
+
+        {/* ==========================================
+            INSTRUCTORS TEAM SECTION (ĐỘI NGŨ GIẢNG VIÊN CHUYÊN GIA)
+            ========================================== */}
+        <section className="py-16 border-t border-border/40">
+          <div className="text-center max-w-2xl mx-auto mb-10 space-y-2">
+            <h2 className="text-3xl uppercase font-extrabold text-foreground tracking-tight">Đội Ngũ Giảng Viên Chuyên Gia</h2>
+            <p className="text-base text-muted-foreground">Gặp gỡ đội ngũ giảng viên giàu kinh nghiệm, dẫn dắt bạn trên lộ trình học tập cá nhân hóa.</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-7xl mx-auto px-4">
+            {INSTRUCTORS_LIST.map((ins) => (
+              <Link 
+                key={ins.id} 
+                to={`/teachers/${ins.id}`}
+                className="p-6 bg-card border border-border/70 rounded-2xl shadow-sm space-y-4 hover:shadow-lg hover:border-primary/40 hover:-translate-y-1.5 transition-all duration-300 flex flex-col justify-between group cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/50"
+              >
+                <div className="space-y-4">
+                  {/* Header: Photo, Name & Title */}
+                  <div className="flex gap-4 items-center">
+                    <div className="h-16 w-16 rounded-full border border-primary/20 bg-primary/5 overflow-hidden shrink-0">
+                      <img
+                        src={ins.avatar}
+                        alt={ins.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="font-bold text-foreground text-base leading-tight group-hover:text-primary transition-colors">{ins.name}</h3>
+                      <p className="text-sm font-bold text-primary">{ins.role}</p>
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <GraduationCap className="h-3.5 w-3.5 text-primary" />
+                        <span>{ins.school}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Bio Description */}
+                  <p className="text-sm leading-relaxed text-muted-foreground italic line-clamp-3">
+                    &ldquo;{ins.bio}&rdquo;
+                  </p>
+                </div>
+
+                {/* Stats Footer */}
+                <div className="pt-4 border-t border-border/60 flex justify-between items-center text-xs text-muted-foreground font-medium">
+                  <div className="flex items-center gap-1">
+                    <Award className="h-4 w-4 text-amber-500" />
+                    <span>Đánh giá: <strong className="text-foreground">{ins.rating} ★</strong></span>
+                  </div>
+                  <div>
+                    <span>Giảng dạy: <strong className="text-foreground">{ins.coursesCount} khóa học</strong></span>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
         </section>
 
         {/* ==========================================

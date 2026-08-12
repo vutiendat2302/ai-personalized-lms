@@ -92,6 +92,7 @@ import { ExplorePathways } from "./pages/ExplorePathways";
 import { CourseDetail } from "./pages/CourseDetail";
 import { PaymentResultPage } from "./pages/PaymentResultPage";
 import { CategoryDetail } from "./pages/CategoryDetail";
+import { TeacherDetail } from "./pages/TeacherDetail";
 import { SetPassword } from "./pages/SetPassword";
 
 import { ProtectedRoute } from "./components/ProtectedRoute";
@@ -219,6 +220,7 @@ function App() {
             <Route path="/courses/:id" element={<CourseDetail />} />
             <Route path="/payment/result" element={<PaymentResultPage />} />
             <Route path="/categories/:id" element={<CategoryDetail />} />
+            <Route path="/teachers/:id" element={<TeacherDetail />} />
             <Route path="/set-password" element={<SetPassword />} />
             <Route path="/contracts/sign/:token" element={<ContractSigningPage />} />
 

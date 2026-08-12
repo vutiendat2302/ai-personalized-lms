@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import {
   studentApi,
   type StudentDashboardMetrics,
@@ -24,6 +24,7 @@ import {
   BookOpen,
   Sparkles,
 } from "lucide-react";
+import { CourseScrollContainer } from "@/components/courses/CourseScrollContainer";
 
 export const StudentDashboardPage: React.FC = () => {
   const navigate = useNavigate();
@@ -114,7 +115,6 @@ export const StudentDashboardPage: React.FC = () => {
     if (isLoadingCoursesRef.current || loadingCourses) return;
     try {
       isLoadingCoursesRef.current = true;
-      setLoadingCourses(true);
       if (tabVal === "popular") {
         const nextPage = popularPage + 1;
         const res = await courseApi.getOutstandingCourses({ page: nextPage, size: 6 });
@@ -146,7 +146,6 @@ export const StudentDashboardPage: React.FC = () => {
     } catch (e) {
       console.error(`Failed to load more ${tabVal} courses:`, e);
     } finally {
-      setLoadingCourses(false);
       isLoadingCoursesRef.current = false;
     }
   };
@@ -570,13 +569,13 @@ export const StudentDashboardPage: React.FC = () => {
 
         <div className="flex flex-wrap justify-center gap-3 max-w-4xl mx-auto">
           {categories.map((cat) => (
-            <span
+            <Link
               key={cat.id}
-              onClick={() => navigate(`/categories/${cat.id}`)}
-              className="px-4 py-2 cursor-pointer hover:scale-105 rounded-full border border-border/70 bg-card text-sm font-bold text-foreground hover:border-primary hover:text-primary transition-all shadow-sm animate-in fade-in duration-200"
+              to={`/categories/${cat.id}`}
+              className="px-4 py-2 cursor-pointer hover:scale-105 rounded-full border border-border/70 bg-card text-sm font-bold text-foreground hover:border-primary hover:text-primary transition-all shadow-sm animate-in fade-in duration-200 focus:outline-none focus:ring-2 focus:ring-primary/50"
             >
               {cat.name}
-            </span>
+            </Link>
           ))}
         </div>
 
@@ -657,65 +656,75 @@ export const StudentDashboardPage: React.FC = () => {
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                   </div>
                 ) : currentCourses.length > 0 ? (
-                  <div
-                    onScroll={(e) => handleScroll(e, tabVal as "popular" | "trending" | "new")}
-                    className={`flex gap-6 overflow-x-auto pb-6 scrollbar-thin scrollbar-thumb-primary/10 scrollbar-track-transparent snap-x snap-mandatory -mx-6 px-6 md:-mx-12 md:px-12 ${
-                      currentCourses.length < 3 ? "justify-center" : "justify-start"
-                    } ${currentCourses.length <= 3 ? "md:justify-center" : "md:justify-start"}`}
-                  >
-                    {currentCourses.map((course) => (
-                      <div
-                        key={course.id}
-                        onClick={() => navigate(`/courses/${course.id}`)}
-                        className="flex-none w-65 sm:w-72.5 snap-start flex flex-col bg-card rounded-2xl border border-border/70 shadow-sm hover:shadow-lg hover:border-primary/40 hover:-translate-y-1.5 cursor-pointer overflow-hidden group transition-all duration-300"
-                      >
-                        <div className="relative aspect-video overflow-hidden bg-muted">
-                          {course.image ? (
-                            <img
-                              src={course.image}
-                              alt={course.name || course.title}
-                              className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300"
-                            />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center bg-primary/8"><BookOpen className="h-10 w-10 text-primary/35" /></div>
-                          )}
-                          {course.level && (
-                            <div className="absolute top-3 left-3 bg-card/90 backdrop-blur-sm px-2.5 py-1 rounded-lg text-sm font-bold text-primary shadow">
-                              {course.level}
-                            </div>
-                          )}
-                        </div>
+                    <CourseScrollContainer
+                      itemCount={currentCourses.length}
+                      onScroll={(e) => handleScroll(e, tabVal as "popular" | "trending" | "new")}
+                      /* 
+                       * Cấu hình căn lề responsive:
+                       * - Khi có ít hơn 3 thẻ khóa học: mobile dùng justify-start để người dùng cuộn mượt từ góc trái qua,
+                       *   còn desktop (md) dùng md:justify-center để căn giữa gọn gàng trên màn hình rộng.
+                       */
+                      className={`flex gap-6 overflow-x-auto pb-6 scrollbar-thin scrollbar-thumb-primary/10 scrollbar-track-transparent snap-x snap-mandatory -mx-6 px-6 md:-mx-12 md:px-12 ${
+                        currentCourses.length < 3 ? "justify-start" : "justify-start"
+                      } ${currentCourses.length <= 3 ? "md:justify-center" : "md:justify-start"}`}
+                    >
+                      {currentCourses.map((course) => (
+                        <Link
+                          key={course.id}
+                          to={`/courses/${course.id}`}
+                          className="flex-none w-65 sm:w-72.5 snap-start flex flex-col bg-card rounded-2xl border border-border/70 shadow-sm hover:shadow-lg hover:border-primary/40 hover:-translate-y-1.5 cursor-pointer overflow-hidden group transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-primary/50"
+                        >
+                          <div className="relative aspect-video overflow-hidden bg-muted">
+                            {course.image ? (
+                              <img
+                                src={course.image}
+                                alt={course.name || course.title}
+                                className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300"
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center bg-primary/8"><BookOpen className="h-10 w-10 text-primary/35" /></div>
+                            )}
+                            {course.level && (
+                              <div className="absolute top-3 left-3 bg-card/90 backdrop-blur-sm px-2.5 py-1 rounded-lg text-sm font-bold text-primary shadow">
+                                {course.level}
+                              </div>
+                            )}
+                          </div>
 
-                        <div className="p-5 flex-1 flex flex-col justify-between">
-                          <div>
-                            <div className="flex flex-wrap gap-1.5 mb-3">
-                              <span className="text-sm font-bold uppercase px-2 py-0.5 rounded bg-primary/10 text-primary">
-                                {course.categoryName}
+                          <div className="p-5 flex-1 flex flex-col justify-between">
+                            <div>
+                              <div className="flex flex-wrap gap-1.5 mb-3">
+                                <span className="text-sm font-bold uppercase px-2 py-0.5 rounded bg-primary/10 text-primary">
+                                  {course.categoryName}
+                                </span>
+                              </div>
+                              <h3 className="font-bold text-foreground text-sm leading-snug line-clamp-2 group-hover:text-primary transition-colors">
+                                {course.name || course.title}
+                              </h3>
+                            </div>
+
+                            <div className="mt-4 pt-4 border-t border-border/80 flex items-center justify-between text-sm text-muted-foreground">
+                              {(course.avgRating ?? course.rating) ? (
+                                <div className="flex items-center gap-1.5">
+                                  <Star className="h-4 w-4 fill-amber-400 stroke-amber-400" />
+                                  <span className="font-bold text-foreground">{course.avgRating ?? course.rating}</span>
+                                  <span>({course.reviewCount ?? 0} đánh giá)</span>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-muted-foreground/70">Chưa có đánh giá</span>
+                              )}
+                              <span className="font-medium text-primary">
+                                {course.suggestedPrice != null
+                                  ? `${course.suggestedPrice.toLocaleString()}đ`
+                                  : course.sellingPrice != null
+                                    ? `${course.sellingPrice.toLocaleString()}đ`
+                                    : "Chưa có giá"}
                               </span>
                             </div>
-                            <h3 className="font-bold text-foreground text-sm leading-snug line-clamp-2 group-hover:text-primary transition-colors">
-                              {course.name || course.title}
-                            </h3>
                           </div>
-
-                          <div className="mt-4 pt-4 border-t border-border/80 flex items-center justify-between text-sm text-muted-foreground">
-                            <div className="flex items-center gap-1.5">
-                              <Star className="h-4 w-4 fill-amber-400 stroke-amber-400" />
-                              <span className="font-bold text-foreground">{course.avgRating ?? course.rating ?? 0}</span>
-                              <span>({course.reviewCount ?? 0} đánh giá)</span>
-                            </div>
-                            <span className="font-medium text-primary">
-                              {course.suggestedPrice != null
-                                ? `${course.suggestedPrice.toLocaleString()}đ`
-                                : course.sellingPrice != null
-                                  ? `${course.sellingPrice.toLocaleString()}đ`
-                                  : "Chưa có giá"}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                        </Link>
+                      ))}
+                    </CourseScrollContainer>
                 ) : (
                   <div className="py-12 text-center text-sm text-muted-foreground">
                     Chưa có khóa học nào trong danh mục này.

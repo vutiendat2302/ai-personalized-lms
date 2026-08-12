@@ -4,6 +4,7 @@ import com.ailms.client.AiServiceClient;
 import com.ailms.common.snowflake.SnowflakeIdGenerator;
 import com.ailms.entity.CourseEntity;
 import com.ailms.entity.LessonEntity;
+import com.ailms.entity.enums.BaseStatusEnum;
 import com.ailms.entity.enums.CourseInstructorStatusEnum;
 import com.ailms.event.AuditLogEvent;
 import com.ailms.exception.BadRequestException;
@@ -148,7 +149,7 @@ public class AiAssessmentAuthoringService {
                 .passScore(quiz.getPassScore())
                 .maxAttempts(quiz.getMaxAttempts())
                 .shuffleQuestions(quiz.getShuffleQuestions())
-                .status((byte) 0)
+                .status(BaseStatusEnum.DRAFT)
                 .build();
     }
 
