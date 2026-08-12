@@ -135,6 +135,7 @@ public class ApprovalRequestController {
         item.put("approverId", request.getApproverId());
         item.put("status", request.getStatus());
         item.put("comment", request.getComment());
+        item.put("requestReason", request.getRequestReason());
         item.put("createdBy", request.getCreatedBy());
         item.put("createdAt", request.getCreatedAt());
         item.put("decidedAt", request.getDecidedAt());

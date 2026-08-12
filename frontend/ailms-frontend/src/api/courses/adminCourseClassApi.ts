@@ -1,6 +1,35 @@
 import httpClient from "@/api/httpClient";
 import type { ApiResponse } from "@/types/base";
 
+export type StreamPostType = "QUESTION" | "DISCUSSION" | "ANNOUNCEMENT";
+
+export interface StreamPostComment {
+  id: string;
+  postId: string;
+  authorId: string;
+  authorName: string;
+  authorAvatar?: string | null;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StreamPostItem {
+  id: string;
+  classId: string;
+  authorId: string;
+  authorName: string;
+  authorAvatar?: string | null;
+  type: StreamPostType;
+  title?: string | null;
+  content: string;
+  pinned: boolean;
+  commentLocked: boolean;
+  createdAt: string;
+  updatedAt: string;
+  commentCount: number;
+}
+
 export const adminCourseClassApi = {
   getCourses: async () => (await httpClient.get<ApiResponse<any[]>>("/v1/courses")).data.data || [],
   searchCourses: async (params?: { keyword?: string; status?: string; page?: number; size?: number }) =>
@@ -48,8 +77,26 @@ export const adminCourseClassApi = {
     (await httpClient.get<ApiResponse<any>>(`/v1/classes/${classId}/stream-posts`, { params: { page, size } })).data.data,
   createStreamPost: async (classId: string, payload: any) =>
     (await httpClient.post<ApiResponse<any>>(`/v1/classes/${classId}/stream-posts`, payload)).data.data,
+  /** Sửa bài đăng trong lớp theo quyền backend. */
+  updateStreamPost: async (classId: string, postId: string, payload: { title?: string; content: string }) =>
+    (await httpClient.put<ApiResponse<StreamPostItem>>(`/v1/classes/${classId}/stream-posts/${postId}`, payload)).data.data,
+  /** Ghim, khóa bình luận hoặc ẩn bài bằng quyền staff lớp. */
+  moderateStreamPost: async (classId: string, postId: string, payload: { pinned?: boolean; commentLocked?: boolean; hidden?: boolean }) =>
+    (await httpClient.patch<ApiResponse<StreamPostItem>>(`/v1/classes/${classId}/stream-posts/${postId}/moderation`, payload)).data.data,
   deleteStreamPost: async (classId: string, postId: string) =>
     httpClient.delete(`/v1/classes/${classId}/stream-posts/${postId}`),
+  /** Lấy bình luận phân trang của bài. */
+  getStreamComments: async (classId: string, postId: string, page = 0, size = 20) =>
+    (await httpClient.get<ApiResponse<any>>(`/v1/classes/${classId}/stream-posts/${postId}/comments`, { params: { page, size } })).data.data,
+  /** Đăng bình luận hoặc câu trả lời mới. */
+  createStreamComment: async (classId: string, postId: string, content: string) =>
+    (await httpClient.post<ApiResponse<StreamPostComment>>(`/v1/classes/${classId}/stream-posts/${postId}/comments`, { content })).data.data,
+  /** Sửa bình luận của người dùng hiện tại. */
+  updateStreamComment: async (classId: string, postId: string, commentId: string, content: string) =>
+    (await httpClient.put<ApiResponse<StreamPostComment>>(`/v1/classes/${classId}/stream-posts/${postId}/comments/${commentId}`, { content })).data.data,
+  /** Xóa bình luận theo quyền tác giả hoặc staff. */
+  deleteStreamComment: async (classId: string, postId: string, commentId: string) =>
+    httpClient.delete(`/v1/classes/${classId}/stream-posts/${postId}/comments/${commentId}`),
 
   // Class Resources API
   getClassResources: async (classId: string, params?: { keyword?: string; page?: number; size?: number }) =>

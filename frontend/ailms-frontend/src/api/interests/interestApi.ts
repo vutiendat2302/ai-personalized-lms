@@ -9,10 +9,11 @@ export interface InterestResponse {
   icon?: string;
   color?: string;
   categoryName?: string;
-  status?: string;
+  status?: number;
 }
 
 export const interestApi = {
+  /** Lấy danh sách sở thích cố định được cấu hình tại backend. */
   getInterests: () =>
     httpClient.get<ApiResponse<InterestResponse[]>>("/v1/interests"),
 };

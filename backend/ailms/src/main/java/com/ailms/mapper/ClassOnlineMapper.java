@@ -35,6 +35,9 @@ public interface ClassOnlineMapper {
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
+    @Mapping(target = "sessionKind", ignore = true)
+    @Mapping(target = "countsTowardPackage", ignore = true)
+    @Mapping(target = "payable", ignore = true)
     ClassOnlineEntity toEntity(CreateClassOnlineRequest request);
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
@@ -47,5 +50,8 @@ public interface ClassOnlineMapper {
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
+    @Mapping(target = "sessionKind", ignore = true)
+    @Mapping(target = "countsTowardPackage", ignore = true)
+    @Mapping(target = "payable", ignore = true)
     void updateFromRequest(UpdateClassOnlineRequest request, @MappingTarget ClassOnlineEntity entity);
 }

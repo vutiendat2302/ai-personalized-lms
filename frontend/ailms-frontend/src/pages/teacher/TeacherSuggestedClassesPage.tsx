@@ -3,28 +3,30 @@ import { teacherApi, type SuggestedClassMatchingItem } from "@/api/teacher/teach
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/useToast";
-import { Sparkles, Check, X } from "lucide-react";
+import { Sparkles, Check } from "lucide-react";
 
 export const TeacherSuggestedClassesPage: React.FC = () => {
-  const { success } = useToast();
+  const { success, error } = useToast();
   const [suggested, setSuggested] = useState<SuggestedClassMatchingItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
-    teacherApi.getSuggestedClasses().then((res) => {
-      setSuggested(res);
-      setLoading(false);
-    });
+    teacherApi.getSuggestedClasses()
+      .then(setSuggested)
+      .catch(() => setLoadError("Không thể tải danh sách yêu cầu 1-1."))
+      .finally(() => setLoading(false));
   }, []);
 
+  /** Nhận yêu cầu qua backend có khóa chống hai người nhận đồng thời. */
   const handleAccept = async (item: SuggestedClassMatchingItem) => {
-    await teacherApi.acceptSuggestedClass(item.id);
-    success(`Đã đăng ký nhận lớp thành công: ${item.courseName}!`);
-    setSuggested((prev) => prev.filter((i) => i.id !== item.id));
-  };
-
-  const handleIgnore = (id: string) => {
-    setSuggested((prev) => prev.filter((i) => i.id !== id));
+    try {
+      await teacherApi.acceptSuggestedClass(item.id);
+      success(`Đã nhận yêu cầu học 1-1: ${item.courseName}.`);
+      setSuggested((prev) => prev.filter((i) => i.id !== item.id));
+    } catch {
+      error("Yêu cầu đã được người khác nhận hoặc bạn không còn đủ điều kiện nhận lớp.");
+    }
   };
 
   if (loading) {
@@ -36,6 +38,10 @@ export const TeacherSuggestedClassesPage: React.FC = () => {
     );
   }
 
+  if (loadError) {
+    return <Card className="p-12 text-center text-sm text-destructive">{loadError}</Card>;
+  }
+
   return (
     <div className="space-y-6 pb-16">
       <div>
@@ -44,7 +50,7 @@ export const TeacherSuggestedClassesPage: React.FC = () => {
           Lớp gợi ý (Matching & Nhận lớp)
         </h1>
         <p className="text-xs text-muted-foreground mt-1">
-          Hệ thống tự động đề xuất các lớp nhóm & học viên 1-1 mới phù hợp với chuyên môn & lịch rảnh của bạn.
+          Các yêu cầu học 1-1 đã thanh toán phù hợp với danh mục chuyên môn của bạn.
         </p>
       </div>
 
@@ -63,39 +69,22 @@ export const TeacherSuggestedClassesPage: React.FC = () => {
                   </span>
                   <h3 className="text-base font-bold text-foreground mt-0.5">{item.courseName}</h3>
                 </div>
-                {item.isExpiringSoon && (
-                  <span className="px-2 py-0.5 text-[9px] font-extrabold bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 rounded border border-amber-300 dark:border-amber-800 animate-pulse">
-                    Sắp hết hạn gợi ý
-                  </span>
-                )}
+                <span className="text-[10px] text-muted-foreground">{item.includedTutorSessions} buổi chính thức</span>
               </div>
 
               <div className="space-y-2 text-xs text-foreground bg-muted/40 p-3.5 rounded-xl border border-border/40">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Hình thức:</span>
-                  <span className="font-bold text-primary">
-                    {item.classType === "ONE_ON_ONE" ? "Kèm 1-1 Chuyên Sâu" : "Lớp Nhóm Online"}
-                  </span>
+                  <span className="font-bold text-primary">Kèm 1-1 chuyên sâu</span>
                 </div>
-
-                {item.requestedSchedule && (
-                  <div className="flex items-center justify-between gap-2 pt-1 border-t border-border/40 text-amber-600 dark:text-amber-400">
-                    <span className="text-muted-foreground shrink-0">Lịch học viên yêu cầu:</span>
-                    <span className="font-bold text-right">{item.requestedSchedule}</span>
-                  </div>
-                )}
+                <p><span className="text-muted-foreground">Trình độ:</span> {item.currentLevel}</p>
+                <p><span className="text-muted-foreground">Thời gian:</span> {item.availablePeriod}; {item.availableDays}; {item.preferredTimes}</p>
+                <p><span className="text-muted-foreground">Mục tiêu:</span> {item.learningGoals}</p>
+                <p><span className="text-muted-foreground">Nội dung yếu:</span> {item.weakAreas}</p>
+                {item.additionalNotes && <p><span className="text-muted-foreground">Ghi chú:</span> {item.additionalNotes}</p>}
               </div>
 
-              <div className="flex items-center justify-between pt-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => handleIgnore(item.id)}
-                  className="text-xs border-border text-muted-foreground hover:bg-muted cursor-pointer gap-1.5"
-                >
-                  <X className="h-3.5 w-3.5" />
-                  Bỏ qua
-                </Button>
+              <div className="flex items-center justify-end pt-2">
                 <Button
                   size="sm"
                   onClick={() => handleAccept(item)}

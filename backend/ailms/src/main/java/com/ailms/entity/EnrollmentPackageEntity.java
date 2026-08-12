@@ -4,6 +4,7 @@ import com.ailms.common.snowflake.SnowflakeId;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
+import com.ailms.entity.enums.EnrollmentPackageStatusEnum;
 
 import java.time.LocalDateTime;
 
@@ -12,7 +13,9 @@ import java.time.LocalDateTime;
  * Quản lý thời điểm kích hoạt và thời điểm hết hạn truy cập của gói học.
  */
 @Entity
-@Table(name = "enrollment_package", indexes = {
+@Table(name = "enrollment_package", uniqueConstraints = {
+        @UniqueConstraint(name = "uk_enrollment_package_order_item", columnNames = "order_item_id")
+}, indexes = {
         @Index(name = "idx_enroll_pkg_enrollment_id", columnList = "enrollment_id"),
         @Index(name = "idx_enroll_pkg_course_package_id", columnList = "course_package_id")
 })
@@ -51,4 +54,10 @@ public class EnrollmentPackageEntity extends BaseEntity {
     /** Thời điểm quyền truy cập gói học hết hạn (null nếu vô hạn). */
     @Column(name = "expires_at")
     private LocalDateTime expiresAt;
+
+    /** Trạng thái quyền lợi riêng của package, độc lập với Enrollment của khóa học. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    @Builder.Default
+    private EnrollmentPackageStatusEnum status = EnrollmentPackageStatusEnum.ACTIVE;
 }

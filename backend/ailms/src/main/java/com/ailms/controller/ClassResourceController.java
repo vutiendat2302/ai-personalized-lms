@@ -9,6 +9,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -19,6 +20,7 @@ public class ClassResourceController {
     private final IClassResourceService resourceService;
 
     @PostMapping
+    @PreAuthorize("@classAccess.canManage(#classId, authentication)")
     public ResponseEntity<ApiResponse<ClassResourceResponse>> createResource(
             @PathVariable Long classId,
             @Valid @RequestBody CreateClassResourceRequest request) {
@@ -28,6 +30,7 @@ public class ClassResourceController {
     }
 
     @GetMapping
+    @PreAuthorize("@classAccess.canView(#classId, authentication)")
     public ResponseEntity<ApiResponse<PageResponse<ClassResourceResponse>>> getResourcesPage(
             @PathVariable Long classId,
             @RequestParam(required = false) String keyword,
@@ -38,7 +41,10 @@ public class ClassResourceController {
     }
 
     @DeleteMapping("/{resourceId}")
-    public ResponseEntity<ApiResponse<Void>> deleteResource(@PathVariable Long resourceId) {
+    @PreAuthorize("@classAccess.canManageResource(#classId, #resourceId, authentication)")
+    public ResponseEntity<ApiResponse<Void>> deleteResource(
+            @PathVariable Long classId,
+            @PathVariable Long resourceId) {
         resourceService.deleteResource(resourceId);
         return ResponseEntity.ok(ApiResponse.message("Class resource deleted successfully"));
     }

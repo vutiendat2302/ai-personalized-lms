@@ -67,6 +67,9 @@ public interface IQuizService {
      */
     List<QuizResponse> getBySectionId(Long sectionId);
 
+    /** Lấy quiz/bài thi được giao cho một lớp cụ thể. */
+    List<QuizResponse> getByClassId(Long classId);
+
     /**
      * Tạo mới bản ghi từ dữ liệu yêu cầu.
      *

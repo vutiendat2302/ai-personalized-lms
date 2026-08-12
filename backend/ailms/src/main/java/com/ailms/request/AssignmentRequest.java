@@ -20,6 +20,8 @@ public class AssignmentRequest {
 
     private Long sectionId;
 
+    private Long classId;
+
     @NotBlank(message = "Title must not be blank")
     private String title;
 

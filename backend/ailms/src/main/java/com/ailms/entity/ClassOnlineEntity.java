@@ -2,6 +2,7 @@ package com.ailms.entity;
 
 import com.ailms.common.snowflake.SnowflakeId;
 import com.ailms.entity.enums.BaseStatusEnum;
+import com.ailms.entity.enums.SessionKindEnum;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
@@ -91,4 +92,20 @@ public class ClassOnlineEntity extends BaseEntity {
 
     @Column(name = "code")
     private String code;
+
+    /** Phân loại buổi học thường hoặc buổi học thử. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "session_kind", nullable = false, length = 20)
+    @Builder.Default
+    private SessionKindEnum sessionKind = SessionKindEnum.REGULAR;
+
+    /** Buổi học có trừ vào số buổi chính thức trong gói hay không. */
+    @Column(name = "counts_toward_package", nullable = false)
+    @Builder.Default
+    private Boolean countsTowardPackage = true;
+
+    /** Buổi học có được tính thù lao hay không. */
+    @Column(name = "payable", nullable = false)
+    @Builder.Default
+    private Boolean payable = true;
 }

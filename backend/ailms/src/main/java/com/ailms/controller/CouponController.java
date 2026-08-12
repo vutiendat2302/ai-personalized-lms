@@ -3,18 +3,21 @@ package com.ailms.controller;
 import com.ailms.request.CouponRequest;
 import com.ailms.response.ApiResponse;
 import com.ailms.response.CouponResponse;
+import com.ailms.response.UserCouponResponse;
 import com.ailms.service.ICouponService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import java.util.List;
 
 @RestController
 @RequestMapping("${api.prefix}/coupons")
 @RequiredArgsConstructor
+@PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_HR')")
 public class CouponController {
 
     private final ICouponService couponService;
@@ -64,5 +67,21 @@ public class CouponController {
             @RequestParam(required = false) Long courseId) {
         CouponResponse response = couponService.validateCoupon(code, courseId);
         return ResponseEntity.ok(ApiResponse.of("Coupon is valid", response));
+    }
+
+    /** Cấp voucher cho một người dùng cụ thể để xuất hiện trong ví voucher của họ. */
+    @PostMapping("/{couponId}/users/{userId}")
+    public ResponseEntity<ApiResponse<UserCouponResponse>> assignToUser(
+            @PathVariable Long couponId, @PathVariable Long userId) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(
+                "Voucher assigned successfully", couponService.assignToUser(couponId, userId)));
+    }
+
+    /** Lấy danh sách voucher đã cấp cho một người dùng phục vụ quản lý. */
+    @GetMapping("/users/{userId}")
+    public ResponseEntity<ApiResponse<List<UserCouponResponse>>> getUserCoupons(
+            @PathVariable Long userId) {
+        return ResponseEntity.ok(ApiResponse.of(
+                "User vouchers retrieved successfully", couponService.getUserCoupons(userId)));
     }
 }

@@ -2,6 +2,7 @@ package com.ailms.service.imp;
 
 import com.ailms.entity.*;
 import com.ailms.entity.enums.*;
+import com.ailms.common.util.CodeGenerator;
 import com.ailms.event.AuditLogEvent;
 import com.ailms.exception.BusinessException;
 import com.ailms.exception.DuplicateResourceException;
@@ -13,6 +14,7 @@ import com.ailms.repository.specification.CourseSpecification;
 import com.ailms.request.*;
 import com.ailms.response.ClassResponse;
 import com.ailms.response.CourseResponse;
+import com.ailms.response.CourseMetricResponse;
 import com.ailms.response.PageResponse;
 import com.ailms.request.BaseSearchRequest;
 import com.ailms.service.ICourseService;
@@ -29,7 +31,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.text.Normalizer;
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 @Service
@@ -53,8 +58,11 @@ public class CourseService implements ICourseService {
     private final UserRoleRepository userRoleRepository;
     private final CourseTeacherRepository courseTeacherRepository;
     private final CoursePackageRepository coursePackageRepository;
+    private final CourseSectionRepository courseSectionRepository;
+    private final ReviewRepository reviewRepository;
 
     private static final String RESOURCE_NAME = "Course";
+    private static final String CODE_PREFIX = "KH";
 
     @Override
     public List<CourseResponse> getAll() {
@@ -160,6 +168,9 @@ public class CourseService implements ICourseService {
         CourseEntity existingEntity = courseRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
 
+        if (request.getStatus() == CourseStatusEnum.ACTIVE) {
+            requireActiveSelfStudyPackage(id);
+        }
         existingEntity.setStatus(request.getStatus());
 
         CourseEntity updatedEntity = courseRepository.save(existingEntity);
@@ -182,6 +193,7 @@ public class CourseService implements ICourseService {
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
 
         if (Boolean.TRUE.equals(request.getApprove())) {
+            requireActiveSelfStudyPackage(id);
             course.setStatus(CourseStatusEnum.ACTIVE);
             course.setRejectionReason(null);
             log.info("Course {} approved and activated for sale", id);
@@ -248,7 +260,7 @@ public class CourseService implements ICourseService {
         if (course == null || course.getId() == null) return;
         try {
             List<CourseTeacherEntity> teachers = courseTeacherRepository.findByCourseEntity_Id(course.getId());
-            java.util.Set<Long> notifiedUserIds = new java.util.HashSet<>();
+            Set<Long> notifiedUserIds = new HashSet<>();
 
             for (CourseTeacherEntity ct : teachers) {
                 if (ct.getUserEntity() != null && ct.getUserEntity().getId() != null) {
@@ -298,11 +310,23 @@ public class CourseService implements ICourseService {
         }
     }
 
+    /** Chỉ vô hiệu hóa gói khi khóa học bị ngừng bán/xóa; giữ gói ACTIVE để có thể duyệt bản nháp. */
     private void deactivatePackagesIfCourseNotActive(CourseEntity course) {
         if (course == null || course.getId() == null) return;
-        if (course.getStatus() != CourseStatusEnum.ACTIVE) {
+        if (course.getStatus() == CourseStatusEnum.INACTIVE || course.getStatus() == CourseStatusEnum.DELETED) {
             log.info("Course {} status is {}, deactivating all its course packages", course.getId(), course.getStatus());
             coursePackageRepository.deactivateAllByCourseId(course.getId());
+        }
+    }
+
+    /** Chặn xuất bản nếu khóa học chưa có ít nhất một gói tự học đang hoạt động. */
+    private void requireActiveSelfStudyPackage(Long courseId) {
+        long activeSelfStudyPackages = coursePackageRepository
+                .countByCourseEntity_IdAndDeliveryModeAndStatus(
+                        courseId, DeliveryModeEnum.SELF_STUDY, CoursePackageStatusEnum.ACTIVE);
+        if (activeSelfStudyPackages == 0) {
+            throw new BusinessException(
+                    "Khóa học phải có ít nhất một gói tự học đang hoạt động trước khi xuất bản.");
         }
     }
 
@@ -324,14 +348,46 @@ public class CourseService implements ICourseService {
         return courseMapper.toResponse(entity);
     }
 
+    /** Tính các chỉ số tổng quan từ dữ liệu khóa học, gói học và đánh giá đang hiển thị. */
+    @Override
+    public CourseMetricResponse getMetrics(Long id) {
+        CourseEntity course = courseRepository.findById(id)
+                .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
+        long reviewCount = reviewRepository.countByCourseIdAndStatus(id, ReviewStatusEnum.ACTIVE);
+        long positiveReviewCount = reviewRepository
+                .countByCourseIdAndStatusAndRatingGreaterThanEqual(id, ReviewStatusEnum.ACTIVE, 4);
+        Double averageRating = reviewRepository.getAverageRatingForCourseAndStatus(id, ReviewStatusEnum.ACTIVE);
+        List<CoursePackageEntity> activePackages = coursePackageRepository.findByCourseEntity_Id(id).stream()
+                .filter(item -> item.getStatus() == CoursePackageStatusEnum.ACTIVE)
+                .toList();
+        List<DeliveryModeEnum> deliveryModes = activePackages.stream()
+                .map(CoursePackageEntity::getDeliveryMode)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        DeliveryModeEnum deliveryMode = deliveryModes.size() > 1 ? DeliveryModeEnum.COMBO
+                : deliveryModes.isEmpty() ? null : deliveryModes.get(0);
+        int satisfactionPercent = reviewCount == 0 ? 0
+                : (int) Math.round((double) positiveReviewCount * 100 / reviewCount);
+        return CourseMetricResponse.builder()
+                .courseId(id)
+                .moduleCount(courseSectionRepository.countByCourseEntityId(id))
+                .averageRating(averageRating != null ? averageRating : 0D)
+                .reviewCount(reviewCount)
+                .level(course.getLevel() != null ? course.getLevel().name() : null)
+                .deliveryMode(deliveryMode)
+                .satisfactionPercent(satisfactionPercent)
+                .build();
+    }
+
     @Override
     public PageResponse<CourseResponse> search(CourseSearchRequest request) {
         log.info("Searching courses with keyword: {}", request.getKeyword());
 
-        Page<CourseEntity> page = courseRepository.findAll(
-                CourseSpecification.filterAndSearch(request),
-                request.toPageable()
-        );
+        Page<CourseEntity> page = request.getStatus() == CourseStatusEnum.ACTIVE
+                ? courseRepository.findActiveCoursesForSale(
+                        request.getKeyword(), request.getCategoryId(), request.getLevel(), request.toPageable())
+                : courseRepository.findAll(CourseSpecification.filterAndSearch(request), request.toPageable());
 
         return PageResponse.from(page.map(courseMapper::toResponse));
     }
@@ -424,7 +480,7 @@ public class CourseService implements ICourseService {
                         Sort.Order.desc("enrollmentCount")
                 )
         );
-        Page<CourseEntity> page = courseRepository.findByStatus(CourseStatusEnum.ACTIVE, pageable);
+        Page<CourseEntity> page = courseRepository.findActiveCoursesForSale(null, null, null, pageable);
         return PageResponse.from(page.map(courseMapper::toResponse));
     }
 
@@ -436,7 +492,7 @@ public class CourseService implements ICourseService {
                 request.getSize(),
                 Sort.by(Sort.Order.desc("trendingScore"))
         );
-        Page<CourseEntity> page = courseRepository.findByStatus(CourseStatusEnum.ACTIVE, pageable);
+        Page<CourseEntity> page = courseRepository.findActiveCoursesForSale(null, null, null, pageable);
         return PageResponse.from(page.map(courseMapper::toResponse));
     }
 
@@ -448,7 +504,7 @@ public class CourseService implements ICourseService {
                 request.getSize(),
                 Sort.by(Sort.Order.desc("createdAt"))
         );
-        Page<CourseEntity> page = courseRepository.findByStatus(CourseStatusEnum.ACTIVE, pageable);
+        Page<CourseEntity> page = courseRepository.findActiveCoursesForSale(null, null, null, pageable);
         return PageResponse.from(page.map(courseMapper::toResponse));
     }
 
@@ -478,11 +534,13 @@ public class CourseService implements ICourseService {
         return courseRepository.countByStatus(CourseStatusEnum.ACTIVE);
     }
 
+    /** Chuẩn bị khóa học mới với mã tự sinh và các giá trị mặc định nghiệp vụ. */
     private CourseEntity prepareCourse(
             CreateCourseRequest request,
             CategoryEntity category,
             CourseStatusEnum defaultStatus) {
         CourseEntity course = courseMapper.toEntity(request);
+        course.setCode(CodeGenerator.generate(CODE_PREFIX, courseRepository::existsByCode));
         course.setCategoryEntity(category);
         course.setLink(resolveLink(request.getLink(), request.getName()));
         course.setStatus(request.getStatus() != null ? request.getStatus() : defaultStatus);

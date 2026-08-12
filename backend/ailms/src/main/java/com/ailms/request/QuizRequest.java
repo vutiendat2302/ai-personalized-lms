@@ -4,6 +4,8 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.*;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import com.ailms.entity.enums.BaseStatusEnum;
 
 @Getter
 @Setter
@@ -17,6 +19,8 @@ public class QuizRequest {
     private Long courseId;
 
     private Long sectionId;
+
+    private Long classId;
 
     private String code;
 
@@ -33,5 +37,7 @@ public class QuizRequest {
 
     private Boolean shuffleQuestions;
 
-    private Byte status;
+    private LocalDateTime dueAt;
+
+    private BaseStatusEnum status;
 }

@@ -1,52 +1,113 @@
 import React, { useState, useEffect } from "react";
+import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { studentApi, type StudentOrderItem } from "@/api/student/studentApi";
+import type { OrderResponse } from "@/api/orders/orderApi";
+import { orderApi } from "@/api/orders/orderApi";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/useToast";
-import { Receipt, Download, RefreshCcw, ArrowUpRight, X } from "lucide-react";
+import { Receipt, Download, ArrowUpRight, Loader2 } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { StudentPageSkeleton } from "@/components/student/StudentPageSkeleton";
+import { Textarea } from "@/components/ui/textarea";
 
 export const StudentOrdersPage: React.FC = () => {
   const navigate = useNavigate();
-  const { success } = useToast();
+  const { success, error } = useToast();
 
   const [orders, setOrders] = useState<StudentOrderItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"ORDERS" | "REQUESTS">("ORDERS");
   const [selectedOrder, setSelectedOrder] = useState<StudentOrderItem | null>(null);
+  const [orderDetail, setOrderDetail] = useState<OrderResponse | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [retryingOrderId, setRetryingOrderId] = useState<string | null>(null);
 
   // Refund Modal State
   const [showRefundModal, setShowRefundModal] = useState(false);
   const [refundReason, setRefundReason] = useState("");
+  const [refundLoading, setRefundLoading] = useState(false);
 
   useEffect(() => {
-    studentApi.getOrders().then((res) => {
-      setOrders(res);
-      setLoading(false);
-    });
+    studentApi.getOrders().then(setOrders)
+      .catch(() => setLoadError("Không thể tải lịch sử đơn hàng."))
+      .finally(() => setLoading(false));
   }, []);
 
+  /** Định dạng snapshot giá trong đơn hàng thành VNĐ. */
   const formatVND = (val: number) => {
     return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(val);
   };
 
+  /** Gửi refund và tải lại trạng thái đơn hàng sau khi PayPal hoàn tất. */
   const handleRefundSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedOrder || !refundReason.trim()) return;
-    await studentApi.requestRefund(selectedOrder.id, refundReason);
-    success("Đã gửi yêu cầu hoàn tiền thành công! HR & Admin sẽ xem xét trong vòng 24h.");
-    setShowRefundModal(false);
-    setRefundReason("");
+    try {
+      setRefundLoading(true);
+      await studentApi.requestRefund(selectedOrder.id, refundReason);
+      success("Đã gửi yêu cầu hoàn tiền. HR/Admin sẽ phê duyệt trước khi PayPal hoàn tiền.");
+      setOrders(await studentApi.getOrders());
+      setShowRefundModal(false);
+      setRefundReason("");
+    } catch {
+      error("Không thể hoàn tiền đơn hàng.");
+    } finally {
+      setRefundLoading(false);
+    }
+  };
+
+  /** Lấy chi tiết đơn hàng có kiểm tra ownership ở backend. */
+  const handleViewDetail = async (orderId: string) => {
+    setDetailLoading(true);
+    try {
+      setOrderDetail(await studentApi.getOrderDetail(orderId));
+    } catch {
+      error("Không thể tải chi tiết hóa đơn.");
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  /** Tải blob PDF hóa đơn từ endpoint học viên. */
+  const handleDownloadInvoice = async (orderId: string) => {
+    try {
+      const blob = await studentApi.downloadInvoice(orderId);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `AILMS-invoice-${orderId}.pdf`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      error("Không thể tải hóa đơn PDF. Hóa đơn chỉ có sau khi thanh toán.");
+    }
+  };
+
+  /** Mở lại PayPal cho order PENDING, giữ nguyên order và không tạo đơn trùng. */
+  const handleRetryPayment = async (orderId: string) => {
+    try {
+      setRetryingOrderId(orderId);
+      const payment = await orderApi.retryPaypalPayment(orderId);
+      sessionStorage.setItem("ailms_pending_order_id", payment.orderId);
+      window.location.assign(payment.payUrl);
+    } catch (retryError) {
+      const message = axios.isAxiosError(retryError)
+        ? String(retryError.response?.data?.message || "Đơn hàng không còn hiệu lực để thanh toán lại.")
+        : "Đơn hàng không còn hiệu lực để thanh toán lại.";
+      error(message);
+      setOrders(await studentApi.getOrders());
+    } finally {
+      setRetryingOrderId(null);
+    }
   };
 
   if (loading) {
-    return (
-      <div className="p-12 text-center text-muted-foreground">
-        <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-3" />
-        <p className="text-xs font-semibold">Đang tải lịch sử đơn hàng của bạn...</p>
-      </div>
-    );
+    return <StudentPageSkeleton cards={3} columns={1} />;
   }
+
+  if (loadError) return <Card className="p-10 text-center text-sm text-destructive">{loadError}</Card>;
 
   return (
     <div className="space-y-6 pb-16">
@@ -56,43 +117,26 @@ export const StudentOrdersPage: React.FC = () => {
           Đơn hàng của tôi (Order History)
         </h1>
         <p className="text-xs text-muted-foreground mt-1">
-          Theo dõi lịch sử đơn hàng, tải hóa đơn PDF, yêu cầu hoàn tiền và theo dõi tiến trình đổi lớp/giảng viên.
+          Theo dõi lịch sử mua gói học, xem chi tiết, tải hóa đơn PDF và yêu cầu hoàn tiền.
         </p>
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-border/40">
-        <button
-          onClick={() => setActiveTab("ORDERS")}
-          className={`px-4 py-2.5 text-xs font-bold transition border-b-2 cursor-pointer ${
-            activeTab === "ORDERS"
-              ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          Lịch sử Đơn hàng ({orders.length})
-        </button>
-        <button
-          onClick={() => setActiveTab("REQUESTS")}
-          className={`px-4 py-2.5 text-xs font-bold transition border-b-2 cursor-pointer ${
-            activeTab === "REQUESTS"
-              ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          Yêu cầu Đổi lớp / Đổi giảng viên
-        </button>
+      <div className="flex items-center justify-between border-b pb-3">
+        <h2 className="text-sm font-bold text-foreground">Lịch sử đơn hàng</h2>
+        <span className="text-xs text-muted-foreground">{orders.length} đơn hàng</span>
       </div>
 
-      {/* TAB 1: ORDERS LIST */}
-      {activeTab === "ORDERS" && (
-        <div className="space-y-4">
-          {orders.map((ord) => (
-            <Card key={ord.id} className="bg-card border-border/40 p-5 space-y-4 shadow-xs">
+      <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-2">
+          {orders.length === 0 ? (
+            <Card className="p-10 text-center text-sm text-muted-foreground xl:col-span-2">Bạn chưa có đơn hàng nào.</Card>
+          ) : orders.map((ord) => (
+            <Card key={ord.id} className="overflow-hidden border-border/60 p-0 shadow-xs transition hover:border-primary/35 hover:shadow-lg">
+              <div className={`h-1.5 ${ord.status === "PAID" ? "bg-emerald-500" : ord.status === "PENDING" ? "bg-amber-500" : ord.status === "REFUNDED" ? "bg-blue-500" : "bg-muted-foreground/40"}`} />
+              <div className="space-y-4 p-5">
               <div className="flex items-start justify-between gap-3 border-b border-border/40 pb-3">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-foreground font-mono">{ord.snowflakeId}</span>
+                    <span className="text-sm font-bold text-foreground font-mono">{ord.id}</span>
                     <span
                       className={`px-2.5 py-0.5 text-[10px] font-extrabold rounded-full ${
                         ord.status === "PAID"
@@ -110,28 +154,34 @@ export const StudentOrdersPage: React.FC = () => {
                 <span className="text-base font-black text-primary font-mono">{formatVND(ord.finalAmount)}</span>
               </div>
 
-              <div className="space-y-1 text-xs text-foreground">
+              <div className="max-h-36 space-y-2 overflow-y-auto text-xs text-foreground">
                 {ord.items.map((it, idx) => (
-                  <div key={idx} className="flex justify-between p-2 bg-muted/30 rounded-lg">
-                    <span className="font-semibold">{it.courseName} — ({it.packageName})</span>
-                    <span className="font-mono text-muted-foreground">{formatVND(it.price)}</span>
+                  <div key={`${it.courseName}-${it.packageName}-${idx}`} className="flex justify-between gap-3 rounded-xl bg-muted/35 p-3">
+                    <div className="min-w-0"><p className="line-clamp-1 font-semibold">{it.courseName}</p><p className="line-clamp-1 text-muted-foreground">{it.packageName}</p></div>
+                    <span className="shrink-0 font-mono text-muted-foreground">{formatVND(it.price)}</span>
                   </div>
                 ))}
               </div>
 
-              <div className="pt-2 flex flex-wrap items-center justify-between gap-2 border-t border-border/40 text-xs">
+              <div className="grid grid-cols-2 gap-2 border-t border-border/40 pt-3 text-xs">
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => success("Đang tải Hóa đơn PDF cho đơn hàng...")}
+                  onClick={() => void handleDownloadInvoice(ord.id)}
+                  disabled={ord.status !== "PAID" && ord.status !== "REFUNDED"}
                   className="text-xs border-border text-foreground hover:bg-muted cursor-pointer gap-1.5 h-8"
                 >
                   <Download className="h-3.5 w-3.5" />
                   Tải hóa đơn PDF
                 </Button>
 
-                <div className="flex items-center gap-2">
-                  {ord.status === "PAID" && ord.isEligibleForRefund && (
+                <Button size="sm" variant="outline" onClick={() => void handleViewDetail(ord.id)}
+                  disabled={detailLoading} className="text-xs h-8">
+                  Xem chi tiết
+                </Button>
+
+                <div className="col-span-2 flex flex-wrap items-center justify-end gap-2 pt-1">
+                  {ord.status === "PAID" && ord.eligibleForRefund && (
                     <Button
                       size="sm"
                       variant="outline"
@@ -155,30 +205,29 @@ export const StudentOrdersPage: React.FC = () => {
                       Nâng cấp / Mua thêm gói
                     </Button>
                   )}
+                  {ord.status === "PENDING" && (
+                    <Button
+                      size="sm"
+                      onClick={() => void handleRetryPayment(ord.id)}
+                      disabled={retryingOrderId !== null}
+                      className="bg-amber-500 text-xs font-semibold text-white hover:bg-amber-600"
+                    >
+                      {retryingOrderId === ord.id ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Đang mở PayPal...</> : "Thanh toán lại"}
+                    </Button>
+                  )}
                 </div>
+              </div>
               </div>
             </Card>
           ))}
-        </div>
-      )}
-
-      {/* TAB 2: APPROVAL REQUESTS */}
-      {activeTab === "REQUESTS" && (
-        <Card className="bg-card border-border/40 p-5 space-y-3 shadow-xs text-xs text-muted-foreground">
-          <h3 className="font-bold text-foreground">Theo dõi yêu cầu Đổi lớp / Đổi giảng viên</h3>
-          <p>Hiện không có yêu cầu chuyển lớp nào đang chờ duyệt.</p>
-        </Card>
-      )}
+      </div>
 
       {/* Refund Request Modal */}
-      {showRefundModal && selectedOrder && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs z-50 flex items-center justify-center p-4">
-          <div className="bg-popover border border-border rounded-2xl p-6 max-w-md w-full space-y-4 shadow-xl">
+      <Dialog open={showRefundModal && Boolean(selectedOrder)} onOpenChange={setShowRefundModal}>
+        <DialogContent className="max-w-md rounded-2xl">
+          {selectedOrder && <div className="space-y-4">
             <div className="flex items-center justify-between border-b border-border/40 pb-3">
-              <h3 className="text-base font-bold text-foreground">Yêu cầu hoàn tiền đơn {selectedOrder.snowflakeId}</h3>
-              <button onClick={() => setShowRefundModal(false)} className="text-muted-foreground hover:text-foreground">
-                <X className="h-5 w-5" />
-              </button>
+              <h3 className="text-base font-bold text-foreground">Yêu cầu hoàn tiền đơn {selectedOrder.id}</h3>
             </div>
 
             <form onSubmit={handleRefundSubmit} className="space-y-4 text-xs">
@@ -186,13 +235,12 @@ export const StudentOrdersPage: React.FC = () => {
                 Vui lòng nhập lý do muốn hoàn tiền. Đơn hàng còn trong hạn bảo hành refund.
               </p>
 
-              <textarea
+              <Textarea
                 rows={3}
                 placeholder="Nhập lý do chi tiết..."
                 value={refundReason}
                 onChange={(e) => setRefundReason(e.target.value)}
                 className="w-full bg-background border border-border rounded-xl p-3 text-foreground"
-                required
               />
 
               <div className="flex justify-end gap-2 pt-2 border-t border-border/40">
@@ -200,18 +248,43 @@ export const StudentOrdersPage: React.FC = () => {
                   type="button"
                   variant="outline"
                   onClick={() => setShowRefundModal(false)}
+                  disabled={refundLoading}
                   className="text-xs border-border text-foreground cursor-pointer"
                 >
                   Hủy
                 </Button>
-                <Button type="submit" className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold cursor-pointer">
-                  Gửi yêu cầu hoàn tiền
+                <Button type="submit" disabled={refundLoading || !refundReason.trim()} className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold cursor-pointer">
+                  {refundLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Đang hoàn tiền...</> : "Gửi yêu cầu hoàn tiền"}
                 </Button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
+          </div>}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(orderDetail)} onOpenChange={(open) => !open && setOrderDetail(null)}>
+        <DialogContent className="max-w-2xl rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>Chi tiết hóa đơn INV-{orderDetail?.id}</DialogTitle>
+            <DialogDescription>Dữ liệu giá được chụp tại thời điểm tạo đơn hàng.</DialogDescription>
+          </DialogHeader>
+          {orderDetail && <div className="space-y-4 text-sm">
+            <div className="grid grid-cols-2 gap-3 rounded-xl bg-muted/30 p-4">
+              <span>Trạng thái</span><strong>{orderDetail.status}</strong>
+              <span>Tạm tính</span><strong>{formatVND(orderDetail.totalAmount)}</strong>
+              <span>Voucher</span><strong>{orderDetail.couponCode || "Không sử dụng"}</strong>
+              <span>Giảm giá</span><strong>-{formatVND(orderDetail.discountAmount)}</strong>
+              <span>Thanh toán</span><strong className="text-primary">{formatVND(orderDetail.finalAmount)}</strong>
+            </div>
+            <div className="space-y-2">
+              {orderDetail.items.map((item) => <div key={item.id} className="rounded-xl border p-3 flex justify-between gap-3">
+                <div><strong>{item.courseName}</strong><p className="text-xs text-muted-foreground">{item.packageName}</p></div>
+                <div className="text-right"><span>{formatVND(item.finalPrice)}</span><p className="text-xs text-muted-foreground">Giảm {formatVND(item.discountSnapshot)}</p></div>
+              </div>)}
+            </div>
+          </div>}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -2,13 +2,19 @@ package com.ailms.service.imp;
 
 import com.ailms.entity.CourseEntity;
 import com.ailms.entity.CouponEntity;
+import com.ailms.entity.UserCouponEntity;
+import com.ailms.entity.UserEntity;
 import com.ailms.entity.enums.CouponStatusEnum;
+import com.ailms.entity.enums.UserCouponStatusEnum;
 import com.ailms.exception.BusinessException;
 import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.mapper.CouponMapper;
 import com.ailms.repository.CourseRepository;
 import com.ailms.repository.CouponRepository;
+import com.ailms.repository.UserCouponRepository;
+import com.ailms.repository.UserRepository;
 import com.ailms.response.CouponResponse;
+import com.ailms.response.UserCouponResponse;
 import com.ailms.service.ICouponService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,6 +33,8 @@ public class CouponService implements ICouponService {
     private final CouponRepository couponRepository;
     private final CourseRepository courseRepository;
     private final CouponMapper couponMapper;
+    private final UserCouponRepository userCouponRepository;
+    private final UserRepository userRepository;
 
     private static final String RESOURCE_NAME = "Coupon";
 
@@ -138,5 +146,60 @@ public class CouponService implements ICouponService {
         }
 
         return couponMapper.toResponse(entity);
+    }
+
+    /** Cấp coupon cho một học viên và không cho cấp trùng cùng coupon. */
+    @Override
+    @Transactional
+    public UserCouponResponse assignToUser(Long couponId, Long userId) {
+        if (userCouponRepository.existsByUserEntity_IdAndCouponEntity_Id(userId, couponId)) {
+            throw new BusinessException("Voucher đã được cấp cho người dùng này.");
+        }
+        CouponEntity coupon = couponRepository.findById(couponId)
+                .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, couponId));
+        UserEntity user = userRepository.findById(userId)
+                .orElseThrow(() -> ResourceNotFoundException.of("User", userId));
+        return mapUserCoupon(userCouponRepository.save(UserCouponEntity.builder()
+                .userEntity(user).couponEntity(coupon).status(UserCouponStatusEnum.AVAILABLE).build()));
+    }
+
+    /** Lấy danh sách voucher được cấp và tính trạng thái khả dụng tại thời điểm đọc. */
+    @Override
+    public List<UserCouponResponse> getUserCoupons(Long userId) {
+        return userCouponRepository.findByUserEntity_IdOrderByCreatedAtDesc(userId).stream()
+                .map(this::mapUserCoupon).toList();
+    }
+
+    /** Kiểm tra voucher thuộc đúng học viên, còn hạn và áp dụng được cho ít nhất một khóa học. */
+    @Override
+    public UserCouponResponse validateUserCoupon(Long userId, String code, List<Long> courseIds) {
+        UserCouponEntity owned = userCouponRepository.findByUserEntity_IdOrderByCreatedAtDesc(userId).stream()
+                .filter(item -> item.getCouponEntity().getCode().equalsIgnoreCase(code))
+                .findFirst().orElseThrow(() -> new BusinessException("Voucher không thuộc tài khoản của bạn."));
+        UserCouponResponse response = mapUserCoupon(owned);
+        if (!response.isUsable()) throw new BusinessException(response.getUnavailableReason());
+        Long applicableCourseId = response.getApplicableCourseId();
+        if (applicableCourseId != null && (courseIds == null || !courseIds.contains(applicableCourseId))) {
+            throw new BusinessException("Voucher không áp dụng cho các khóa học đã chọn.");
+        }
+        return response;
+    }
+
+    /** Chuyển quyền voucher sang DTO và giải thích lý do không thể sử dụng. */
+    private UserCouponResponse mapUserCoupon(UserCouponEntity owned) {
+        CouponEntity coupon = owned.getCouponEntity();
+        LocalDateTime now = LocalDateTime.now();
+        String reason = null;
+        if (owned.getStatus() != UserCouponStatusEnum.AVAILABLE) reason = "Voucher hiện không khả dụng.";
+        else if (coupon.getStatus() != CouponStatusEnum.ACTIVE) reason = "Voucher đã bị vô hiệu hóa.";
+        else if (coupon.getValidFrom() != null && now.isBefore(coupon.getValidFrom())) reason = "Voucher chưa đến thời gian sử dụng.";
+        else if (coupon.getValidTo() != null && now.isAfter(coupon.getValidTo())) reason = "Voucher đã hết hạn.";
+        else if (coupon.getMaxUsage() != null && coupon.getUsedCount() >= coupon.getMaxUsage()) reason = "Voucher đã hết lượt sử dụng.";
+        return UserCouponResponse.builder().id(owned.getId()).couponId(coupon.getId()).code(coupon.getCode())
+                .discountType(coupon.getDiscountType()).discountValue(coupon.getDiscountValue())
+                .applicableCourseId(coupon.getApplicableCourseEntity() != null ? coupon.getApplicableCourseEntity().getId() : null)
+                .applicableCourseName(coupon.getApplicableCourseEntity() != null ? coupon.getApplicableCourseEntity().getName() : null)
+                .validFrom(coupon.getValidFrom()).validTo(coupon.getValidTo()).status(owned.getStatus())
+                .usable(reason == null).unavailableReason(reason).build();
     }
 }

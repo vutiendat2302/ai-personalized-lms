@@ -24,6 +24,12 @@ public class UpdateCourseRequest {
 
     private String description;
 
+    private String thumbnailUrl;
+
+    private String learningObjectives;
+
+    private String prerequisites;
+
     private String level;
 
     private BigDecimal suggestedPrice;

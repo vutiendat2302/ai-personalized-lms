@@ -2,8 +2,9 @@ package com.ailms.service;
 
 import com.ailms.request.CheckoutRequest;
 import com.ailms.request.RefundRequest;
+import com.ailms.response.CheckoutPaymentResponse;
 import com.ailms.response.OrderResponse;
-import com.ailms.response.PaymentTransactionResponse;
+import com.ailms.response.OrderStatusResponse;
 
 import java.util.List;
 
@@ -15,28 +16,31 @@ public interface IOrderService {
     /**
      * Tạo đơn hàng mới để đăng ký mua các gói học.
      *
-     * @param request Đối tượng DTO chứa thông tin yêu cầu
+     * @param userId ID người dùng đã xác thực
+     * @param request gói mua trực tiếp và nhu cầu 1-1 nếu có
      * @return đối tượng chứa thông tin chi tiết kết quả
      */
-    OrderResponse createOrder(CheckoutRequest request);
+    CheckoutPaymentResponse checkout(Long userId, CheckoutRequest request);
 
     /**
-     * Khởi tạo giao dịch thanh toán trực tuyến cho đơn hàng.
+     * Khởi tạo lại PayPal checkout cho đơn hàng PENDING.
      *
-     * @param orderId Tham số orderId
-     * @param paymentMethod Tham số paymentMethod
+     * @param userId ID chủ sở hữu đơn hàng
+     * @param orderId ID đơn hàng PENDING
      * @return đối tượng chứa thông tin chi tiết kết quả
      */
-    PaymentTransactionResponse initiatePayment(Long orderId, String paymentMethod);
+    CheckoutPaymentResponse createPaypalPayment(Long userId, Long orderId);
 
     /**
-     * Xử lý kết quả phản hồi giao dịch từ cổng thanh toán.
+     * Capture PayPal order đã được người mua phê duyệt và cấp quyền sau khi xác minh.
      *
-     * @param transactionRef Mã tham chiếu giao dịch thanh toán
-     * @param success Trạng thái thanh toán (true nếu thành công)
-     * @return đối tượng chứa thông tin chi tiết kết quả
+     * @param userId ID chủ sở hữu đơn hàng
+     * @param orderId ID đơn hàng PENDING
      */
-    OrderResponse handlePaymentCallback(String transactionRef, boolean success);
+    OrderStatusResponse capturePaypalPayment(Long userId, Long orderId);
+
+    /** Lấy trạng thái server-side của đơn hàng sau khi trình duyệt quay lại từ PayPal. */
+    OrderStatusResponse getOrderStatus(Long userId, Long orderId);
 
     /**
      * Thực hiện hoàn tiền đơn hàng kèm theo lý do.
@@ -47,6 +51,9 @@ public interface IOrderService {
      */
     OrderResponse refundOrder(Long orderId, RefundRequest request);
 
+    /** Kiểm tra điều kiện hoàn tiền trước khi tạo yêu cầu HR/Admin phê duyệt. */
+    void validateRefundEligibility(Long orderId, String reason);
+
     /**
      * Lấy thông tin chi tiết đơn hàng.
      *
@@ -54,6 +61,9 @@ public interface IOrderService {
      * @return đối tượng chứa thông tin chi tiết kết quả
      */
     OrderResponse getOrderById(Long orderId);
+
+    /** Lấy chi tiết đơn hàng sau khi xác minh chủ sở hữu. */
+    OrderResponse getOwnedOrderById(Long userId, Long orderId);
 
     /**
      * Lấy danh sách đơn hàng đã mua của người dùng.

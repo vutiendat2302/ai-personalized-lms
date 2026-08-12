@@ -13,7 +13,7 @@ export interface QuizResponseDTO {
   passScore?: number;
   maxAttempts?: number;
   shuffleQuestions?: boolean;
-  status?: number;
+  status?: string;
   questions?: any[];
 }
 
@@ -41,10 +41,12 @@ export interface ResourceResponseDTO {
 export interface LessonCurriculumItem {
   id: string;
   name: string;
+  title?: string;
   contentType: string;
   contentUrl?: string;
   description?: string;
   durationMin?: number;
+  duration?: number;
   orderIndex: number;
   previewType?: string;
   status?: string;
@@ -54,6 +56,9 @@ export interface LessonCurriculumItem {
   completed?: boolean;
   progressPercent?: number;
   lastPositionSec?: number;
+  preview?: boolean;
+  accessible?: boolean;
+  locked?: boolean;
 }
 
 export interface SectionCurriculumItem {
@@ -76,6 +81,7 @@ export interface CourseCurriculumResponse {
   finalExamAssignments?: AssignmentResponseDTO[];
   totalLessons?: number;
   totalDurationMin?: number;
+  enrollmentId?: string;
 }
 
 export interface SubmissionResponseDTO {

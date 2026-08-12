@@ -35,6 +35,9 @@ public interface IAssessmentService {
      */
     void submitQuizAttempt(Long attemptId, SubmitQuizAttemptRequest request);
 
+    /** Nộp quiz sau khi xác minh attempt thuộc đúng học viên JWT. */
+    void submitQuizAttemptForUser(Long userId, Long attemptId, SubmitQuizAttemptRequest request);
+
     /**
      * Chấm điểm thủ công cho câu hỏi điền vào chỗ trống.
      *

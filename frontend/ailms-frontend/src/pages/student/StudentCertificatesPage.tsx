@@ -49,7 +49,7 @@ export const StudentCertificatesPage: React.FC = () => {
           <Card
             key={c.id}
             className={`p-6 space-y-4 shadow-sm relative overflow-hidden ${
-              c.isUnlocked
+              c.status === "ISSUED"
                 ? "bg-card border-primary/40"
                 : "bg-muted/30 border-border/40 opacity-70"
             }`}
@@ -63,7 +63,7 @@ export const StudentCertificatesPage: React.FC = () => {
 
             <div>
               <h3 className="text-base font-bold text-foreground">{c.courseName}</h3>
-              {c.isUnlocked ? (
+              {c.status === "ISSUED" ? (
                 <p className="text-xs text-primary font-bold mt-1 flex items-center gap-1">
                   <CheckCircle2 className="h-3.5 w-3.5" />
                   Đã cấp ngày: {c.issuedAt}
@@ -71,13 +71,13 @@ export const StudentCertificatesPage: React.FC = () => {
               ) : (
                 <p className="text-xs text-rose-600 dark:text-rose-400 font-semibold mt-1 flex items-center gap-1">
                   <Lock className="h-3.5 w-3.5" />
-                  {c.requiredConditionText}
+                  Chứng chỉ đã bị thu hồi
                 </p>
               )}
             </div>
 
             <div className="pt-2 border-t border-border/40 flex items-center justify-end gap-2">
-              {c.isUnlocked ? (
+              {c.status === "ISSUED" ? (
                 <>
                   <Button
                     size="sm"

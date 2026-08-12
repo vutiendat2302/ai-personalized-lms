@@ -1,11 +1,14 @@
 package com.ailms.service.imp;
 
+import com.ailms.entity.ClassEntity;
+import com.ailms.exception.BusinessException;
 import com.ailms.service.IAssignmentService;
 
 import com.ailms.entity.AssignmentEntity;
 import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.mapper.AssignmentMapper;
 import com.ailms.repository.AssignmentRepository;
+import com.ailms.repository.ClassRepository;
 import com.ailms.repository.specification.AssignmentSpecification;
 import com.ailms.request.AssignmentRequest;
 import com.ailms.request.AssignmentSearchRequest;
@@ -29,6 +32,7 @@ public class AssignmentService implements IAssignmentService {
 
     private final AssignmentRepository assignmentRepository;
     private final AssignmentMapper assignmentMapper;
+    private final ClassRepository classRepository;
 
     private static final String RESOURCE_NAME = "Assignment";
 
@@ -59,9 +63,16 @@ public class AssignmentService implements IAssignmentService {
         return assignmentMapper.toResponseList(assignmentRepository.findBySectionId(sectionId));
     }
 
+    /** Lấy bài tập của lớp theo hạn nộp tăng dần. */
+    @Override
+    public List<AssignmentResponse> getByClassId(Long classId) {
+        return assignmentMapper.toResponseList(assignmentRepository.findByClassIdOrderByDueDateAsc(classId));
+    }
+
     @Transactional
     public AssignmentResponse create(AssignmentRequest request) {
         log.info("Creating assignment: {}", request.getTitle());
+        normalizeClassCourse(request);
         AssignmentEntity entity = assignmentMapper.toEntity(request);
         AssignmentEntity saved = assignmentRepository.save(entity);
         return assignmentMapper.toResponse(saved);
@@ -72,6 +83,7 @@ public class AssignmentService implements IAssignmentService {
         log.info("Updating assignment: {}", id);
         AssignmentEntity existing = assignmentRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
+        normalizeClassCourse(request);
         assignmentMapper.updateFromRequest(request, existing);
         AssignmentEntity updated = assignmentRepository.save(existing);
         return assignmentMapper.toResponse(updated);
@@ -84,6 +96,17 @@ public class AssignmentService implements IAssignmentService {
             throw ResourceNotFoundException.of(RESOURCE_NAME, id);
         }
         assignmentRepository.deleteById(id);
+    }
+
+    /** Đồng bộ courseId từ lớp để bài tập không thể trỏ sang khóa học khác. */
+    private void normalizeClassCourse(AssignmentRequest request) {
+        if (request.getClassId() == null) return;
+        ClassEntity clazz = classRepository.findById(request.getClassId())
+                .orElseThrow(() -> ResourceNotFoundException.of("Class", request.getClassId()));
+        if (clazz.getCourseEntity() == null) {
+            throw new BusinessException("Lớp chưa được gắn với khóa học.");
+        }
+        request.setCourseId(clazz.getCourseEntity().getId());
     }
 
     @Override

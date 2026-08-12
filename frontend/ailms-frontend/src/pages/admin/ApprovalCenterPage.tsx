@@ -28,6 +28,7 @@ interface ApprovalItem {
   requesterEmail?: string;
   status: ApprovalStatus;
   comment?: string;
+  requestReason?: string;
   createdAt?: string;
   decidedAt?: string;
   level?: number;
@@ -44,7 +45,7 @@ interface MineResponse { requested?: Record<string, unknown>[]; toApprove?: Reco
 const TYPE_LABELS: Record<string, string> = {
   CONTRACT: "Hợp đồng", SALARY: "Phiếu lương", TEACHING_PAYMENT: "Thanh toán buổi dạy", LEAVE_REQUEST: "Đơn nghỉ phép",
   HALF_DAY_LEAVE: "Nghỉ nửa buổi", RESIGNATION: "Nghỉ việc", CLASS_TRANSFER_REQUEST: "Chuyển lớp",
-  TEACHER_CHANGE_REQUEST: "Đổi giáo viên", CLASS_TEACHER_LEAVE_REQUEST: "Giáo viên xin nghỉ dạy", PENDING_MATCHING: "Chờ ghép giáo viên", COURSE: "Duyệt khóa học",
+  TEACHER_CHANGE_REQUEST: "Đổi giáo viên", CLASS_TEACHER_LEAVE_REQUEST: "Giáo viên xin nghỉ dạy", PENDING_MATCHING: "Chờ ghép giáo viên", REFUND_ORDER: "Hoàn tiền đơn hàng", COURSE: "Duyệt khóa học",
 };
 const dateTime = (value?: string) => value ? new Date(value).toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" }) : "—";
 const normalize = (raw: Record<string, unknown>, assignedToMe: boolean): ApprovalItem => ({
@@ -52,7 +53,7 @@ const normalize = (raw: Record<string, unknown>, assignedToMe: boolean): Approva
   approverId: raw.approverId == null ? undefined : String(raw.approverId), approverName: String(raw.approverName || "Chưa xác định"),
   requesterId: raw.createdBy == null ? undefined : String(raw.createdBy), requesterName: String(raw.requesterName || "Chưa xác định"),
   requesterEmail: raw.requesterEmail ? String(raw.requesterEmail) : undefined, status: String(raw.status || "PENDING") as ApprovalStatus,
-  comment: raw.comment ? String(raw.comment) : undefined, createdAt: raw.createdAt ? String(raw.createdAt) : undefined,
+  comment: raw.comment ? String(raw.comment) : undefined, requestReason: raw.requestReason ? String(raw.requestReason) : undefined, createdAt: raw.createdAt ? String(raw.createdAt) : undefined,
   decidedAt: raw.decidedAt ? String(raw.decidedAt) : undefined, level: Number(raw.level || 1), totalLevels: Number(raw.totalLevels || 1), assignedToMe,
 });
 
@@ -291,6 +292,7 @@ export const ApprovalCenterPage: React.FC = () => {
       {detailLoading ? <div className="flex h-36 items-center justify-center gap-2 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" />Đang tải thông tin khóa học...</div> : detail.targetType === "COURSE" && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-primary/5 p-4"><div><p className="font-bold">{detail.title || "Khóa học cần duyệt"}</p><p className="mt-1 text-xs text-muted-foreground">{detail.categoryName || "Chưa phân loại"} · Giá đề xuất {Number(detail.suggestedPrice || 0).toLocaleString("vi-VN")} đ</p></div><Button type="button" onClick={() => navigate(`/admin/courses/${detail.targetId}`, { state: { returnTo: `${location.pathname}${location.search}`, returnLabel: "Hàng đợi yêu cầu xử lý", approvalView: { tab, search, type, status, page } } })}><Eye className="mr-1.5 h-4 w-4" />Xem chi tiết khóa học</Button></div>}
       {!detailLoading && targetDetails && <div className="rounded-xl border p-4"><p className="mb-3 text-xs font-bold uppercase text-muted-foreground">Phiên bản đối tượng cần duyệt</p><div className="grid gap-2 sm:grid-cols-2">{Object.entries(targetDetails).filter(([, value]) => value == null || ["string", "number", "boolean"].includes(typeof value)).slice(0, 18).map(([key, value]) => <div key={key} className="rounded-lg bg-muted/30 p-3"><p className="text-[10px] uppercase text-muted-foreground">{key.replace(/([A-Z])/g, " $1").trim()}</p><p className="mt-1 wrap-break-word font-semibold">{value == null || value === "" ? "Chưa cập nhật" : String(value)}</p></div>)}</div></div>}
       <div className="grid gap-3 sm:grid-cols-2"><div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Người gửi</p><p className="font-bold">{detail.requesterName}</p><p className="text-xs text-muted-foreground">{detail.requesterEmail || "Chưa có email"}</p></div><div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Thời gian</p><p>Gửi: <strong>{dateTime(detail.createdAt)}</strong></p><p>Xử lý: <strong>{dateTime(detail.decidedAt)}</strong></p></div></div>
+      {detail.requestReason && <div className="rounded-xl border border-rose-500/30 bg-rose-500/5 p-4"><p className="text-xs font-bold text-muted-foreground">Lý do hoàn tiền từ học viên</p><p className="mt-1">{detail.requestReason}</p></div>}
       {detail.comment && <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4"><p className="text-xs font-bold text-muted-foreground">Ghi chú / lý do xử lý</p><p className="mt-1">{detail.comment}</p></div>}
       <details className="rounded-lg border p-3 text-xs"><summary className="cursor-pointer font-semibold">Thông tin kỹ thuật</summary><div className="mt-2 space-y-1 font-mono text-muted-foreground"><p>Mã yêu cầu: {detail.id}</p><p>Mã đối tượng: {detail.targetId}</p><p>Người duyệt ID: {detail.approverId || "—"}</p></div></details>
       <DialogFooter>{detail.assignedToMe && detail.status === "PENDING" && <><Button variant="destructive" onClick={() => { setRejectTarget(detail); setRejectReason(""); }}>Từ chối</Button><Button onClick={() => setApproveTarget(detail)}>Phê duyệt</Button></>}</DialogFooter>

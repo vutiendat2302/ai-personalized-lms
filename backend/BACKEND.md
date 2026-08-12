@@ -1736,7 +1736,7 @@ flowchart TD
     D["Validate coupon"]
     E["Tính discount_amount, final_amount"]
     X1["Throw BusinessException<br/>Coupon không hợp lệ/hết hạn"]
-    F["Redirect user sang cổng thanh toán<br/><small>VNPAY/MOMO/...</small>"]
+    F["Redirect user sang cổng thanh toán<br/><small>PayPal/...</small>"]
     G["Cổng thanh toán callback webhook"]
     H{"Thanh toán thành công?"}
     I["payment_transaction.status = SUCCESS"]
@@ -1846,7 +1846,7 @@ flowchart TD
     D["Validate coupon<br/>(atomic UPDATE used_count, xem mục Coupon)"]
     E["Tính discount_amount, phân bổ<br/>xuống từng order_item.price_snapshot"]
     X1["Coupon không hợp lệ/hết lượt<br/>→ báo lỗi, không tạo order"]
-    F["Redirect sang cổng thanh toán<br/>VNPAY/MOMO/..."]
+    F["Redirect sang cổng thanh toán<br/>PayPal/..."]
     G["Cổng thanh toán callback webhook<br/>(check idempotent theo transaction_ref)"]
     H{"Thanh toán thành công?"}
     I["payment_transaction.status = SUCCESS"]
@@ -2874,5 +2874,114 @@ flowchart TD
 
 ## 15. AI
 
+---
 
+## 16. Student portal API
 
+Các API bên dưới yêu cầu JWT có `ROLE_STUDENT`. Backend luôn suy ra học viên từ JWT, không nhận `userId` từ client.
+
+| Method | Endpoint | Chức năng |
+|---|---|---|
+| `GET` | `/api/v1/student/activities/learning?page=0&size=20&action=LESSON_VIEW&from=2026-01-01T00:00:00&to=2026-01-31T23:59:59` | Lịch sử learning phân trang, lọc theo hành động/khoảng thời gian và trả tên đối tượng |
+| `GET` | `/api/v1/student/activities/learning/{id}` | Chi tiết lịch sử learning thuộc học viên |
+| `DELETE` | `/api/v1/student/activities/learning/{id}` | Xóa lịch sử learning thuộc học viên |
+| `GET` | `/api/v1/student/activities/system?page=0&size=20&action=LOGIN&from=2026-01-01T00:00:00&to=2026-01-31T23:59:59` | Lịch sử hệ thống phân trang và lọc theo hành động/khoảng thời gian |
+| `GET` | `/api/v1/student/activities/system/{id}` | Chi tiết lịch sử hệ thống thuộc học viên |
+| `DELETE` | `/api/v1/student/activities/system/{id}` | Xóa lịch sử hệ thống thuộc học viên |
+| `GET` | `/api/v1/student/dashboard/metrics` | Streak, số khóa học, điểm quiz và bài tập đến hạn trong 14 ngày |
+| `GET` | `/api/v1/student/catalog?page=0&size=12&keyword=java` | Catalog chỉ gồm khóa học mở bán thuộc danh mục khớp sở thích thật của học viên; không có kết quả thì trả trang rỗng |
+| `GET` | `/api/v1/student/catalog/all?page=0&size=12&keyword=java` | Tất cả khóa học đủ điều kiện bán công khai, tách khỏi catalog cá nhân hóa |
+| `GET` | `/api/v1/student/courses?status=ACTIVE` | Khóa học học viên đã ghi danh kèm tiến độ, lọc `ACTIVE`, `COMPLETED` hoặc `EXPIRED` |
+| `GET` | `/api/v1/student/courses/{courseId}` | Cây nội dung và tiến độ cá nhân của khóa học |
+| `GET` | `/api/v1/classes/enrolled/me` | Các lớp mà JWT hiện tại là học viên `ACTIVE` |
+| `GET` | `/api/v1/student/schedule` | Lịch hợp nhất buổi học, hạn bài tập và hạn quiz của đúng enrollment/lớp |
+| `GET` | `/api/v1/student/assignments` | Bài tập và trạng thái bài nộp của khóa/lớp hiện tại |
+| `GET` | `/api/v1/student/quizzes` | Quiz cần làm, deadline, số lượt và kết quả của học viên |
+| `POST` | `/api/v1/student/quizzes/{quizId}/attempts` | Tạo một lượt làm quiz sau khi kiểm tra enrollment, lớp, deadline và số lượt |
+| `POST` | `/api/v1/student/quiz-attempts/{attemptId}/submit` | Nộp câu trả lời của attempt thuộc chính học viên để backend chấm |
+| `POST` | `/api/v1/student/assignments/{assignmentId}/submissions` | Nộp nội dung/tệp bài tập sau khi kiểm tra enrollment, lớp và deadline |
+| `GET` | `/api/v1/student/certificates` | Chứng chỉ đã cấp |
+| `GET` | `/api/v1/student/progress` | Phân tích hoạt động 30 ngày và tiến độ khóa học |
+| `GET` | `/api/v1/student/goals` | Mục tiêu học tập |
+| `POST` | `/api/v1/student/goals` | Tạo mục tiêu cho học viên hiện tại |
+| `PUT` | `/api/v1/student/goals/{goalId}` | Cập nhật mục tiêu chung hiện tại |
+| `GET` | `/api/v1/student/cart` | Các gói học trong giỏ hàng |
+| `DELETE` | `/api/v1/student/cart/{cartItemId}` | Xóa dòng giỏ thuộc học viên |
+| `GET` | `/api/v1/student/vouchers` | Ví voucher đã được cấp cho học viên |
+| `POST` | `/api/v1/student/cart/coupon` | Kiểm tra và tính tiền giảm từ coupon trên đúng danh sách `coursePackageIds` đang được chọn |
+| `GET` | `/api/v1/student/orders` | Lịch sử đơn hàng và chi tiết sản phẩm |
+| `GET` | `/api/v1/student/orders/{orderId}` | Chi tiết đơn hàng có kiểm tra chủ sở hữu |
+| `GET` | `/api/v1/student/orders/{orderId}/invoice.pdf` | Tải hóa đơn PDF của đơn PAID/REFUNDED |
+| `POST` | `/api/v1/student/cart` | Thêm gói học đang mở bán vào giỏ |
+| `POST` | `/api/v1/student/orders/{orderId}/refund` | Hoàn tiền đơn thuộc học viên hiện tại |
+| `POST` | `/api/v1/student/onboarding` | Hoàn tất mục tiêu và sở thích ban đầu |
+| `GET` | `/api/v1/student/profile` hoặc `/api/v1/student/profile/personalization` | Trình độ học vấn, mục tiêu đến AILMS, nền tảng, trường học, mục tiêu học tập và chủ đề/sở thích đã chọn |
+
+Streak được tính từ các ngày có `learning_activity_log`. Job `StudentStreakRefreshJob` chạy lúc `00:05` theo múi giờ `Asia/Bangkok` để đánh giá và đồng bộ lại các mục tiêu học tập. Catalog cá nhân hóa không trộn khóa học ngoài sở thích; học viên chưa có sở thích hoặc chưa có danh mục khớp sẽ nhận trang rỗng và có thể dùng endpoint `catalog/all`. Trường `deliveryMode` giữ nguyên enum backend: `SELF_STUDY`, `GROUP_CLASS`, `ONE_ON_ONE`, `COMBO`.
+
+Các thao tác mua hàng quan trọng phát sinh audit log, gồm thêm/xóa/xóa toàn bộ giỏ, tạo checkout PayPal, capture thành công, hủy/hết hạn/hoàn tiền order và vòng đời reserve/use/release/restore voucher.
+
+---
+
+## 17. Course detail, PayPal Sandbox và matching 1-1
+
+### 17.1 Course detail và quyền bài học
+
+`GET /api/v1/courses/{courseId}/detail` là response tổng hợp cho trang công khai: khóa học, danh mục, người tạo/biên soạn, curriculum, gói đang hoạt động, lớp của gói nhóm, enrollment và quyền mua thêm. Gói `GROUP_CLASS` hoặc `COMBO` có sĩ số nhóm nhưng thiếu `classId` được trả `purchasable=false` để frontend chặn trước checkout. Một khóa chỉ công khai khi `ACTIVE`, có gói hoạt động và có ít nhất một `SELF_STUDY` hoạt động. Backend từ chối publish nếu thiếu gói tự học và không cho vô hiệu hóa gói tự học cuối cùng của khóa đang bán.
+
+| Method | Endpoint | Chức năng |
+|---|---|---|
+| `GET` | `/api/v1/courses/{courseId}/detail` | Dữ liệu tổng hợp cho `CourseDetail` |
+| `GET` | `/api/v1/courses/{courseId}/curriculum` | Tên toàn bộ chương/bài và cờ `preview`, `accessible`, `locked` |
+| `GET` | `/api/v1/course-packages/{packageId}/class-detail` | Lớp, staff, lịch và sức chứa của gói nhóm |
+| `GET` | `/api/v1/learning/courses/{courseId}` | Không gian học tập với nội dung bị lọc theo quyền |
+| `GET` | `/api/v1/learning/lessons/{lessonId}` | Trả nội dung nếu có gói còn hiệu lực hoặc bài `FREE`; trường hợp còn lại trả `403` |
+
+### 17.2 Checkout PayPal Sandbox
+
+Frontend gọi `POST /api/v1/orders/checkout` cho một gói trực tiếp hoặc nhiều dòng `items` từ giỏ. Backend đọc lại giá/trạng thái, kiểm tra sở hữu và trùng lịch, reserve voucher của đúng học viên, phân bổ `discount_snapshot`, tạo `Order`, `OrderItem`, `PaymentTransaction` ở `PENDING`, rồi trả PayPal approval URL. Nếu trùng lịch lớp nhóm/COMBO, response yêu cầu học viên xác nhận bằng `acceptScheduleConflict=true` trước khi tiếp tục.
+
+Sau redirect, frontend dùng `orderId` để khôi phục ngữ cảnh và query `token` như tín hiệu PayPal đã quay về, rồi gọi `POST /api/v1/payments/paypal/capture?orderId={orderId}`. Backend lấy PayPal order ID từ database, kiểm tra chủ đơn, capture qua Orders API, kiểm tra `COMPLETED`, capture ID, amount và currency trước khi chuyển đơn sang `PAID` và cấp quyền. Không dùng query redirect để tự cấp quyền. `paypal_request_id`, gateway order ID, `paypal_capture_id` và `EnrollmentPackage.orderItemId` có unique constraint; xử lý lặp không tạo lại enrollment, class member hay matching request.
+
+Refund là refund toàn phần số tiền thực trả sau voucher về đúng nguồn thanh toán PayPal ban đầu, không yêu cầu tài khoản ngân hàng. Sau PayPal `COMPLETED`, backend thu hồi quyền học và trả voucher về `AVAILABLE` nếu còn hiệu lực, đồng thời giảm `coupon.used_count` đúng một lần. Hóa đơn được sinh động từ snapshot order qua API học viên hoặc API quản lý `GET /api/v1/orders/{orderId}/invoice.pdf`.
+
+Quản lý cấp voucher bằng `POST /api/v1/coupons/{couponId}/users/{userId}` và xem ví của người dùng bằng `GET /api/v1/coupons/users/{userId}`. Giáo viên/trợ giảng ACTIVE của lớp giao nội dung có hạn qua `POST /api/v1/classes/{classId}/assignments` và `POST /api/v1/classes/{classId}/quizzes`; `classAccess.canManage` chặn người không phụ trách lớp. Học viên bắt đầu/nộp quiz và nộp assignment qua các endpoint `/api/v1/student/...`, backend lấy user ID từ JWT và kiểm tra enrollment, class membership cùng deadline.
+
+Biến môi trường bắt buộc:
+
+```text
+PAYPAL_CLIENT_ID
+PAYPAL_CLIENT_SECRET
+PAYPAL_API_BASE_URL=https://api-m.sandbox.paypal.com
+PAYPAL_RETURN_URL=http://localhost/payment/result
+PAYPAL_CANCEL_URL=http://localhost/payment/result?cancelled=1
+PAYPAL_CURRENCY=USD
+PAYPAL_VND_PER_UNIT=26000
+```
+
+Luồng capture này dùng browser redirect rồi backend gọi trực tiếp PayPal nên local Sandbox không cần ngrok. `PAYPAL_CLIENT_SECRET` không được log hoặc commit. Khi dùng production, cần thay base URL, thiết kế nguồn tỷ giá có kiểm soát và triển khai webhook PayPal riêng.
+
+Postman collection và environment test thủ công nằm tại `docs/postman/AILMS-PayPal-Sandbox.postman_collection.json` và `docs/postman/AILMS-Local.postman_environment.json`; xem `docs/postman/README.md` để chạy checkout, approve trong browser, capture và kiểm tra idempotency.
+
+### 17.3 Cấp quyền theo gói
+
+- `SELF_STUDY`: tạo/tái sử dụng enrollment và tạo `EnrollmentPackage`, không tạo `ClassMember`.
+- `GROUP_CLASS`: khóa bản ghi lớp, kiểm tra lớp hoạt động/nhận học viên/đăng ký muộn/sức chứa, sau đó thêm student member và gửi thông báo cho học viên, giáo viên, trợ giảng.
+- `ONE_ON_ONE`: lưu nhu cầu vào order item; chỉ sau PayPal capture thành công mới tạo matching request `WAITING_INSTRUCTOR`. Chưa tạo lớp ở bước thanh toán.
+- `COMBO`: nếu có sĩ số nhóm thì kiểm tra/gắn lớp như `GROUP_CLASS`; nếu có số buổi gia sư thì bắt buộc nhu cầu và tạo matching request như `ONE_ON_ONE`. Hai quyền lợi được cấp độc lập sau capture thành công.
+
+### 17.4 State machine 1-1
+
+```text
+WAITING_INSTRUCTOR -> INSTRUCTOR_ACCEPTED -> CONTACTED
+-> TRIAL_SCHEDULED -> TRIAL_COMPLETED -> MATCHED
+                                      \-> REMATCHING -> INSTRUCTOR_ACCEPTED
+```
+
+| Vai trò | API chính |
+|---|---|
+| Học viên | `GET /api/v1/students/one-on-one/requests`, `POST .../{id}/trial-result` |
+| Giáo viên/TA | `GET /api/v1/instructors/one-on-one/suggestions`, `POST .../{id}/accept`, `trial-class`, `trial-session`, `trial-review` |
+| HR | `GET /api/v1/hr/one-on-one/requests`, `POST .../{id}/mark-contacted`, `cancel`, `refund` |
+
+Accept và mọi state transition dùng row lock. Chỉ assignee được tạo/hoàn tất buổi thử. Lớp thử có `classKind=ONE_ON_ONE_TRIAL`, buổi thử có `sessionKind=TRIAL`, `countsTowardPackage=false`, `payable=false`. Khi học viên đồng ý, cùng lớp chuyển thành `ONE_ON_ONE/ACTIVE`; khi từ chối, lớp thử đóng, assignee được ghi vào danh sách không nhận lại và request tự quay về `REMATCHING`.

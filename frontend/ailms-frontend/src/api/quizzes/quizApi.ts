@@ -6,7 +6,7 @@ export interface QuizSearchRequest {
   courseId?: string | number;
   lessonId?: string | number;
   sectionId?: string | number;
-  status?: number;
+  status?: string;
   page?: number;
   size?: number;
   sort?: string[] | string;
@@ -40,7 +40,7 @@ export interface QuizResponseItem {
   passScore?: number;
   maxAttempts?: number;
   shuffleQuestions?: boolean;
-  status?: number;
+  status?: string;
   questions?: QuizQuestionItem[] | any;
   createdBy?: string;
   updatedBy?: string;

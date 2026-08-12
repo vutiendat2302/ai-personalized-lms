@@ -2,6 +2,7 @@ package com.ailms.service;
 
 import com.ailms.request.CouponRequest;
 import com.ailms.response.CouponResponse;
+import com.ailms.response.UserCouponResponse;
 
 import java.util.List;
 
@@ -64,4 +65,13 @@ public interface ICouponService {
      * @return đối tượng chứa thông tin chi tiết kết quả
      */
     CouponResponse validateCoupon(String code, Long courseId);
+
+    /** Cấp một coupon cho người dùng, không tạo trùng quyền sở hữu. */
+    UserCouponResponse assignToUser(Long couponId, Long userId);
+
+    /** Lấy các voucher thực sự được cấp cho người dùng. */
+    List<UserCouponResponse> getUserCoupons(Long userId);
+
+    /** Kiểm tra voucher thuộc người dùng và còn đủ điều kiện áp dụng. */
+    UserCouponResponse validateUserCoupon(Long userId, String code, List<Long> courseIds);
 }

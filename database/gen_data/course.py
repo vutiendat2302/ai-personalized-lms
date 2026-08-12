@@ -12,6 +12,7 @@ Seed dữ liệu cho bảng `course` (Khóa học).
 
 import random
 import re
+import string
 import unicodedata
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -61,6 +62,19 @@ def slugify(text: str, suffix: str = "") -> str:
     return f"{text}-{suffix}" if suffix else text
 
 
+def generate_course_code(existing_codes: set[str]) -> str:
+    """Sinh mã khóa học duy nhất theo cùng định dạng với backend."""
+    yy_mm = datetime.now().strftime("%y%m")
+    alphabet = string.ascii_uppercase + string.digits
+    for _ in range(10):
+        random_part = "".join(random.choices(alphabet, k=6))
+        code = f"KH-{yy_mm}-{random_part}"
+        if code not in existing_codes:
+            existing_codes.add(code)
+            return code
+    raise RuntimeError("Không thể sinh mã khóa học duy nhất sau 10 lần thử")
+
+
 def get_valid_teacher_categories(cursor):
     query = """
         SELECT tc.employee_id, tc.category_id, c.name as category_name
@@ -86,6 +100,15 @@ def get_current_course_count(cursor):
         return 0
 
 
+def get_existing_course_codes(cursor) -> set[str]:
+    """Lấy các mã khóa học hiện có để tránh trùng khi seed bổ sung."""
+    try:
+        cursor.execute("SELECT code FROM course WHERE code IS NOT NULL")
+        return {row["code"] for row in cursor.fetchall()}
+    except Exception:
+        return set()
+
+
 def seed(cursor):
     print("→ Seeding courses (~3000 khóa học từ chuyên môn giảng viên)...")
 
@@ -103,6 +126,7 @@ def seed(cursor):
 
     target_courses = 3000 - current_count
     total_inserted = 0
+    existing_codes = get_existing_course_codes(cursor)
     
     for i in range(1, target_courses + 1):
         emp_id, cat_id, cat_name = random.choice(tc_list)
@@ -164,21 +188,22 @@ def seed(cursor):
         updated_at = created_at + timedelta(days=random.randint(1, days_ago)) if days_ago > 1 else created_at
 
         new_id = snowflake.next_id()
+        course_code = generate_course_code(existing_codes)
 
         # Insert bao gồm 3 cột mới
         cursor.execute(
             """
             INSERT INTO course (
-                id, category_id, name, link, description, 
+                id, code, category_id, name, link, description,
                 suggested_price, level, status, rejection_reason, 
                 avg_rating, review_count, certificate_condition_type, certificate_pass_threshold, 
                 view_count, enrollment_count, trending_score,
                 created_by, updated_by, created_at, updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
-                new_id, cat_id, course_name[:100], link_slug[:255], description,
+                new_id, course_code, cat_id, course_name[:100], link_slug[:255], description,
                 suggested_price, level, status, rejection_reason,
                 avg_rating, review_count, cert_type, cert_threshold,
                 view_count, enrollment_count, trending_score,

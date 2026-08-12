@@ -35,6 +35,10 @@ public class CourseEntity extends BaseEntity {
     @Column(name = "id", updatable = false, nullable = false)
     private Long id;
 
+    /** Mã khóa học do backend tự động sinh và không cho phép cập nhật. */
+    @Column(name = "code", unique = true, nullable = false, updatable = false, length = 30)
+    private String code;
+
     /** Danh mục mà khóa học trực thuộc. */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "category_id")
@@ -53,6 +57,18 @@ public class CourseEntity extends BaseEntity {
     /** Mô tả chi tiết nội dung và mục tiêu khóa học. */
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
+
+    /** Ảnh đại diện hiển thị công khai của khóa học. */
+    @Column(name = "thumbnail_url", length = 500)
+    private String thumbnailUrl;
+
+    /** Mục tiêu đầu ra của khóa học. */
+    @Column(name = "learning_objectives", columnDefinition = "TEXT")
+    private String learningObjectives;
+
+    /** Kiến thức hoặc điều kiện đầu vào của khóa học. */
+    @Column(name = "prerequisites", columnDefinition = "TEXT")
+    private String prerequisites;
 
     /**
      * Giá bán gợi ý do giảng viên đề xuất.

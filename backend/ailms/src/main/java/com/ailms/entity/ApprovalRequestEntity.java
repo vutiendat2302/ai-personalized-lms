@@ -58,6 +58,10 @@ public class ApprovalRequestEntity extends BaseEntity {
     @Column(name = "comment")
     private String comment;
 
+    /** Lý do gốc do người yêu cầu gửi, được giữ nguyên khi HR/Admin ghi chú quyết định. */
+    @Column(name = "request_reason", length = 255)
+    private String requestReason;
+
     /** Thời điểm người phê duyệt đưa ra quyết định xử lý. */
     @Column(name = "decided_at")
     private LocalDateTime decidedAt;

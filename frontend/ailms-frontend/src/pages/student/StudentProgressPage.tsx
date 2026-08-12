@@ -43,7 +43,7 @@ export const StudentProgressPage: React.FC = () => {
             <div key={idx} className="p-3 bg-background border border-border/40 rounded-xl space-y-2 text-xs">
               <div className="flex justify-between font-semibold text-foreground">
                 <span>{cp.courseName}</span>
-                <span className="text-primary font-bold">{cp.progressPercent}% / Mục tiêu {cp.targetPercent}%</span>
+                <span className="text-primary font-bold">{cp.progressPercent}% · Quiz TB {cp.averageQuizScore ?? "Chưa có"}</span>
               </div>
               <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
                 <div className="h-full bg-primary rounded-full" style={{ width: `${cp.progressPercent}%` }} />

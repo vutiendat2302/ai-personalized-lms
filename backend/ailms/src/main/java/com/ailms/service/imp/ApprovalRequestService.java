@@ -7,6 +7,8 @@ import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.repository.*;
 import com.ailms.security.CustomUserDetails;
 import com.ailms.service.IApprovalRequestService;
+import com.ailms.service.IOrderService;
+import com.ailms.request.RefundRequest;
 import com.ailms.service.INotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +23,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -37,6 +40,7 @@ public class ApprovalRequestService implements IApprovalRequestService {
     private final RoleRepository roleRepository;
     private final UserRoleRepository userRoleRepository;
     private final INotificationService notificationService;
+    private final IOrderService orderService;
 
     private Long getCurrentUserId() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -105,6 +109,45 @@ public class ApprovalRequestService implements IApprovalRequestService {
         return approvalRequestRepository.save(request);
     }
 
+    /** Kiểm tra điều kiện refund và lưu yêu cầu chờ duyệt, chưa thực hiện refund PayPal. */
+    @Override
+    @Transactional
+    public ApprovalRequestEntity createRefundRequest(Long orderId, RefundRequest request) {
+        if (request == null || request.getReason() == null || request.getReason().isBlank()) {
+            throw new BusinessException("Lý do hoàn tiền là bắt buộc.");
+        }
+        orderService.validateRefundEligibility(orderId, request.getReason());
+        if (approvalRequestRepository.findFirstByTargetTypeAndTargetIdAndStatusOrderByLevelDesc(
+                "REFUND_ORDER", orderId, ApprovalStatusEnum.PENDING).isPresent()) {
+            throw new BusinessException("Đơn hàng đã có yêu cầu hoàn tiền đang chờ duyệt.");
+        }
+        ApprovalRequestEntity saved = approvalRequestRepository.save(ApprovalRequestEntity.builder()
+                .targetType("REFUND_ORDER")
+                .targetId(orderId)
+                .totalLevels(1)
+                .approverId(null)
+                .status(ApprovalStatusEnum.PENDING)
+                .requestReason(request.getReason().trim())
+                .build());
+        notifyRefundApprovers(saved);
+        return saved;
+    }
+
+    /** Gửi thông báo tới HR/Admin để yêu cầu hoàn tiền không bị bỏ sót trong hàng đợi. */
+    private void notifyRefundApprovers(ApprovalRequestEntity request) {
+        userRoleRepository.findAll().stream()
+                .filter(item -> item.getRoleEntity() != null && item.getRoleEntity().getCode() != null)
+                .filter(item -> Set.of("HR", "ROLE_HR", "ADMIN", "ROLE_ADMIN")
+                        .contains(item.getRoleEntity().getCode().toUpperCase()))
+                .map(UserRoleEntity::getUserEntity)
+                .filter(Objects::nonNull)
+                .distinct()
+                .forEach(user -> notificationService.createSystemNotification(
+                        user, NotificationTypeEnum.GENERAL, "Có yêu cầu hoàn tiền cần duyệt",
+                        "Đơn hàng #" + request.getTargetId() + " đang chờ HR/Admin phê duyệt hoàn tiền.",
+                        request.getId(), "/admin/approval-center"));
+    }
+
     @Override
     @Transactional
     public ApprovalRequestEntity approve(Long id, String comment) {
@@ -132,7 +175,7 @@ public class ApprovalRequestService implements IApprovalRequestService {
         request.setDecidedAt(LocalDateTime.now());
         approvalRequestRepository.save(request);
 
-        finalizeTargetStatus(request.getTargetType(), request.getTargetId(), true);
+        finalizeTargetStatus(request, true);
 
         notifyCreator(request, true, comment);
 
@@ -165,7 +208,7 @@ public class ApprovalRequestService implements IApprovalRequestService {
         request.setDecidedAt(LocalDateTime.now());
         approvalRequestRepository.save(request);
 
-        finalizeTargetStatus(request.getTargetType(), request.getTargetId(), false);
+        finalizeTargetStatus(request, false);
 
         notifyCreator(request, false, comment);
 
@@ -210,7 +253,7 @@ public class ApprovalRequestService implements IApprovalRequestService {
         request.setDecidedAt(LocalDateTime.now());
         approvalRequestRepository.save(request);
 
-        finalizeTargetStatus(request.getTargetType(), request.getTargetId(), false);
+        finalizeTargetStatus(request, false);
     }
 
     @Override
@@ -311,8 +354,17 @@ public class ApprovalRequestService implements IApprovalRequestService {
         throw new BusinessException("Không tìm thấy người dùng phù hợp cho cấp phê duyệt tiếp theo.");
     }
 
-    private void finalizeTargetStatus(String targetType, Long targetId, boolean approved) {
-        if ("CONTRACT".equalsIgnoreCase(targetType)) {
+    /** Áp dụng trạng thái nghiệp vụ sau quyết định phê duyệt. */
+    private void finalizeTargetStatus(ApprovalRequestEntity request, boolean approved) {
+        String targetType = request.getTargetType();
+        Long targetId = request.getTargetId();
+        if ("REFUND_ORDER".equalsIgnoreCase(targetType)) {
+            if (approved) {
+                orderService.refundOrder(targetId, RefundRequest.builder()
+                        .reason(request.getRequestReason())
+                        .build());
+            }
+        } else if ("CONTRACT".equalsIgnoreCase(targetType)) {
             EmployeeContractEntity contract = employeeContractRepository.findById(targetId)
                     .orElseThrow(() -> ResourceNotFoundException.of("EmployeeContract", targetId));
             contract.setStatus(approved ? BaseStatusEnum.ACTIVE : BaseStatusEnum.REJECTED);

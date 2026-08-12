@@ -43,6 +43,15 @@ public class OrderItemEntity extends BaseEntity {
     @Column(name = "price_snapshot", nullable = false, precision = 15, scale = 2)
     private BigDecimal priceSnapshot;
 
+    /** Phần giảm giá được phân bổ và chụp tại thời điểm tạo đơn. */
+    @Column(name = "discount_snapshot", nullable = false, precision = 15, scale = 2)
+    @Builder.Default
+    private BigDecimal discountSnapshot = BigDecimal.ZERO;
+
+    /** Số tiền cuối cùng của riêng dòng hàng sau khi phân bổ voucher. */
+    @Column(name = "final_price", nullable = false, precision = 15, scale = 2)
+    private BigDecimal finalPrice;
+
     /** Loại mục sản phẩm (COURSE_PACKAGE, RE_ENROLLMENT, CERTIFICATE_FEE). */
     @Column(name = "item_type", nullable = false, length = 20)
     @Enumerated(EnumType.STRING)
@@ -52,4 +61,8 @@ public class OrderItemEntity extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "related_enrollment_id")
     private EnrollmentEntity relatedEnrollment;
+
+    /** Nhu cầu học 1-1 được chụp tại thời điểm checkout, chưa tạo matching request. */
+    @Column(name = "one_on_one_needs", columnDefinition = "TEXT")
+    private String oneOnOneNeeds;
 }

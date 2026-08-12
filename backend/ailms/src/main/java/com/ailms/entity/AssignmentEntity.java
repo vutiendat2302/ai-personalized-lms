@@ -43,6 +43,10 @@ public class AssignmentEntity extends BaseEntity {
     @Column(name = "section_id")
     private Long sectionId;
 
+    /** ID lớp nhận bài tập; null nghĩa là bài tập chung của khóa học. */
+    @Column(name = "class_id")
+    private Long classId;
+
     /** Tiêu đề bài tập tự luận. */
     @Column(name = "title")
     private String title;

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   Dialog,
   DialogContent,
@@ -12,9 +12,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, BookOpen, Users, User, Layers, Plus, Loader2, Save } from "lucide-react";
+import { AlertCircle, BookOpen, Users, User, Layers, Plus, Loader2, Save, ExternalLink, Info, DollarSign, Clock, Check } from "lucide-react";
 import type { DeliveryMode, CoursePackage } from "@/types/adminCourseClass";
 import { adminCourseClassApi } from "@/api/courses/adminCourseClassApi";
+import { cn } from "@/lib/utils";
 
 interface CreatePackageDialogProps {
   open: boolean;
@@ -27,6 +28,13 @@ interface CreatePackageDialogProps {
   initialSelectedClassId?: string;
 }
 
+const formatVND = (val?: number | string) => {
+  if (val == null) return "0 ₫";
+  const num = typeof val === "string" ? parseFloat(val) : val;
+  if (isNaN(num)) return "0 ₫";
+  return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(num);
+};
+
 export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
   open,
   onOpenChange,
@@ -38,36 +46,55 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
   initialSelectedClassId,
 }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const isEdit = Boolean(editingPackage);
 
-  const [deliveryMode, setDeliveryMode] = useState<DeliveryMode>("GROUP_CLASS");
+  const [deliveryMode, setDeliveryMode] = useState<DeliveryMode>("SELF_STUDY");
   const [packageName, setPackageName] = useState("");
   const [price, setPrice] = useState("");
-  const [durationDays, setDurationDays] = useState("60");
+  const [originalPrice, setOriginalPrice] = useState("");
+  const [durationDays, setDurationDays] = useState("365");
+  const [includedTutorSessions, setIncludedTutorSessions] = useState("");
+  const [maxGroupSize, setMaxGroupSize] = useState("");
   const [selectedClassId, setSelectedClassId] = useState<string>(initialSelectedClassId || "");
   const [classes, setClasses] = useState<any[]>([]);
+  const [existingPackages, setExistingPackages] = useState<CoursePackage[]>([]);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
+  
+  // 🌟 SHADCN UI INLINE FIELD ERRORS STATE 🌟
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  // Pre-fill form when opening in edit mode
+  // Pre-fill form when opening
   useEffect(() => {
     if (open && editingPackage) {
-      setDeliveryMode((editingPackage.deliveryMode as DeliveryMode) || "GROUP_CLASS");
+      setDeliveryMode((editingPackage.deliveryMode as DeliveryMode) || "SELF_STUDY");
       setPackageName(editingPackage.name || "");
       setPrice(editingPackage.price != null ? String(editingPackage.price) : "");
-      setDurationDays(editingPackage.durationDays != null ? String(editingPackage.durationDays) : "60");
-      setSelectedClassId(editingPackage.attachedClassId || "");
+      setOriginalPrice(
+        (editingPackage as any).originalPrice != null
+          ? String((editingPackage as any).originalPrice)
+          : editingPackage.price != null
+          ? String(editingPackage.price)
+          : ""
+      );
+      setDurationDays(editingPackage.durationDays != null ? String(editingPackage.durationDays) : "365");
+      setIncludedTutorSessions((editingPackage as any).includedTutorSessions != null ? String((editingPackage as any).includedTutorSessions) : "");
+      setMaxGroupSize((editingPackage as any).maxGroupSize != null ? String((editingPackage as any).maxGroupSize) : "");
+      setSelectedClassId(editingPackage.attachedClassId || (editingPackage as any).classId || "");
+      setFieldErrors({});
     } else if (open && !editingPackage) {
       // Reset for create mode
-      setDeliveryMode("GROUP_CLASS");
+      setDeliveryMode("SELF_STUDY");
       setPackageName("");
       setPrice("");
-      setDurationDays("60");
+      setOriginalPrice("");
+      setDurationDays("365");
+      setIncludedTutorSessions("");
+      setMaxGroupSize("");
       setSelectedClassId(initialSelectedClassId || "");
+      setFieldErrors({});
     }
   }, [open, editingPackage, initialSelectedClassId]);
-
-  const [existingPackages, setExistingPackages] = useState<CoursePackage[]>([]);
 
   useEffect(() => {
     if (!open) return;
@@ -76,293 +103,551 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
       adminCourseClassApi.getPackagesByCourse(courseId),
     ])
       .then(([clsList, pkgList]) => {
-        setClasses(clsList);
+        setClasses(Array.isArray(clsList) ? clsList : []);
         setExistingPackages(pkgList || []);
         if (initialSelectedClassId) {
           setSelectedClassId(initialSelectedClassId);
         }
       })
-      .catch((err) => setError(err?.response?.data?.message || "Không thể tải dữ liệu lớp học của khóa học"));
+      .catch(() => {});
   }, [open, courseId, initialSelectedClassId]);
 
-  // Get ready classes for this course
-  const readyClasses = classes.filter((c) => c.status === "ACTIVE" && c.packageType === "GROUP_CLASS");
-
-  // Check if a class is already attached to an existing package (other than the editing one)
-  const getAttachedPackage = (classId: string) => {
+  // Check if a class is already attached to an existing package
+  const getAttachedPackage = (clsId: string) => {
     return existingPackages.find(
-      (p) => p.id !== editingPackage?.id && (String(p.attachedClassId || (p as any).classId) === String(classId))
+      (p) => p.id !== editingPackage?.id && String(p.attachedClassId || (p as any).classId) === String(clsId)
     );
   };
 
-  const availableClasses = readyClasses.filter((c) => !getAttachedPackage(String(c.id)));
+  const readyClasses = classes.filter((c) => c.status === "ACTIVE" || c.status === "READY");
+
+  const numMaxGroupSize = Number(maxGroupSize) || 0;
+  const isGroupRequired =
+    deliveryMode === "GROUP_CLASS" ||
+    (deliveryMode === "COMBO" && numMaxGroupSize > 1);
+
+  // 🌟 SHADCN FORM VALIDATION FUNCTION 🌟
+  const validateForm = (): boolean => {
+    const errs: Record<string, string> = {};
+
+    if (!isEdit && courseStatus !== "ACTIVE") {
+      errs.general = "Không thể tạo gói bán: Khóa học phải ở trạng thái Đang hoạt động (ACTIVE).";
+    }
+
+    const normalizedName = packageName.trim();
+    if (!normalizedName) {
+      errs.packageName = "Vui lòng nhập Tên gói bán sản phẩm!";
+    } else if (normalizedName.length > 100) {
+      errs.packageName = "Tên gói bán không được vượt quá 100 ký tự!";
+    }
+
+    // 1. Price validation
+    if (!price.trim()) {
+      errs.price = "Vui lòng nhập Giá bán thực tế!";
+    } else {
+      const numPrice = Number(price);
+      if (isNaN(numPrice) || numPrice < 0) {
+        errs.price = "Giá bán thực tế phải lớn hơn hoặc bằng 0!";
+      }
+    }
+
+    // 2. Original Price validation
+    if (!originalPrice.trim()) {
+      errs.originalPrice = "Vui lòng nhập Giá niêm yết gốc!";
+    } else {
+      const numOrig = Number(originalPrice);
+      if (isNaN(numOrig) || numOrig < 0) {
+        errs.originalPrice = "Giá niêm yết gốc phải lớn hơn hoặc bằng 0!";
+      }
+    }
+
+    // 3. Price vs Original Price validation
+    if (price.trim() && originalPrice.trim()) {
+      const p = Number(price);
+      const op = Number(originalPrice);
+      if (p > op) {
+        errs.price = `Giá bán thực tế (${formatVND(p)}) không được lớn hơn Giá niêm yết gốc (${formatVND(op)})!`;
+      }
+    }
+
+    // 4. Duration validation
+    if (durationDays.trim()) {
+      const numDur = Number(durationDays);
+      if (isNaN(numDur) || numDur <= 0) {
+        errs.durationDays = "Thời hạn truy cập phải lớn hơn 0 ngày!";
+      }
+    }
+
+    // 5. Tutor sessions validation
+    if (deliveryMode === "GROUP_CLASS" || deliveryMode === "ONE_ON_ONE" || deliveryMode === "COMBO") {
+      if (includedTutorSessions.trim()) {
+        const numTutor = Number(includedTutorSessions);
+        if (isNaN(numTutor) || numTutor < 0) {
+          errs.includedTutorSessions = "Số buổi kèm riêng phải lớn hơn hoặc bằng 0!";
+        }
+      }
+    }
+
+    // 6. Max Group Size & Class Attachment validation
+    if (deliveryMode === "GROUP_CLASS") {
+      if (!maxGroupSize || Number(maxGroupSize) <= 0) {
+        errs.maxGroupSize = "Gói Lớp Nhóm phải nhập Sĩ số tối đa học viên lớn hơn 0!";
+      }
+      if (!selectedClassId && !isEdit) {
+        errs.classId = "Gói Lớp Nhóm bắt buộc phải chọn hoặc tạo mới Lớp học đính kèm!";
+      }
+    } else if (deliveryMode === "COMBO") {
+      if (numMaxGroupSize > 1 && !selectedClassId && !isEdit) {
+        errs.classId = "Gói Combo có sĩ số > 1 bắt buộc phải chọn Lớp học đính kèm!";
+      }
+    }
+
+    if (selectedClassId) {
+      const attached = getAttachedPackage(selectedClassId);
+      if (attached) {
+        errs.classId = `Lớp học này đã được gán cho gói bán "${attached.name}". Vui lòng chọn lớp khác.`;
+      }
+    }
+
+    setFieldErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const handleNavigateToCreateClass = () => {
+    onOpenChange(false);
+    navigate("/admin/classes/create", {
+      state: {
+        courseId,
+        courseName,
+        returnUrl: location.pathname,
+      },
+    });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
-    if (!isEdit && courseStatus !== "ACTIVE") {
-      setError("Không thể tạo gói bán: khóa học phải ở trạng thái Đang hoạt động (ACTIVE).");
-      return;
-    }
-    const normalizedName = packageName.trim();
-    if (normalizedName.length < 3 || normalizedName.length > 150) {
-      setError("Tên gói bán phải có từ 3 đến 150 ký tự.");
-      return;
-    }
+    if (!validateForm()) return;
+
     const numPrice = Number(price);
-    const numDuration = Number(durationDays);
+    const numOriginalPrice = Number(originalPrice);
+    const numDuration = durationDays ? Number(durationDays) : 365;
 
-    if (!Number.isFinite(numPrice) || numPrice <= 0) {
-      setError("Giá bán phải lớn hơn 0.");
-      return;
-    }
-    if (!Number.isInteger(numDuration) || numDuration <= 0 || numDuration > 3650) {
-      setError("Thời hạn truy cập phải là số nguyên từ 1 đến 3.650 ngày.");
-      return;
-    }
-
-    if (!isEdit && deliveryMode === "GROUP_CLASS" && availableClasses.length === 0) {
-      setError("Tất cả các lớp học nhóm hiện tại đều đã được gán gói bán. Vui lòng tạo lớp học mới.");
-      return;
-    }
-
-    const selectedClass = readyClasses.find((c) => String(c.id) === selectedClassId);
-
-    if (deliveryMode === "GROUP_CLASS" && !selectedClassId && !isEdit) {
-      setError("Vui lòng chọn lớp học nhóm.");
-      return;
-    }
-
-    if (deliveryMode === "GROUP_CLASS" && selectedClassId) {
-      const attached = getAttachedPackage(selectedClassId);
-      if (attached) {
-        setError(`Lớp học này đã được gán cho gói bán "${attached.name}". Vui lòng chọn lớp học khác hoặc tạo lớp mới.`);
-        return;
-      }
-    }
-    setSubmitting(true); setError("");
+    setSubmitting(true);
     try {
       let saved: any;
       if (isEdit && editingPackage) {
         saved = await adminCourseClassApi.updatePackage(editingPackage.id, {
           courseId,
-          classId: deliveryMode === "GROUP_CLASS" ? selectedClassId || null : null,
-          name: normalizedName,
+          classId: isGroupRequired ? selectedClassId || null : null,
+          name: packageName.trim(),
           deliveryMode,
           price: numPrice,
-          originalPrice: (editingPackage as any).originalPrice ?? numPrice,
+          originalPrice: numOriginalPrice,
           durationDays: numDuration,
+          includedTutorSessions:
+            deliveryMode === "SELF_STUDY"
+              ? undefined
+              : includedTutorSessions !== ""
+              ? Number(includedTutorSessions)
+              : undefined,
+          maxGroupSize:
+            deliveryMode === "SELF_STUDY"
+              ? undefined
+              : deliveryMode === "ONE_ON_ONE"
+              ? 1
+              : maxGroupSize !== ""
+              ? Number(maxGroupSize)
+              : undefined,
           status: editingPackage.active ? "ACTIVE" : "INACTIVE",
         });
       } else {
         saved = await adminCourseClassApi.createPackage({
           courseId,
-          classId: deliveryMode === "GROUP_CLASS" ? selectedClassId : null,
-          name: normalizedName,
+          classId: isGroupRequired ? selectedClassId || null : null,
+          name: packageName.trim(),
           deliveryMode,
           price: numPrice,
-          originalPrice: numPrice,
+          originalPrice: numOriginalPrice,
           durationDays: numDuration,
+          includedTutorSessions:
+            deliveryMode === "SELF_STUDY"
+              ? undefined
+              : includedTutorSessions !== ""
+              ? Number(includedTutorSessions)
+              : undefined,
+          maxGroupSize:
+            deliveryMode === "SELF_STUDY"
+              ? undefined
+              : deliveryMode === "ONE_ON_ONE"
+              ? 1
+              : maxGroupSize !== ""
+              ? Number(maxGroupSize)
+              : undefined,
           status: "ACTIVE",
         });
       }
-      onPackageCreated({ ...saved, id: String(saved.id), courseId: String(saved.courseId), active: saved.status === "ACTIVE",
-        attachedClassId: saved.classId ? String(saved.classId) : undefined, attachedClassName: saved.className,
-        attachedClassCapacity: selectedClass ? { current: selectedClass.currentMemberCount || 0, max: selectedClass.maxMembers || 0 } : undefined,
+
+      const selectedClass = readyClasses.find((c) => String(c.id) === selectedClassId);
+
+      onPackageCreated({
+        ...saved,
+        id: String(saved.id),
+        courseId: String(saved.courseId),
+        active: saved.status === "ACTIVE",
+        attachedClassId: saved.classId ? String(saved.classId) : undefined,
+        attachedClassName: saved.className,
+        attachedClassCapacity: selectedClass
+          ? { current: selectedClass.currentMemberCount || 0, max: selectedClass.maxMembers || 0 }
+          : undefined,
       } as CoursePackage);
+
       onOpenChange(false);
-    } catch (err: any) { setError(err?.response?.data?.message || (isEdit ? "Không thể cập nhật gói bán" : "Không thể tạo gói bán")); }
-    finally { setSubmitting(false); }
+    } catch (err: any) {
+      setFieldErrors((prev) => ({
+        ...prev,
+        general: err?.response?.data?.message || (isEdit ? "Không thể cập nhật gói bán" : "Không thể tạo gói bán"),
+      }));
+    } finally {
+      setSubmitting(false);
+    }
   };
+
+  const isPriceInvalid =
+    price !== "" &&
+    originalPrice !== "" &&
+    Number(price) > Number(originalPrice);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl p-6 sm:p-8">
-        <DialogHeader className="space-y-1 text-left">
-          <DialogTitle className="text-xl font-bold text-slate-900">
-            {isEdit ? "Chỉnh sửa Gói Bán" : "Tạo Gói Bán Khóa Học Mới"}
+      <DialogContent className="max-w-2xl p-6 sm:p-8 max-h-[90vh] overflow-y-auto">
+        <DialogHeader className="space-y-1 text-left border-b border-slate-100 pb-3">
+          <DialogTitle className="text-xl font-bold text-slate-900 flex items-center gap-2">
+            <BookOpen className="h-5 w-5 text-blue-600" />
+            {isEdit ? "Chỉnh sửa Gói Bán Khóa Học" : "Tạo Gói Bán Khóa Học Mới"}
           </DialogTitle>
-          <DialogDescription className="text-slate-500 text-sm">
-            Khóa học: <span className="font-semibold text-slate-700">{courseName}</span>
+          <DialogDescription className="text-slate-500 text-xs">
+            Khóa học áp dụng: <span className="font-bold text-slate-800">{courseName}</span>
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-6 py-2">
-          {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700 flex gap-2"><AlertCircle className="h-4 w-4" /> {error}</div>}
-          {/* Step 1: Delivery Mode Selector via Large Cards */}
+        {/* 🌟 FORM WITH NOVALIDATE FOR SHADCN UI VALIDATION 🌟 */}
+        <form noValidate onSubmit={handleSubmit} className="space-y-5 py-2">
+          {fieldErrors.general && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700 flex items-center gap-2 font-semibold">
+              <AlertCircle className="h-4 w-4 shrink-0 text-red-600" />
+              <span>{fieldErrors.general}</span>
+            </div>
+          )}
+
+          {/* 1. Delivery Mode cards */}
           <div className="space-y-2">
-            <Label className="text-sm font-semibold text-slate-800">
-              1. Chọn Hình Thức Đào Tạo (Delivery Mode) *
+            <Label className="text-xs font-bold text-slate-800">
+              1. Chọn Hình Thức Đào Tạo (DeliveryModeEnum) *
             </Label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2.5">
               {/* SELF_STUDY */}
               <div
-                className={`cursor-pointer border-2 rounded-xl p-3.5 transition-all flex flex-col justify-between ${
+                className={cn(
+                  "cursor-pointer border-2 rounded-xl p-3 transition-all flex flex-col justify-between",
                   deliveryMode === "SELF_STUDY"
-                    ? "border-blue-600 bg-blue-50/50 shadow-sm"
+                    ? "border-emerald-600 bg-emerald-50/60 shadow-xs font-medium"
                     : "border-slate-200 hover:border-slate-300 bg-white"
-                }`}
-                onClick={() => setDeliveryMode("SELF_STUDY")}
+                )}
+                onClick={() => {
+                  if (isEdit) return;
+                  setDeliveryMode("SELF_STUDY");
+                  setFieldErrors((prev) => ({ ...prev, classId: "", maxGroupSize: "", includedTutorSessions: "" }));
+                }}
               >
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="p-1.5 rounded-lg bg-slate-100 text-slate-700">
-                    <BookOpen className="w-4 h-4" />
-                  </div>
-                  <span className="font-semibold text-sm text-slate-900">Tự Học Online</span>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-bold text-xs text-slate-900">Gói Tự Học (Self-Study)</span>
+                  {deliveryMode === "SELF_STUDY" && <Check className="h-4 w-4 text-emerald-600" />}
                 </div>
-                <p className="text-xs text-slate-500">
-                  Học qua bài giảng video & tài liệu tự do.
+                <p className="text-[11px] text-slate-500">
+                  Học viên tự học qua bài giảng video & tài liệu tự do.
                 </p>
               </div>
 
               {/* GROUP_CLASS */}
               <div
-                className={`cursor-pointer border-2 rounded-xl p-3.5 transition-all flex flex-col justify-between ${
+                className={cn(
+                  "cursor-pointer border-2 rounded-xl p-3 transition-all flex flex-col justify-between",
                   deliveryMode === "GROUP_CLASS"
-                    ? "border-blue-600 bg-blue-50/50 shadow-sm"
+                    ? "border-blue-600 bg-blue-50/60 shadow-xs font-medium"
                     : "border-slate-200 hover:border-slate-300 bg-white"
-                }`}
-                onClick={() => setDeliveryMode("GROUP_CLASS")}
+                )}
+                onClick={() => {
+                  if (isEdit) return;
+                  setDeliveryMode("GROUP_CLASS");
+                  setFieldErrors((prev) => ({ ...prev, classId: "", maxGroupSize: "", includedTutorSessions: "" }));
+                }}
               >
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="p-1.5 rounded-lg bg-blue-100 text-blue-700">
-                    <Users className="w-4 h-4" />
-                  </div>
-                  <span className="font-semibold text-sm text-slate-900">Lớp Học Nhóm</span>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-bold text-xs text-slate-900">Lớp Học Nhóm (Group Class)</span>
+                  {deliveryMode === "GROUP_CLASS" && <Check className="h-4 w-4 text-blue-600" />}
                 </div>
-                <p className="text-xs text-slate-500">
-                  Học tương tác với giáo viên & sĩ số cố định.
+                <p className="text-[11px] text-slate-500">
+                  Học tương tác sĩ số cố định (Bắt buộc gắn Lớp).
                 </p>
               </div>
 
               {/* ONE_ON_ONE */}
               <div
-                className={`cursor-pointer border-2 rounded-xl p-3.5 transition-all flex flex-col justify-between ${
+                className={cn(
+                  "cursor-pointer border-2 rounded-xl p-3 transition-all flex flex-col justify-between",
                   deliveryMode === "ONE_ON_ONE"
-                    ? "border-purple-600 bg-purple-50/50 shadow-sm"
+                    ? "border-purple-600 bg-purple-50/60 shadow-xs font-medium"
                     : "border-slate-200 hover:border-slate-300 bg-white"
-                }`}
-                onClick={() => setDeliveryMode("ONE_ON_ONE")}
+                )}
+                onClick={() => {
+                  if (isEdit) return;
+                  setDeliveryMode("ONE_ON_ONE");
+                  setFieldErrors((prev) => ({ ...prev, classId: "", maxGroupSize: "", includedTutorSessions: "" }));
+                }}
               >
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="p-1.5 rounded-lg bg-purple-100 text-purple-700">
-                    <User className="w-4 h-4" />
-                  </div>
-                  <span className="font-semibold text-sm text-slate-900">1 Kèm 1 VIP</span>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-bold text-xs text-slate-900">Gia Sư 1 Kèm 1 (One-on-One)</span>
+                  {deliveryMode === "ONE_ON_ONE" && <Check className="h-4 w-4 text-purple-600" />}
                 </div>
-                <p className="text-xs text-slate-500">
+                <p className="text-[11px] text-slate-500">
                   Kèm riêng 1-on-1 theo thời khóa biểu cá nhân.
                 </p>
               </div>
 
               {/* COMBO */}
               <div
-                className={`cursor-pointer border-2 rounded-xl p-3.5 transition-all flex flex-col justify-between ${
+                className={cn(
+                  "cursor-pointer border-2 rounded-xl p-3 transition-all flex flex-col justify-between",
                   deliveryMode === "COMBO"
-                    ? "border-amber-500 bg-amber-50/50 shadow-sm"
+                    ? "border-amber-600 bg-amber-50/60 shadow-xs font-medium"
                     : "border-slate-200 hover:border-slate-300 bg-white"
-                }`}
-                onClick={() => setDeliveryMode("COMBO")}
+                )}
+                onClick={() => {
+                  if (isEdit) return;
+                  setDeliveryMode("COMBO");
+                  setFieldErrors((prev) => ({ ...prev, classId: "", maxGroupSize: "", includedTutorSessions: "" }));
+                }}
               >
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="p-1.5 rounded-lg bg-amber-100 text-amber-700">
-                    <Layers className="w-4 h-4" />
-                  </div>
-                  <span className="font-semibold text-sm text-slate-900">Combo Hỗn hợp</span>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-bold text-xs text-slate-900">Gói Combo Hỗn Hợp (Combo)</span>
+                  {deliveryMode === "COMBO" && <Check className="h-4 w-4 text-amber-600" />}
                 </div>
-                <p className="text-xs text-slate-500">
-                  Kết hợp giữa Tự học video và Lớp nhóm/Kèm.
+                <p className="text-[11px] text-slate-500">
+                  Kết hợp bài giảng Tự học + Lớp nhóm/Kèm 1-1.
                 </p>
               </div>
             </div>
           </div>
 
-          {/* Form details */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2 space-y-1.5">
-              <Label className="text-sm font-medium text-slate-700">Tên Gói Bán *</Label>
+          {/* 2. Package details */}
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label className="text-xs font-bold text-slate-800">Tên Gói Bán Sản Phẩm *</Label>
               <Input
-                placeholder="VD: Java Lớp Nhóm K12 - Khóa Mùa Thu"
+                placeholder="VD: Java Fullstack Pro - Lớp Nhóm K12"
                 value={packageName}
-                onChange={(e) => setPackageName(e.target.value)}
-                required
-                className="h-10"
+                onChange={(e) => {
+                  setPackageName(e.target.value);
+                  setFieldErrors((prev) => ({ ...prev, packageName: "" }));
+                }}
+                className={cn(
+                  "h-9 text-xs rounded-xl font-semibold",
+                  fieldErrors.packageName && "border-rose-500 bg-rose-500/5 focus-visible:ring-rose-500"
+                )}
               />
+              {fieldErrors.packageName && (
+                <p className="text-[11px] font-semibold text-rose-500 flex items-center gap-1 mt-1">
+                  <AlertCircle className="h-3 w-3 shrink-0" />
+                  {fieldErrors.packageName}
+                </p>
+              )}
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-sm font-medium text-slate-700">Giá Bán (VNĐ) *</Label>
-              <Input
-                type="number"
-                placeholder="VD: 3500000"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                required
-                className="h-10"
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-bold text-slate-800">Giá bán thực tế (VNĐ) *</Label>
+                <Input
+                  type="number"
+                  placeholder="VD: 3500000"
+                  value={price}
+                  onChange={(e) => {
+                    setPrice(e.target.value);
+                    setFieldErrors((prev) => ({ ...prev, price: "" }));
+                  }}
+                  className={cn(
+                    "h-9 text-xs rounded-xl font-mono font-bold",
+                    (fieldErrors.price || isPriceInvalid)
+                      ? "border-rose-500 bg-rose-500/5 text-rose-600 focus-visible:ring-rose-500"
+                      : "text-blue-700"
+                  )}
+                />
+                {fieldErrors.price && (
+                  <p className="text-[11px] font-semibold text-rose-500 flex items-center gap-1 mt-1">
+                    <AlertCircle className="h-3 w-3 shrink-0" />
+                    {fieldErrors.price}
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-xs font-bold text-slate-800">Giá niêm yết gốc (VNĐ) *</Label>
+                <Input
+                  type="number"
+                  placeholder="VD: 4500000"
+                  value={originalPrice}
+                  onChange={(e) => {
+                    setOriginalPrice(e.target.value);
+                    setFieldErrors((prev) => ({ ...prev, originalPrice: "", price: "" }));
+                  }}
+                  className={cn(
+                    "h-9 text-xs rounded-xl font-mono font-bold text-slate-600",
+                    fieldErrors.originalPrice && "border-rose-500 bg-rose-500/5 focus-visible:ring-rose-500"
+                  )}
+                />
+                {fieldErrors.originalPrice && (
+                  <p className="text-[11px] font-semibold text-rose-500 flex items-center gap-1 mt-1">
+                    <AlertCircle className="h-3 w-3 shrink-0" />
+                    {fieldErrors.originalPrice}
+                  </p>
+                )}
+              </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label className="text-sm font-medium text-slate-700">Thời Hạn Truy Cập (Ngày) *</Label>
+            {/* Price Alert */}
+            {isPriceInvalid && !fieldErrors.price && (
+              <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-600 text-xs font-bold flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>
+                  Lỗi: Giá bán thực tế ({formatVND(Number(price))}) không được lớn hơn Giá niêm yết gốc ({formatVND(Number(originalPrice))})!
+                </span>
+              </div>
+            )}
+
+            <div className="space-y-1">
+              <Label className="text-xs font-bold text-slate-800">Thời Hạn Truy Cập (Ngày)</Label>
               <Input
                 type="number"
-                placeholder="VD: 60"
+                placeholder="VD: 365"
                 value={durationDays}
-                onChange={(e) => setDurationDays(e.target.value)}
-                required
-                className="h-10"
+                onChange={(e) => {
+                  setDurationDays(e.target.value);
+                  setFieldErrors((prev) => ({ ...prev, durationDays: "" }));
+                }}
+                className={cn(
+                  "h-9 text-xs rounded-xl font-semibold",
+                  fieldErrors.durationDays && "border-rose-500 bg-rose-500/5 focus-visible:ring-rose-500"
+                )}
               />
+              {fieldErrors.durationDays && (
+                <p className="text-[11px] font-semibold text-rose-500 flex items-center gap-1 mt-1">
+                  <AlertCircle className="h-3 w-3 shrink-0" />
+                  {fieldErrors.durationDays}
+                </p>
+              )}
             </div>
           </div>
 
-          {/* Special Logic for GROUP_CLASS */}
-          {deliveryMode === "GROUP_CLASS" && (
-            <div className="space-y-3 pt-2 border-t border-slate-100">
+          {/* 3. Capacity & Tutor Sessions */}
+          {deliveryMode === "SELF_STUDY" ? (
+            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2">
+              <Info className="h-4 w-4 shrink-0 text-emerald-600" />
+              <span>Gói Tự Học (Self-Study) không giới hạn sĩ số và không có buổi kèm riêng đính kèm.</span>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100">
+              {deliveryMode !== "ONE_ON_ONE" && (
+                <div className="space-y-1">
+                  <Label className="text-xs font-bold text-slate-800">Sĩ số tối đa (maxGroupSize)</Label>
+                  <Input
+                    type="number"
+                    placeholder="VD: 20"
+                    value={maxGroupSize}
+                    onChange={(e) => {
+                      setMaxGroupSize(e.target.value);
+                      setFieldErrors((prev) => ({ ...prev, maxGroupSize: "" }));
+                    }}
+                    className={cn(
+                      "h-9 text-xs rounded-xl font-semibold",
+                      fieldErrors.maxGroupSize && "border-rose-500 bg-rose-500/5 focus-visible:ring-rose-500"
+                    )}
+                  />
+                  {fieldErrors.maxGroupSize && (
+                    <p className="text-[11px] font-semibold text-rose-500 flex items-center gap-1 mt-1">
+                      <AlertCircle className="h-3 w-3 shrink-0" />
+                      {fieldErrors.maxGroupSize}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {deliveryMode === "ONE_ON_ONE" && (
+                <div className="space-y-1">
+                  <Label className="text-xs font-bold text-slate-800">Sĩ số tối đa</Label>
+                  <Input type="number" disabled value={1} className="h-9 text-xs rounded-xl bg-slate-100 font-semibold" />
+                </div>
+              )}
+
+              {(deliveryMode === "GROUP_CLASS" || deliveryMode === "ONE_ON_ONE" || deliveryMode === "COMBO") && (
+                <div className="space-y-1">
+                  <Label className="text-xs font-bold text-slate-800">Số buổi kèm (includedTutorSessions)</Label>
+                  <Input
+                    type="number"
+                    placeholder="VD: 8 buổi"
+                    value={includedTutorSessions}
+                    onChange={(e) => {
+                      setIncludedTutorSessions(e.target.value);
+                      setFieldErrors((prev) => ({ ...prev, includedTutorSessions: "" }));
+                    }}
+                    className={cn(
+                      "h-9 text-xs rounded-xl font-semibold",
+                      fieldErrors.includedTutorSessions && "border-rose-500 bg-rose-500/5 focus-visible:ring-rose-500"
+                    )}
+                  />
+                  {fieldErrors.includedTutorSessions && (
+                    <p className="text-[11px] font-semibold text-rose-500 flex items-center gap-1 mt-1">
+                      <AlertCircle className="h-3 w-3 shrink-0" />
+                      {fieldErrors.includedTutorSessions}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 4. Class Selection for GROUP_CLASS / COMBO */}
+          {isGroupRequired && (
+            <div className={cn(
+              "space-y-3 pt-2 border-t border-slate-100 p-3 rounded-xl border",
+              fieldErrors.classId ? "border-rose-500 bg-rose-50/50" : "border-amber-200 bg-amber-50/30"
+            )}>
               <div className="flex items-center justify-between">
-                <Label className="text-sm font-semibold text-slate-800">
-                  2. Chọn Lớp Học Nhóm (Yêu cầu Trạng thái READY) *
+                <Label className="text-xs font-bold text-slate-800">
+                  Lớp Học Đính Kèm * (Trạng thái READY)
                 </Label>
-                <Button
+                <button
                   type="button"
-                  variant="link"
-                  className="p-0 h-auto text-xs font-bold text-blue-600 underline cursor-pointer"
-                  onClick={() => {
-                    onOpenChange(false);
-                    navigate("/admin/classes/create", {
-                      state: {
-                        courseId,
-                        courseName,
-                        returnUrl: `/admin/courses/${courseId}`,
-                        packageMode: deliveryMode,
-                        packageId: editingPackage?.id,
-                      },
-                    });
-                  }}
+                  onClick={handleNavigateToCreateClass}
+                  className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1 cursor-pointer"
                 >
-                  [+ Tạo Lớp Học Mới Ngay]
-                </Button>
+                  [+ Tạo Lớp Học Mới Ngay] <ExternalLink className="h-3 w-3" />
+                </button>
               </div>
 
               {readyClasses.length === 0 ? (
-                <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                  <div className="text-xs text-amber-800 space-y-1">
-                    <p className="font-semibold">
-                      Chưa có lớp học nào ở trạng thái READY cho khóa học này.
-                    </p>
-                    <p>
-                      Bạn phải tạo 1 lớp học mới ở trạng thái Sẵn Sàng trước khi tạo gói bán nhóm.
-                    </p>
-                  </div>
+                <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800 space-y-1">
+                  <p className="font-bold flex items-center gap-1.5">
+                    <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
+                    Chưa có lớp học nào khả dụng cho khóa học này.
+                  </p>
+                  <p className="text-[11px]">Bấm nút bên trên để tạo lớp học mới ở trang quản lý lớp.</p>
                 </div>
               ) : (
-                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
                   {readyClasses.map((cls) => {
                     const attachedPkg = getAttachedPackage(String(cls.id));
                     const isAttached = Boolean(attachedPkg);
                     const isSelected = selectedClassId === String(cls.id);
                     const classCode = cls.code || `LH-${cls.id}`;
-                    const teacherDisplayName = cls.teacherName || cls.teacher?.name || "Chưa phân công";
 
                     return (
                       <div
@@ -370,55 +655,39 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
                         onClick={() => {
                           if (isAttached) return;
                           setSelectedClassId(String(cls.id));
+                          setFieldErrors((prev) => ({ ...prev, classId: "" }));
                         }}
-                        className={`p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs transition-all ${
+                        className={cn(
+                          "p-2.5 rounded-xl border flex items-center justify-between text-xs transition-all",
                           isAttached
-                            ? "bg-slate-100/70 border-slate-200 opacity-60 cursor-not-allowed"
+                            ? "bg-slate-100 border-slate-200 opacity-60 cursor-not-allowed"
                             : isSelected
-                            ? "border-blue-600 bg-blue-50/80 font-medium cursor-pointer shadow-sm ring-1 ring-blue-500/30"
+                            ? "border-blue-600 bg-blue-50/90 font-bold cursor-pointer shadow-xs"
                             : "border-slate-200 hover:bg-slate-50 cursor-pointer"
-                        }`}
+                        )}
                       >
-                        <div className="min-w-0 flex-1 space-y-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-bold text-slate-900 text-sm">{cls.name}</span>
-                            <Badge variant="outline" className="text-[10px] bg-slate-50 text-slate-600 border-slate-200 font-mono">
-                              Mã lớp: {classCode}
-                            </Badge>
-                          </div>
-
-                          <div className="flex items-center gap-3 text-[11px] text-slate-600 flex-wrap">
-                            <span className="flex items-center gap-1 font-semibold text-blue-700 bg-blue-50/80 px-2 py-0.5 rounded-md border border-blue-100">
-                              👨‍🏫 Giảng viên: {teacherDisplayName}
-                            </span>
-                            {cls.startDate && (
-                              <span className="text-slate-500">
-                                📅 {new Date(cls.startDate).toLocaleDateString("vi-VN")} - {new Date(cls.endDate || cls.startDate).toLocaleDateString("vi-VN")}
-                              </span>
-                            )}
-                          </div>
-
+                        <div className="truncate pr-2">
+                          <p className="font-bold text-slate-900 truncate">{cls.name}</p>
+                          <p className="text-[10px] text-slate-500 font-mono">
+                            Mã: {classCode} • Sĩ số: {cls.currentMemberCount || 0}/{cls.maxMembers || 20}
+                          </p>
                           {isAttached && (
-                            <p className="text-[11px] text-amber-700 font-medium pt-0.5">
-                              🔒 Đã gán gói bán: <span className="font-semibold">{attachedPkg?.name}</span>
-                            </p>
+                            <p className="text-[10px] text-amber-700 font-semibold">🔒 Đã gán gói: {attachedPkg?.name}</p>
                           )}
                         </div>
 
-                        <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
-                          <Badge variant="outline" className="bg-white text-xs font-semibold px-2.5 py-1">
-                            Sĩ số: {cls.currentMemberCount || 0}/{cls.maxMembers || 0}
-                          </Badge>
-                          {isAttached && (
-                            <Badge className="bg-amber-100 text-amber-800 border-amber-200 text-[10px] px-2 py-0.5">
-                              Đã có gói
-                            </Badge>
-                          )}
-                        </div>
+                        {isSelected && <Check className="h-4 w-4 text-blue-600 shrink-0" />}
                       </div>
                     );
                   })}
                 </div>
+              )}
+
+              {fieldErrors.classId && (
+                <p className="text-[11px] font-semibold text-rose-500 flex items-center gap-1 mt-1">
+                  <AlertCircle className="h-3 w-3 shrink-0" />
+                  {fieldErrors.classId}
+                </p>
               )}
             </div>
           )}
@@ -433,13 +702,8 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
             </Button>
             <Button
               type="submit"
-              disabled={
-                !packageName ||
-                (!isEdit && courseStatus !== "ACTIVE") ||
-                submitting ||
-                (!isEdit && deliveryMode === "GROUP_CLASS" && (!selectedClassId || readyClasses.length === 0))
-              }
-              className="bg-blue-600 hover:bg-blue-700 text-white font-medium"
+              disabled={submitting || isPriceInvalid}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold cursor-pointer"
             >
               {submitting ? (
                 <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />

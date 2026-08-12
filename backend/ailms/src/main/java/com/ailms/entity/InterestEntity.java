@@ -6,7 +6,9 @@ import lombok.*;
 import lombok.experimental.SuperBuilder;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Danh mục sở thích / lĩnh vực học viên muốn tìm hiểu, phát triển.
@@ -51,4 +53,12 @@ public class InterestEntity extends BaseEntity {
     @OneToMany(mappedBy = "interest", fetch = FetchType.LAZY)
     @Builder.Default
     private List<StudentInterestEntity> studentInterests = new ArrayList<>();
+
+    /** Danh mục khóa học cố định được gắn trực tiếp với sở thích này. */
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(name = "interest_category",
+            joinColumns = @JoinColumn(name = "interest_id"),
+            inverseJoinColumns = @JoinColumn(name = "category_id"))
+    @Builder.Default
+    private Set<CategoryEntity> categories = new HashSet<>();
 }

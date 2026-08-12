@@ -6,6 +6,8 @@ import lombok.*;
 import lombok.experimental.SuperBuilder;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import com.ailms.entity.enums.BaseStatusEnum;
 
 /**
  * Thực thể lưu trữ thông tin bài kiểm tra trắc nghiệm (Quiz) trong khóa học hoặc bài học.
@@ -41,6 +43,10 @@ public class QuizEntity extends BaseEntity {
     @Column(name = "section_id")
     private Long sectionId;
 
+    /** ID lớp nhận quiz; null nghĩa là quiz chung của khóa học. */
+    @Column(name = "class_id")
+    private Long classId;
+
     /** Mã định danh bài kiểm tra dạng chữ/số duy nhất. */
     @Column(name = "code")
     private String code;
@@ -69,7 +75,13 @@ public class QuizEntity extends BaseEntity {
     @Column(name = "shuffle_questions")
     private Boolean shuffleQuestions;
 
-    /** Trạng thái bài kiểm tra (1 = Active, 0 = Draft/Inactive). */
-    @Column(name = "status")
-    private Byte status;
+    /** Thời điểm đóng bài quiz/thi đối với học viên. */
+    @Column(name = "due_at")
+    private LocalDateTime dueAt;
+
+    /** Trạng thái bài kiểm tra đồng nhất với Assignment (DRAFT, ACTIVE, INACTIVE...). */
+    @Column(name = "status", length = 20)
+    @Enumerated(EnumType.STRING)
+    @Builder.Default
+    private BaseStatusEnum status = BaseStatusEnum.DRAFT;
 }

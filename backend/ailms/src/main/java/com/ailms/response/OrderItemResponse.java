@@ -12,9 +12,14 @@ import java.math.BigDecimal;
 @Builder
 public class OrderItemResponse {
     private Long id;
+    private Long orderId;
     private Long coursePackageId;
     private String coursePackageName;
+    private String courseName;
+    private String packageName;
     private BigDecimal priceSnapshot;
+    private BigDecimal discountSnapshot;
+    private BigDecimal finalPrice;
     private OrderItemTypeEnum itemType;
     private Long relatedEnrollmentId;
 }

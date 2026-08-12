@@ -2,6 +2,7 @@ package com.ailms.request;
 
 import com.ailms.entity.enums.OrderItemTypeEnum;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.Valid;
 import lombok.*;
 
 @Getter
@@ -14,8 +15,11 @@ public class CheckoutItemRequest {
     @NotNull(message = "Course Package ID is required")
     private Long coursePackageId;
 
-    @NotNull(message = "Item type is required")
     private OrderItemTypeEnum itemType;
 
     private Long relatedEnrollmentId;
+
+    /** Nhu cầu học tập riêng của dòng ONE_ON_ONE trong checkout giỏ hàng. */
+    @Valid
+    private OneOnOneNeedsRequest oneOnOneNeeds;
 }

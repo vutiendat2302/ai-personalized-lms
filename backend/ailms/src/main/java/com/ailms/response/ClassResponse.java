@@ -2,6 +2,7 @@ package com.ailms.response;
 
 import com.ailms.entity.enums.BaseStatusEnum;
 import com.ailms.entity.enums.DeliveryModeEnum;
+import com.ailms.entity.enums.ClassKindEnum;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.persistence.Column;
 import lombok.*;
@@ -28,6 +29,14 @@ public class ClassResponse {
     private String categoryName;
 
     private String name;
+
+    private String description;
+
+    private ClassKindEnum classKind;
+
+    private Boolean registrationOpen;
+
+    private Boolean allowLateEnrollment;
 
     private String teacherName;
 

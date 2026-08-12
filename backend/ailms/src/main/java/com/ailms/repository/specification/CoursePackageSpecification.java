@@ -10,6 +10,7 @@ public final class CoursePackageSpecification {
     private CoursePackageSpecification() {
     }
 
+    /** Tạo điều kiện tìm kiếm gói theo mã, tên và các bộ lọc nghiệp vụ. */
     public static Specification<CoursePackageEntity> filterAndSearch(CoursePackageSearchRequest request) {
         SpecificationBuilder<CoursePackageEntity> builder = SpecificationBuilder.of();
 
@@ -17,7 +18,7 @@ public final class CoursePackageSpecification {
             return builder.build();
         }
 
-        builder.likeIfPresent("name", request.getKeyword());
+        builder.likeAnyIfPresent(request.getKeyword(), "code", "name");
         builder.equalIfPresent("courseEntity.id", request.getCourseId());
         builder.equalIfPresent("deliveryMode", request.getDeliveryMode());
         builder.equalIfPresent("status", request.getStatus());

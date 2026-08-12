@@ -88,9 +88,20 @@ const resolveBackendUrl = (url?: string | null): string | undefined => {
     return url;
   }
   const base = (import.meta.env.VITE_BE_URL || "").replace(/\/$/, "");
-  if (!base) return url;
+  if (!base) return url.startsWith("/v1/") ? `/api${url}` : url;
   const normalized = url.startsWith("/") ? url : `/${url}`;
+  if (base.endsWith("/api") && normalized.startsWith("/api/")) {
+    return `${base.slice(0, -4)}${normalized}`;
+  }
   return `${base}${normalized}`;
+};
+
+/** Thêm phiên bản cập nhật để trình duyệt không giữ ảnh avatar cũ trong cache. */
+const resolveAvatarUrl = (url?: string | null, version?: string | null): string | undefined => {
+  const resolved = resolveBackendUrl(url);
+  if (!resolved) return undefined;
+  if (!version) return resolved;
+  return `${resolved}${resolved.includes("?") ? "&" : "?"}v=${encodeURIComponent(version)}`;
 };
 
 const displayText = (value?: string | number | null): string => {
@@ -155,6 +166,7 @@ export const Profile: React.FC = () => {
   const [roleInfoStatus, setRoleInfoStatus] = useState({ success: "", error: "", loading: false });
   const [passwordStatus, setPasswordStatus] = useState({ success: "", error: "", loading: false });
   const [avatarStatus, setAvatarStatus] = useState({ success: "", error: "", loading: false });
+  const [avatarVersion, setAvatarVersion] = useState<string>();
 
   // Password visibility
   const [showOldPass, setShowOldPass] = useState(false);
@@ -397,6 +409,7 @@ export const Profile: React.FC = () => {
         gender: data.gender ? parseInt(data.gender) : undefined,
       });
       setProfile(updated);
+      setAvatarVersion(String(Date.now()));
       await fetchProfile();
       setBasicStatus({ success: "Đã lưu thông tin cá nhân cơ bản vào CSDL!", error: "", loading: false });
       setTimeout(() => setBasicStatus((s) => ({ ...s, success: "" })), 3500);
@@ -597,6 +610,7 @@ export const Profile: React.FC = () => {
 
 
       setProfile(updated);
+      setAvatarVersion(String(Date.now()));
       setAvatarStatus({ success: "Đã tải avatar lên MinIO & lưu CSDL!", error: "", loading: false });
       setAvatarEditOpen(false);
       setSelectedAvatarFile(null);
@@ -615,6 +629,7 @@ export const Profile: React.FC = () => {
     try {
       const updated = await userService.deleteAvatar();
       setProfile(updated);
+      setAvatarVersion(String(Date.now()));
       setAvatarStatus({ success: "Đã xóa ảnh đại diện về mặc định trong CSDL!", error: "", loading: false });
       setTimeout(() => setAvatarStatus((s) => ({ ...s, success: "" })), 3000);
     } catch (e) {
@@ -788,7 +803,7 @@ export const Profile: React.FC = () => {
                     title="Click vào ảnh để xem phóng to HD"
                   >
                     <Avatar className="h-24 w-24 border-4 border-primary/20 group-hover:border-primary/60 transition-all shadow-md">
-                      <AvatarImage src={resolveBackendUrl(profile?.avatarUrl) || `https://api.dicebear.com/7.x/adventurer/svg?seed=${profile?.username}`} />
+                      <AvatarImage src={resolveAvatarUrl(profile?.avatarUrl, avatarVersion || profile?.updatedAt) || `https://api.dicebear.com/7.x/adventurer/svg?seed=${profile?.username}`} />
                       <AvatarFallback className="bg-primary/10 text-primary font-extrabold uppercase text-2xl">
                         {profile?.username.slice(0, 2)}
                       </AvatarFallback>
@@ -1405,7 +1420,7 @@ export const Profile: React.FC = () => {
           <div className="flex flex-col items-center justify-center gap-4 py-4">
             <div className="w-80 h-80 rounded-full border-4 border-primary/40 shadow-2xl overflow-hidden bg-black flex items-center justify-center">
               <img
-                src={resolveBackendUrl(profile?.avatarUrl) || `https://api.dicebear.com/7.x/adventurer/svg?seed=${profile?.username}`}
+                src={resolveAvatarUrl(profile?.avatarUrl, avatarVersion || profile?.updatedAt) || `https://api.dicebear.com/7.x/adventurer/svg?seed=${profile?.username}`}
                 alt="Avatar Large Preview"
                 style={{ transform: `scale(${detailZoom}) rotate(${detailRotate}deg)`, transition: "transform 0.2s ease" }}
                 className="w-full h-full object-cover"
