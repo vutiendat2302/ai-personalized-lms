@@ -2,8 +2,11 @@ from typing import Optional
 from fastapi import Header, HTTPException, status
 from app.core.config import settings
 
-# Xác thực nội bộ với spring boot 
-async def verify_internal_token(x_internal_token: Optional[str] = Header(None, alias="X-Internal-Token")):
+
+# Xác thực nội bộ với spring boot
+async def verify_internal_token(
+    x_internal_token: Optional[str] = Header(None, alias="X-Internal-Token")
+):
     """
     Xác thực token bảo mật giao tiếp nội bộ giữa Spring Boot Backend và AI Service.
 
@@ -16,5 +19,5 @@ async def verify_internal_token(x_internal_token: Optional[str] = Header(None, a
     if not x_internal_token or x_internal_token != settings.INTERNAL_SECRET:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or missing X-Internal-Token header"
+            detail="Invalid or missing X-Internal-Token header",
         )

@@ -10,10 +10,24 @@ export interface ChatMessage {
   content: string;
   createdAt: string;
   status?: MessageStatus;
+  feedback?: "THUMBS_UP" | "THUMBS_DOWN" | null;
 }
 
 export interface AiChatRequestPayload {
   conversationId?: string;
   question: string;
   systemInstruction?: string;
+  module?: string;
+  route?: string;
+}
+
+export interface AiConversation {
+  id: string;
+  title: string;
+  scope: "ADMIN_COPILOT" | "EMPLOYEE_COPILOT" | "STUDENT_ASSISTANT" | "COURSE_ASSISTANT";
+  module: string;
+  route?: string;
+  createdAt: string;
+  updatedAt: string;
+  messages: ChatMessage[];
 }

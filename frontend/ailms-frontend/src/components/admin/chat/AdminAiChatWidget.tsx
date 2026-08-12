@@ -10,12 +10,25 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ChatHeader } from "./ChatHeader";
 import { ChatMessages } from "./ChatMessages";
 import { ChatInput } from "./ChatInput";
+import { ConversationHistory } from "./ConversationHistory";
+import { useLocation } from "react-router-dom";
 
-export const AdminAiChatWidget: React.FC = () => {
+/** Ánh xạ route toàn hệ thống sang module dùng để filter RAG. */
+const resolveChatModule = (pathname: string): string => {
+  if (pathname.startsWith("/sales")) return "SALES";
+  if (pathname.startsWith("/analytics")) return "REPORTING";
+  if (/contracts|employees|students|attendance|salaries|work-schedule|approval|category-teachers/.test(pathname)) return "HR";
+  if (/courses|reviews|classrooms|sessions|quizzes/.test(pathname)) return "TRAINING";
+  return "SYSTEM";
+};
+
+export const AiChatWidget: React.FC = () => {
   const { auth } = useAuth();
   const toast = useToast();
+  const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const widgetRef = useRef<HTMLDivElement>(null);
 
   const {
@@ -23,10 +36,17 @@ export const AdminAiChatWidget: React.FC = () => {
     input,
     setInput,
     isStreaming,
+    conversations,
+    conversationId,
+    isHistoryLoading,
+    historyError,
     sendMessage,
     stopGenerating,
-    clearHistory,
-  } = useAiChat();
+    startNewConversation,
+    openConversation,
+    removeConversation,
+    renameConversation,
+  } = useAiChat(location.pathname, resolveChatModule(location.pathname));
 
   const currentUser = auth.user;
   const userName = currentUser?.fullName || currentUser?.username || "Người dùng";
@@ -66,9 +86,15 @@ export const AdminAiChatWidget: React.FC = () => {
 
   const userRole = getUserSystemRole();
 
-  const handleConfirmClearHistory = () => {
-    clearHistory();
-    toast.success("Đã xóa lịch sử trò chuyện!");
+  /** Xóa conversation đã lưu hoặc chỉ dọn chat mới chưa được backend cấp ID. */
+  const handleConfirmClearHistory = async () => {
+    if (conversationId) {
+      await removeConversation(conversationId);
+    } else {
+      startNewConversation();
+    }
+    setIsClearConfirmOpen(false);
+    toast.success("Đã xóa cuộc trò chuyện!");
   };
 
   return (
@@ -81,25 +107,51 @@ export const AdminAiChatWidget: React.FC = () => {
             userRoleLabel={userRole}
             hasMessages={messages.length > 0}
             onClearHistory={() => setIsClearConfirmOpen(true)}
+            onToggleHistory={() => setIsHistoryOpen((value) => !value)}
+            onNewConversation={() => {
+              startNewConversation();
+              setIsHistoryOpen(false);
+            }}
             onClose={() => setIsOpen(false)}
           />
 
           {/* Messages List */}
-          <ChatMessages
-            messages={messages}
-            userName={userName}
-            userRole={userRole}
-            isStreaming={isStreaming}
-          />
+          {isHistoryOpen ? (
+            <ConversationHistory
+              conversations={conversations}
+              currentId={conversationId}
+              loading={isHistoryLoading}
+              error={historyError}
+              onOpen={(id) => {
+                void openConversation(id).then(() => setIsHistoryOpen(false));
+              }}
+              onDelete={(id) => {
+                void removeConversation(id);
+              }}
+              onRename={(id, title) => {
+                void renameConversation(id, title)
+                  .then(() => toast.success("Đã đổi tiêu đề hội thoại"));
+              }}
+            />
+          ) : (
+            <ChatMessages
+              messages={messages}
+              userName={userName}
+              userRole={userRole}
+              isStreaming={isStreaming}
+            />
+          )}
 
           {/* Input Area */}
-          <ChatInput
-            input={input}
-            setInput={setInput}
-            onSend={sendMessage}
-            onStop={stopGenerating}
-            isStreaming={isStreaming}
-          />
+          {!isHistoryOpen && (
+            <ChatInput
+              input={input}
+              setInput={setInput}
+              onSend={sendMessage}
+              onStop={stopGenerating}
+              isStreaming={isStreaming}
+            />
+          )}
         </Card>
       )}
 
@@ -108,8 +160,8 @@ export const AdminAiChatWidget: React.FC = () => {
         open={isClearConfirmOpen}
         onOpenChange={setIsClearConfirmOpen}
         title="Xóa lịch sử trò chuyện"
-        description="Bạn có chắc chắn muốn xóa toàn bộ lịch sử trò chuyện với AI Copilot không? Thao tác này không thể hoàn tác."
-        confirmText="Xóa lịch sử"
+        description="Bạn có chắc chắn muốn xóa cuộc trò chuyện hiện tại không? Thao tác này không thể hoàn tác."
+        confirmText="Xóa hội thoại"
         cancelText="Hủy bỏ"
         variant="destructive"
         onConfirm={handleConfirmClearHistory}

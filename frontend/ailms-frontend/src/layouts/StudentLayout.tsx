@@ -20,6 +20,7 @@ import {
   Menu,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { AiChatWidget } from "@/components/admin/chat/AdminAiChatWidget";
 
 interface NavSection {
   title?: string;
@@ -175,6 +176,7 @@ export const StudentLayout: React.FC = () => {
       <main className="flex-1 p-6 md:p-8 w-full min-w-0 overflow-x-clip bg-background">
         <Outlet />
       </main>
+      <AiChatWidget />
     </div>
   );
 };

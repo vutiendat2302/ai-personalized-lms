@@ -2,7 +2,7 @@ import React from "react";
 import { Outlet } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
-import { AdminAiChatWidget } from "@/components/admin/chat/AdminAiChatWidget";
+import { AiChatWidget } from "@/components/admin/chat/AdminAiChatWidget";
 
 export const AdminLayout: React.FC = () => {
   const { auth } = useAuth();
@@ -15,7 +15,12 @@ export const AdminLayout: React.FC = () => {
   );
 
   if (!isAdmin) {
-    return <Outlet />;
+    return (
+      <>
+        <Outlet />
+        <AiChatWidget />
+      </>
+    );
   }
 
   return (
@@ -24,7 +29,7 @@ export const AdminLayout: React.FC = () => {
       <main className="flex-1 p-6 md:p-8 w-full min-w-0 overflow-x-clip">
         <Outlet />
       </main>
-      <AdminAiChatWidget />
+      <AiChatWidget />
     </div>
   );
 };

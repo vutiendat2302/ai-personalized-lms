@@ -10,7 +10,7 @@ spring:
   jpa:
     hibernate:
       ##(create, update, create-drop, validate)
-      ddl-auto: create
+      ddl-auto: update
     show-sql: true
     properties:
       hibernate:
@@ -53,7 +53,7 @@ api:
 app:
   jwt:
     secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
-    expiration-ms: 900000 # 15 minutes - thời gian sống của access token
+    expiration-ms: 604800000 # 15 minutes - thời gian sống của access token
     refresh-expiration-ms: 604800000 # 7 days - thời gian sống của refresh token
   frontend:
     url: ${FRONTEND_URL:http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:3000,http://213.163.201.42,http://ailms.chickenkiller.com}
@@ -72,5 +72,5 @@ minio:
   bucket-name: ${MINIO_BUCKET_NAME:ailms-minio}
 
 ai-service:
-  base-url: http://localhost:8000
-  interal-token: dev_internal_secret_123
+  base-url: ${AI_SERVICE_BASE_URL:http://localhost:8000}
+  internal-token: ${AI_SERVICE_INTERNAL_TOKEN:dev_internal_secret_123}

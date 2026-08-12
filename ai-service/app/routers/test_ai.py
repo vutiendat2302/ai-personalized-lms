@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from app.core.config import settings
 from app.core.security import verify_internal_token
@@ -6,6 +8,7 @@ from app.schemas.test_schema import GenerateTestRequest, GenerateTestResponse
 
 router = APIRouter(prefix="/test", tags=["Test AI Connection"])
 gemini_provider = GeminiProvider()
+logger = logging.getLogger(__name__)
 
 
 @router.get("/health")
@@ -18,17 +21,22 @@ async def health_check():
         dict: Chứa thông tin trạng thái service, tên model Gemini và trạng thái cấu hình API Key.
     """
     api_key_configured = bool(
-        settings.GEMINI_API_KEY and settings.GEMINI_API_KEY != "your_gemini_api_key_here"
+        settings.GEMINI_API_KEY
+        and settings.GEMINI_API_KEY != "your_gemini_api_key_here"
     )
     return {
         "status": "ok",
         "service": "ai-service",
         "gemini_model": settings.GEMINI_MODEL,
-        "api_key_configured": api_key_configured
+        "api_key_configured": api_key_configured,
     }
 
 
-@router.post("/generate", response_model=GenerateTestResponse, dependencies=[Depends(verify_internal_token)])
+@router.post(
+    "/generate",
+    response_model=GenerateTestResponse,
+    dependencies=[Depends(verify_internal_token)],
+)
 async def test_generate(request: GenerateTestRequest):
     """
     Endpoint thử nghiệm gửi prompt trực tiếp tới Google Gemini AI và nhận phản hồi.
@@ -42,19 +50,19 @@ async def test_generate(request: GenerateTestRequest):
     """
     try:
         response_text = await gemini_provider.generate_text(
-            prompt=request.prompt,
-            system_instruction=request.system_instruction
+            prompt=request.prompt, system_instruction=request.system_instruction
         )
         return GenerateTestResponse(
             status="success",
             provider="gemini",
             model=settings.GEMINI_MODEL,
-            result=response_text
+            result=response_text,
         )
     except ValueError as ve:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
-    except Exception as e:
+    except Exception:
+        logger.exception("Không thể kết nối Google AI ở endpoint kiểm tra")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Lỗi kết nối tới Google AI: {str(e)}"
+            detail="Không thể kết nối tới Google AI lúc này",
         )

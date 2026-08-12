@@ -11,6 +11,7 @@ import com.ailms.common.converter.SimpleJsonWriter;
 import com.ailms.entity.*;
 import com.ailms.entity.enums.*;
 import com.ailms.event.AuditLogEvent;
+import com.ailms.event.ContractKnowledgeChangedEvent;
 import com.ailms.exception.BusinessException;
 import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.mapper.EmployeeContractMapper;
@@ -206,6 +207,7 @@ public class EmployeeContractService implements IEmployeeContractService {
         employeeRepository.save(employee);
 
         EmployeeContractEntity saved = employeeContractRepository.save(entity);
+        publishKnowledgeUpsert(saved.getId());
         String newValue = SimpleJsonWriter.toJson(saved);
 
         // Ghi Audit Log cho hành động chấm dứt
@@ -245,6 +247,7 @@ public class EmployeeContractService implements IEmployeeContractService {
         entity.setStatus(BaseStatusEnum.ACTIVE);
 
         EmployeeContractEntity saved = employeeContractRepository.save(entity);
+        publishKnowledgeUpsert(saved.getId());
         employee.setStatus(request.getContractTypeEnum() == ContractTypeEnum.PROBATION
                 ? EmployeeStatusEnum.PROBATION : EmployeeStatusEnum.ACTIVE);
         employee.setEndDate(null);
@@ -311,6 +314,7 @@ public class EmployeeContractService implements IEmployeeContractService {
             contract.setFileMetadata(savedMetadata);
             contract.setFileKey(objectKey);
             EmployeeContractEntity updatedContract = employeeContractRepository.save(contract);
+            publishKnowledgeUpsert(updatedContract.getId());
 
             applicationEventPublisher.publishEvent(new AuditLogEvent(this, "UPLOAD_FILE", "EMPLOYEE_CONTRACT", updatedContract.getId(), null, updatedContract));
 
@@ -437,6 +441,7 @@ public class EmployeeContractService implements IEmployeeContractService {
                 .build();
 
         EmployeeContractEntity savedContract = employeeContractRepository.save(contractEntity);
+        publishKnowledgeUpsert(savedContract.getId());
         employee.setStatus(request.getContractTypeEnum() == ContractTypeEnum.PROBATION
                 ? EmployeeStatusEnum.PROBATION : EmployeeStatusEnum.ACTIVE);
         employee.setEndDate(null);
@@ -499,6 +504,7 @@ public class EmployeeContractService implements IEmployeeContractService {
         employeeContractMapper.updateFromRequest(request, existing);
 
         EmployeeContractEntity updated = employeeContractRepository.save(existing);
+        publishKnowledgeUpsert(updated.getId());
         String newValue = SimpleJsonWriter.toJson(updated);
 
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "UPDATE", "EMPLOYEE_CONTRACT", id, oldValue, newValue));
@@ -531,6 +537,7 @@ public class EmployeeContractService implements IEmployeeContractService {
         }
 
         employeeContractRepository.delete(contract);
+        publishKnowledgeDelete(id);
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "DELETE", "EMPLOYEE_CONTRACT", id, oldValue, null));
     }
 
@@ -575,6 +582,7 @@ public class EmployeeContractService implements IEmployeeContractService {
         employeeContractRepository.deleteAll(contracts);
         employeeContractRepository.flush();
         fileMetadataRepository.deleteAll(metadataToDelete);
+        contracts.forEach(contract -> publishKnowledgeDelete(contract.getId()));
 
         applicationEventPublisher.publishEvent(new AuditLogEvent(
                 this, "DELETE_ALL", "EMPLOYEE_CONTRACT", employeeId,
@@ -995,6 +1003,7 @@ public class EmployeeContractService implements IEmployeeContractService {
         contract.setSigningTokenExpiresAt(expiresAt);
 
         EmployeeContractEntity saved = employeeContractRepository.save(contract);
+        publishKnowledgeUpsert(saved.getId());
         String newValue = SimpleJsonWriter.toJson(saved);
 
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CONTRACT_SIGNED_COMPANY", "EmployeeContract", id, oldValue, newValue));
@@ -1184,6 +1193,7 @@ public class EmployeeContractService implements IEmployeeContractService {
         contract.setSigningTokenExpiresAt(null);
 
         EmployeeContractEntity saved = employeeContractRepository.saveAndFlush(contract);
+        publishKnowledgeUpsert(saved.getId());
         if (oldMetadata != null && !Objects.equals(oldMetadata.getId(), savedMetadata.getId())) {
             fileMetadataRepository.delete(oldMetadata);
         }
@@ -1537,5 +1547,17 @@ public class EmployeeContractService implements IEmployeeContractService {
         Specification<EmployeeContractEntity> spec = (root, query, cb) -> cb.disjunction();
         spec = spec.or((root, query, cb) -> cb.equal(root.get("employee").get("userId"), currentUserId));
         return spec;
+    }
+
+    /** Phát sự kiện upsert RAG bằng chính Snowflake ID của hợp đồng. */
+    private void publishKnowledgeUpsert(Long contractId) {
+        applicationEventPublisher.publishEvent(new ContractKnowledgeChangedEvent(
+                contractId, ContractKnowledgeChangedEvent.Operation.UPSERT));
+    }
+
+    /** Phát sự kiện xóa nguồn RAG sau khi hợp đồng bị xóa khỏi MySQL. */
+    private void publishKnowledgeDelete(Long contractId) {
+        applicationEventPublisher.publishEvent(new ContractKnowledgeChangedEvent(
+                contractId, ContractKnowledgeChangedEvent.Operation.DELETE));
     }
 }
