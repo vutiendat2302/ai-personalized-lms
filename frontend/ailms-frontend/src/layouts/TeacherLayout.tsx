@@ -109,7 +109,7 @@ export const TeacherLayout: React.FC = () => {
                 <div className="truncate">
                   <h3 className="text-base font-semibold uppercase tracking-wider text-primary truncate">TEACHER PORTAL</h3>
                   <p className="text-xs text-muted-foreground font-medium truncate">
-                    {isTA ? "Không gian Trợ giảng (TA)" : "Không gian Giảng viên"}
+                    {isTA ? "Không gian Trợ giảng" : "Không gian Giảng viên"}
                   </p>
                 </div>
               </div>

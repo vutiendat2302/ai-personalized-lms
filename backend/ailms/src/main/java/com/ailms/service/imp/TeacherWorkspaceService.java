@@ -94,7 +94,8 @@ public class TeacherWorkspaceService implements ITeacherWorkspaceService {
         long minSeconds = reviewable.stream().mapToLong(item -> reviewSecondsLeft(item, now)).min().orElse(0L);
 
         return TeacherWorkspaceResponse.Metrics.builder()
-                .activeClassesCount(scope.classes().stream().filter(item -> item.getClassEntity().getStatus() == BaseStatusEnum.ACTIVE).count())
+                .activeClassesCount(scope.classes().stream()
+                        .filter(item -> isActiveClassAt(item.getClassEntity(), now)).count())
                 .sessionsThisWeekTotal(weekSessions.size())
                 .sessionsThisWeekCompleted(weekSessions.stream().filter(item -> isCompleted(item, now)).count())
                 .unreviewedSessionsCount(reviewable.size()).unreviewedMinSecondsLeft(minSeconds)
@@ -756,6 +757,13 @@ public class TeacherWorkspaceService implements ITeacherWorkspaceService {
     /** Làm tròn số thực theo số chữ số thập phân. */
     private double round(double value, int scale) {
         return BigDecimal.valueOf(value).setScale(scale, RoundingMode.HALF_UP).doubleValue();
+    }
+
+    /** Xác định lớp còn hoạt động tại thời điểm hiện tại và chưa quá ngày kết thúc. */
+    private boolean isActiveClassAt(ClassEntity classEntity, LocalDateTime now) {
+        if (classEntity == null || classEntity.getStatus() != BaseStatusEnum.ACTIVE) return false;
+        LocalDateTime endDate = classEntity.getEndDate();
+        return endDate == null || endDate.isAfter(now);
     }
 
     /** Trả chuỗi đã trim hoặc null nếu rỗng. */

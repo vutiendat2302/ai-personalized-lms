@@ -1,22 +1,44 @@
 import { useEffect, useMemo, useState } from "react";
+import axios from "axios";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { CalendarDays, CheckCircle2, Clock, GraduationCap, Loader2, ShoppingCart, Users } from "lucide-react";
 import type { CourseDetailPackage } from "@/api/courses/courseApi";
-import type { OneOnOneNeedsPayload } from "@/api/orders/orderApi";
+import { orderApi, type OneOnOneNeedsPayload } from "@/api/orders/orderApi";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { TutorSchedulePicker, type TutorScheduleSlot } from "@/components/courses/TutorSchedulePicker";
+
+const EMPTY_SCHEDULE_SLOT: TutorScheduleSlot = { id: "initial", dayOfWeek: 1, startTime: "", endTime: "" };
+
+/** Kiểm tra danh sách lịch mong muốn không có hai khung giờ giao nhau trong cùng ngày. */
+const hasNoOverlappingSlots = (slots: TutorScheduleSlot[]) => slots.every((left, leftIndex) => (
+  slots.every((right, rightIndex) => leftIndex === rightIndex
+    || left.dayOfWeek !== right.dayOfWeek
+    || left.startTime >= right.endTime
+    || right.startTime >= left.endTime)
+));
 
 const needsSchema = z.object({
   availablePeriod: z.string().trim().min(1, "Vui lòng nhập khoảng thời gian có thể bắt đầu học.").max(255, "Tối đa 255 ký tự."),
-  availableDays: z.string().trim().min(1, "Vui lòng chọn ít nhất một ngày có thể học.").max(255, "Tối đa 255 ký tự."),
-  preferredTimes: z.string().trim().min(1, "Vui lòng nhập ít nhất một khung giờ mong muốn.").max(500, "Tối đa 500 ký tự."),
+  scheduleSlots: z.array(z.object({
+    id: z.string(),
+    dayOfWeek: z.number().int().min(1).max(7),
+    startTime: z.string(),
+    endTime: z.string(),
+  }))
+    .min(1, "Vui lòng thêm ít nhất một khung lịch có thể học.")
+    .max(14, "Chỉ được khai báo tối đa 14 khung lịch.")
+    .refine((slots) => slots.every((slot) => slot.startTime && slot.endTime), "Vui lòng chọn đủ giờ bắt đầu và kết thúc.")
+    .refine((slots) => slots.every((slot) => slot.startTime < slot.endTime), "Giờ kết thúc phải sau giờ bắt đầu.")
+    .refine(hasNoOverlappingSlots, "Các khung giờ trong cùng một ngày không được trùng nhau."),
   currentLevel: z.string().trim().min(1, "Vui lòng nhập trình độ hiện tại.").max(255, "Tối đa 255 ký tự."),
   learningSituation: z.string().trim().min(1, "Tình hình học tập là bắt buộc.").max(2000, "Tối đa 2.000 ký tự."),
   learningGoals: z.string().trim().min(1, "Mục tiêu học tập là bắt buộc.").max(2000, "Tối đa 2.000 ký tự."),
@@ -35,13 +57,12 @@ interface CoursePackageModalProps {
   loading?: boolean;
   submitting: boolean;
   action: "checkout" | "cart";
-  onConfirm: (coursePackage: CourseDetailPackage, needs?: OneOnOneNeedsPayload) => Promise<void>;
+  onConfirm: (coursePackage: CourseDetailPackage, needs?: OneOnOneNeedsPayload, acceptScheduleConflict?: boolean) => Promise<void>;
 }
 
 const EMPTY_NEEDS: NeedsForm = {
   availablePeriod: "",
-  availableDays: "",
-  preferredTimes: "",
+  scheduleSlots: [{ ...EMPTY_SCHEDULE_SLOT }],
   currentLevel: "",
   learningSituation: "",
   learningGoals: "",
@@ -68,6 +89,13 @@ const packageTypeLabel = (type: CourseDetailPackage["deliveryMode"]) => ({
 /** Đổi chỉ số ngày backend thành nhãn lịch học tiếng Việt. */
 const dayLabel = (day: number) => day === 7 ? "Chủ nhật" : `Thứ ${String(day + 1)}`;
 
+/** Chuyển lịch chọn có cấu trúc sang hai trường chuỗi tương thích hợp đồng backend hiện tại. */
+const toNeedsPayload = ({ scheduleSlots, ...values }: NeedsForm): OneOnOneNeedsPayload => ({
+  ...values,
+  availableDays: scheduleSlots.map((slot) => dayLabel(slot.dayOfWeek)).join("; "),
+  preferredTimes: scheduleSlots.map((slot) => `${slot.startTime}-${slot.endTime}`).join("; "),
+});
+
 /** Xác định package có phần lớp nhóm và phải hiển thị lịch trước khi mua. */
 const requiresGroupClass = (item: CourseDetailPackage) => item.deliveryMode === "GROUP_CLASS"
   || (item.deliveryMode === "COMBO" && ((item.maxGroupSize ?? 0) > 1 || item.classDetail != null));
@@ -89,6 +117,10 @@ export function CoursePackageModal({
 }: CoursePackageModalProps) {
   const [selectedId, setSelectedId] = useState("");
   const [classDetailOpen, setClassDetailOpen] = useState(false);
+  const [scheduleChecking, setScheduleChecking] = useState(false);
+  const [scheduleConflict, setScheduleConflict] = useState("");
+  const [scheduleCheckError, setScheduleCheckError] = useState("");
+  const [pendingNeeds, setPendingNeeds] = useState<OneOnOneNeedsPayload | null>(null);
   const form = useForm<NeedsForm>({
     resolver: zodResolver(needsSchema),
     defaultValues: EMPTY_NEEDS,
@@ -108,6 +140,9 @@ export function CoursePackageModal({
     requestAnimationFrame(() => {
       setSelectedId(firstPurchasable?.id ?? "");
       setClassDetailOpen(firstPurchasable ? requiresGroupClass(firstPurchasable) : false);
+      setScheduleConflict("");
+      setScheduleCheckError("");
+      setPendingNeeds(null);
       reset(EMPTY_NEEDS);
     });
   }, [isOpen, packages, reset]);
@@ -118,19 +153,46 @@ export function CoursePackageModal({
     if (packageId !== selectedId) reset(EMPTY_NEEDS);
     setSelectedId(packageId);
     setClassDetailOpen(nextPackage ? requiresGroupClass(nextPackage) : false);
+    setScheduleConflict("");
+    setScheduleCheckError("");
+    setPendingNeeds(null);
   };
 
-  /** Xác thực nhu cầu 1-1 khi cần rồi chuyển dữ liệu cho hành động cha. */
+  /** Kiểm tra xung đột lịch 1-1 trước khi chuyển dữ liệu cho hành động cha. */
+  const confirmTutorNeeds = async (needs: OneOnOneNeedsPayload) => {
+    if (!selectedPackage) return;
+    setScheduleChecking(true);
+    setScheduleCheckError("");
+    try {
+      const result = await orderApi.checkTutorScheduleConflict(needs);
+      if (result.conflict) {
+        setPendingNeeds(needs);
+        setScheduleConflict(result.message ?? "Khung giờ mong muốn đang trùng với lịch học hiện tại.");
+        return;
+      }
+      await onConfirm(selectedPackage, needs, false);
+    } catch (error) {
+      const message = axios.isAxiosError<{ message?: string }>(error)
+        ? error.response?.data.message
+        : null;
+      setScheduleCheckError(message ?? "Không thể kiểm tra thời khóa biểu hiện tại. Vui lòng thử lại.");
+    } finally {
+      setScheduleChecking(false);
+    }
+  };
+
+  /** Xác thực toàn bộ form và chuẩn hóa các dòng lịch trước khi kiểm tra xung đột. */
   const handleConfirm = async () => {
     if (!selectedPackage?.purchasable) return;
     if (!requiresTutorNeeds(selectedPackage)) {
       await onConfirm(selectedPackage);
       return;
     }
-    await form.handleSubmit(async (values) => onConfirm(selectedPackage, values))();
+    await form.handleSubmit(async (values) => confirmTutorNeeds(toNeedsPayload(values)))();
   };
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent className="max-h-[92vh] max-w-4xl overflow-y-auto">
         <DialogHeader>
@@ -244,15 +306,27 @@ export function CoursePackageModal({
               <div className="md:col-span-2 rounded-lg bg-primary/5 p-3 text-sm font-medium">
                 Gói gồm {selectedPackage.includedTutorSessions ?? 0} buổi gia sư chính thức.
               </div>
-              {(["availablePeriod", "availableDays", "preferredTimes", "currentLevel"] as const).map((field) => (
+              {(["availablePeriod", "currentLevel"] as const).map((field) => (
                 <FormField key={field} control={form.control} name={field} render={({ field: input }) => (
                   <FormItem>
-                    <FormLabel>{({ availablePeriod: "Khoảng thời gian có thể bắt đầu", availableDays: "Các ngày có thể học", preferredTimes: "Khung giờ mong muốn", currentLevel: "Trình độ hiện tại" })[field]} *</FormLabel>
+                    <FormLabel>{({ availablePeriod: "Khoảng thời gian có thể bắt đầu", currentLevel: "Trình độ hiện tại" })[field]} *</FormLabel>
                     <FormControl><Input {...input} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )} />
               ))}
+              <FormField control={form.control} name="scheduleSlots" render={({ field: input }) => (
+                <FormItem className="md:col-span-2">
+                  <FormLabel>Các ngày và khung giờ có thể học *</FormLabel>
+                  <FormControl>
+                    <TutorSchedulePicker value={input.value} onChange={input.onChange} disabled={submitting} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )} />
+              {scheduleCheckError && (
+                <p className="md:col-span-2 text-sm font-medium text-destructive">{scheduleCheckError}</p>
+              )}
               {(["learningSituation", "learningGoals", "weakAreas", "instructorPreferences", "additionalNotes"] as const).map((field) => (
                 <FormField key={field} control={form.control} name={field} render={({ field: input }) => (
                   <FormItem className="md:col-span-2">
@@ -268,12 +342,31 @@ export function CoursePackageModal({
 
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>Đóng</Button>
-          <Button type="button" onClick={() => void handleConfirm()} disabled={loading || !selectedPackage?.purchasable || submitting}>
-            {submitting ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{action === "cart" ? "Đang thêm..." : "Đang tạo thanh toán..."}</> : action === "cart" ? <><ShoppingCart className="mr-2 h-4 w-4" />Thêm vào giỏ hàng</> : "Thanh toán qua PayPal"}
+          <Button type="button" onClick={() => void handleConfirm()} disabled={loading || !selectedPackage?.purchasable || submitting || scheduleChecking}>
+            {submitting || scheduleChecking ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{scheduleChecking ? "Đang kiểm tra lịch..." : action === "cart" ? "Đang thêm..." : "Đang tạo thanh toán..."}</> : action === "cart" ? <><ShoppingCart className="mr-2 h-4 w-4" />Thêm vào giỏ hàng</> : "Thanh toán qua PayPal"}
           </Button>
         </div>
       </DialogContent>
     </Dialog>
+    <ConfirmDialog
+      open={Boolean(scheduleConflict)}
+      onOpenChange={(open) => {
+        if (!open && !submitting) {
+          setScheduleConflict("");
+          setPendingNeeds(null);
+        }
+      }}
+      title="Lịch học bị trùng"
+      description={scheduleConflict}
+      confirmText={action === "cart" ? "Vẫn thêm vào giỏ hàng" : "Vẫn tiếp tục thanh toán"}
+      cancelText="Chọn lại lịch"
+      variant="warning"
+      loading={submitting}
+      onConfirm={async () => {
+        if (!selectedPackage || !pendingNeeds) return;
+        await onConfirm(selectedPackage, pendingNeeds, true);
+      }}
+    />
+    </>
   );
 }
-

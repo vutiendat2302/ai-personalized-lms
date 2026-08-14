@@ -609,7 +609,7 @@ export const StudentDashboardPage: React.FC = () => {
       {/* ==========================================
           [SECTION 4] KHÓA HỌC NỔI BẬT (ÁP ĐÚNG LANDING PAGE WITH TABS)
           ========================================== */}
-      <section id="courses" className="py-16 border-t border-border/40 max-w-6xl mx-auto px-6">
+      <section id="courses" className="py-16 border-t border-border/40 max-w-6xl mx-auto px-6 sm:px-12 md:px-16">
         <div className="text-center max-w-2xl mx-auto mb-10">
           <h2 className="text-3xl uppercase font-extrabold text-foreground tracking-tight">
             Khóa học nổi bật

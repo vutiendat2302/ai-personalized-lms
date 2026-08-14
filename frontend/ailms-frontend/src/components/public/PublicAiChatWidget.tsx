@@ -11,6 +11,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/useToast";
 import {
   closeVisitorSupportConversation,
+  cancelSupportConversation,
   continueVisitorSupportConversation,
   ensureVisitor,
   getCurrentConversation,
@@ -110,6 +111,7 @@ export const PublicAiChatWidget: React.FC = () => {
   const { error: showError } = useToast();
   const [isOpen, setIsOpen] = useState(false);
   const [newConversationOpen, setNewConversationOpen] = useState(false);
+  const [cancelConversationOpen, setCancelConversationOpen] = useState(false);
   const [messages, setMessages] = useState<SupportMessage[]>([]);
   const [options, setOptions] = useState<SupportOption[]>([]);
   const [conversation, setConversation] = useState<SupportConversation | null>(null);
@@ -456,6 +458,21 @@ export const PublicAiChatWidget: React.FC = () => {
     finally { setLoading(false); }
   };
 
+  /** Hủy yêu cầu đang chờ và cập nhật ngay trạng thái conversation trong widget. */
+  const cancelQueuedConversation = async () => {
+    if (!visitorToken || !conversation?.id || loading) return;
+    setLoading(true);
+    try {
+      const cancelled = await cancelSupportConversation(visitorToken, conversation.id);
+      setConversation(cancelled);
+      setCancelConversationOpen(false);
+    } catch (error) {
+      showError(errorMessage(error, "Không thể hủy yêu cầu tư vấn. Vui lòng thử lại."));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   /** Từ chối đóng và đưa conversation trở lại ACTIVE. */
   const keepConversationActive = async () => {
     if (!visitorToken || !conversation?.id || loading) return;
@@ -576,7 +593,7 @@ export const PublicAiChatWidget: React.FC = () => {
     .includes(conversation?.status ?? "");
 
   return <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
-    {isOpen && <Card className="relative mb-4 flex h-[min(700px,calc(100vh-6rem))] w-480 max-w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden border p-0 shadow-2xl">
+    {isOpen && <Card className="relative mb-4 flex h-[min(700px,calc(100vh-6rem))] w-[420px] max-w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden border p-0 shadow-2xl">
       <div className="flex items-center justify-between border-b bg-primary px-4 py-3 text-primary-foreground">
         <div className="flex items-center gap-2"><Bot className="h-5 w-5" /><div><p className="text-sm font-semibold">Tư vấn AILMS</p><p className="text-sm opacity-80">Đồng hành cùng bạn</p></div></div>
         <div className="flex items-center gap-1">
@@ -662,11 +679,17 @@ export const PublicAiChatWidget: React.FC = () => {
             <strong className="text-foreground">{estimatedWaitMinutes != null ? `Khoảng ${String(estimatedWaitMinutes)} phút` : "Đang cập nhật"}</strong>
           </div>
           {conversation.queuePosition != null && <p className="text-center text-[11px] text-muted-foreground">Vị trí hiện tại trong hàng đợi: <strong className="text-foreground">{conversation.queuePosition}</strong></p>}
+          <p className="flex items-center justify-center gap-1.5 text-[11px] text-muted-foreground" role="status" aria-live="polite">
+            <Loader2 className="h-3 w-3 animate-spin" /> Đang cập nhật trạng thái kết nối...
+          </p>
           {!isQueueOverloaded && <div className="flex justify-center gap-1" aria-label="Đang chờ">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary [animation-delay:180ms]" />
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary [animation-delay:360ms]" />
           </div>}
+          <Button variant="outline" className="w-full" disabled={loading} onClick={() => { setCancelConversationOpen(true); }}>
+            Hủy kết nối với tư vấn viên
+          </Button>
         </div>}
         {["CLOSED", "CANCELLED", "EXPIRED"].includes(conversation?.status ?? "") && <Button variant="outline" className="w-full" onClick={() => { setNewConversationOpen(true); }}><RotateCcw className="mr-2 h-4 w-4" />Tạo cuộc trò chuyện mới</Button>}
         <div ref={messagesEndRef} />
@@ -694,5 +717,6 @@ export const PublicAiChatWidget: React.FC = () => {
     <div className="relative"><Button size="icon" onClick={() => { if (!isOpen) setUnreadCount(0); setIsOpen((value) => !value); }} title={isOpen ? "Đóng tư vấn" : "Mở tư vấn"} className="h-14 w-14 rounded-full shadow-xl">{isOpen ? <X className="h-6 w-6" /> : <Bot className="h-7 w-7" />}</Button>{!isOpen && unreadCount > 0 && <span className="pointer-events-none absolute -right-1 -top-1 min-w-5 rounded-full bg-destructive px-1.5 py-1 text-center text-[10px] font-extrabold leading-none text-destructive-foreground shadow-md">{unreadCount > 99 ? "99+" : `+${String(unreadCount)}`}</span>}</div>
 
     <ConfirmDialog open={newConversationOpen} onOpenChange={setNewConversationOpen} title="Tạo cuộc trò chuyện mới?" description="Cuộc trò chuyện đang mở sẽ được kết thúc và lịch sử vẫn được lưu lại." confirmText="Tạo mới" variant="warning" loading={loading} onConfirm={createNewConversation} />
+    <ConfirmDialog open={cancelConversationOpen} onOpenChange={setCancelConversationOpen} title="Hủy kết nối với tư vấn viên?" description="Yêu cầu sẽ được rút khỏi hàng đợi. Bạn có thể tạo yêu cầu mới bất cứ lúc nào." confirmText="Hủy kết nối" variant="warning" loading={loading} onConfirm={cancelQueuedConversation} />
   </div>;
 };

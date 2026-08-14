@@ -91,7 +91,7 @@ export const CourseAdminDetailPage: React.FC = () => {
           const status = assignment.status || "ACTIVE";
           return {
             id: String(assignment.userId),
-            name: employee?.fullName || employee?.username || `Giảng viên #${assignment.userId}`,
+            name: employee?.fullName || employee?.username || "Chưa xác định",
             avatar: employee?.avatarUrl && employee.avatarUrl.trim() !== "" ? employee.avatarUrl : undefined,
             category: isPrimary ? "Giảng viên chính" : "Đồng phụ trách",
             isPrimary,
@@ -103,7 +103,7 @@ export const CourseAdminDetailPage: React.FC = () => {
         setCurriculum(sections.map((section: any, index: number) => ({ ...section, lessons: lessons[index] || [] })));
         setCourse({ ...row, id: String(row.id), categoryId: String(row.categoryId),
           status: row.status as import("@/types/adminCourseClass").CourseStatus,
-          level: row.level === "BEGINNER" ? "BASIC" : row.level,
+          level: row.level as import("@/types/adminCourseClass").CourseLevel,
           teachers: assignedTeachers,
           rating: Number(row.avgRating || 0), reviewCount: row.reviewCount || 0, referencePrice: Number(row.suggestedPrice || 0),
           packages: packages.map((item: any) => ({ ...item, id: String(item.id), courseId: String(item.courseId), active: item.status === "ACTIVE", attachedClassId: item.classId ? String(item.classId) : undefined, attachedClassName: item.className })), packagesCount: packages.length,
@@ -137,7 +137,7 @@ export const CourseAdminDetailPage: React.FC = () => {
       await adminCourseClassApi.assignCourseTeacher(course.id, uid);
       const newTeacher = {
         id: uid,
-        name: employee.fullName || employee.username || `Giảng viên #${uid}`,
+        name: employee.fullName || employee.username || "Chưa xác định",
         avatar: employee.avatarUrl && employee.avatarUrl.trim() !== "" ? employee.avatarUrl : undefined,
         category: asPrimary || teachers.length === 0 ? "Giảng viên chính" : "Đồng phụ trách",
         isPrimary: asPrimary || teachers.length === 0,

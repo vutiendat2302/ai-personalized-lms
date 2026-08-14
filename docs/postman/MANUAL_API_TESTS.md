@@ -209,8 +209,8 @@ Content-Type: application/json
   "coursePackageId": "{{oneOnOnePackageId}}",
   "oneOnOneNeeds": {
     "availablePeriod": "01/09/2026 - 30/09/2026",
-    "availableDays": "Thứ 3, Thứ 5, Thứ 7",
-    "preferredTimes": "19:00 - 21:00",
+    "availableDays": "Thứ 3; Thứ 5; Thứ 7",
+    "preferredTimes": "19:00-21:00; 19:00-21:00; 08:00-10:00",
     "currentLevel": "Cơ bản",
     "learningSituation": "Đã học kiến thức nền nhưng chưa vững bài tập",
     "learningGoals": "Củng cố nền tảng và đạt điểm 8",
@@ -222,6 +222,26 @@ Content-Type: application/json
 ```
 
 Approve PayPal và capture như mục 2. Kỳ vọng sau capture mới tạo một matching request ở `WAITING_INSTRUCTOR`; không tạo lớp 1-1 chính thức ngay lúc thanh toán.
+
+Mỗi phần tử trong `availableDays` phải tương ứng theo vị trí với một phần tử trong `preferredTimes`, phân tách bằng dấu `;`. Có thể kiểm tra xung đột trước mà không tạo order:
+
+```http
+POST {{baseUrl}}/v1/orders/tutor-schedule/check
+Authorization: Bearer {{studentToken}}
+Content-Type: application/json
+
+{
+  "availablePeriod": "01/09/2026 - 30/09/2026",
+  "availableDays": "Thứ 3; Thứ 5",
+  "preferredTimes": "19:00-21:00; 19:00-21:00",
+  "currentLevel": "Cơ bản",
+  "learningSituation": "Đã học kiến thức nền nhưng chưa vững bài tập",
+  "learningGoals": "Củng cố nền tảng và đạt điểm 8",
+  "weakAreas": "Bài toán vận dụng"
+}
+```
+
+Kỳ vọng `200` với `data.conflict: false` khi không trùng. Nếu trùng, endpoint vẫn trả `200` với `data.conflict: true` và `data.message` nêu thứ, giờ, tên lớp hiện tại; gửi `acceptScheduleConflict: true` ở checkout nếu học viên xác nhận vẫn tiếp tục. Checkout thật vẫn trả `422` khi có xung đột mà chưa gửi cờ xác nhận.
 
 ## 4. API học viên cho yêu cầu 1-1
 
@@ -362,7 +382,40 @@ Authorization: Bearer {{hrToken}}
 
 Kỳ vọng `CONTACTED`. HR không tạo lớp thử hoặc phê duyệt lịch thử.
 
-### 6.4 Hủy hoặc hoàn tiền khi cần can thiệp
+### 6.4 Từ chối kết nối và gửi lại cho người dạy khác
+
+Khi request đang `INSTRUCTOR_ACCEPTED`, HR có thể từ chối kết nối:
+
+```http
+POST {{baseUrl}}/v1/hr/one-on-one/requests/{{requestId}}/reject-connection
+Authorization: Bearer {{hrToken}}
+Content-Type: application/json
+
+{ "reason": "Lịch trao đổi và phương án hỗ trợ chưa phù hợp" }
+```
+
+Kỳ vọng request chuyển `REMATCHING`, assignee bị xóa và không thể nhận lại request. Hệ thống gửi thông báo cho người bị từ chối, học viên và các Teacher/TA ACTIVE phù hợp khác trong danh mục.
+
+HR cũng có thể chọn người nhận cụ thể:
+
+```http
+GET {{baseUrl}}/v1/hr/one-on-one/requests/{{requestId}}/instructor-candidates
+Authorization: Bearer {{hrToken}}
+```
+
+Chọn các `instructorId` từ response rồi gửi:
+
+```http
+POST {{baseUrl}}/v1/hr/one-on-one/requests/{{requestId}}/notify-instructors
+Authorization: Bearer {{hrToken}}
+Content-Type: application/json
+
+{ "instructorIds": ["{{teacherUserId}}", "{{taUserId}}"] }
+```
+
+Kỳ vọng chỉ những Teacher/TA được chọn nhận notification dẫn tới trang lớp gợi ý.
+
+### 6.5 Hủy hoặc hoàn tiền khi cần can thiệp
 
 Hủy:
 

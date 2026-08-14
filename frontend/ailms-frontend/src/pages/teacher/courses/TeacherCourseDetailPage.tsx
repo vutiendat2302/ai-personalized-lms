@@ -92,7 +92,7 @@ export const TeacherCourseDetailPage: React.FC = () => {
           const status = assignment.status || "ACTIVE";
           return {
             id: String(assignment.userId),
-            name: employee?.fullName || employee?.username || `Giảng viên #${assignment.userId}`,
+            name: employee?.fullName || employee?.username || "Chưa xác định",
             avatar: employee?.avatarUrl && employee.avatarUrl.trim() !== "" ? employee.avatarUrl : undefined,
             category: isPrimary ? "Giảng viên chính" : "Đồng phụ trách",
             isPrimary,
@@ -109,7 +109,7 @@ export const TeacherCourseDetailPage: React.FC = () => {
           id: String(row.id),
           categoryId: String(row.categoryId),
           status: row.status as import("@/types/adminCourseClass").CourseStatus,
-          level: row.level === "BEGINNER" ? "BASIC" : row.level,
+          level: row.level as import("@/types/adminCourseClass").CourseLevel,
           teachers: assignedTeachers,
           rating: Number(row.avgRating || 0),
           reviewCount: row.reviewCount || 0,

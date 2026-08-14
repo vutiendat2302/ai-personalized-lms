@@ -201,7 +201,7 @@ export const CourseScrollContainer: React.FC<CourseScrollContainerProps> = ({
         onClick={() => {
           handleButtonClick(-1);
         }}
-        className="absolute sm:-left-16 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-card/95 border-border/50 text-foreground shadow-xl backdrop-blur-md transition-all duration-200 hover:bg-primary hover:text-primary-foreground hover:border-primary hover:scale-110 active:scale-95 disabled:opacity-20 disabled:pointer-events-none disabled:scale-100 disabled:shadow-none select-none cursor-pointer"
+        className="absolute -left-4 sm:-left-7 md:-left-10 lg:-left-14 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-card/95 border border-border/70 text-foreground shadow-lg backdrop-blur-md transition-all duration-200 hover:bg-primary hover:text-primary-foreground hover:border-primary hover:scale-110 hover:shadow-xl active:scale-95 disabled:opacity-0 disabled:pointer-events-none select-none cursor-pointer"
       >
         <ChevronLeft className="w-6 h-6 shrink-0" />
       </Button>
@@ -237,7 +237,7 @@ export const CourseScrollContainer: React.FC<CourseScrollContainerProps> = ({
         onClick={() => {
           handleButtonClick(1);
         }}
-        className="absolute sm:-right-16 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-card/95 border-border/50 text-foreground shadow-xl backdrop-blur-md transition-all duration-200 hover:bg-primary hover:text-primary-foreground hover:border-primary hover:scale-110 active:scale-95 disabled:opacity-20 disabled:pointer-events-none disabled:scale-100 disabled:shadow-none select-none cursor-pointer"
+        className="absolute -right-4 sm:-right-7 md:-right-10 lg:-right-14 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-card/95 border border-border/70 text-foreground shadow-lg backdrop-blur-md transition-all duration-200 hover:bg-primary hover:text-primary-foreground hover:border-primary hover:scale-110 hover:shadow-xl active:scale-95 disabled:opacity-0 disabled:pointer-events-none select-none cursor-pointer"
       >
         <ChevronRight className="w-6 h-6 shrink-0" />
       </Button>

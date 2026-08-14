@@ -71,7 +71,7 @@ export const TeacherDashboardPage: React.FC = () => {
           <GraduationCap className="h-6 w-6 text-primary" />
           Tổng quan Giảng dạy
         </h1>
-        <p className="text-xs text-muted-foreground mt-1">
+        <p className="text-sm text-foreground mt-1 opacity-80">
           Theo dõi thông tin các lớp đang đảm nhận, lịch dạy hôm nay và thu nhập của bạn.
         </p>
       </div>
@@ -80,40 +80,40 @@ export const TeacherDashboardPage: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="bg-card border-border/40 p-4 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground font-semibold">Lớp đang đảm nhận</span>
+            <span className="text-sm text-muted-foreground font-semibold">Lớp đang đảm nhận</span>
             <Users className="h-4 w-4 text-primary" />
           </div>
           <p className="text-2xl font-black text-foreground mt-2">{metrics.activeClassesCount}</p>
-          <p className="text-[11px] text-muted-foreground mt-1">Bao gồm Lớp Nhóm & 1-1</p>
+          <p className="text-sm text-foreground mt-1 opacity-80">Bao gồm nhóm và 1-1</p>
         </Card>
 
         <Card className="bg-card border-border/40 p-4 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground font-semibold">Buổi dạy tuần này</span>
+            <span className="text-sm text-muted-foreground font-semibold">Buổi dạy tuần này</span>
             <Calendar className="h-4 w-4 text-primary" />
           </div>
           <p className="text-2xl font-black text-foreground mt-2">
             {metrics.sessionsThisWeekCompleted}/{metrics.sessionsThisWeekTotal}
           </p>
-          <p className="text-[11px] text-primary font-bold mt-1">Đã dạy {metrics.sessionsThisWeekCompleted} buổi</p>
+          <p className="text-sm text-foreground font-medium mt-1 opacity-80">Đã dạy {metrics.sessionsThisWeekCompleted} buổi</p>
         </Card>
 
         <Card className="bg-card border-border/40 p-4 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground font-semibold">Đánh giá trung bình</span>
-            <Star className="h-4 w-4 text-amber-500 fill-amber-500" />
+            <span className="text-sm text-foreground font-semibold">Đánh giá trung bình</span>
+            <Star className="h-4 w-4" />
           </div>
           <p className="text-2xl font-black text-foreground mt-2">{metrics.averageRating} ⭐</p>
-          <p className="text-[11px] text-muted-foreground mt-1">Dựa trên review học viên</p>
+          <p className="text-sm text-foreground mt-1 opacity-80">Dựa trên review học viên</p>
         </Card>
 
         <Card className="bg-card border-border/40 p-4 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground font-semibold">Thu nhập tạm tính</span>
+            <span className="text-sm text-muted-foreground font-semibold">Thu nhập tạm tính</span>
             <DollarSign className="h-4 w-4 text-primary" />
           </div>
-          <p className="text-xl font-black text-primary mt-2">{formatVND(metrics.estimatedEarningsMonth)}</p>
-          <p className="text-[11px] text-muted-foreground mt-1">CONFIRMED tháng này</p>
+          <p className="text-2xl font-black text-muted-foreground mt-2">{formatVND(metrics.estimatedEarningsMonth)}</p>
+          <p className="text-sm text-foreground mt-1 opacity-80">Tháng này</p>
         </Card>
       </div>
 
@@ -121,17 +121,17 @@ export const TeacherDashboardPage: React.FC = () => {
       <Card className="bg-card border-border/40 p-5 space-y-4 shadow-xs">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+            <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
               <Calendar className="h-4 w-4 text-primary" />
               Lịch dạy hôm nay & sắp tới
             </h3>
-            <p className="text-xs text-muted-foreground">Bấm vào buổi dạy để xem chi tiết hoặc mở phòng học trực tuyến</p>
+            <p className="text-sm text-foreground opacity-80">Bấm vào buổi dạy để xem chi tiết hoặc mở phòng học trực tuyến</p>
           </div>
           <Button
             variant="outline"
             size="sm"
             onClick={() => navigate("/teacher/schedule")}
-            className="text-xs border-border text-foreground hover:bg-muted rounded-lg gap-1.5 cursor-pointer"
+            className="text-xs font-semibold border-border text-foreground hover:bg-foreground hover:text-white rounded-lg gap-1.5 cursor-pointer"
           >
             Mở xem toàn bộ Lịch
             <ArrowRight className="h-3.5 w-3.5" />
@@ -187,9 +187,9 @@ export const TeacherDashboardPage: React.FC = () => {
 
       {/* Row 4 — Activity Feed */}
       <Card className="bg-card border-border/40 p-5 space-y-3 shadow-xs">
-        <h3 className="text-sm font-bold text-foreground flex items-center gap-2"><Activity className="h-4 w-4 text-primary" />Hoạt động mới nhất</h3>
+        <h3 className="text-lg font-bold text-foreground flex items-center gap-2"><Activity className="h-4 w-4 text-primary" />Hoạt động mới nhất</h3>
         {activities.length === 0 ? (
-          <p className="py-5 text-center text-xs text-muted-foreground">Chưa có hoạt động mới trong các lớp đang phụ trách.</p>
+          <p className="py-5 text-center text-sm opacity-80 text-muted-foreground">Chưa có hoạt động mới trong các lớp đang phụ trách.</p>
         ) : (
           <div className="space-y-2 text-xs text-muted-foreground">
             {activities.map((item) => (

@@ -25,6 +25,8 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.format.DateTimeParseException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -470,6 +472,7 @@ public class OrderService implements IOrderService {
                 throw new BusinessException("Gói có gia sư phải cấu hình số buổi chính thức.");
             }
             requireOneOnOneNeeds(needs);
+            validateTutorScheduleConflict(userId, needs, acceptScheduleConflict);
         }
         if (requiresGroupClass(pkg)) {
             validateAndLockGroupClass(pkg);
@@ -499,6 +502,94 @@ public class OrderService implements IOrderService {
         }
     }
 
+    /** Báo khung giờ 1-1 mong muốn trùng với lịch lớp đang hoạt động của học viên. */
+    private void validateTutorScheduleConflict(Long userId, OneOnOneNeedsRequest needs, boolean accepted) {
+        String conflictMessage = findTutorScheduleConflict(userId, needs);
+        if (!accepted && conflictMessage != null) {
+            throw new BusinessException(conflictMessage + " Gửi acceptScheduleConflict=true để xác nhận.");
+        }
+    }
+
+    /** Tìm mô tả xung đột lịch 1-1 để dùng chung cho kiểm tra trước và checkout. */
+    private String findTutorScheduleConflict(Long userId, OneOnOneNeedsRequest needs) {
+        List<TutorScheduleSlot> requestedSlots = parseTutorScheduleSlots(needs);
+        List<Long> existingClassIds = classMemberRepository.findById_UserId(userId).stream()
+                .filter(member -> member.getStatus() == ClassMemberStatusEnum.ACTIVE
+                        && member.getRoleInClass() == ClassMemberRole.STUDENT)
+                .map(ClassMemberEntity::getClassEntity)
+                .filter(Objects::nonNull)
+                .filter(clazz -> clazz.getStatus() == BaseStatusEnum.ACTIVE)
+                .filter(clazz -> clazz.getEndDate() == null || clazz.getEndDate().isAfter(LocalDateTime.now()))
+                .map(ClassEntity::getId).distinct().toList();
+        if (existingClassIds.isEmpty()) return null;
+        Optional<ClassScheduleEntity> conflict = classScheduleRepository.findByClassEntity_IdIn(existingClassIds).stream()
+                .filter(slot -> slot.getStatus() == BaseStatusEnum.ACTIVE)
+                .filter(existing -> requestedSlots.stream().anyMatch(requested -> schedulesOverlap(requested, existing)))
+                .findFirst();
+        if (conflict.isEmpty()) return null;
+        ClassScheduleEntity existing = conflict.get();
+        TutorScheduleSlot requested = requestedSlots.stream()
+                .filter(slot -> schedulesOverlap(slot, existing)).findFirst().orElseThrow();
+        return "Khung giờ mong muốn " + dayName(requested.dayOfWeek()) + " ("
+                + requested.startTime() + " - " + requested.endTime() + ") bị trùng với lớp \""
+                + existing.getClassEntity().getName() + "\" (" + existing.getStartTime() + " - "
+                + existing.getEndTime() + "). Bạn chắc chắn muốn tiếp tục chứ?";
+    }
+
+    /** Đọc các cặp thứ và thời gian do bộ chọn lịch 1-1 gửi lên theo cùng thứ tự. */
+    private List<TutorScheduleSlot> parseTutorScheduleSlots(OneOnOneNeedsRequest needs) {
+        String[] days = needs.getAvailableDays().trim().split("\\s*;\\s*");
+        String[] timeRanges = needs.getPreferredTimes().trim().split("\\s*;\\s*");
+        if (days.length != timeRanges.length || days.length == 0 || days.length > 14) {
+            throw new BusinessException("Danh sách ngày học và khung giờ mong muốn không hợp lệ.");
+        }
+        List<TutorScheduleSlot> slots = new ArrayList<>();
+        for (int index = 0; index < days.length; index++) {
+            String[] times = timeRanges[index].split("\\s*[-–]\\s*");
+            if (times.length != 2) {
+                throw new BusinessException("Khung giờ mong muốn phải có giờ bắt đầu và giờ kết thúc.");
+            }
+            try {
+                LocalTime startTime = LocalTime.parse(times[0]);
+                LocalTime endTime = LocalTime.parse(times[1]);
+                if (!startTime.isBefore(endTime)) {
+                    throw new BusinessException("Giờ kết thúc phải sau giờ bắt đầu trong từng khung lịch.");
+                }
+                slots.add(new TutorScheduleSlot(parseDayOfWeek(days[index]), startTime, endTime));
+            } catch (DateTimeParseException exception) {
+                throw new BusinessException("Khung giờ mong muốn phải dùng định dạng 24 giờ HH:mm.");
+            }
+        }
+        boolean overlaps = slots.stream().anyMatch(left -> slots.stream().anyMatch(right -> left != right
+                && left.dayOfWeek() == right.dayOfWeek()
+                && left.startTime().isBefore(right.endTime()) && right.startTime().isBefore(left.endTime())));
+        if (overlaps) throw new BusinessException("Các khung giờ mong muốn trong cùng một ngày không được trùng nhau.");
+        return slots;
+    }
+
+    /** Chuyển nhãn ngày tiếng Việt đã chuẩn hóa thành thứ ISO từ 1 đến 7. */
+    private int parseDayOfWeek(String value) {
+        String normalized = value.trim().toLowerCase(Locale.ROOT);
+        if (normalized.equals("chủ nhật")) return 7;
+        if (normalized.matches("thứ\\s*[2-7]")) {
+            return Integer.parseInt(normalized.replaceAll("\\D", "")) - 1;
+        }
+        throw new BusinessException("Ngày có thể học không hợp lệ: " + value + ".");
+    }
+
+    /** Hiển thị thứ ISO bằng nhãn tiếng Việt trong cảnh báo xung đột. */
+    private String dayName(int dayOfWeek) {
+        return dayOfWeek == 7 ? "Chủ nhật" : "Thứ " + (dayOfWeek + 1);
+    }
+
+    /** Kiểm tra một khung lịch mong muốn có giao với lịch lớp đang tồn tại hay không. */
+    private boolean schedulesOverlap(TutorScheduleSlot requested, ClassScheduleEntity existing) {
+        return Objects.equals(requested.dayOfWeek(), existing.getDayOfWeek())
+                && existing.getStartTime() != null && existing.getEndTime() != null
+                && requested.startTime().isBefore(existing.getEndTime())
+                && existing.getStartTime().isBefore(requested.endTime());
+    }
+
     /** Kiểm tra hai khung lịch định kỳ có cùng ngày và giao nhau hay không. */
     private boolean schedulesOverlap(ClassScheduleEntity left, ClassScheduleEntity right) {
         return Objects.equals(left.getDayOfWeek(), right.getDayOfWeek())
@@ -506,6 +597,10 @@ public class OrderService implements IOrderService {
                 && right.getStartTime() != null && right.getEndTime() != null
                 && left.getStartTime().isBefore(right.getEndTime())
                 && right.getStartTime().isBefore(left.getEndTime());
+    }
+
+    /** Khung lịch 1-1 đã được chuẩn hóa để so sánh với lịch lớp. */
+    private record TutorScheduleSlot(int dayOfWeek, LocalTime startTime, LocalTime endTime) {
     }
 
     /** Chỉ coi lịch định kỳ là trùng khi thời gian hoạt động của hai lớp cũng giao nhau. */
@@ -762,6 +857,20 @@ public class OrderService implements IOrderService {
                 .orderId(order.getId())
                 .paymentTransactionId(transaction.getId())
                 .payUrl(paypalOrder.approvalUrl())
+                .build();
+    }
+
+    /** Kiểm tra trước lịch 1-1 mong muốn mà không tạo đơn hàng hay thay đổi dữ liệu. */
+    @Override
+    public TutorScheduleCheckResponse validateTutorScheduleAvailability(Long userId, OneOnOneNeedsRequest needs) {
+        if (!userRepository.existsById(userId)) {
+            throw ResourceNotFoundException.of("User", userId);
+        }
+        requireOneOnOneNeeds(needs);
+        String conflictMessage = findTutorScheduleConflict(userId, needs);
+        return TutorScheduleCheckResponse.builder()
+                .conflict(conflictMessage != null)
+                .message(conflictMessage)
                 .build();
     }
 

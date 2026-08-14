@@ -1,11 +1,13 @@
 package com.ailms.controller;
 
 import com.ailms.request.CheckoutRequest;
+import com.ailms.request.OneOnOneNeedsRequest;
 import com.ailms.request.RefundRequest;
 import com.ailms.response.ApiResponse;
 import com.ailms.response.CheckoutPaymentResponse;
 import com.ailms.response.OrderResponse;
 import com.ailms.response.OrderStatusResponse;
+import com.ailms.response.TutorScheduleCheckResponse;
 import com.ailms.security.CustomUserDetails;
 import com.ailms.exception.UnauthorizedException;
 import com.ailms.service.IOrderService;
@@ -41,6 +43,17 @@ public class OrderController {
         CheckoutPaymentResponse response = orderService.checkout(userId, request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.of("PayPal Sandbox checkout created successfully", response));
+    }
+
+    /** Kiểm tra trước lịch mong muốn 1-1 có trùng với lớp hiện tại của học viên hay không. */
+    @PostMapping("/tutor-schedule/check")
+    @PreAuthorize("hasAnyAuthority('ROLE_STUDENT', 'ROLE_ADMIN')")
+    public ResponseEntity<ApiResponse<TutorScheduleCheckResponse>> checkTutorSchedule(
+            @AuthenticationPrincipal CustomUserDetails currentUser,
+            @Valid @RequestBody OneOnOneNeedsRequest request) {
+        TutorScheduleCheckResponse response = orderService.validateTutorScheduleAvailability(
+                requireUserId(currentUser), request);
+        return ResponseEntity.ok(ApiResponse.of("Tutor schedule checked successfully", response));
     }
 
     /** Trả trạng thái đáng tin cậy sau redirect, chỉ cho chủ đơn hàng. */

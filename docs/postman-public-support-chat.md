@@ -68,7 +68,14 @@ GET {{baseUrl}}/public/support/conversations/{{conversationId}}/messages?page=0&
 X-Visitor-Token: {{visitorToken}}
 ```
 
-Visitor không được tự hủy ticket `QUEUED/ACTIVE`; endpoint `cancel` cũ trả lỗi nghiệp vụ. Khi tư vấn viên yêu cầu đóng và trạng thái là `WAITING_CONFIRMATION`, visitor đồng ý bằng:
+Visitor có thể hủy ticket khi đang `QUEUED` hoặc `ASSIGNED`; hệ thống rút ticket khỏi hàng đợi, giải phóng supporter đã được gán và chuyển sang `CANCELLED`:
+
+```http
+POST {{baseUrl}}/public/support/conversations/{{conversationId}}/cancel
+X-Visitor-Token: {{visitorToken}}
+```
+
+Ticket `ACTIVE` không thể hủy bằng thao tác này. Khi tư vấn viên yêu cầu đóng và trạng thái là `WAITING_CONFIRMATION`, visitor đồng ý bằng:
 
 ```http
 POST {{baseUrl}}/public/support/conversations/{{conversationId}}/close

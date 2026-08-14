@@ -387,11 +387,21 @@ public class SupportChatService implements com.ailms.service.ISupportChatService
                 PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 100))).map(this::toMessage));
     }
 
-    /** Chặn visitor tự hủy ticket để tránh bỏ ngang hàng đợi hoặc phiên đang hỗ trợ. */
+    /** Hủy yêu cầu đang chờ và giải phóng slot của supporter nếu ticket đã được gán. */
     @Transactional
     public SupportConversationResponse cancel(Long conversationId, String token) {
-        requireVisitorConversation(conversationId, token);
-        throw new BusinessException("Yêu cầu tư vấn không thể hủy. Hệ thống sẽ tự xử lý theo thời gian chờ");
+        SupportConversationEntity conversation = requireVisitorConversation(conversationId, token);
+        ensureStatus(conversation, EnumSet.of(SupportConversationStatusEnum.QUEUED,
+                SupportConversationStatusEnum.ASSIGNED));
+        releaseAssignedHr(conversation);
+        conversation.setStatus(SupportConversationStatusEnum.CANCELLED);
+        conversation.setQueuePosition(null);
+        conversation.setEstimatedWaitMinutes(null);
+        conversation.setEndedAt(LocalDateTime.now());
+        conversation.setCloseReason("VISITOR_CANCELLED");
+        saveMessage(conversation, SupportMessageSenderEnum.SYSTEM, SupportMessageTypeEnum.SYSTEM,
+                "Bạn đã hủy yêu cầu kết nối với tư vấn viên.", null);
+        return toConversation(conversation);
     }
 
     /** Đóng conversation theo lựa chọn cảm ơn của visitor. */

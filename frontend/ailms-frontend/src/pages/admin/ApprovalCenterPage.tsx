@@ -4,6 +4,7 @@ import httpClient from "@/api/httpClient";
 import { courseApi } from "@/api/courses/courseApi";
 import type { ApiResponse } from "@/types/base";
 import { useToast } from "@/hooks/useToast";
+import { hrApi, type HrOneOnOneRequestResponse } from "@/api/hr/hrApi";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,6 +13,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { OneOnOneConnectionApprovalTab } from "@/components/admin/approval/OneOnOneConnectionApprovalTab";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertTriangle, ArrowDownUp, CheckCircle2, ChevronLeft, ChevronRight, Clock3, Eye, FileCheck2, Loader2, RefreshCw, Search, Trash2, XCircle } from "lucide-react";
@@ -61,13 +64,13 @@ export const ApprovalCenterPage: React.FC = () => {
   const { success, error } = useToast();
   const location = useLocation();
   const navigate = useNavigate();
-  const restoredView = (location.state as { approvalView?: { tab?: "PENDING" | "ALL"; search?: string; type?: string; status?: string; page?: number } } | null)?.approvalView;
+  const restoredView = (location.state as { approvalView?: { sectionTab?: "CONNECTIONS" | "COURSES"; tab?: "PENDING" | "ALL"; search?: string; status?: string; page?: number } } | null)?.approvalView;
   const [items, setItems] = useState<ApprovalItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [sectionTab, setSectionTab] = useState<"CONNECTIONS" | "COURSES">(restoredView?.sectionTab ?? "CONNECTIONS");
   const [tab, setTab] = useState<"PENDING" | "ALL">(restoredView?.tab || "PENDING");
   const [search, setSearch] = useState(restoredView?.search || "");
-  const [type, setType] = useState(restoredView?.type || "ALL");
   const [status, setStatus] = useState(restoredView?.status || "ALL");
   const [dateSort, setDateSort] = useState<"DESC" | "ASC">("DESC");
   const [page, setPage] = useState(restoredView?.page || 0);
@@ -82,6 +85,7 @@ export const ApprovalCenterPage: React.FC = () => {
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ApprovalItem | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [oneOnOneRequests, setOneOnOneRequests] = useState<HrOneOnOneRequestResponse[]>([]);
   const [targetDetails, setTargetDetails] = useState<Record<string, unknown> | null>(null);
   const filtersMounted = useRef(false);
   const pageSize = 10;
@@ -89,10 +93,15 @@ export const ApprovalCenterPage: React.FC = () => {
   const load = async () => {
     setLoading(true); setLoadError("");
     try {
-      const [response, pendingCourses] = await Promise.all([
+      const [response, pendingCourses, oneOnOneResponse] = await Promise.all([
         httpClient.get<ApiResponse<MineResponse>>("/v1/approvals/mine"),
         courseApi.searchCourses({ status: "PENDING", page: 0, size: 100, sortBy: "createdAt", sortDirection: "ASC" }),
+        hrApi.getOneOnOneRequests(),
       ]);
+      setOneOnOneRequests((oneOnOneResponse.data.data || []).map(item => ({
+        ...item,
+        id: String(item.id),
+      })));
       const requested = (response.data.data?.requested || []).map(raw => normalize(raw, false));
       const assigned = (response.data.data?.toApprove || []).map(raw => normalize(raw, true));
       const unique = new Map<string, ApprovalItem>();
@@ -138,8 +147,8 @@ export const ApprovalCenterPage: React.FC = () => {
   }, [detail?.id]);
 
   const filtered = useMemo(() => items.filter(item => {
+    if (item.targetType !== "COURSE") return false;
     if (tab === "PENDING" && (!item.assignedToMe || item.status !== "PENDING")) return false;
-    if (type !== "ALL" && item.targetType !== type) return false;
     if (status !== "ALL" && item.status !== status) return false;
     const key = search.trim().toLocaleLowerCase("vi");
     return !key || [item.id, item.targetId, item.requesterName, item.requesterEmail, item.approverName, TYPE_LABELS[item.targetType]]
@@ -147,13 +156,13 @@ export const ApprovalCenterPage: React.FC = () => {
   }).sort((a, b) => {
     const delta = new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime();
     return dateSort === "ASC" ? delta : -delta;
-  }), [items, tab, type, status, search, dateSort]);
+  }), [items, tab, status, search, dateSort]);
   const pages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const visible = filtered.slice(page * pageSize, page * pageSize + pageSize);
   useEffect(() => {
     if (!filtersMounted.current) { filtersMounted.current = true; return; }
     setPage(0);
-  }, [tab, type, status, search, dateSort]);
+  }, [tab, status, search, dateSort]);
   const canSelectItem = (item: ApprovalItem) => (item.assignedToMe && item.status === "PENDING")
     || (tab === "ALL" && item.status === "CONFIRMED" && !item.id.startsWith("COURSE-"));
   const selectableVisible = visible.filter(canSelectItem);
@@ -162,10 +171,15 @@ export const ApprovalCenterPage: React.FC = () => {
   const selectedApprovedItems = items.filter(item => selectedIds.includes(item.id) && item.status === "CONFIRMED" && !item.id.startsWith("COURSE-"));
   const displayTitle = (item: ApprovalItem) => item.title || TYPE_LABELS[item.targetType] || "Yêu cầu nghiệp vụ";
   const summary = useMemo(() => ({
-    pending: items.filter(item => item.status === "PENDING").length,
-    approved: items.filter(item => item.status === "CONFIRMED").length,
-    rejected: items.filter(item => item.status === "REJECTED").length,
+    pending: items.filter(item => item.targetType === "COURSE" && item.status === "PENDING").length,
+    approved: items.filter(item => item.targetType === "COURSE" && item.status === "CONFIRMED").length,
+    rejected: items.filter(item => item.targetType === "COURSE" && item.status === "REJECTED").length,
   }), [items]);
+
+  /** Đồng bộ một yêu cầu kết nối sau khi HR duyệt hoặc từ chối. */
+  const updateOneOnOneRequest = (updated: HrOneOnOneRequestResponse) => {
+    setOneOnOneRequests((current) => current.map((item) => item.id === updated.id ? updated : item));
+  };
   const markItemsResolved = (ids: string[], nextStatus: "CONFIRMED" | "REJECTED", comment?: string) => {
     const decidedAt = new Date().toISOString();
     setItems(current => current.map(item => ids.includes(item.id)
@@ -250,16 +264,29 @@ export const ApprovalCenterPage: React.FC = () => {
     : <Badge className="bg-rose-500/10 text-rose-700 hover:bg-rose-500/10"><XCircle className="mr-1 h-3 w-3" />{value === "REJECTED" ? "Từ chối" : "Đã hủy"}</Badge>;
 
   return <div className="mx-auto max-w-375 space-y-5 p-6">
-    <div className="flex flex-wrap items-start justify-between gap-3"><div><h1 className="flex items-center gap-2 text-2xl font-bold"><FileCheck2 className="h-6 w-6 text-primary" />Hàng đợi yêu cầu xử lý</h1><p className="mt-1 text-xs text-muted-foreground">Một nơi duy nhất để HR/Admin xem, duyệt hoặc từ chối các yêu cầu nghiệp vụ.</p></div><Button variant="outline" onClick={() => void load()} disabled={loading}><RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />Làm mới</Button></div>
+    <div className="flex flex-wrap items-start justify-between gap-3"><div><h1 className="flex items-center gap-2 text-2xl font-bold"><FileCheck2 className="h-6 w-6 text-primary" />Trung tâm phê duyệt</h1><p className="mt-1 text-xs text-muted-foreground">Phê duyệt kết nối 1-1 và khóa học được tách thành hai hàng đợi độc lập.</p></div><Button variant="outline" onClick={() => void load()} disabled={loading}><RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />Làm mới</Button></div>
+    <Tabs value={sectionTab} onValueChange={(value) => { setSectionTab(value as "CONNECTIONS" | "COURSES"); }} className="space-y-4">
+      <TabsList className="h-10 w-full justify-start sm:w-auto">
+        <TabsTrigger value="CONNECTIONS" className="px-4">Phê duyệt kết nối</TabsTrigger>
+        <TabsTrigger value="COURSES" className="px-4">Phê duyệt khóa học</TabsTrigger>
+      </TabsList>
+      <TabsContent value="CONNECTIONS">
+        <OneOnOneConnectionApprovalTab
+          requests={oneOnOneRequests}
+          loading={loading}
+          onRequestUpdated={updateOneOnOneRequest}
+        />
+      </TabsContent>
+      <TabsContent value="COURSES" className="space-y-5">
     <div className="grid gap-3 sm:grid-cols-3">
       <Card role="button" tabIndex={0} onClick={() => { setTab("PENDING"); setStatus("ALL"); }} className="cursor-pointer overflow-hidden border-amber-200/70 transition-all hover:-translate-y-0.5 hover:shadow-md"><CardContent className="flex items-center justify-between bg-linear-to-br from-amber-50 to-background p-5"><div><p className="text-xs font-semibold text-amber-800">Cần xử lý</p><p className="mt-1 text-3xl font-bold tracking-tight text-amber-600">{summary.pending}</p><p className="mt-1 text-[11px] text-muted-foreground">Yêu cầu đang chờ quyết định</p></div><div className="rounded-2xl bg-amber-100 p-3 text-amber-700"><Clock3 className="h-6 w-6" /></div></CardContent></Card>
       <Card role="button" tabIndex={0} onClick={() => { setTab("ALL"); setStatus("CONFIRMED"); }} className="cursor-pointer overflow-hidden border-emerald-200/70 transition-all hover:-translate-y-0.5 hover:shadow-md"><CardContent className="flex items-center justify-between bg-linear-to-br from-emerald-50 to-background p-5"><div><p className="text-xs font-semibold text-emerald-800">Đã phê duyệt</p><p className="mt-1 text-3xl font-bold tracking-tight text-emerald-600">{summary.approved}</p><p className="mt-1 text-[11px] text-muted-foreground">Đã hoàn tất xử lý thành công</p></div><div className="rounded-2xl bg-emerald-100 p-3 text-emerald-700"><CheckCircle2 className="h-6 w-6" /></div></CardContent></Card>
       <Card role="button" tabIndex={0} onClick={() => { setTab("ALL"); setStatus("REJECTED"); }} className="cursor-pointer overflow-hidden border-rose-200/70 transition-all hover:-translate-y-0.5 hover:shadow-md"><CardContent className="flex items-center justify-between bg-linear-to-br from-rose-50 to-background p-5"><div><p className="text-xs font-semibold text-rose-800">Đã từ chối</p><p className="mt-1 text-3xl font-bold tracking-tight text-rose-600">{summary.rejected}</p><p className="mt-1 text-[11px] text-muted-foreground">Yêu cầu không được chấp thuận</p></div><div className="rounded-2xl bg-rose-100 p-3 text-rose-700"><XCircle className="h-6 w-6" /></div></CardContent></Card>
     </div>
-    <Card><CardHeader className="pb-3"><div className="flex gap-5 border-b"><button className={`pb-3 text-sm font-bold ${tab === "PENDING" ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`} onClick={() => setTab("PENDING")}>Cần phê duyệt</button><button className={`pb-3 text-sm font-bold ${tab === "ALL" ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`} onClick={() => setTab("ALL")}>Tất cả yêu cầu liên quan</button></div></CardHeader><CardContent className="space-y-4">
-      <div className="grid gap-2 md:grid-cols-[1fr_210px_170px_190px]"><div className="relative"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-9" value={search} onChange={e => setSearch(e.target.value)} placeholder="Tên yêu cầu, đối tượng, người gửi..." /></div><Select value={type} onValueChange={setType}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="ALL">Tất cả loại</SelectItem>{Object.entries(TYPE_LABELS).map(([key, label]) => <SelectItem key={key} value={key}>{label}</SelectItem>)}</SelectContent></Select><Select value={status} onValueChange={setStatus} disabled={tab === "PENDING"}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="ALL">Tất cả trạng thái</SelectItem><SelectItem value="PENDING">Chờ duyệt</SelectItem><SelectItem value="CONFIRMED">Đã duyệt</SelectItem><SelectItem value="REJECTED">Từ chối</SelectItem><SelectItem value="CANCELLED">Đã hủy</SelectItem></SelectContent></Select><Select value={dateSort} onValueChange={value => setDateSort(value as "DESC" | "ASC")}><SelectTrigger><ArrowDownUp className="mr-2 h-4 w-4 text-muted-foreground" /><SelectValue /></SelectTrigger><SelectContent><SelectItem value="DESC">Ngày gửi: Mới nhất</SelectItem><SelectItem value="ASC">Ngày gửi: Cũ nhất</SelectItem></SelectContent></Select></div>
+    <Card><CardHeader className="pb-3"><div className="flex gap-5 border-b"><button className={`pb-3 text-sm font-bold ${tab === "PENDING" ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`} onClick={() => setTab("PENDING")}>Khóa học chờ duyệt</button><button className={`pb-3 text-sm font-bold ${tab === "ALL" ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`} onClick={() => setTab("ALL")}>Lịch sử duyệt khóa học</button></div></CardHeader><CardContent className="space-y-4">
+      <div className="grid gap-2 md:grid-cols-[1fr_170px_190px]"><div className="relative"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-9" value={search} onChange={e => setSearch(e.target.value)} placeholder="Tên khóa học, người gửi..." /></div><Select value={status} onValueChange={setStatus} disabled={tab === "PENDING"}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="ALL">Tất cả trạng thái</SelectItem><SelectItem value="PENDING">Chờ duyệt</SelectItem><SelectItem value="CONFIRMED">Đã duyệt</SelectItem><SelectItem value="REJECTED">Từ chối</SelectItem><SelectItem value="CANCELLED">Đã hủy</SelectItem></SelectContent></Select><Select value={dateSort} onValueChange={value => setDateSort(value as "DESC" | "ASC")}><SelectTrigger><ArrowDownUp className="mr-2 h-4 w-4 text-muted-foreground" /><SelectValue /></SelectTrigger><SelectContent><SelectItem value="DESC">Ngày gửi: Mới nhất</SelectItem><SelectItem value="ASC">Ngày gửi: Cũ nhất</SelectItem></SelectContent></Select></div>
       {!loading && selectableVisible.length > 0 && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-muted/20 p-3"><label className="flex cursor-pointer items-center gap-2 text-xs font-semibold"><Checkbox checked={allVisibleSelected} onCheckedChange={checked => setSelectedIds(current => checked ? [...new Set([...current, ...selectableVisible.map(item => item.id)])] : current.filter(id => !selectableVisible.some(item => item.id === id)))} />Chọn các yêu cầu có thể xử lý trên trang</label><div className="flex flex-wrap items-center gap-2"><span className="text-xs text-muted-foreground">Đã chọn <strong className="text-foreground">{selectedItems.length + selectedApprovedItems.length}</strong></span>{selectedIds.length > 0 && <Button size="sm" variant="outline" onClick={() => setSelectedIds([])}>Bỏ chọn</Button>}{selectedItems.length > 0 && <><Button size="sm" variant="destructive" onClick={() => { setRejectReason(""); setBulkRejectOpen(true); }}>Từ chối {selectedItems.length} yêu cầu</Button>{tab === "PENDING" && <Button size="sm" onClick={() => setBulkApproveOpen(true)}><CheckCircle2 className="mr-1.5 h-4 w-4" />Duyệt hàng loạt</Button>}</>}{selectedApprovedItems.length > 0 && <Button size="sm" variant="destructive" onClick={() => setBulkDeleteOpen(true)}><Trash2 className="mr-1.5 h-4 w-4" />Xóa {selectedApprovedItems.length} yêu cầu đã duyệt</Button>}</div></div>}
-      {loading ? <div className="flex h-64 items-center justify-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" />Đang tải dữ liệu phê duyệt...</div> : loadError ? <div className="flex h-64 flex-col items-center justify-center gap-3 text-sm text-destructive"><AlertTriangle className="h-7 w-7" />{loadError}<Button variant="outline" onClick={() => void load()}>Thử lại</Button></div> : !visible.length ? <div className="flex h-64 flex-col items-center justify-center text-center"><FileCheck2 className="mb-3 h-10 w-10 text-muted-foreground/40" /><p className="font-semibold">Không có dữ liệu phê duyệt</p><p className="mt-1 text-xs text-muted-foreground">Không có yêu cầu phù hợp với bộ lọc hiện tại.</p></div> : tab === "PENDING" ? (
+      {loading ? <div className="flex h-64 items-center justify-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" />Đang tải khóa học cần phê duyệt...</div> : loadError ? <div className="flex h-64 flex-col items-center justify-center gap-3 text-sm text-destructive"><AlertTriangle className="h-7 w-7" />{loadError}<Button variant="outline" onClick={() => void load()}>Thử lại</Button></div> : !visible.length ? <div className="flex h-64 flex-col items-center justify-center text-center"><FileCheck2 className="mb-3 h-10 w-10 text-muted-foreground/40" /><p className="font-semibold">Không có khóa học cần phê duyệt</p><p className="mt-1 text-xs text-muted-foreground">Không có khóa học phù hợp với bộ lọc hiện tại.</p></div> : tab === "PENDING" ? (
         <div className="grid gap-4 lg:grid-cols-2">
           {visible.map(item => <Card key={item.id} className="group overflow-hidden border-border/70 transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md">
             <CardContent className="p-0">
@@ -287,9 +314,11 @@ export const ApprovalCenterPage: React.FC = () => {
       )}
       {!loading && filtered.length > pageSize && <div className="flex items-center justify-end gap-2"><Button size="icon" variant="outline" disabled={page === 0} onClick={() => setPage(p => p - 1)}><ChevronLeft className="h-4 w-4" /></Button><span className="text-xs">Trang {page + 1}/{pages}</span><Button size="icon" variant="outline" disabled={page >= pages - 1} onClick={() => setPage(p => p + 1)}><ChevronRight className="h-4 w-4" /></Button></div>}
     </CardContent></Card>
+      </TabsContent>
+    </Tabs>
     <Dialog open={Boolean(detail)} onOpenChange={open => !open && setDetail(null)}><DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto"><DialogHeader><DialogTitle>{detail?.title || `Chi tiết ${TYPE_LABELS[detail?.targetType || ""] || "yêu cầu"}`}</DialogTitle><DialogDescription>Phiên bản dữ liệu thực tế được gửi lên để HR/Admin thẩm định.</DialogDescription></DialogHeader>{detail && <div className="space-y-4 text-sm">
       <div className="flex items-center justify-between rounded-xl bg-muted/30 p-4"><div><p className="text-xs text-muted-foreground">Loại yêu cầu</p><p className="font-bold">{TYPE_LABELS[detail.targetType] || detail.targetType}</p></div>{statusBadge(detail.status)}</div>
-      {detailLoading ? <div className="flex h-36 items-center justify-center gap-2 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" />Đang tải thông tin khóa học...</div> : detail.targetType === "COURSE" && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-primary/5 p-4"><div><p className="font-bold">{detail.title || "Khóa học cần duyệt"}</p><p className="mt-1 text-xs text-muted-foreground">{detail.categoryName || "Chưa phân loại"} · Giá đề xuất {Number(detail.suggestedPrice || 0).toLocaleString("vi-VN")} đ</p></div><Button type="button" onClick={() => navigate(`/admin/courses/${detail.targetId}`, { state: { returnTo: `${location.pathname}${location.search}`, returnLabel: "Hàng đợi yêu cầu xử lý", approvalView: { tab, search, type, status, page } } })}><Eye className="mr-1.5 h-4 w-4" />Xem chi tiết khóa học</Button></div>}
+      {detailLoading ? <div className="flex h-36 items-center justify-center gap-2 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" />Đang tải thông tin khóa học...</div> : detail.targetType === "COURSE" && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-primary/5 p-4"><div><p className="font-bold">{detail.title || "Khóa học cần duyệt"}</p><p className="mt-1 text-xs text-muted-foreground">{detail.categoryName || "Chưa phân loại"} · Giá đề xuất {Number(detail.suggestedPrice || 0).toLocaleString("vi-VN")} đ</p></div><Button type="button" onClick={() => navigate(`/admin/courses/${detail.targetId}`, { state: { returnTo: `${location.pathname}${location.search}`, returnLabel: "Hàng đợi yêu cầu xử lý", approvalView: { sectionTab, tab, search, status, page } } })}><Eye className="mr-1.5 h-4 w-4" />Xem chi tiết khóa học</Button></div>}
       {!detailLoading && targetDetails && <div className="rounded-xl border p-4"><p className="mb-3 text-xs font-bold uppercase text-muted-foreground">Phiên bản đối tượng cần duyệt</p><div className="grid gap-2 sm:grid-cols-2">{Object.entries(targetDetails).filter(([, value]) => value == null || ["string", "number", "boolean"].includes(typeof value)).slice(0, 18).map(([key, value]) => <div key={key} className="rounded-lg bg-muted/30 p-3"><p className="text-[10px] uppercase text-muted-foreground">{key.replace(/([A-Z])/g, " $1").trim()}</p><p className="mt-1 wrap-break-word font-semibold">{value == null || value === "" ? "Chưa cập nhật" : String(value)}</p></div>)}</div></div>}
       <div className="grid gap-3 sm:grid-cols-2"><div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Người gửi</p><p className="font-bold">{detail.requesterName}</p><p className="text-xs text-muted-foreground">{detail.requesterEmail || "Chưa có email"}</p></div><div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Thời gian</p><p>Gửi: <strong>{dateTime(detail.createdAt)}</strong></p><p>Xử lý: <strong>{dateTime(detail.decidedAt)}</strong></p></div></div>
       {detail.requestReason && <div className="rounded-xl border border-rose-500/30 bg-rose-500/5 p-4"><p className="text-xs font-bold text-muted-foreground">Lý do hoàn tiền từ học viên</p><p className="mt-1">{detail.requestReason}</p></div>}

@@ -398,22 +398,11 @@ export const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ scop
       {/* HEADER BAR */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/40 pb-4">
         <div>
-          <div className="flex items-center gap-2 text-sm font-semibold text-primary mb-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate(-1)}
-              className="h-8 px-2.5 text-xs font-bold gap-1.5 rounded-xl border border-border/40 hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              <span>Quay lại</span>
-            </Button>
-          </div>
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-foreground flex items-center gap-3 mt-1">
             <HelpCircle className="h-7 w-7 text-primary" />
-            <span>Quản Lý Bài Kiểm Tra (Quiz) & Bài Tập (Assignment)</span>
+            <span>Quản Lý Bài Kiểm Tra & Bài Tập</span>
           </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
+          <p className="text-sm text-foreground/80 mt-0.5">
             {authoredOnly
               ? "Quản lý ngân hàng Quiz và bài tập do chính bạn tạo."
               : "Quản lý ngân hàng câu hỏi Quiz và bài tập tự luận trong hệ thống."}
@@ -424,7 +413,7 @@ export const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ scop
           <Button
             size="sm"
             onClick={handleOpenCreateModal}
-            className="text-xs font-bold gap-1.5 rounded-xl bg-primary text-primary-foreground shadow-sm"
+            className="text-xs font-bold gap-1.5 rounded-xl bg-white border-border/30 text-foreground hover:bg-foreground hover:text-white shadow-sm"
           >
             <Plus className="h-4 w-4" />
             <span>{activeTab === "quizzes" ? "Tạo Quiz Mới" : "Tạo Bài Tập Mới"}</span>
@@ -451,14 +440,11 @@ export const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ scop
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
             activeTab === "quizzes"
               ? "bg-primary text-primary-foreground shadow-xs"
-              : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              : "text-foreground hover:bg-foreground hover:text-white"
           }`}
         >
           <FileQuestion className="h-4 w-4" />
-          <span>Quản Lý Bài Kiểm Tra (Quiz)</span>
-          <Badge variant="secondary" className="ml-1 text-[10px] bg-background/20 text-current font-extrabold">
-            {activeTab === "quizzes" ? totalElements : ""}
-          </Badge>
+          <span>Quản Lý Quizz</span>
         </button>
 
         <button
@@ -466,14 +452,11 @@ export const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ scop
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
             activeTab === "assignments"
               ? "bg-primary text-primary-foreground shadow-xs"
-              : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              : "text-foreground hover:bg-foreground hover:text-white"
           }`}
         >
           <FileText className="h-4 w-4" />
-          <span>Quản Lý Bài Tập (Assignment)</span>
-          <Badge variant="secondary" className="ml-1 text-[10px] bg-background/20 text-current font-extrabold">
-            {activeTab === "assignments" ? totalElements : ""}
-          </Badge>
+          <span>Quản Lý Bài Tập</span>
         </button>
       </div>
 
@@ -482,11 +465,11 @@ export const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ scop
         <CardContent className="p-4">
           <form onSubmit={handleSearchSubmit} className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="relative flex-1 w-full">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-foreground/80" />
               <Input
                 placeholder={
                   activeTab === "quizzes"
-                    ? "Tìm kiếm bài Quiz theo tiêu đề, mã code..."
+                    ? "Tìm kiếm bài Quiz..."
                     : "Tìm kiếm bài tập theo tiêu đề..."
                 }
                 value={searchKeyword}
@@ -496,7 +479,7 @@ export const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ scop
             </div>
 
             <div className="flex items-center gap-3 w-full sm:w-auto shrink-0">
-              <Button type="submit" size="sm" className="h-9 text-xs font-bold rounded-xl gap-1 bg-primary text-primary-foreground">
+              <Button type="submit" size="sm" className="h-9 text-xs font-semibold hover:bg-foreground hover:text-white rounded-xl gap-1 bg-primary text-primary-foreground">
                 <Search className="h-3.5 w-3.5" /> Tìm kiếm
               </Button>
 
@@ -509,9 +492,9 @@ export const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ scop
                   setPage(0);
                   fetchData();
                 }}
-                className="h-9 text-xs font-semibold rounded-xl gap-1"
+                className="h-9 text-xs font-semibold rounded-xl gap-1 hover:bg-foreground/20 hover:text-white"
               >
-                <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" /> Làm mới
+                <RefreshCw className="h-3.5 w-3.5 text-foreground group-hover:text-white" />
               </Button>
             </div>
           </form>
@@ -546,27 +529,27 @@ export const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ scop
                     />
                   </TableHead>
 
-                  <TableHead className="font-extrabold text-xs">Mã / ID</TableHead>
-                  <TableHead className="font-extrabold text-xs">
-                    {activeTab === "quizzes" ? "Tiêu Đề Bài Quiz" : "Tiêu Đề Bài Tập"}
+                  <TableHead className="font-extrabold text-xs opacity-80">Code</TableHead>
+                  <TableHead className="font-extrabold text-xs opacity-80">
+                    {activeTab === "quizzes" ? "Tiêu Đề " : "Tiêu Đề "}
                   </TableHead>
                   
                   {activeTab === "quizzes" ? (
                     <>
-                      <TableHead className="font-extrabold text-xs text-center">Thời Gian (Phút)</TableHead>
-                      <TableHead className="font-extrabold text-xs text-center">Điểm Đạt</TableHead>
+                      <TableHead className="font-extrabold text-xs text-center opacity-80">Thời Gian (Phút)</TableHead>
+                      <TableHead className="font-extrabold text-xs text-center opacity-80">Điểm Đạt</TableHead>
                     </>
                   ) : (
                     <>
-                      <TableHead className="font-extrabold text-xs text-center">Điểm Tối Đa</TableHead>
-                      <TableHead className="font-extrabold text-xs">Hạn Nộp</TableHead>
+                      <TableHead className="font-extrabold text-xs text-center opacity-80">Điểm Tối Đa</TableHead>
+                      <TableHead className="font-extrabold text-xs opacity-80">Hạn Nộp</TableHead>
                     </>
                   )}
 
-                  <TableHead className="font-extrabold text-xs">Người Tạo (createdBy)</TableHead>
-                  <TableHead className="font-extrabold text-xs">Thời Gian Tạo (createdAt)</TableHead>
-                  <TableHead className="font-extrabold text-xs text-center">Trạng Thái</TableHead>
-                  <TableHead className="font-extrabold text-xs text-right pr-6">Thao Tác</TableHead>
+                  <TableHead className="font-extrabold text-xs opacity-80">Người Tạo</TableHead>
+                  <TableHead className="font-extrabold text-xs opacity-80">Thời Gian Tạo</TableHead>
+                  <TableHead className="font-extrabold text-xs text-center opacity-80">Trạng Thái</TableHead>
+                  <TableHead className="font-extrabold text-xs text-right pr-6 opacity-80">Thao Tác</TableHead>
                 </TableRow>
               </TableHeader>
 
@@ -585,7 +568,7 @@ export const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ scop
                     <TableCell colSpan={10} className="h-48 text-center">
                       <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
                         <FileQuestion className="h-10 w-10 text-muted-foreground/30" />
-                        <span className="text-xs font-extrabold text-foreground">Không có bài kiểm tra (Quiz) nào trong CSDL.</span>
+                        <span className="text-xs font-extrabold text-foreground">Không có bài Quiz nào trong CSDL.</span>
                         <span className="text-xs">Bấm "Tạo Quiz Mới" để bắt đầu soạn đề thi.</span>
                       </div>
                     </TableCell>
@@ -595,7 +578,7 @@ export const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ scop
                     <TableCell colSpan={10} className="h-48 text-center">
                       <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
                         <FileText className="h-10 w-10 text-muted-foreground/30" />
-                        <span className="text-xs font-extrabold text-foreground">Không có bài tập (Assignment) nào trong CSDL.</span>
+                        <span className="text-xs font-extrabold text-foreground">Không có bài tập nào trong CSDL.</span>
                         <span className="text-xs">Bấm "Tạo Bài Tập Mới" để bổ sung bài làm.</span>
                       </div>
                     </TableCell>
@@ -762,14 +745,14 @@ export const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ scop
           </div>
 
           {/* PAGINATION BAR */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border-t border-border/40">
-            <div className="text-xs text-muted-foreground font-semibold">
-              Hiển thị <strong className="text-foreground">{totalElements}</strong> kết quả từ CSDL
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border-t border-border/30">
+            <div className="text-xs text-foreground/80">
+              Hiển thị <strong className="text-foreground/80">{totalElements}</strong> kết quả từ CSDL
             </div>
 
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-1.5 text-xs">
-                <span className="text-muted-foreground font-semibold">Số dòng:</span>
+                <span className="text-foreground/80 font-semibold">Số dòng:</span>
                 <Select
                   value={String(pageSize)}
                   onValueChange={(val) => {
@@ -799,7 +782,7 @@ export const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ scop
                 >
                   <ChevronLeft className="h-4 w-4" /> Trước
                 </Button>
-                <span className="text-xs font-mono font-bold text-foreground px-1">
+                <span className="text-xs font-semibold text-foreground/80 px-1">
                   Trang {page + 1} / {Math.max(totalPages, 1)}
                 </span>
                 <Button
@@ -825,12 +808,12 @@ export const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ scop
               {selectedQuizDetail ? (
                 <>
                   <FileQuestion className="h-5 w-5 text-primary" />
-                  <span>Chi Tiết Quiz & Bản Preview Học Sinh (Studio Authoring)</span>
+                  <span>Chi Tiết Quiz & Preview</span>
                 </>
               ) : (
                 <>
                   <FileText className="h-5 w-5 text-primary" />
-                  <span>Chi Tiết Bài Tập & Bản Preview Học Sinh (Studio Authoring)</span>
+                  <span>Chi Tiết Bài Tập & Preview</span>
                 </>
               )}
             </DialogTitle>
@@ -842,18 +825,18 @@ export const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ scop
           {/* AUDIT INFORMATION SECTION (người tạo, thời gian tạo, ng update, thời gian update) */}
           <div className="p-4 bg-muted/30 rounded-2xl border border-border/50 space-y-3">
             <h4 className="text-xs font-bold text-primary flex items-center gap-1.5 uppercase tracking-wider">
-              <ShieldCheck className="h-4 w-4" /> Thông Tin Audit Bản Ghi (Hệ Thống CSDL)
+              <ShieldCheck className="h-4 w-4" /> Thông Tin Audit Bản Ghi
             </h4>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
               <div className="space-y-1">
-                <p className="text-muted-foreground">👤 Người tạo (createdBy): <strong className="text-foreground font-mono">{selectedQuizDetail?.createdBy || selectedAssignmentDetail?.createdBy || "Admin System"}</strong></p>
-                <p className="text-muted-foreground">🕒 Thời gian tạo (createdAt): <strong className="text-foreground font-mono">{formatDateDisplay(selectedQuizDetail?.createdAt || selectedAssignmentDetail?.createdAt)}</strong></p>
+                <p className="text-muted-foreground">👤 Người tạo: <strong className="text-foreground font-mono">{selectedQuizDetail?.createdBy || selectedAssignmentDetail?.createdBy || "Admin System"}</strong></p>
+                <p className="text-muted-foreground">🕒 Thời gian tạo: <strong className="text-foreground font-mono">{formatDateDisplay(selectedQuizDetail?.createdAt || selectedAssignmentDetail?.createdAt)}</strong></p>
               </div>
 
               <div className="space-y-1">
-                <p className="text-muted-foreground">✏️ Người cập nhật (updatedBy): <strong className="text-foreground font-mono">{selectedQuizDetail?.updatedBy || selectedAssignmentDetail?.updatedBy || "Chưa chỉnh sửa"}</strong></p>
-                <p className="text-muted-foreground">🔄 Thời gian cập nhật (updatedAt): <strong className="text-foreground font-mono">{formatDateDisplay(selectedQuizDetail?.updatedAt || selectedAssignmentDetail?.updatedAt)}</strong></p>
+                <p className="text-muted-foreground">✏️ Người cập nhật: <strong className="text-foreground font-mono">{selectedQuizDetail?.updatedBy || selectedAssignmentDetail?.updatedBy || "Chưa chỉnh sửa"}</strong></p>
+                <p className="text-muted-foreground">🔄 Thời gian cập nhật: <strong className="text-foreground font-mono">{formatDateDisplay(selectedQuizDetail?.updatedAt || selectedAssignmentDetail?.updatedAt)}</strong></p>
               </div>
             </div>
           </div>

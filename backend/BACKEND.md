@@ -2939,7 +2939,9 @@ Các thao tác mua hàng quan trọng phát sinh audit log, gồm thêm/xóa/xó
 
 ### 17.2 Checkout PayPal Sandbox
 
-Frontend gọi `POST /api/v1/orders/checkout` cho một gói trực tiếp hoặc nhiều dòng `items` từ giỏ. Backend đọc lại giá/trạng thái, kiểm tra sở hữu và trùng lịch, reserve voucher của đúng học viên, phân bổ `discount_snapshot`, tạo `Order`, `OrderItem`, `PaymentTransaction` ở `PENDING`, rồi trả PayPal approval URL. Nếu trùng lịch lớp nhóm/COMBO, response yêu cầu học viên xác nhận bằng `acceptScheduleConflict=true` trước khi tiếp tục.
+Frontend gọi `POST /api/v1/orders/tutor-schedule/check` để đối chiếu từng cặp thứ/giờ học 1-1 mong muốn với lịch các lớp ACTIVE của học viên trước khi thêm giỏ hoặc thanh toán. Endpoint này chỉ đọc dữ liệu và luôn trả `200` cho kết quả kiểm tra hợp lệ với `data.conflict` cùng `data.message`; frontend dùng thông tin này để hiển thị dialog xác nhận khi trùng lịch.
+
+Frontend gọi `POST /api/v1/orders/checkout` cho một gói trực tiếp hoặc nhiều dòng `items` từ giỏ. Backend đọc lại giá/trạng thái, kiểm tra sở hữu và trùng lịch, reserve voucher của đúng học viên, phân bổ `discount_snapshot`, tạo `Order`, `OrderItem`, `PaymentTransaction` ở `PENDING`, rồi trả PayPal approval URL. Backend kiểm tra lại cả lịch lớp nhóm/COMBO lẫn lịch 1-1 mong muốn tại checkout; response yêu cầu học viên xác nhận bằng `acceptScheduleConflict=true` trước khi tiếp tục nếu có xung đột.
 
 Sau redirect, frontend dùng `orderId` để khôi phục ngữ cảnh và query `token` như tín hiệu PayPal đã quay về, rồi gọi `POST /api/v1/payments/paypal/capture?orderId={orderId}`. Backend lấy PayPal order ID từ database, kiểm tra chủ đơn, capture qua Orders API, kiểm tra `COMPLETED`, capture ID, amount và currency trước khi chuyển đơn sang `PAID` và cấp quyền. Không dùng query redirect để tự cấp quyền. `paypal_request_id`, gateway order ID, `paypal_capture_id` và `EnrollmentPackage.orderItemId` có unique constraint; xử lý lặp không tạo lại enrollment, class member hay matching request.
 
@@ -2976,12 +2978,13 @@ Postman collection và environment test thủ công nằm tại `docs/postman/AI
 WAITING_INSTRUCTOR -> INSTRUCTOR_ACCEPTED -> CONTACTED
 -> TRIAL_SCHEDULED -> TRIAL_COMPLETED -> MATCHED
                                       \-> REMATCHING -> INSTRUCTOR_ACCEPTED
+                     \-> HR_REJECTS_CONNECTION -> REMATCHING
 ```
 
 | Vai trò | API chính |
 |---|---|
 | Học viên | `GET /api/v1/students/one-on-one/requests`, `POST .../{id}/trial-result` |
 | Giáo viên/TA | `GET /api/v1/instructors/one-on-one/suggestions`, `POST .../{id}/accept`, `trial-class`, `trial-session`, `trial-review` |
-| HR | `GET /api/v1/hr/one-on-one/requests`, `POST .../{id}/mark-contacted`, `cancel`, `refund` |
+| HR | `GET /api/v1/hr/one-on-one/requests`, `POST .../{id}/mark-contacted`, `reject-connection`, `notify-instructors`, `cancel`, `refund`; `GET .../{id}/instructor-candidates` |
 
-Accept và mọi state transition dùng row lock. Chỉ assignee được tạo/hoàn tất buổi thử. Lớp thử có `classKind=ONE_ON_ONE_TRIAL`, buổi thử có `sessionKind=TRIAL`, `countsTowardPackage=false`, `payable=false`. Khi học viên đồng ý, cùng lớp chuyển thành `ONE_ON_ONE/ACTIVE`; khi từ chối, lớp thử đóng, assignee được ghi vào danh sách không nhận lại và request tự quay về `REMATCHING`.
+Accept và mọi state transition dùng row lock. HR có thể phê duyệt kết nối để chuyển sang `CONTACTED`, hoặc từ chối người vừa nhận: người này được ghi vào danh sách không nhận lại, request quay về `REMATCHING`, học viên/người bị từ chối nhận thông báo và hệ thống gửi lại cho Teacher/TA ACTIVE khác cùng danh mục. Ở `WAITING_INSTRUCTOR`/`REMATCHING`, HR có thể lấy danh sách ứng viên hợp lệ và gửi thông báo tới một tập người dạy tùy chọn. Chỉ assignee được tạo/hoàn tất buổi thử. Lớp thử có `classKind=ONE_ON_ONE_TRIAL`, buổi thử có `sessionKind=TRIAL`, `countsTowardPackage=false`, `payable=false`. Khi học viên đồng ý, cùng lớp chuyển thành `ONE_ON_ONE/ACTIVE`; khi từ chối sau học thử, lớp thử đóng, assignee được ghi vào danh sách không nhận lại và request tự quay về `REMATCHING`.

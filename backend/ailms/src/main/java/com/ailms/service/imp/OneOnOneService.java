@@ -9,6 +9,7 @@ import com.ailms.exception.ForbiddenException;
 import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.repository.*;
 import com.ailms.request.*;
+import com.ailms.response.OneOnOneInstructorCandidateResponse;
 import com.ailms.response.OneOnOneRequestResponse;
 import com.ailms.service.INotificationService;
 import com.ailms.service.IOneOnOneService;
@@ -271,6 +272,68 @@ public class OneOnOneService implements IOneOnOneService {
         return toResponse(saved);
     }
 
+    /** HR từ chối kết nối hiện tại, chặn người vừa nhận và phân phối lại cho người phù hợp khác. */
+    @Override
+    @Transactional
+    public OneOnOneRequestResponse rejectConnection(Long requestId, String reason) {
+        if (reason == null || reason.trim().length() < 5) {
+            throw new BusinessException("Lý do từ chối kết nối phải có ít nhất 5 ký tự.");
+        }
+        OneOnOneRequestEntity request = getForUpdate(requestId);
+        requireState(request, OneOnOneRequestStatusEnum.INSTRUCTOR_ACCEPTED);
+        UserEntity rejected = request.getAssignedInstructorEntity();
+        if (rejected == null) throw new BusinessException("Yêu cầu chưa có người dạy để từ chối kết nối.");
+        if (!rejectedInstructorRepository.existsByRequestEntity_IdAndInstructorEntity_Id(requestId, rejected.getId())) {
+            rejectedInstructorRepository.save(OneOnOneRejectedInstructorEntity.builder()
+                    .requestEntity(request)
+                    .instructorEntity(rejected)
+                    .build());
+        }
+        request.setAssignedInstructorEntity(null);
+        request.setAcceptedAt(null);
+        request.setContactedAt(null);
+        request.setStatus(OneOnOneRequestStatusEnum.REMATCHING);
+        OneOnOneRequestEntity saved = requestRepository.save(request);
+        notifyInstructor(rejected, "HR từ chối kết nối lớp 1-1",
+                "HR chưa phê duyệt kết nối yêu cầu #" + requestId + ". Lý do: " + reason.trim(), requestId);
+        notifyUser(request.getStudentEntity(), "Đang tìm người dạy khác",
+                "HR chưa phê duyệt kết nối hiện tại và đã mở lại yêu cầu để tìm người dạy phù hợp khác.", requestId);
+        List<OneOnOneInstructorCandidateResponse> candidates = eligibleInstructorCandidates(saved);
+        notifyCandidateUsers(saved, candidates.stream().map(OneOnOneInstructorCandidateResponse::getInstructorId).toList());
+        eventPublisher.publishEvent(new AuditLogEvent(
+                this, "REJECT_ONE_ON_ONE_CONNECTION", "ONE_ON_ONE_REQUEST", requestId,
+                Map.of("rejectedInstructorId", rejected.getId(), "reason", reason.trim()), toResponse(saved)));
+        return toResponse(saved);
+    }
+
+    /** Lấy Teacher/TA ACTIVE đúng chuyên môn và chưa bị từ chối cho yêu cầu này. */
+    @Override
+    public List<OneOnOneInstructorCandidateResponse> getInstructorCandidates(Long requestId) {
+        OneOnOneRequestEntity request = requestRepository.findById(requestId)
+                .orElseThrow(() -> ResourceNotFoundException.of("OneOnOneRequest", requestId));
+        requireState(request, OneOnOneRequestStatusEnum.WAITING_INSTRUCTOR, OneOnOneRequestStatusEnum.REMATCHING);
+        return eligibleInstructorCandidates(request);
+    }
+
+    /** Xác thực danh sách HR chọn rồi gửi thông báo nhận lớp cho từng Teacher/TA. */
+    @Override
+    @Transactional
+    public void notifyInstructors(Long requestId, List<Long> instructorIds) {
+        OneOnOneRequestEntity request = getForUpdate(requestId);
+        requireState(request, OneOnOneRequestStatusEnum.WAITING_INSTRUCTOR, OneOnOneRequestStatusEnum.REMATCHING);
+        Set<Long> selectedIds = instructorIds == null ? Set.of() : new LinkedHashSet<>(instructorIds);
+        if (selectedIds.isEmpty()) throw new BusinessException("Vui lòng chọn ít nhất một giáo viên hoặc trợ giảng.");
+        Set<Long> eligibleIds = eligibleInstructorCandidates(request).stream()
+                .map(OneOnOneInstructorCandidateResponse::getInstructorId).collect(java.util.stream.Collectors.toSet());
+        if (!eligibleIds.containsAll(selectedIds)) {
+            throw new BusinessException("Danh sách có người dạy không còn phù hợp với danh mục hoặc trạng thái yêu cầu.");
+        }
+        notifyCandidateUsers(request, selectedIds.stream().toList());
+        eventPublisher.publishEvent(new AuditLogEvent(
+                this, "NOTIFY_ONE_ON_ONE_CANDIDATES", "ONE_ON_ONE_REQUEST", requestId,
+                null, Map.of("instructorIds", selectedIds)));
+    }
+
     /** HR hủy yêu cầu và đóng lớp thử nếu có. */
     @Override
     @Transactional
@@ -381,15 +444,73 @@ public class OneOnOneService implements IOneOnOneService {
         return course.getCategoryEntity() != null ? course.getCategoryEntity().getId() : null;
     }
 
+    /** Tạo danh sách người dạy hợp lệ từ phân công danh mục, trạng thái nhân sự và vai trò hiện hành. */
+    private List<OneOnOneInstructorCandidateResponse> eligibleInstructorCandidates(OneOnOneRequestEntity request) {
+        Long categoryId = getCategoryId(request);
+        if (categoryId == null) return List.of();
+        Map<Long, EmployeeEntity> eligible = new LinkedHashMap<>();
+        teacherCategoryRepository.findByCategory_IdAndStatus(categoryId, BaseStatusEnum.ACTIVE).stream()
+                .map(TeacherCategoryEntity::getEmployee)
+                .filter(Objects::nonNull)
+                .filter(employee -> employee.getStatus() == EmployeeStatusEnum.ACTIVE)
+                .filter(employee -> employee.getUserEntity() != null)
+                .filter(employee -> userRoleRepository.hasActiveInstructorRole(employee.getUserId(), LocalDateTime.now()))
+                .filter(employee -> !rejectedInstructorRepository
+                        .existsByRequestEntity_IdAndInstructorEntity_Id(request.getId(), employee.getUserId()))
+                .forEach(employee -> eligible.putIfAbsent(employee.getUserId(), employee));
+        return eligible.values().stream().map(employee -> OneOnOneInstructorCandidateResponse.builder()
+                .instructorId(employee.getUserId())
+                .instructorName(employee.getUserEntity().getFullName())
+                .employeeCode(employee.getEmployeeCode())
+                .role(instructorRoleLabel(employee.getUserId()))
+                .build()).toList();
+    }
+
+    /** Gửi thông báo nhận lớp 1-1 tới đúng danh sách người dạy đã được xác thực. */
+    private void notifyCandidateUsers(OneOnOneRequestEntity request, List<Long> instructorIds) {
+        if (instructorIds.isEmpty()) return;
+        Map<Long, UserEntity> users = userRepository.findAllById(instructorIds).stream()
+                .collect(java.util.stream.Collectors.toMap(UserEntity::getId, user -> user));
+        String courseName = getPackage(request).getCourseEntity().getName();
+        instructorIds.stream().map(users::get).filter(Objects::nonNull).forEach(user -> notifyInstructor(
+                user,
+                "Có lớp 1-1 phù hợp chuyên môn",
+                "HR đã gửi yêu cầu học 1-1 #" + request.getId() + " của khóa " + courseName + " đến bạn.",
+                request.getId()));
+    }
+
+    /** Hiển thị vai trò Teacher hoặc TA còn hiệu lực của ứng viên. */
+    private String instructorRoleLabel(Long userId) {
+        LocalDateTime now = LocalDateTime.now();
+        boolean isTa = userRoleRepository.findByUserEntity_IdWithRole(userId).stream()
+                .filter(role -> role.getAssignedAt() == null || !role.getAssignedAt().isAfter(now))
+                .filter(role -> role.getExpiredAt() == null || role.getExpiredAt().isAfter(now))
+                .map(role -> role.getRoleEntity().getCode().toUpperCase(Locale.ROOT))
+                .anyMatch(code -> code.equals("TA") || code.equals("ROLE_TA"));
+        return isTa ? "Trợ giảng" : "Giáo viên";
+    }
+
     /** Gửi thông báo hệ thống tới một người dùng nếu tồn tại. */
     private void notifyUser(UserEntity user, String title, String content, Long requestId) {
         if (user != null) notificationService.createSystemNotification(
                 user, NotificationTypeEnum.GENERAL, title, content, requestId, "/one-on-one/requests/" + requestId);
     }
 
+    /** Gửi thông báo nhận lớp tới trang gợi ý dành cho Teacher/TA. */
+    private void notifyInstructor(UserEntity user, String title, String content, Long requestId) {
+        if (user != null) notificationService.createSystemNotification(
+                user, NotificationTypeEnum.GENERAL, title, content, requestId, "/teacher/suggested-classes");
+    }
+
     /** Gửi thông báo theo dõi cho toàn bộ HR. */
     private void notifyHr(String title, String content, Long requestId) {
-        userRoleRepository.findHrUsers().forEach(user -> notifyUser(user, title, content, requestId));
+        userRoleRepository.findHrUsers().forEach(user -> notificationService.createSystemNotification(
+                user,
+                NotificationTypeEnum.GENERAL,
+                title,
+                content,
+                requestId,
+                "/admin/approval-center"));
     }
 
     /** Ghi audit cho mọi transition thay đổi dữ liệu 1-1. */

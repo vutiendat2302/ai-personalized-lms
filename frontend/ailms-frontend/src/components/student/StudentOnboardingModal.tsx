@@ -382,14 +382,19 @@ export const StudentOnboardingModal: React.FC<StudentOnboardingModalProps> = ({
           }
         }
 
-        // 3. Submit Study Goal
-        const goalPayload: CreateStudyGoalRequest = {
-          userId,
+        // 3. Create or update the single general Study Goal
+        const goalPayload: Pick<CreateStudyGoalRequest, "studyGoalTypeEnum" | "targetValue"> = {
           studyGoalTypeEnum: studyGoalType,
           targetValue,
         };
         try {
-          await studentApi.createStudyGoal(goalPayload);
+          const existingGoals = await studentPortalApi.getGoals();
+          const existingGoal = existingGoals.find((item) => item.courseId == null);
+          if (existingGoal) {
+            await studentPortalApi.updateGoal(existingGoal.id, goalPayload);
+          } else {
+            await studentPortalApi.createGoal(goalPayload);
+          }
         } catch (e) {
           console.log("Goal API note:", e);
         }
