@@ -28,6 +28,9 @@ public class UpdateEmployeeRequest {
     @Size(min = 2, max = 100, message = "Position must be between 2 and 100 characters")
     private String position;
 
+    @Size(max = 2000, message = "Bio must not exceed 2000 characters")
+    private String bio;
+
     @Size(max = 255, message = "Address must not exceed 255 characters")
     private String address;
 

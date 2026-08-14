@@ -4,10 +4,11 @@ import { useAuth } from "@/hooks/useAuth";
 import { useModalStore } from "@/store/useModalStore";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { LogOut, ChevronDown, Bell, Globe, Search, User, Settings, BookOpen, Shield, Activity, Clock, Trash2, Sparkles, Target, ShoppingBag, BarChart, Loader2 } from "lucide-react";
+import { LogOut, ChevronDown, Bell, Search, User, Settings, BookOpen, Shield, Activity, Clock, Trash2, Sparkles, Target, ShoppingBag, BarChart, Loader2, Award } from "lucide-react";
 import { searchApi, type SearchHistoryResponse, type PopularSearchResponse, type SuggestionResponse } from "@/api/search/searchApi";
 import { StudentOnboardingModal } from "@/components/student/StudentOnboardingModal";
 import { studentApi } from "@/api/students/studentApi";
+import { studentApi as studentPortalApi } from "@/api/student/studentApi";
 import { useCartStore } from "@/store/useCartStore";
 import { WorkspaceSwitcher } from "@/components/WorkspaceSwitcher";
 import type { StudentProfileData } from "@/api/students/studentApi";
@@ -20,13 +21,14 @@ export const Header: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { openLogin, openRegister, openChangePassword } = useModalStore();
-  const { items: cartItems, toggleCart } = useCartStore();
+  const { items: cartItems, fetchCart, resetCart } = useCartStore();
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notificationLoading, setNotificationLoading] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const notificationRef = useRef<HTMLDivElement>(null);
   const [searchFocused, setSearchFocused] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [suggestions, setSuggestions] = useState<SuggestionResponse[]>([]);
@@ -41,13 +43,29 @@ export const Header: React.FC = () => {
     return localStorage.getItem(`hasGoal_${auth.user.id}`) === "true";
   });
   const searchRef = useRef<HTMLDivElement>(null);
+  const [myCoursesDropdownOpen, setMyCoursesDropdownOpen] = useState(false);
+  const [activeStudentCourses, setActiveStudentCourses] = useState<any[]>([]);
+  const [loadingMyCourses, setLoadingMyCourses] = useState(false);
+  const myCoursesDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleMyCoursesClickOutside = (event: MouseEvent) => {
+      if (myCoursesDropdownRef.current && !myCoursesDropdownRef.current.contains(event.target as Node)) {
+        setMyCoursesDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleMyCoursesClickOutside);
+    return () => document.removeEventListener("mousedown", handleMyCoursesClickOutside);
+  }, []);
+
+
 
   const loadNotifications = async () => {
     if (!auth.accessToken) return;
     setNotificationLoading(true);
     try {
       const [page, count] = await Promise.all([
-        notificationApi.getMine(0, 8),
+        notificationApi.getMine(0, 50),
         notificationApi.getUnreadCount(),
       ]);
       setNotifications(page?.content || []);
@@ -101,6 +119,26 @@ export const Header: React.FC = () => {
     })
   );
 
+  /** Đồng bộ badge giỏ hàng từ cùng API được trang giỏ ở sidebar sử dụng. */
+  useEffect(() => {
+    if (auth.accessToken && isStudent) void fetchCart();
+    else resetCart();
+  }, [auth.accessToken, auth.user?.id, isStudent, fetchCart, resetCart]);
+
+  useEffect(() => {
+    if (myCoursesDropdownOpen && isStudent && auth.accessToken) {
+      setLoadingMyCourses(true);
+      studentPortalApi.getCourses()
+        .then((res: any) => {
+          const list = Array.isArray(res) ? res : [];
+          const activeOnly = list.filter((c: any) => c.status === "ACTIVE" && !c.expired);
+          setActiveStudentCourses(activeOnly);
+        })
+        .catch(() => setActiveStudentCourses([]))
+        .finally(() => setLoadingMyCourses(false));
+    }
+  }, [myCoursesDropdownOpen, isStudent, auth.accessToken]);
+
   // Automatically trigger Student Onboarding modal on first login if hasGoal is false
   useEffect(() => {
     if (auth.accessToken && auth.user && isStudent) {
@@ -131,46 +169,18 @@ export const Header: React.FC = () => {
     }
   }, [auth.accessToken, auth.user, isStudent]);
 
-  // Synchronize searchQuery with URL query parameter when on /explore
-  useEffect(() => {
-    if (location.pathname === "/explore") {
-      const searchParams = new URLSearchParams(location.search);
-      const kw = searchParams.get("keyword") || searchParams.get("q") || "";
-      setSearchQuery(kw);
-    }
-  }, [location.pathname, location.search]);
-
-  // Fetch search history from API (or local user history), max 4 items
+  // Fetch only persisted history from the Backend; anonymous users have no synthetic history.
   useEffect(() => {
     if (searchFocused) {
-      const localHist: SearchHistoryResponse[] = JSON.parse(
-        localStorage.getItem("ailms_local_search_history") || "[]"
-      );
-
       if (auth.accessToken) {
         searchApi
           .getSearchHistory()
           .then((res) => {
-            if (res.data?.success && Array.isArray(res.data?.data) && res.data.data.length > 0) {
-              const apiHist = res.data.data;
-              const merged = [...apiHist];
-              localHist.forEach((lh) => {
-                if (!merged.some((ah) => ah.keyword.toLowerCase() === lh.keyword.toLowerCase())) {
-                  merged.push(lh);
-                }
-              });
-              const finalFour = merged.slice(0, 4);
-              setSearchHistory(finalFour);
-              localStorage.setItem("ailms_local_search_history", JSON.stringify(finalFour));
-            } else {
-              setSearchHistory(localHist.slice(0, 4));
-            }
+            setSearchHistory(res.data?.success && Array.isArray(res.data?.data) ? res.data.data.slice(0, 4) : []);
           })
-          .catch(() => {
-            setSearchHistory(localHist.slice(0, 4));
-          });
+          .catch(() => setSearchHistory([]));
       } else {
-        setSearchHistory(localHist.slice(0, 4));
+        setSearchHistory([]);
       }
     }
   }, [searchFocused, auth.accessToken]);
@@ -229,8 +239,9 @@ export const Header: React.FC = () => {
     if (searchFocused) {
       const localViewed = JSON.parse(
         localStorage.getItem("recently_viewed_courses") || "[]"
-      );
+      ).filter((item: any) => item?.id && item?.name && !/unsplash\.com|dicebear\.com/i.test(item?.image || ""));
       setRecentlyViewedCourses(localViewed);
+      localStorage.setItem("recently_viewed_courses", JSON.stringify(localViewed));
     }
   }, [searchFocused]);
 
@@ -241,8 +252,8 @@ export const Header: React.FC = () => {
       {
         id: String(course.id),
         name: course.name,
-        category: course.category || "Khóa học AILMS",
-        image: course.image || "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=300&auto=format&fit=crop&q=60",
+        ...(course.category ? { category: course.category } : {}),
+        ...(course.image ? { image: course.image } : {}),
       },
       ...filtered,
     ].slice(0, 3);
@@ -254,26 +265,12 @@ export const Header: React.FC = () => {
     if (!keyword.trim()) return;
     const cleanKw = keyword.trim();
 
-    // 1. Update local storage history immediately
-    const localHist: SearchHistoryResponse[] = JSON.parse(
-      localStorage.getItem("ailms_local_search_history") || "[]"
-    );
-    const newHistItem: SearchHistoryResponse = {
-      id: `hist-${Date.now()}`,
-      keyword: cleanKw,
-      courseId: courseId || null,
-      createdAt: new Date().toISOString(),
-    };
-    const filteredLocal = localHist.filter((h) => h.keyword.toLowerCase() !== cleanKw.toLowerCase());
-    const updatedLocal = [newHistItem, ...filteredLocal].slice(0, 4);
-    localStorage.setItem("ailms_local_search_history", JSON.stringify(updatedLocal));
-    setSearchHistory(updatedLocal);
-
-    // 2. Call API if logged in
+    // Persist history only for authenticated accounts through the Backend API.
     if (auth.accessToken) {
-      searchApi.saveSearchHistory({ keyword: cleanKw, courseId: courseId || null }).catch(() => {
-        // Silently catch 403 / unauth errors
-      });
+      searchApi.saveSearchHistory({ keyword: cleanKw, courseId: courseId || null })
+        .then(() => searchApi.getSearchHistory())
+        .then((res) => setSearchHistory(res.data?.success && Array.isArray(res.data?.data) ? res.data.data.slice(0, 4) : []))
+        .catch(() => undefined);
     }
   };
 
@@ -281,16 +278,10 @@ export const Header: React.FC = () => {
     e.stopPropagation();
     const targetId = String(id);
 
-    // 1. Instantly update UI and LocalStorage
-    const localHist: SearchHistoryResponse[] = JSON.parse(
-      localStorage.getItem("ailms_local_search_history") || "[]"
-    );
-    const updatedLocal = localHist.filter((item) => String(item.id) !== targetId).slice(0, 4);
-    localStorage.setItem("ailms_local_search_history", JSON.stringify(updatedLocal));
+    // Remove the persisted item through the Backend and update the visible list immediately.
     setSearchHistory((prev) => prev.filter((item) => String(item.id) !== targetId).slice(0, 4));
 
-    // 2. Call DELETE API only when authenticated and non-synthetic id
-    if (auth.accessToken && !targetId.startsWith("hist-")) {
+    if (auth.accessToken) {
       try {
         await searchApi.deleteSearchHistory(targetId);
       } catch {
@@ -306,7 +297,13 @@ export const Header: React.FC = () => {
       saveHistory(query);
       setSearchFocused(false);
       setSearchQuery("");
-      navigate(`/explore?keyword=${encodeURIComponent(query)}`);
+      const isExplore = location.pathname === "/explore";
+      const existingFrom = (location.state as { from?: string } | null)?.from;
+      const originalFrom = !isExplore ? `${location.pathname}${location.search}${location.hash}` : (existingFrom || "/student/dashboard");
+      navigate(`/explore?keyword=${encodeURIComponent(query)}#courses`, {
+        replace: isExplore,
+        state: { from: originalFrom },
+      });
     }
   };
 
@@ -348,7 +345,13 @@ export const Header: React.FC = () => {
     if (effectiveCourseId) {
       navigate(`/courses/${effectiveCourseId}`);
     } else {
-      navigate(`/explore?keyword=${encodeURIComponent(keyword)}`);
+      const isExplore = location.pathname === "/explore";
+      const existingFrom = (location.state as { from?: string } | null)?.from;
+      const originalFrom = !isExplore ? `${location.pathname}${location.search}${location.hash}` : (existingFrom || "/student/dashboard");
+      navigate(`/explore?keyword=${encodeURIComponent(keyword)}#courses`, {
+        replace: isExplore,
+        state: { from: originalFrom },
+      });
     }
   };
 
@@ -377,6 +380,17 @@ export const Header: React.FC = () => {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Close notification dropdown on outside click
+  useEffect(() => {
+    const handleNotificationClickOutside = (event: MouseEvent) => {
+      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
+        setNotificationOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleNotificationClickOutside);
+    return () => document.removeEventListener("mousedown", handleNotificationClickOutside);
+  }, []);
+
   // Close search dropdown on outside click
   useEffect(() => {
     const handleSearchClickOutside = (event: MouseEvent) => {
@@ -395,7 +409,14 @@ export const Header: React.FC = () => {
     })
   );
 
-  // Ẩn giỏ hàng cho toàn bộ nhóm nhân viên (Admin, HR, Teacher, TA)
+  const isSupport = Boolean(
+    auth.user?.roles?.some((r: any) => {
+      const roleStr = (typeof r === "object" ? (r?.code || r?.name || "") : String(r)).toUpperCase();
+      return roleStr.includes("SUPPORT");
+    })
+  );
+
+  // Ẩn giỏ hàng cho toàn bộ nhóm nhân viên (Admin, HR, Teacher, TA, Support)
   const isEmployee = Boolean(
     auth.user?.roles?.some((r: any) => {
       const roleStr = (typeof r === "object" ? (r?.code || r?.name || "") : String(r)).toUpperCase();
@@ -404,6 +425,7 @@ export const Header: React.FC = () => {
         roleStr.includes("HR") ||
         roleStr.includes("TEACHER") ||
         roleStr.includes("TA") ||
+        roleStr.includes("SUPPORT") ||
         roleStr.includes("EMPLOYEE")
       );
     })
@@ -420,16 +442,87 @@ export const Header: React.FC = () => {
 
         {/* Center: Global Search Bar & Navigation */}
         <div className="flex-1 flex items-center justify-center max-w-4xl mx-4 sm:mx-8 md:mx-12 gap-4">
-          {/* Courses Dropdown (Only for Authenticated Student/User - Hidden for Employee/Staff) */}
-          {auth.accessToken && auth.user && !isEmployee && (
-            <div className="relative shrink-0 hidden md:block">
+          {/* Active Courses Dropdown on the LEFT (Only for Authenticated Student) */}
+          {auth.accessToken && auth.user && isStudent && (
+            <div className="relative shrink-0 hidden md:block" ref={myCoursesDropdownRef}>
               <button 
-                onClick={() => navigate("/dashboard")}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-background/50 hover:bg-background text-xs font-semibold text-foreground transition-all"
+                onClick={() => {
+                  setMyCoursesDropdownOpen((prev) => !prev);
+                  setNotificationOpen(false);
+                  setDropdownOpen(false);
+                }}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 text-xs font-bold transition-all shadow-xs cursor-pointer"
+                title="Khóa học đang học của tôi"
               >
-                <span>Các khóa học của tôi</span>
-                <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                <BookOpen className="h-4 w-4" />
+                <span>Khóa học của tôi</span>
+                <ChevronDown className="h-3.5 w-3.5 opacity-70" />
               </button>
+
+              {myCoursesDropdownOpen && (
+                <div className="absolute left-0 top-12 z-50 w-80 rounded-2xl border border-border/70 bg-card p-3 shadow-2xl animate-in fade-in-50 slide-in-from-top-2 space-y-2">
+                  <div className="flex items-center justify-between border-b border-border/60 pb-2 px-1">
+                    <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                      <BookOpen className="h-4 w-4 text-primary" />
+                      Khóa học đang học ({activeStudentCourses.length})
+                    </span>
+                    <button
+                      onClick={() => {
+                        setMyCoursesDropdownOpen(false);
+                        navigate("/student/courses");
+                      }}
+                      className="text-[11px] font-bold text-primary hover:underline cursor-pointer"
+                    >
+                      Tất cả →
+                    </button>
+                  </div>
+
+                  <div className="max-h-72 overflow-y-auto space-y-1.5 scrollbar-thin">
+                    {loadingMyCourses ? (
+                      <div className="py-6 text-center text-xs text-muted-foreground flex items-center justify-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                        <span>Đang tải khóa học...</span>
+                      </div>
+                    ) : activeStudentCourses.length === 0 ? (
+                      <div className="py-6 text-center text-xs text-muted-foreground">
+                        Chưa có khóa học đang active nào.
+                      </div>
+                    ) : (
+                      activeStudentCourses.map((c) => (
+                        <button
+                          key={c.id}
+                          onClick={() => {
+                            setMyCoursesDropdownOpen(false);
+                            navigate(`/learn/courses/${c.id}`);
+                          }}
+                          className="w-full text-left p-2.5 rounded-xl border border-border/40 hover:bg-primary/5 hover:border-primary/40 transition-all space-y-1.5 group cursor-pointer"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-xs font-bold text-foreground line-clamp-1 group-hover:text-primary transition-colors">
+                              {c.title || c.name}
+                            </span>
+                            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800 shrink-0">
+                              ACTIVE
+                            </span>
+                          </div>
+
+                          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                            <span className="truncate">{c.categoryName || "Khóa học AILMS"}</span>
+                            <span className="font-mono font-bold text-foreground shrink-0">{c.progressPercent || 0}%</span>
+                          </div>
+
+                          <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className="h-1.5 bg-primary rounded-full transition-all"
+                              style={{ width: `${c.progressPercent || 0}%` }}
+                            />
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -581,7 +674,7 @@ export const Header: React.FC = () => {
                                 {c.image ? <img src={c.image} alt={c.name} className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300" /> : <div className="flex h-full w-full items-center justify-center bg-primary/5"><BookOpen className="h-6 w-6 text-primary/40" /></div>}
                               </div>
                               <div className="p-2 flex-1 flex flex-col justify-between space-y-1">
-                                <span className="text-[10px] font-extrabold uppercase text-primary tracking-wider">{c.category}</span>
+                                {c.category && <span className="text-[10px] font-extrabold uppercase text-primary tracking-wider">{c.category}</span>}
                                 <h5 className="font-bold text-foreground text-xs leading-tight line-clamp-2 group-hover:text-primary transition-colors">
                                   {c.name}
                                 </h5>
@@ -605,7 +698,7 @@ export const Header: React.FC = () => {
         <div className="flex items-center gap-3">
           {auth.accessToken && auth.user ? (
             // Authenticated Right Side Icons & Profile Dropdown
-            <div className="flex items-center gap-3 relative" ref={dropdownRef}>
+            <div className="flex items-center gap-3">
               
               {/* Workspace Switcher dropdown for multi-role users */}
               <WorkspaceSwitcher />
@@ -626,15 +719,10 @@ export const Header: React.FC = () => {
                 </button>
               )}
 
-              {/* Globe Icon */}
-              <button className="p-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title="Ngôn ngữ">
-                <Globe className="h-4.5 w-4.5" />
-              </button>
-
               {/* Shopping Cart Trigger (Chỉ hiển thị cho Học Viên / Khách vãng lai, ẩn hoàn toàn đối với Nhân Viên & Admin) */}
               {(!auth.accessToken || isStudent) && !isEmployee && (
                 <button
-                  onClick={toggleCart}
+                  onClick={() => auth.accessToken ? navigate("/student/cart") : openLogin()}
                   className="p-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors relative"
                   title="Giỏ hàng"
                 >
@@ -649,68 +737,71 @@ export const Header: React.FC = () => {
 
 
               {/* Notification Bell */}
-              <button
-                onClick={() => { setNotificationOpen((open) => !open); setDropdownOpen(false); }}
-                className="p-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors relative"
-                title="Thông báo"
-                aria-label={`Thông báo${unreadCount ? `, ${unreadCount} chưa đọc` : ""}`}
-              >
-                <Bell className="h-4.5 w-4.5" />
-                {unreadCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-destructive text-[9px] font-bold text-white flex items-center justify-center ring-2 ring-background">
-                    {unreadCount > 99 ? "99+" : unreadCount}
-                  </span>
-                )}
-              </button>
+              <div className="relative" ref={notificationRef}>
+                <button
+                  onClick={() => { setNotificationOpen((open) => !open); setDropdownOpen(false); }}
+                  className="p-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors relative"
+                  title="Thông báo"
+                  aria-label={`Thông báo${unreadCount ? `, ${unreadCount} chưa đọc` : ""}`}
+                >
+                  <Bell className="h-4.5 w-4.5" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-destructive text-[9px] font-bold text-white flex items-center justify-center ring-2 ring-background">
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </span>
+                  )}
+                </button>
 
-              {notificationOpen && (
-                <div className="absolute right-10 top-12 z-50 w-[min(92vw,360px)] overflow-hidden rounded-2xl border border-border/70 bg-card shadow-2xl animate-in fade-in-50 slide-in-from-top-2">
-                  <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
-                    <div>
-                      <p className="text-sm font-bold text-foreground">Thông báo</p>
-                      <p className="text-[10px] text-muted-foreground">Theo tài khoản và vai trò hiện tại</p>
+                {notificationOpen && (
+                  <div className="absolute right-0 top-12 z-50 w-[min(92vw,360px)] overflow-hidden rounded-2xl border border-border/70 bg-card shadow-2xl animate-in fade-in-50 slide-in-from-top-2">
+                    <div className="flex items-center justify-between border-b border-border/60 px-4 py-3">
+                      <div>
+                        <p className="text-sm font-bold text-foreground">Thông báo</p>
+                        <p className="text-[10px] text-muted-foreground">Theo tài khoản và vai trò hiện tại</p>
+                      </div>
+                      {unreadCount > 0 && (
+                        <button
+                          className="text-[11px] font-semibold text-primary hover:underline"
+                          onClick={async () => { await notificationApi.markAllRead(); setUnreadCount(0); setNotifications((items) => items.map((item) => ({ ...item, isRead: true }))); }}
+                        >
+                          Đánh dấu đã đọc
+                        </button>
+                      )}
                     </div>
-                    {unreadCount > 0 && (
-                      <button
-                        className="text-[11px] font-semibold text-primary hover:underline"
-                        onClick={async () => { await notificationApi.markAllRead(); setUnreadCount(0); setNotifications((items) => items.map((item) => ({ ...item, isRead: true }))); }}
-                      >
-                        Đánh dấu đã đọc
-                      </button>
-                    )}
+                    <div className="max-h-105 overflow-y-auto p-2">
+                      {notificationLoading ? (
+                        <div className="flex items-center justify-center gap-2 py-10 text-xs text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Đang tải thông báo...</div>
+                      ) : notifications.length === 0 ? (
+                        <div className="py-10 text-center"><Bell className="mx-auto mb-2 h-7 w-7 text-muted-foreground/40" /><p className="text-xs font-medium text-muted-foreground">Chưa có thông báo</p></div>
+                      ) : notifications.map((item) => (
+                        <button
+                          key={item.id}
+                          onClick={() => void openNotification(item)}
+                          className={`mb-1 w-full rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-muted ${item.isRead ? "" : "bg-primary/5"}`}
+                        >
+                          <div className="flex items-start gap-2.5">
+                            <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${item.isRead ? "bg-muted-foreground/25" : "bg-primary"}`} />
+                            <span className="min-w-0">
+                              <span className="block truncate text-xs font-semibold text-foreground">{item.title}</span>
+                              <span className="mt-0.5 line-clamp-2 block text-[11px] leading-4 text-muted-foreground">{item.content}</span>
+                              <span className="mt-1 block text-[10px] text-muted-foreground/70">{new Date(item.createdAt).toLocaleString("vi-VN")}</span>
+                            </span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  <div className="max-h-105 overflow-y-auto p-2">
-                    {notificationLoading ? (
-                      <div className="flex items-center justify-center gap-2 py-10 text-xs text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Đang tải thông báo...</div>
-                    ) : notifications.length === 0 ? (
-                      <div className="py-10 text-center"><Bell className="mx-auto mb-2 h-7 w-7 text-muted-foreground/40" /><p className="text-xs font-medium text-muted-foreground">Chưa có thông báo</p></div>
-                    ) : notifications.map((item) => (
-                      <button
-                        key={item.id}
-                        onClick={() => void openNotification(item)}
-                        className={`mb-1 w-full rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-muted ${item.isRead ? "" : "bg-primary/5"}`}
-                      >
-                        <div className="flex items-start gap-2.5">
-                          <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${item.isRead ? "bg-muted-foreground/25" : "bg-primary"}`} />
-                          <span className="min-w-0">
-                            <span className="block truncate text-xs font-semibold text-foreground">{item.title}</span>
-                            <span className="mt-0.5 line-clamp-2 block text-[11px] leading-4 text-muted-foreground">{item.content}</span>
-                            <span className="mt-1 block text-[10px] text-muted-foreground/70">{new Date(item.createdAt).toLocaleString("vi-VN")}</span>
-                          </span>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
+                )}
+              </div>
 
               {/* Avatar trigger */}
-              <button 
-                onClick={() => setDropdownOpen(!dropdownOpen)}
-                className="flex items-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-primary/20 rounded-full p-0.5"
-              >
+              <div className="relative" ref={dropdownRef}>
+                <button 
+                  onClick={() => { setDropdownOpen(!dropdownOpen); setNotificationOpen(false); }}
+                  className="flex items-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-primary/20 rounded-full p-0.5"
+                >
                 <Avatar className="h-9 w-9 border-2 border-primary/20 hover:border-primary/60 transition-all">
-                  <AvatarImage src={`https://api.dicebear.com/7.x/adventurer/svg?seed=${auth.user.username}`} />
+                  <AvatarImage src={auth.user.avatarUrl || undefined} />
                   <AvatarFallback className="bg-primary/10 text-primary uppercase font-bold text-xs">
                     {auth.user.username.slice(0, 2)}
                   </AvatarFallback>
@@ -725,7 +816,18 @@ export const Header: React.FC = () => {
                     <p className="text-[10px] text-muted-foreground truncate">{auth.user.email}</p>
                   </div>
 
-                  {isAdmin ? (
+                  {isSupport ? (
+                    // Support Menu Items (Chỉ Thông tin cá nhân)
+                    <>
+                      <button
+                        onClick={() => { setDropdownOpen(false); navigate("/profile"); }}
+                        className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
+                      >
+                        <User className="h-4 w-4 text-primary" />
+                        <span>Thông tin cá nhân</span>
+                      </button>
+                    </>
+                  ) : isAdmin ? (
                     // Admin Menu Items
                     <>
                       <button
@@ -788,18 +890,18 @@ export const Header: React.FC = () => {
                         <span>Thông tin cá nhân</span>
                       </button>
                       <button
-                        onClick={() => { setDropdownOpen(false); navigate("/dashboard"); }}
-                        className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
-                      >
-                        <BookOpen className="h-4 w-4 text-primary" />
-                        <span>Các khóa học của tôi</span>
-                      </button>
-                      <button
-                        onClick={() => { setDropdownOpen(false); setOnboardingModalOpen(true); }}
+                        onClick={() => { setDropdownOpen(false); navigate("/student/goals"); }}
                         className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
                       >
                         <Target className="h-4 w-4 text-primary" />
                         <span>Thiết lập mục tiêu & Sở thích</span>
+                      </button>
+                      <button
+                        onClick={() => { setDropdownOpen(false); navigate("/student/certificates"); }}
+                        className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
+                      >
+                        <Award className="h-4 w-4 text-primary" />
+                        <span>Chứng chỉ & Kết quả</span>
                       </button>
                       <button
                         onClick={() => { setDropdownOpen(false); navigate("/activity-log"); }}
@@ -829,9 +931,9 @@ export const Header: React.FC = () => {
                       <span>Đăng xuất</span>
                     </button>
                   </div>
-                </div>
-              )}
-
+                  </div>
+                )}
+              </div>
             </div>
           ) : (
             // Public Right Side LogIn/SignUp Buttons

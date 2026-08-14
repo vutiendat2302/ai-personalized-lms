@@ -24,7 +24,7 @@ public class AiServiceConfig {
     @Value("${ai-service.base-url:http://localhost:8000}")
     private String baseUrl;
 
-    @Value("${ai-service.internal-token:${ai-service.interal-token:dev_internal_secret_123}}")
+    @Value("${ai-service.internal-token:dev_internal_secret_123}")
     private String internalToken;
 
     /**

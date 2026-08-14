@@ -18,8 +18,10 @@ import {
   ChevronDown,
   ChevronRight,
   Menu,
+  School,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { AiChatWidget } from "@/components/admin/chat/AdminAiChatWidget";
 
 interface NavSection {
   title?: string;
@@ -27,21 +29,14 @@ interface NavSection {
     label: string;
     path: string;
     icon: React.ComponentType<{ className?: string }>;
-    badgeCount?: number;
   }[];
 }
 
 export const StudentLayout: React.FC = () => {
   const location = useLocation();
-  const navigate = useNavigate();
-  const { auth, logout } = useAuth();
-  const { user } = auth;
-
   const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
     return localStorage.getItem("ailms_student_sidebar_collapsed") === "true";
   });
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [showUserMenu, setShowUserMenu] = useState(false);
 
   const toggleCollapse = () => {
     setIsCollapsed((prev) => {
@@ -61,27 +56,20 @@ export const StudentLayout: React.FC = () => {
       title: "HỌC TẬP",
       items: [
         { label: "Khóa học của tôi", path: "/student/courses", icon: Sparkles },
+        { label: "Lớp học của tôi", path: "/student/classes", icon: School },
         { label: "Lịch học & Thi", path: "/student/schedule", icon: Calendar },
-        { label: "Bài tập cần nộp", path: "/student/assignments", icon: CheckSquare, badgeCount: 2 },
-        { label: "Chứng chỉ & Kết quả", path: "/student/certificates", icon: Award },
-        { label: "Tiến độ học tập", path: "/student/progress", icon: BarChart2 },
-        { label: "Mục tiêu & Streak", path: "/student/goals", icon: Target },
+        { label: "Bài tập cần nộp", path: "/student/assignments", icon: CheckSquare },
       ],
     },
     {
       title: "MUA SẮM",
       items: [
         { label: "Khám phá khóa học", path: "/student/catalog", icon: ShoppingBag },
-        { label: "Kho Voucher & Mã giảm giá", path: "/student/vouchers", icon: Tag, badgeCount: 4 },
-        { label: "Giỏ hàng", path: "/student/cart", icon: ShoppingCart, badgeCount: 1 },
+        { label: "Voucher của tôi", path: "/student/vouchers", icon: Tag },
+        { label: "Giỏ hàng", path: "/student/cart", icon: ShoppingCart },
         { label: "Đơn hàng của tôi", path: "/student/orders", icon: Receipt },
       ],
     },
-  ];
-
-  const notifications = [
-    { id: 1, title: "Nhắc nộp bài tập", text: "Bài tập JWT Spring Security sẽ hết hạn vào 23:59 hôm nay", time: "30 phút trước", unread: true },
-    { id: 2, title: "Lịch học nhóm sắp tới", text: "Buổi 12: Spring Security Live Class diễn ra lúc 19:00", time: "2 giờ trước", unread: true },
   ];
 
   return (
@@ -128,7 +116,8 @@ export const StudentLayout: React.FC = () => {
                 <div className="space-y-1">
                   {group.items.map((item) => {
                     const Icon = item.icon;
-                    const isActive = location.pathname === item.path;
+                    const isActive = location.pathname === item.path
+                      || (item.path === "/student/classes" && location.pathname.startsWith("/student/classes/"));
 
                     return (
                       <Link
@@ -155,10 +144,6 @@ export const StudentLayout: React.FC = () => {
                         {!isCollapsed && (
                           isActive ? (
                             <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-80" />
-                          ) : item.badgeCount && item.badgeCount > 0 ? (
-                            <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black bg-primary/10 text-primary">
-                              {item.badgeCount}
-                            </span>
                           ) : null
                         )}
                       </Link>
@@ -175,6 +160,7 @@ export const StudentLayout: React.FC = () => {
       <main className="flex-1 p-6 md:p-8 w-full min-w-0 overflow-x-clip bg-background">
         <Outlet />
       </main>
+      <AiChatWidget />
     </div>
   );
 };

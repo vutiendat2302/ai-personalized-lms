@@ -25,6 +25,8 @@ public class CourseCurriculumResponse {
 
     private Integer totalLessons;
     private Integer totalDurationMin;
+    private Long enrollmentId;
+    private Boolean staffPreviewAccess;
 
     @Getter
     @Setter
@@ -49,10 +51,12 @@ public class CourseCurriculumResponse {
     public static class LessonCurriculumItem {
         private Long id;
         private String name;
+        private String title;
         private String contentType;
         private String contentUrl;
         private String description;
         private Integer durationMin;
+        private Integer duration;
         private Integer orderIndex;
         private String previewType;
         private String status;
@@ -62,5 +66,8 @@ public class CourseCurriculumResponse {
         private Boolean completed;
         private Integer progressPercent;
         private Integer lastPositionSec;
+        private Boolean preview;
+        private Boolean accessible;
+        private Boolean locked;
     }
 }

@@ -16,6 +16,7 @@ import {
   Menu,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { AiChatWidget } from "@/components/admin/chat/AdminAiChatWidget";
 
 interface NavSection {
   title: string;
@@ -28,6 +29,9 @@ interface NavSection {
   }[];
 }
 
+/**
+ * Component Layout chung định hình Sidebar và Content cho phân hệ Giảng viên & Trợ giảng.
+ */
 export const TeacherLayout: React.FC = () => {
   const location = useLocation();
   const { auth } = useAuth();
@@ -37,6 +41,7 @@ export const TeacherLayout: React.FC = () => {
     return localStorage.getItem("ailms_teacher_sidebar_collapsed") === "true";
   });
 
+  /** Đóng / mở rộng thanh menu sidebar giảng viên. */
   const toggleCollapse = () => {
     setIsCollapsed((prev) => {
       const next = !prev;
@@ -63,18 +68,17 @@ export const TeacherLayout: React.FC = () => {
       items: [
         { label: "Tổng quan Giảng dạy", path: "/teacher/dashboard", icon: GraduationCap },
         { label: "Quản lý Khóa học", path: "/teacher/courses", icon: BookOpen, requiresTeacher: true },
+        { label: "Quản lý Bài tập & Bài thi", path: "/teacher/assessments", icon: FileCheck, requiresTeacher: true },
         { label: "Lớp học đảm nhận", path: "/teacher/classes", icon: Users },
         { label: "Lịch dạy Online", path: "/teacher/schedule", icon: Calendar, badgeCount: 1 },
-        { label: "Lớp gợi ý", path: "/teacher/suggested-classes", icon: Sparkles, badgeCount: 4 },
+        { label: "Lớp gợi ý nhận lớp", path: "/teacher/suggested-classes", icon: Sparkles, badgeCount: 4 },
       ],
     },
     {
       title: "ĐÁNH GIÁ HỌC VIÊN",
       items: [
-        { label: "Chấm bài tập", path: "/teacher/grading/assignments", icon: ClipboardList, badgeCount: 5 },
-        { label: "Bài thi & Quiz", path: "/teacher/grading/quizzes", icon: FileCheck, badgeCount: 3 },
-        { label: "Điểm danh", path: "/teacher/attendance", icon: Clock },
-        { label: "Tiến độ & Học viên nguy cơ", path: "/teacher/insights", icon: TrendingUp, badgeCount: 3 },
+        { label: "Chấm bài & Đánh giá", path: "/teacher/grading", icon: ClipboardList, badgeCount: 8 },
+        { label: "Điểm danh lớp", path: "/teacher/attendance", icon: Clock },
       ],
     },
     {
@@ -105,7 +109,7 @@ export const TeacherLayout: React.FC = () => {
                 <div className="truncate">
                   <h3 className="text-base font-semibold uppercase tracking-wider text-primary truncate">TEACHER PORTAL</h3>
                   <p className="text-xs text-muted-foreground font-medium truncate">
-                    {isTA ? "Không gian Trợ giảng (TA)" : "Không gian Giảng viên"}
+                    {isTA ? "Không gian Trợ giảng" : "Không gian Giảng viên"}
                   </p>
                 </div>
               </div>
@@ -184,6 +188,7 @@ export const TeacherLayout: React.FC = () => {
       <main className="flex-1 p-6 md:p-8 w-full min-w-0 overflow-x-clip bg-background">
         <Outlet />
       </main>
+      <AiChatWidget />
     </div>
   );
 };

@@ -1,5 +1,5 @@
 // types/auth.ts
-export type RoleCode = "ADMIN" | "TEACHER" | "TA" | "STUDENT" | "HR";
+export type RoleCode = "ADMIN" | "TEACHER" | "TA" | "STUDENT" | "HR" | "SUPPORT";
 
 
 export interface JwtAuthenticationResponse {
@@ -8,6 +8,7 @@ export interface JwtAuthenticationResponse {
   username: string;
   email: string;
   fullName: string;
+  avatarUrl?: string | null;
   roles: RoleCode[];
   permissions: string[];
 }
@@ -19,6 +20,7 @@ export interface AuthUser {
   roles: RoleCode[];
   permissions: string[];
   fullName?: string;
+  avatarUrl?: string | null;
 }
 
 export interface AuthState {

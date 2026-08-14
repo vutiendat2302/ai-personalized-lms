@@ -16,6 +16,8 @@ import java.time.LocalDateTime;
 public class CourseResponse {
 
     private Long id;
+
+    private String code;
     
     private Long categoryId;
     
@@ -26,6 +28,12 @@ public class CourseResponse {
     private String link;
     
     private String description;
+
+    private String thumbnailUrl;
+
+    private String learningObjectives;
+
+    private String prerequisites;
 
     private BigDecimal suggestedPrice;
     
@@ -51,9 +59,9 @@ public class CourseResponse {
 
     private Long createdBy;
     
-    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss[.SSSSSS]")
     private LocalDateTime createdAt;
     
-    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss[.SSSSSS]")
     private LocalDateTime updatedAt;
 }

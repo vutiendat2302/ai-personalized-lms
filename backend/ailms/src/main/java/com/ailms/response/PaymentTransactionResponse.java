@@ -19,5 +19,10 @@ public class PaymentTransactionResponse {
     private PaymentTransactionStatusEnum status;
     private String transactionRef;
     private LocalDateTime paidAt;
+    private String paypalRefundId;
+    private BigDecimal refundAmount;
+    private String refundCurrency;
+    private String refundReason;
+    private LocalDateTime refundedAt;
     private LocalDateTime createdAt;
 }

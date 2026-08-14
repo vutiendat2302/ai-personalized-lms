@@ -92,16 +92,18 @@ def seed(cursor):
         cursor.execute(
             """
             INSERT INTO order_item (
-                id, order_id, course_package_id, price_snapshot, item_type,
+                id, order_id, course_package_id, price_snapshot, discount_snapshot, final_price, item_type,
                 created_at, updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 item_id,
                 order_id,
                 pkg["id"],
                 pkg_price,
+                discount_amount,
+                final_amount,
                 "NEW_PURCHASE",
                 created_at,
                 created_at,

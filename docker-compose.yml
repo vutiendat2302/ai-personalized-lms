@@ -1,6 +1,8 @@
 services:
   mysql:
     image: mysql:8.4
+    ports:
+      - "3306:3306"
     container_name: ailms-mysql-docker
     restart: always
     environment:
@@ -27,6 +29,51 @@ services:
       - redis_data:/data
     healthcheck:
       test: ["CMD-SHELL", "redis-cli ping || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ailms-network
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.15
+    container_name: ailms-meilisearch-docker
+    restart: always
+    environment:
+      MEILI_ENV: ${MEILI_ENV:-development}
+      MEILISEARCH_API_KEY: ${MEILISEARCH_API_KEY:-}
+    command:
+      - /bin/sh
+      - -c
+      - >-
+        if [ -n "$${MEILISEARCH_API_KEY}" ]; then
+          exec meilisearch --master-key "$${MEILISEARCH_API_KEY}";
+        else
+          exec meilisearch;
+        fi
+    volumes:
+      - meilisearch_data:/meili_data
+    ports:
+      - "7700:7700"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:7700/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ailms-network
+
+  qdrant:
+    image: qdrant/qdrant:v1.15.4
+    container_name: ailms-qdrant-docker
+    restart: always
+    ports:
+    - "6333:6333"
+    - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -78,8 +125,18 @@ services:
     restart: always
     environment:
       GEMINI_API_KEY: ${GEMINI_API_KEY}
-      GEMINI_MODEL: ${GEMINI_MODEL}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash-lite}
       INTERNAL_SECRET: ${AI_INTERNAL_SECRET}
+      GEMINI_EMBEDDING_MODEL: ${GEMINI_EMBEDDING_MODEL:-gemini-embedding-2}
+      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
+      QDRANT_API_KEY: ${QDRANT_API_KEY:-}
+      BACKEND_INTERNAL_BASE_URL: ${BACKEND_INTERNAL_BASE_URL:-http://backend:8080}
+    ports:
+      - "127.0.0.1:8000:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - catalog_embedding_models:/root/.cache/huggingface
     healthcheck:
       test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/test/health')\" || exit 1"]
       interval: 10s
@@ -88,6 +145,9 @@ services:
       start_period: 10s
     networks:
       - ailms-network
+    depends_on:
+      qdrant:
+        condition: service_healthy
 
   backend:
     build:
@@ -102,28 +162,41 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD}
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
+      MEILISEARCH_URL: http://meilisearch:7700
+      MEILISEARCH_API_KEY: ${MEILISEARCH_API_KEY:-}
       MINIO_ENDPOINT: http://minio:9000
       MINIO_EXTERNAL_ENDPOINT: ${MINIO_EXTERNAL_ENDPOINT:-http://192.168.0.103:9000}
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
       AI_SERVICE_BASE_URL: http://ai-service:8000
       AI_SERVICE_INTERNAL_TOKEN: ${AI_INTERNAL_SECRET}
+      PUBLIC_CATALOG_VECTOR_STARTUP_SYNC: ${PUBLIC_CATALOG_VECTOR_STARTUP_SYNC:-false}
       EMAIL_USERNAME: ${EMAIL_USERNAME}
       EMAIL_PASSWORD: ${EMAIL_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
       FRONTEND_URL: ${FRONTEND_URL}
       FRONTEND_SET_PASSWORD_URL: ${FRONTEND_SET_PASSWORD_URL}
+      PAYPAL_CLIENT_ID: ${PAYPAL_CLIENT_ID}
+      PAYPAL_CLIENT_SECRET: ${PAYPAL_CLIENT_SECRET}
+      PAYPAL_API_BASE_URL: ${PAYPAL_API_BASE_URL}
+      PAYPAL_RETURN_URL: ${PAYPAL_RETURN_URL}
+      PAYPAL_CANCEL_URL: ${PAYPAL_CANCEL_URL}
+      PAYPAL_CURRENCY: ${PAYPAL_CURRENCY}
+      PAYPAL_VND_PER_UNIT: ${PAYPAL_VND_PER_UNIT}
     depends_on:
       mysql:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      meilisearch:
         condition: service_healthy
       minio:
         condition: service_healthy
       ai-service:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8080/api/v1/courses || exit 1"]
+      # This public aggregate confirms Spring Boot and its database connection are ready.
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/api/v1/courses/active-count || exit 1"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -152,6 +225,7 @@ networks:
     driver: bridge
 
 volumes:
+  meilisearch_data:
   mysql_data:
     name: ailms_mysql_data
     driver: local
@@ -160,4 +234,10 @@ volumes:
     driver: local
   minio_data:
     name: ailms_minio_data
+    driver: local
+  qdrant_data:
+    name: ailms_qdrant_data
+    driver: local
+  catalog_embedding_models:
+    name: ailms_catalog_embedding_models
     driver: local

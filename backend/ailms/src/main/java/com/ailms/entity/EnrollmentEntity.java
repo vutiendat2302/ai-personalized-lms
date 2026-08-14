@@ -15,7 +15,9 @@ import java.time.LocalDateTime;
  * Quản lý thông tin khóa học, lớp học đăng ký, trạng thái và mốc thời gian hoàn thành.
  */
 @Entity
-@Table(name = "enrollment", indexes = {
+@Table(name = "enrollment", uniqueConstraints = {
+        @UniqueConstraint(name = "uk_enrollment_user_course", columnNames = {"user_id", "course_id"})
+}, indexes = {
         @Index(name = "idx_enrollment_user_id", columnList = "user_id"),
         @Index(name = "idx_enrollment_course_id", columnList = "course_id"),
         @Index(name = "idx_enrollment_class_id", columnList = "class_id")

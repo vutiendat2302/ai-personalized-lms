@@ -93,11 +93,11 @@ const PaginatedCourseSelector: React.FC<PaginatedCourseSelectorProps> = ({
                 {selectedCourse.name}
               </span>
               <Badge variant="outline" className="text-[10px] shrink-0 bg-blue-50 text-blue-700 border-blue-200">
-                {selectedCourse.categoryName || `MÃ£ DM: ${selectedCourse.categoryId}`}
+                {selectedCourse.categoryName || `Mã Danh Mục: ${selectedCourse.categoryId}`}
               </Badge>
             </div>
           ) : (
-            <span className="text-slate-400">Chá»n khÃ³a há»c liÃªn quan...</span>
+            <span className="text-slate-400">Các khóa học liên quan khác...</span>
           )}
         </div>
         <ChevronDown className="h-4 w-4 text-slate-400 shrink-0 ml-2" />
@@ -111,7 +111,7 @@ const PaginatedCourseSelector: React.FC<PaginatedCourseSelectorProps> = ({
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
               <Input
-                placeholder="TÃ¬m tÃªn khÃ³a há»c..."
+                placeholder="Tạo lớp học khác..."
                 value={keyword}
                 onChange={handleKeywordChange}
                 className="pl-9 h-8 text-xs rounded-lg bg-white"
@@ -127,7 +127,7 @@ const PaginatedCourseSelector: React.FC<PaginatedCourseSelectorProps> = ({
           <div className="flex-1 overflow-y-auto p-1.5 space-y-1 min-h-35">
             {courses.length === 0 && !loading ? (
               <p className="text-xs text-slate-400 text-center py-6">
-                KhÃ´ng tÃ¬m tháº¥y khÃ³a há»c nÃ o phÃ¹ há»£p.
+                Không tìm thấy khóa học nào phù hợp.
               </p>
             ) : (
               courses.map((course) => {
@@ -148,9 +148,9 @@ const PaginatedCourseSelector: React.FC<PaginatedCourseSelectorProps> = ({
                     <div className="min-w-0 pr-2">
                       <p className="font-semibold text-slate-900 truncate">{course.name}</p>
                       <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-500">
-                        <span>Danh má»¥c: {course.categoryName}</span>
-                        <span>â€¢</span>
-                        <span>Cáº¥p Ä‘á»™: {course.level}</span>
+                        <span>Danh mục: {course.categoryName}</span>
+                        <span>•</span>
+                        <span>Cấp độ: {course.level}</span>
                       </div>
                     </div>
                     {isSelected && <Check className="h-4 w-4 text-blue-600 shrink-0" />}
@@ -163,7 +163,7 @@ const PaginatedCourseSelector: React.FC<PaginatedCourseSelectorProps> = ({
           {/* Pagination Footer */}
           <div className="p-2 border-t border-slate-100 bg-slate-50/80 flex items-center justify-between text-xs text-slate-500">
             <span className="text-[11px]">
-              Trang {page + 1}/{totalPages} ({totalElements} khÃ³a há»c)
+              Trang {page + 1}/{totalPages} ({totalElements} khóa học)
             </span>
             <div className="flex items-center gap-1">
               <Button
@@ -173,7 +173,7 @@ const PaginatedCourseSelector: React.FC<PaginatedCourseSelectorProps> = ({
                 onClick={() => setPage((p) => Math.max(0, p - 1))}
                 className="h-7 px-2 text-[11px] cursor-pointer"
               >
-                <ChevronLeft className="h-3.5 w-3.5" /> TrÆ°á»›c
+                <ChevronLeft className="h-3.5 w-3.5" /> Trước
               </Button>
               <Button
                 size="sm"
@@ -270,7 +270,7 @@ export const CreateGroupClassPage: React.FC = () => {
           setSelectedCourse(targetCourse);
         }
       } catch (err: any) {
-        setError(getErrorMessage(err, "KhÃ´ng thá»ƒ táº£i dá»¯ liá»‡u táº¡o lá»›p"));
+        setError(getErrorMessage(err, "Không thể tải dữ liệu tạo lớp"));
       } finally {
         setLoading(false);
       }
@@ -278,7 +278,7 @@ export const CreateGroupClassPage: React.FC = () => {
     void load();
   }, []);
 
-  const categoryName = selectedCourse?.categoryName || "ChÆ°a chá»n khÃ³a há»c";
+  const categoryName = selectedCourse?.categoryName || "Chưa chọn khóa học";
 
   // Filter candidate teachers whose category matches course category
   const candidateTeachers = useMemo(() => {
@@ -294,11 +294,11 @@ export const CreateGroupClassPage: React.FC = () => {
       )
       .map((employee) => ({
         id: String(employee.userId || employee.id),
-        name: employee.fullName || employee.userName || "Giáº£ng viÃªn",
+        name: employee.fullName || employee.userName || "Giảng viên",
         avatar: employee.avatarUrl && employee.avatarUrl.trim() !== "" ? employee.avatarUrl : undefined,
         category: categoryName,
-        email: employee.userEmail || employee.email || "ChÆ°a cáº­p nháº­t",
-        phone: employee.phone || "ChÆ°a cáº­p nháº­t",
+        email: employee.userEmail || employee.email || "Chưa cập nhật",
+        phone: employee.phone || "Chưa cập nhật",
         rating: null,
       }));
   }, [employees, teacherCategories, selectedCourse, categoryName]);
@@ -308,42 +308,42 @@ export const CreateGroupClassPage: React.FC = () => {
   const handleGoToStep2 = () => {
     setError("");
     if (!selectedCourse) {
-      setError("Vui lÃ²ng chá»n khÃ³a há»c liÃªn quan.");
+      setError("Vui lòng chọn khóa học liên quan.");
       return;
     }
     const nameTrimmed = classNameValue.trim();
     if (!nameTrimmed) {
-      setError("Vui lÃ²ng nháº­p tÃªn lá»›p há»c.");
+      setError("Vui lòng nhập tên lớp học.");
       return;
     }
     if (nameTrimmed.length < 3 || nameTrimmed.length > 150) {
-      setError("TÃªn lá»›p há»c pháº£i cÃ³ Ä‘á»™ dÃ i tá»« 3 Ä‘áº¿n 150 kÃ½ tá»±.");
+      setError("Tên lớp học phải có độ dài từ 3 đến 150 ký tự.");
       return;
     }
     if (!Number.isInteger(maxCapacity) || maxCapacity <= 0 || maxCapacity > 500) {
-      setError("SÄ© sá»‘ tá»‘i Ä‘a pháº£i lÃ  sá»‘ nguyÃªn tá»« 1 Ä‘áº¿n 500 thÃ nh viÃªn.");
+      setError("Sĩ số tối đa phải là số nguyên từ 1 đến 500 thành viên.");
       return;
     }
     if (!startDate || !endDate) {
-      setError("Vui lÃ²ng chá»n ngÃ y khai giáº£ng vÃ  ngÃ y báº¿ giáº£ng.");
+      setError("Vui lòng chọn ngày khai giảng và ngày bế giảng.");
       return;
     }
     if (new Date(startDate) > new Date(endDate)) {
-      setError("NgÃ y khai giáº£ng pháº£i trÆ°á»›c hoáº·c báº±ng ngÃ y báº¿ giáº£ng.");
+      setError("Ngày khai giảng phải trước hoặc bằng ngày bế giảng.");
       return;
     }
     if (schedules.length === 0) {
-      setError("Vui lÃ²ng thÃªm Ã­t nháº¥t má»™t khung giá» há»c láº·p hÃ ng tuáº§n.");
+      setError("Vui lòng thêm ít nhất một khung giờ học lặp hàng tuần.");
       return;
     }
     for (let i = 0; i < schedules.length; i++) {
       const slot = schedules[i];
       if (!slot.startTime || !slot.endTime) {
-        setError(`Vui lÃ²ng chá»n Ä‘áº§y Ä‘á»§ giá» báº¯t Ä‘áº§u vÃ  káº¿t thÃºc á»Ÿ buá»•i há»c #${i + 1}.`);
+        setError(`Vui lòng chọn đầy đủ giờ bắt đầu và kết thúc ở buổi học #${i + 1}.`);
         return;
       }
       if (slot.startTime >= slot.endTime) {
-        setError(`á»ž buá»•i há»c #${i + 1}, giá» báº¯t Ä‘áº§u (${slot.startTime}) pháº£i trÆ°á»›c giá» káº¿t thÃºc (${slot.endTime}).`);
+        setError(`Ở buổi học #${i + 1}, giờ bắt đầu (${slot.startTime}) phải trước giờ kết thúc (${slot.endTime}).`);
         return;
       }
     }
@@ -355,7 +355,7 @@ export const CreateGroupClassPage: React.FC = () => {
           const s2 = schedules[j].startTime;
           const e2 = schedules[j].endTime;
           if (s1 < e2 && e1 > s2) {
-            setError(`PhÃ¡t hiá»‡n khung giá» láº·p bá»‹ trÃ¹ng nhau trong cáº¥u hÃ¬nh lá»›p há»c (buá»•i #${i + 1} vÃ  #${j + 1}).`);
+            setError(`Phát hiện khung giờ lặp bị trùng nhau trong cấu hình lớp học (buổi #${i + 1} và #${j + 1}).`);
             return;
           }
         }
@@ -439,7 +439,7 @@ export const CreateGroupClassPage: React.FC = () => {
         navigate("/admin/classrooms");
       }
     } catch (err: any) {
-      setError(getErrorMessage(err, "KhÃ´ng thá»ƒ táº¡o lá»›p há»c"));
+      setError(getErrorMessage(err, "Không thể tạo lớp học"));
     } finally {
       setSubmitting(false);
     }
@@ -448,7 +448,7 @@ export const CreateGroupClassPage: React.FC = () => {
   if (loading) {
     return (
       <div className="py-20 flex justify-center items-center gap-2 text-sm text-slate-500">
-        <Loader2 className="h-5 w-5 animate-spin" /> Äang táº£i dá»¯ liá»‡u...
+        <Loader2 className="h-5 w-5 animate-spin" /> Đang tải dữ liệu...
       </div>
     );
   }
@@ -459,7 +459,7 @@ export const CreateGroupClassPage: React.FC = () => {
         <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 flex items-start gap-3 shadow-sm animate-in fade-in duration-200">
           <AlertCircle className="h-5 w-5 shrink-0 mt-0.5 text-red-600" />
           <div className="space-y-1">
-            <p className="font-bold text-red-900">KhÃ´ng Thá»ƒ Táº¡o Lá»›p Há»c</p>
+            <p className="font-bold text-red-900">Không Thể Tạo Lớp Học</p>
             <p className="text-xs text-red-800 leading-relaxed font-medium">{error}</p>
           </div>
         </div>
@@ -473,14 +473,14 @@ export const CreateGroupClassPage: React.FC = () => {
             onClick={handleCancel}
             className="h-9 px-3 text-slate-700 cursor-pointer"
           >
-            <ArrowLeft className="w-4 h-4 mr-1.5" /> {navigationState?.returnUrl ? "Quay láº¡i gÃ³i bÃ¡n" : "Há»§y"}
+            <ArrowLeft className="w-4 h-4 mr-1.5" /> {navigationState?.returnUrl ? "Quay lại gói bán" : "Hủy"}
           </Button>
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-slate-900">
-              Táº¡o Lá»›p Há»c NhÃ³m Má»›i
+              Tạo Lớp Học Nhóm Mới
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">
-              Quy trÃ¬nh 2 bÆ°á»›c cáº¥u hÃ¬nh lá»›p vÃ  kiá»ƒm tra trÃ¹ng lá»‹ch giÃ¡o viÃªn
+              Quy trình 2 bước cấu hình lớp và kiểm tra trùng lịch giáo viên
             </p>
           </div>
         </div>
@@ -505,8 +505,8 @@ export const CreateGroupClassPage: React.FC = () => {
             1
           </div>
           <div>
-            <p className="font-bold text-sm text-slate-900">BÆ°á»›c 1: ThÃ´ng Tin Lá»›p Há»c</p>
-            <p className="text-xs text-slate-500">KhÃ³a há»c, sÄ© sá»‘ & Lá»‹ch láº·p hÃ ng tuáº§n</p>
+            <p className="font-bold text-sm text-slate-900">Bước 1: Thông Tin Lớp Học</p>
+            <p className="text-xs text-slate-500">Khóa học, sĩ số & Lịch lặp hàng tuần</p>
           </div>
         </div>
 
@@ -527,8 +527,8 @@ export const CreateGroupClassPage: React.FC = () => {
             2
           </div>
           <div>
-            <p className="font-bold text-sm text-slate-900">BÆ°á»›c 2: PhÃ¢n CÃ´ng GiÃ¡o ViÃªn</p>
-            <p className="text-xs text-slate-500">Äá»‘i chiáº¿u lá»‹ch & Kiá»ƒm tra trÃ¹ng giá»</p>
+            <p className="font-bold text-sm text-slate-900">Bước 2: Phân Công Giáo Viên</p>
+            <p className="text-xs text-slate-500">Đối chiếu lịch & Kiểm tra trùng giờ</p>
           </div>
         </div>
       </div>
@@ -541,7 +541,7 @@ export const CreateGroupClassPage: React.FC = () => {
               {/* Course Selector */}
               <div className="space-y-1.5">
                 <Label className="text-sm font-semibold text-slate-800">
-                  KhÃ³a Há»c LiÃªn Quan *
+                  Khóa Học Liên Quan *
                 </Label>
                 <PaginatedCourseSelector
                   selectedCourse={selectedCourse}
@@ -552,7 +552,7 @@ export const CreateGroupClassPage: React.FC = () => {
               {/* Auto Category Field */}
               <div className="space-y-1.5">
                 <Label className="text-sm font-semibold text-slate-800">
-                  Danh Má»¥c (Tá»± Äá»™ng)
+                  Danh Mục (Tự Động)
                 </Label>
                 <Input
                   value={categoryName}
@@ -577,7 +577,7 @@ export const CreateGroupClassPage: React.FC = () => {
               {/* Capacity */}
               <div className="space-y-1.5">
                 <Label className="text-sm font-semibold text-slate-800">
-                  SÄ© Sá»‘ Tá»‘i Äa *
+                  Sĩ Số Tối Đa *
                 </Label>
                 <Input
                   type="number"
@@ -591,7 +591,7 @@ export const CreateGroupClassPage: React.FC = () => {
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1.5">
                   <Label className="text-sm font-semibold text-slate-800">
-                    NgÃ y Khai Giáº£ng *
+                    Ngày Khai Giảng *
                   </Label>
                   <Input
                     type="date"
@@ -602,7 +602,7 @@ export const CreateGroupClassPage: React.FC = () => {
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-sm font-semibold text-slate-800">
-                    NgÃ y Báº¿ Giáº£ng *
+                    Ngày Bế Giảng *
                   </Label>
                   <Input
                     type="date"
@@ -619,10 +619,10 @@ export const CreateGroupClassPage: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div>
                   <Label className="text-sm font-bold text-slate-900 block">
-                    Lá»‹ch Há»c Láº·p HÃ ng Tuáº§n (class_schedule) *
+                    Lịch Học Lặp Hàng Tuần (class_schedule) *
                   </Label>
                   <p className="text-xs text-slate-500">
-                    ThÃªm cÃ¡c buá»•i há»c cá»‘ Ä‘á»‹nh diá»…n ra má»—i tuáº§n
+                    Thêm các buổi học cố định diễn ra mỗi tuần
                   </p>
                 </div>
                 <Button
@@ -632,7 +632,7 @@ export const CreateGroupClassPage: React.FC = () => {
                   onClick={handleAddScheduleRow}
                   className="h-8 text-xs font-semibold"
                 >
-                  <Plus className="w-3.5 h-3.5 mr-1 text-blue-600" /> ThÃªm Buá»•i Há»c
+                  <Plus className="w-3.5 h-3.5 mr-1 text-blue-600" /> Thêm Buổi Học
                 </Button>
               </div>
 
@@ -659,13 +659,13 @@ export const CreateGroupClassPage: React.FC = () => {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="MON">Thá»© 2 (MON)</SelectItem>
-                          <SelectItem value="TUE">Thá»© 3 (TUE)</SelectItem>
-                          <SelectItem value="WED">Thá»© 4 (WED)</SelectItem>
-                          <SelectItem value="THU">Thá»© 5 (THU)</SelectItem>
-                          <SelectItem value="FRI">Thá»© 6 (FRI)</SelectItem>
-                          <SelectItem value="SAT">Thá»© 7 (SAT)</SelectItem>
-                          <SelectItem value="SUN">Chá»§ Nháº­t (SUN)</SelectItem>
+                          <SelectItem value="MON">Thứ 2 (MON)</SelectItem>
+                          <SelectItem value="TUE">Thứ 3 (TUE)</SelectItem>
+                          <SelectItem value="WED">Thứ 4 (WED)</SelectItem>
+                          <SelectItem value="THU">Thứ 5 (THU)</SelectItem>
+                          <SelectItem value="FRI">Thứ 6 (FRI)</SelectItem>
+                          <SelectItem value="SAT">Thứ 7 (SAT)</SelectItem>
+                          <SelectItem value="SUN">Chủ Nhật (SUN)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -683,7 +683,7 @@ export const CreateGroupClassPage: React.FC = () => {
                       />
                     </div>
 
-                    <span className="text-slate-400 text-xs font-medium">Ä‘áº¿n</span>
+                    <span className="text-slate-400 text-xs font-medium">đến</span>
 
                     {/* End time */}
                     <div className="flex items-center gap-1.5 flex-1">
@@ -719,7 +719,7 @@ export const CreateGroupClassPage: React.FC = () => {
                 onClick={handleGoToStep2}
                 className="bg-blue-600 hover:bg-blue-700 text-white font-semibold cursor-pointer"
               >
-                Tiáº¿p Theo: PhÃ¢n CÃ´ng GiÃ¡o ViÃªn <ChevronRight className="w-4 h-4 ml-1" />
+                Tiếp Theo: Phân Công Giáo Viên <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
             </div>
           </CardContent>
@@ -732,12 +732,12 @@ export const CreateGroupClassPage: React.FC = () => {
           <CardContent className="p-6 md:p-8 space-y-6">
             <div className="space-y-1">
               <h3 className="font-bold text-slate-900 text-base">
-                á»¨ng ViÃªn GiÃ¡o ViÃªn Phá»¥ TrÃ¡ch ({categoryName})
+                Ứng Viên Giáo Viên Phụ Trách ({categoryName})
               </h3>
               <p className="text-xs text-slate-500">
-                Há»‡ thá»‘ng chá»‰ hiá»ƒn thá»‹ cÃ¡c giÃ¡o viÃªn thuá»™c danh má»¥c{" "}
+                Hệ thống chỉ hiển thị các giáo viên thuộc danh mục{" "}
                 <span className="font-semibold text-slate-700">{categoryName}</span>.
-                Chá»n giÃ¡o viÃªn Ä‘á»ƒ kiá»ƒm tra trÃ¹ng lá»‹ch ngay láº­p tá»©c.
+                Chọn giáo viên để kiểm tra trùng lịch ngay lập tức.
               </p>
             </div>
 
@@ -774,19 +774,19 @@ export const CreateGroupClassPage: React.FC = () => {
                       <div className="space-y-0.5">
                         <div className="flex items-center gap-2">
                           <h4 className="font-bold text-slate-900 text-base">{t.name}</h4>
-                          {t.rating != null && <Badge variant="outline" className="text-xs bg-white">â˜… {t.rating}</Badge>}
+                          {t.rating != null && <Badge variant="outline" className="text-xs bg-white">★ {t.rating}</Badge>}
                         </div>
-                        <p className="text-xs text-slate-500">{t.email} â€¢ {t.phone}</p>
+                        <p className="text-xs text-slate-500">{t.email} • {t.phone}</p>
                       </div>
                     </div>
 
                     {/* Eligibility from teacher_category; collision is validated by backend on submit */}
                     <div className="bg-slate-100/80 rounded-lg p-2.5 text-xs space-y-1 md:w-64">
                       <span className="text-[10px] uppercase font-bold text-slate-500 block">
-                        Äiá»u kiá»‡n phÃ¢n cÃ´ng:
+                        Điều kiện phân công:
                       </span>
-                      <span className="bg-emerald-100 text-emerald-800 font-semibold px-1.5 py-0.5 rounded text-[10px]">ÄÃºng danh má»¥c chuyÃªn mÃ´n</span>
-                      <p className="text-[10px] text-slate-500">Backend sáº½ kiá»ƒm tra trÃ¹ng lá»‹ch khi hoÃ n táº¥t.</p>
+                      <span className="bg-emerald-100 text-emerald-800 font-semibold px-1.5 py-0.5 rounded text-[10px]">Đúng danh mục chuyên môn</span>
+                      <p className="text-[10px] text-slate-500">Backend sẽ kiểm tra trùng lịch khi hoàn tất.</p>
                     </div>
 
                     {/* Right: Conflict Warning or Select Button */}
@@ -794,17 +794,17 @@ export const CreateGroupClassPage: React.FC = () => {
                       {conflict.hasConflict ? (
                         <div className="text-right space-y-1">
                           <Badge className="bg-red-500/10 text-red-600 border-red-500/20 font-bold text-xs">
-                            <AlertCircle className="w-3 h-3 mr-1" /> TrÃ¹ng Lá»‹ch
+                            <AlertCircle className="w-3 h-3 mr-1" /> Trùng Lịch
                           </Badge>
                           <p className="text-[11px] text-red-600 font-medium">
-                            âš  TrÃ¹ng lá»‹ch vá»›i lá»›p <span className="font-bold">{conflict.conflictingClassName}</span> vÃ o {conflict.conflictTime}
+                            ⚠ Trùng lịch với lớp <span className="font-bold">{conflict.conflictingClassName}</span> vào {conflict.conflictTime}
                           </p>
                           <Button
                             size="sm"
                             disabled
                             className="h-8 text-xs opacity-50 bg-slate-300 text-slate-600 cursor-not-allowed"
                           >
-                            KhÃ´ng Thá»ƒ Chá»n
+                            Không Thể Chọn
                           </Button>
                         </div>
                       ) : (
@@ -820,10 +820,10 @@ export const CreateGroupClassPage: React.FC = () => {
                         >
                           {isSelected ? (
                             <>
-                              <Check className="w-3.5 h-3.5 mr-1" /> ÄÃ£ Chá»n
+                              <Check className="w-3.5 h-3.5 mr-1" /> Đã Chọn
                             </>
                           ) : (
-                            "Chá»n GiÃ¡o ViÃªn"
+                            "Chọn Giáo Viên"
                           )}
                         </Button>
                       )}
@@ -836,14 +836,14 @@ export const CreateGroupClassPage: React.FC = () => {
             {/* Bottom Footer Actions */}
             <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
               <Button variant="outline" onClick={() => setCurrentStep(1)}>
-                <ArrowLeft className="w-4 h-4 mr-1.5" /> Quay Láº¡i BÆ°á»›c 1
+                <ArrowLeft className="w-4 h-4 mr-1.5" /> Quay Lại Bước 1
               </Button>
               <Button
                 onClick={handleCompleteClassCreation}
                 disabled={!selectedTeacherId || submitting}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6"
               >
-                {submitting ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Check className="w-4 h-4 mr-1.5" />} HoÃ n Táº¥t Táº¡o Lá»›p Há»c
+                {submitting ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Check className="w-4 h-4 mr-1.5" />} Hoàn Tất Tạo Lớp Học
               </Button>
             </div>
           </CardContent>

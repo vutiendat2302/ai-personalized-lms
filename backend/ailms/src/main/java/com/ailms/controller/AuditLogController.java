@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -22,6 +23,7 @@ public class AuditLogController {
     private final IAuditLogService auditLogService;
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<ApiResponse<AuditLogResponse>> getByLogId(@PathVariable Long id) {
         AuditLogResponse response = auditLogService.getByLogId(id);
         return ResponseEntity.ok(ApiResponse.of("Audit log retrieved successfully", response));
@@ -31,12 +33,14 @@ public class AuditLogController {
      * Tìm kiếm/lọc audit log có phân trang.
      */
     @GetMapping({"", "/page"})
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<ApiResponse<PageResponse<AuditLogResponse>>> getAuditLogs(AuditLogSearchRequest request) {
         PageResponse<AuditLogResponse> response = auditLogService.getAuditLogs(request);
         return ResponseEntity.ok(ApiResponse.of("Audit logs retrieved successfully", response));
     }
 
     @GetMapping("/all")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<ApiResponse<List<AuditLogResponse>>> getAllAuditLogs() {
         List<AuditLogResponse> response = auditLogService.getAllAuditLogs();
         return ResponseEntity.ok(ApiResponse.of("All audit logs retrieved successfully", response));
@@ -47,6 +51,7 @@ public class AuditLogController {
      * VD: GET /api/audit-log/users/5/page?keyword=login&action=update_user&occurredFrom=2026-01-01T00:00:00&page=0&size=10&sortBy=occurredAt&sortDirection=DESC
      */
     @GetMapping("/users/{userId}/page")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN') or #userId == authentication.principal.user.id")
     public ResponseEntity<ApiResponse<PageResponse<AuditLogResponse>>> getAuditLogsByUserId(
             @PathVariable Long userId,
             AuditLogSearchRequest request) {
@@ -55,6 +60,7 @@ public class AuditLogController {
     }
 
     @GetMapping("/entity/{entityType}/{entityId}")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<ApiResponse<PageResponse<AuditLogResponse>>> getAuditLogsByEntity(
             @PathVariable String entityType,
             @PathVariable Long entityId,
@@ -64,6 +70,7 @@ public class AuditLogController {
     }
 
     @GetMapping("/export")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<byte[]> exportAuditLogs(AuditLogSearchRequest request) {
         byte[] csvBytes = auditLogService.exportAuditLogs(request);
         return ResponseEntity.ok()
@@ -73,6 +80,7 @@ public class AuditLogController {
     }
 
     @GetMapping("/{id}/export-csv")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<byte[]> exportSingleAuditLogToCsv(@PathVariable Long id) {
         byte[] csvBytes = auditLogService.exportSingleAuditLogToCsv(id);
         return ResponseEntity.ok()
@@ -82,12 +90,14 @@ public class AuditLogController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deleteAuditLog(@PathVariable Long id) {
         auditLogService.deleteAuditLog(id);
         return ResponseEntity.ok(ApiResponse.message("Audit log deleted successfully"));
     }
 
     @PostMapping("/bulk-delete")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<ApiResponse<Void>> bulkDeleteAuditLogs(@RequestBody List<Long> ids) {
         auditLogService.bulkDeleteAuditLogs(ids);
         return ResponseEntity.ok(ApiResponse.message("Audit logs bulk deleted successfully"));

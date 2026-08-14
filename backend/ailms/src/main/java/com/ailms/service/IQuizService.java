@@ -29,6 +29,9 @@ public interface IQuizService {
      */
     PageResponse<QuizResponse> search(QuizSearchRequest request);
 
+    /** Tìm kiếm quiz do đúng user hiện tại tạo. */
+    PageResponse<QuizResponse> searchAuthored(QuizSearchRequest request, Long userId);
+
     /**
      * Lấy danh sách tất cả các bản ghi.
      * @return danh sách các đối tượng phù hợp
@@ -42,6 +45,9 @@ public interface IQuizService {
      * @return đối tượng chứa thông tin chi tiết kết quả
      */
     QuizResponse getById(Long id);
+
+    /** Lấy chi tiết quiz nếu user hiện tại là người tạo. */
+    QuizResponse getAuthoredById(Long id, Long userId);
 
     /**
      * Lấy danh sách đề kiểm tra thuộc bài học.
@@ -67,6 +73,9 @@ public interface IQuizService {
      */
     List<QuizResponse> getBySectionId(Long sectionId);
 
+    /** Lấy quiz/bài thi được giao cho một lớp cụ thể. */
+    List<QuizResponse> getByClassId(Long classId);
+
     /**
      * Tạo mới bản ghi từ dữ liệu yêu cầu.
      *
@@ -74,6 +83,9 @@ public interface IQuizService {
      * @return đối tượng chứa thông tin chi tiết kết quả
      */
     QuizResponse create(QuizRequest request);
+
+    /** Tạo quiz và gắn người tạo từ JWT. */
+    QuizResponse createForAuthor(QuizRequest request, Long userId);
 
     /**
      * Cập nhật thông tin bản ghi theo ID.
@@ -84,10 +96,16 @@ public interface IQuizService {
      */
     QuizResponse update(Long id, QuizRequest request);
 
+    /** Cập nhật quiz nếu user hiện tại là người tạo. */
+    QuizResponse updateAuthored(Long id, QuizRequest request, Long userId);
+
     /**
      * Xóa bản ghi khỏi hệ thống theo ID.
      *
      * @param id ID của bản ghi cần xử lý
      */
     void delete(Long id);
+
+    /** Xóa quiz nếu user hiện tại là người tạo. */
+    void deleteAuthored(Long id, Long userId);
 }

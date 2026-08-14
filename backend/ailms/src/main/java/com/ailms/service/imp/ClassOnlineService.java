@@ -1,6 +1,8 @@
 package com.ailms.service.imp;
 
 import com.ailms.common.util.CodeGenerator;
+import com.ailms.entity.enums.ClassKindEnum;
+import com.ailms.entity.enums.SessionKindEnum;
 import com.ailms.repository.specification.ClassOnlineSpecification;
 import com.ailms.request.ClassOnlineSearchRequest;
 import com.ailms.request.UpdateClassOnlineRequest;
@@ -21,6 +23,7 @@ import com.ailms.repository.ClassRepository;
 import com.ailms.repository.TeachingRateRepository;
 import com.ailms.repository.TeachingSessionPaymentRepository;
 import com.ailms.repository.UserRepository;
+import com.ailms.repository.OneOnOneRequestRepository;
 import com.ailms.request.CreateClassOnlineRequest;
 import com.ailms.response.ClassOnlineResponse;
 import lombok.RequiredArgsConstructor;
@@ -60,6 +63,7 @@ public class ClassOnlineService implements IClassOnlineService {
     private final ClassOnlineMapper classOnlineMapper;
     private final TeachingRateRepository teachingRateRepository;
     private final TeachingSessionPaymentRepository teachingSessionPaymentRepository;
+    private final OneOnOneRequestRepository oneOnOneRequestRepository;
 
     private static final String RESOURCE_NAME = "ClassOnline";
 
@@ -90,6 +94,7 @@ public class ClassOnlineService implements IClassOnlineService {
         log.info("Creating online class for class: {}", request.getClassId());
         ClassOnlineEntity entity = classOnlineMapper.toEntity(request);
         applyRelations(entity, request);
+        validateOneOnOneOfficialSessionLimit(entity);
         entity.setCode(CodeGenerator.generate(SESSION_CODE_PREFIX, classOnlineRepository::existsByCode));
         applyMeetingDefaults(entity);
 
@@ -128,6 +133,25 @@ public class ClassOnlineService implements IClassOnlineService {
 
         entity.setClassEntity(classEntity);
         entity.setTeacherEntity(teacher);
+    }
+
+    /** Giới hạn số buổi chính thức của lớp 1-1 theo includedTutorSessions đã mua. */
+    private void validateOneOnOneOfficialSessionLimit(ClassOnlineEntity entity) {
+        ClassEntity clazz = entity.getClassEntity();
+        if (clazz == null || clazz.getClassKind() != ClassKindEnum.ONE_ON_ONE) return;
+        var matching = oneOnOneRequestRepository.findByTrialClassEntity_Id(clazz.getId())
+                .orElseThrow(() -> new BusinessException("Lớp 1-1 chưa liên kết với matching request hợp lệ."));
+        Integer limit = matching.getEnrollmentPackageEntity().getCoursePackageEntity().getIncludedTutorSessions();
+        long officialCount = classOnlineRepository.findByClassEntity_Id(clazz.getId()).stream()
+                .filter(session -> session.getSessionKind() == SessionKindEnum.REGULAR)
+                .filter(session -> Boolean.TRUE.equals(session.getCountsTowardPackage()))
+                .filter(session -> session.getStatus() != BaseStatusEnum.CANCELLED
+                        && session.getStatus() != BaseStatusEnum.INACTIVE
+                        && session.getStatus() != BaseStatusEnum.DELETED)
+                .count();
+        if (limit == null || officialCount >= limit) {
+            throw new BusinessException("Số buổi chính thức đã đạt giới hạn của gói 1-1.");
+        }
     }
 
     @Override
@@ -289,6 +313,7 @@ public class ClassOnlineService implements IClassOnlineService {
     }
 
     private void applyCalculatedRemuneration(ClassOnlineEntity entity, ClassOnlineResponse response) {
+        if (!Boolean.TRUE.equals(entity.getPayable())) return;
         if (entity.getTeacherEntity() == null || entity.getClassEntity() == null || entity.getScheduledAt() == null) {
             return;
         }
@@ -325,7 +350,8 @@ public class ClassOnlineService implements IClassOnlineService {
 
     private String resolveLifecycleStatus(ClassOnlineEntity entity) {
         BaseStatusEnum status = entity.getStatus();
-        if (status == BaseStatusEnum.INACTIVE || status == BaseStatusEnum.DELETE || status == BaseStatusEnum.DELETED) {
+        if (status == BaseStatusEnum.CANCELLED || status == BaseStatusEnum.INACTIVE
+                || status == BaseStatusEnum.DELETE || status == BaseStatusEnum.DELETED) {
             return "CANCELLED";
         }
 

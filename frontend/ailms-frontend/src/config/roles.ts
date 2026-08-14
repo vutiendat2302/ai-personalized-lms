@@ -5,7 +5,8 @@ export const UserRole = {
   TA: 'TA',
   STUDENT: 'STUDENT',
   HR: 'HR',
+  SUPPORT: 'SUPPORT',
 } as const;
 
 export type UserRole = typeof UserRole[keyof typeof UserRole];
-export type UserRoleType = 'ADMIN' | 'STUDENT' | 'TEACHER' | 'TA' | 'HR';
+export type UserRoleType = 'ADMIN' | 'STUDENT' | 'TEACHER' | 'TA' | 'HR' | 'SUPPORT';

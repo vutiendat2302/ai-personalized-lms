@@ -3,8 +3,10 @@ import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
@@ -46,9 +48,11 @@ import {
   ArrowUpDown,
   ChevronLeft,
   ChevronRight,
+  CalendarPlus,
+  Ban,
 } from "lucide-react";
-import type { Classroom, ClassMember, ClassScheduleSlot } from "@/types/adminCourseClass";
-import { adminCourseClassApi } from "@/api/courses/adminCourseClassApi";
+import type { Classroom, ClassMember, ClassScheduleSlot, ClassSessionLog } from "@/types/adminCourseClass";
+import { adminCourseClassApi, type ClassSessionUsage } from "@/api/courses/adminCourseClassApi";
 import httpClient from "@/api/httpClient";
 import { ClassroomStreamTab } from "@/components/admin/class/ClassroomStreamTab";
 import { ClassResourceStorageTab } from "@/components/admin/class/ClassResourceStorageTab";
@@ -67,9 +71,10 @@ export const ClassDetailPage: React.FC = () => {
   const location = useLocation();
   const { auth } = useAuth();
   const isTeacherRoute = location.pathname.startsWith("/teacher");
+  const isStudentRoute = location.pathname.startsWith("/student");
   const userRoles = (auth.user?.roles || []).map((role) => String(role).toUpperCase());
   const isAdminOrHR = userRoles.some((role) => role.includes("ADMIN") || role.includes("HR")) && !isTeacherRoute;
-  const backPath = isAdminOrHR ? "/admin/classrooms" : "/teacher/classes";
+  const backPath = isStudentRoute ? "/student/classes" : isAdminOrHR ? "/admin/classrooms" : "/teacher/classes";
 
   const [cls, setCls] = useState<Classroom | null>(null);
   const [loading, setLoading] = useState(true);
@@ -78,6 +83,14 @@ export const ClassDetailPage: React.FC = () => {
   const [staff, setStaff] = useState<any[]>([]);
   const [enrollmentCount, setEnrollmentCount] = useState(0);
   const [activeRate, setActiveRate] = useState<any | null>(null);
+  const [sessionUsage, setSessionUsage] = useState<ClassSessionUsage | null>(null);
+  const [scheduleSessionOpen, setScheduleSessionOpen] = useState(false);
+  const [sessionToCancel, setSessionToCancel] = useState<ClassSessionLog | null>(null);
+  const [sessionActionLoading, setSessionActionLoading] = useState(false);
+  const [sessionActionError, setSessionActionError] = useState("");
+  const [sessionActionMessage, setSessionActionMessage] = useState("");
+  const [newSession, setNewSession] = useState({ title: "", scheduledAt: "", durationMin: "60", meetingUrl: "" });
+  const [cancelReason, setCancelReason] = useState("");
 
   // Operation Modals
   const [changeTeacherOpen, setChangeTeacherOpen] = useState(false);
@@ -109,7 +122,7 @@ export const ClassDetailPage: React.FC = () => {
     setLoading(true);
     setError("");
     try {
-      const [row, memberRows, memberPageRows, sessionPageRows, scheduleRows, employees, enrollments, rates, payments] = await Promise.all([
+      const [row, memberRows, memberPageRows, sessionPageRows, scheduleRows, employees, enrollments, rates, payments, usage] = await Promise.all([
         adminCourseClassApi.getClass(id),
         adminCourseClassApi.getClassMembers(id),
         adminCourseClassApi.getClassMembersPage(id, { role: "STUDENT", status: "ACTIVE", page: membersPage, size: membersSize }),
@@ -122,17 +135,22 @@ export const ClassDetailPage: React.FC = () => {
         }),
         adminCourseClassApi.getClassSchedules(id),
         isAdminOrHR ? adminCourseClassApi.getEmployees() : Promise.resolve([]),
-        adminCourseClassApi.getClassEnrollments(id),
-        adminCourseClassApi.getTeachingRates(),
-        adminCourseClassApi.getTeachingPayments(),
+        isStudentRoute ? Promise.resolve([]) : adminCourseClassApi.getClassEnrollments(id),
+        isStudentRoute ? Promise.resolve([]) : adminCourseClassApi.getTeachingRates(),
+        isStudentRoute ? Promise.resolve([]) : adminCourseClassApi.getTeachingPayments(),
+        adminCourseClassApi.getClassSessionUsage(id),
       ]);
+      setSessionUsage(usage);
 
       const employeeById = new Map(employees.map((employee: any) => [String(employee.id || employee.userId), employee]));
       const staffMembers = memberRows.filter((member: any) => member.status === "ACTIVE" && (member.roleInClass === "TEACHER" || member.roleInClass === "TA"));
       if (!isAdminOrHR) {
         const currentUserId = String(auth.user?.id || "");
         const currentUsername = String(auth.user?.username || "").toLowerCase();
-        const canView = staffMembers.some((member: any) => {
+        const eligibleMembers = isStudentRoute
+          ? memberRows.filter((member: any) => member.status === "ACTIVE")
+          : staffMembers;
+        const canView = eligibleMembers.some((member: any) => {
           const memberUserId = String(member.userId || "");
           const memberUsername = String(member.username || "").toLowerCase();
           return (currentUserId && memberUserId === currentUserId) || (currentUsername && memberUsername === currentUsername);
@@ -265,6 +283,8 @@ export const ClassDetailPage: React.FC = () => {
             amount: matchedPayment ? Number(matchedPayment.amount) : undefined,
             paymentStatus: matchedPayment?.status,
             actualDurationMin: matchedPayment?.actualDurationMin,
+            cancellationReason: session.cancellationReason,
+            scheduledAt: session.scheduledAt,
           };
         }),
       });
@@ -280,7 +300,7 @@ export const ClassDetailPage: React.FC = () => {
 
   useEffect(() => {
     loadClass();
-  }, [id, membersPage, membersSize, sessionsPage, sessionsSize, sessionSearchKeyword, sessionStatusFilter, sessionSortDirection, isAdminOrHR, auth.user?.id, auth.user?.username]);
+  }, [id, membersPage, membersSize, sessionsPage, sessionsSize, sessionSearchKeyword, sessionStatusFilter, sessionSortDirection, isAdminOrHR, isStudentRoute, auth.user?.id, auth.user?.username]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -321,10 +341,54 @@ export const ClassDetailPage: React.FC = () => {
     }
   };
 
+  /** Đặt lịch mới rồi tải lại quota, danh sách buổi và bảng tin từ backend. */
+  const handleScheduleSession = async () => {
+    if (!cls || !newSession.scheduledAt) return;
+    setSessionActionLoading(true);
+    setSessionActionError("");
+    try {
+      await adminCourseClassApi.scheduleClassSession(cls.id, {
+        title: newSession.title.trim() || undefined,
+        scheduledAt: newSession.scheduledAt.length === 16 ? `${newSession.scheduledAt}:00` : newSession.scheduledAt,
+        durationMin: Number(newSession.durationMin),
+        meetingUrl: newSession.meetingUrl.trim() || undefined,
+      });
+      setScheduleSessionOpen(false);
+      setNewSession({ title: "", scheduledAt: "", durationMin: "60", meetingUrl: "" });
+      setSessionActionMessage("Đã đặt lịch và thông báo tới học viên.");
+      await loadClass();
+    } catch (err: any) {
+      setSessionActionError(err?.response?.data?.message || "Không thể đặt lịch học");
+    } finally {
+      setSessionActionLoading(false);
+    }
+  };
+
+  /** Hủy lịch với lý do bắt buộc; backend kiểm tra mốc báo trước một tiếng. */
+  const handleCancelSession = async () => {
+    if (!cls || !sessionToCancel || !cancelReason.trim()) return;
+    setSessionActionLoading(true);
+    setSessionActionError("");
+    try {
+      await adminCourseClassApi.cancelClassSession(cls.id, sessionToCancel.id, cancelReason.trim());
+      setSessionToCancel(null);
+      setCancelReason("");
+      setSessionActionMessage("Đã hủy lịch và thông báo tới học viên.");
+      await loadClass();
+    } catch (err: any) {
+      setSessionActionError(err?.response?.data?.message || "Không thể hủy lịch học");
+    } finally {
+      setSessionActionLoading(false);
+    }
+  };
+
   if (loading) {
     return (
-      <div className="py-20 flex items-center justify-center gap-2 text-sm text-slate-500">
-        <Loader2 className="h-5 w-5 animate-spin text-primary" /> Đang tải thông tin chi tiết lớp học...
+      <div className="mx-auto max-w-7xl space-y-6" aria-label="Đang tải chi tiết lớp học">
+        <Skeleton className="h-20" />
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{[0, 1, 2, 3].map((item) => <Skeleton key={item} className="h-28" />)}</div>
+        <Skeleton className="h-12" />
+        <Skeleton className="h-96" />
       </div>
     );
   }
@@ -426,7 +490,26 @@ export const ClassDetailPage: React.FC = () => {
         )}
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <Card className="shadow-none border-indigo-200 bg-indigo-50/40">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl flex items-center justify-center text-indigo-600 bg-indigo-100">
+              <CalendarPlus className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Buổi học còn lại</p>
+              <p className="text-lg font-bold text-slate-900">
+                {sessionUsage?.packageLimitConfigured ? sessionUsage.remainingSessions : "Chưa cấu hình"}
+              </p>
+              <p className="text-[11px] text-slate-500">
+                {sessionUsage?.packageLimitConfigured
+                  ? `${sessionUsage.reviewedSessions}/${sessionUsage.totalSessions} buổi đã dạy và nhận xét · ${sessionUsage.scheduledSessions} đã đặt`
+                  : "Gói chưa có giới hạn số buổi"}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      {!isStudentRoute && <>
         {[
           { label: "Enrollment", value: enrollmentCount, hint: "Ghi danh trỏ tới lớp", icon: GraduationCap, tone: "text-blue-600 bg-blue-50" },
           { label: "Học viên đang học", value: `${cls.members.length}/${cls.maxCapacity}`, hint: `${cls.waitlist.length} đang chờ`, icon: Users, tone: "text-emerald-600 bg-emerald-50" },
@@ -446,6 +529,7 @@ export const ClassDetailPage: React.FC = () => {
             </CardContent>
           </Card>
         ))}
+      </>}
       </div>
 
       {/* Tabs Layout */}
@@ -476,8 +560,8 @@ export const ClassDetailPage: React.FC = () => {
           <ClassroomStreamTab
             classId={cls.id}
             className={cls.name}
-            currentUserName={cls.teacher?.name || "Giảng viên / Quản trị viên"}
-            currentUserRole="TEACHER"
+            currentUserName={isStudentRoute ? auth.user?.fullName || auth.user?.username || "Học viên" : cls.teacher?.name || "Giảng viên / Quản trị viên"}
+            currentUserRole={isStudentRoute ? "STUDENT" : isAdminOrHR ? "ADMIN" : "TEACHER"}
           />
         </TabsContent>
 
@@ -488,6 +572,7 @@ export const ClassDetailPage: React.FC = () => {
             className={cls.name}
             membersCount={cls.members.length}
             currentUserName={cls.teacher?.name || "Giảng viên"}
+            currentUserRole={isStudentRoute ? "STUDENT" : isAdminOrHR ? "ADMIN" : "TEACHER"}
           />
         </TabsContent>
 
@@ -526,7 +611,7 @@ export const ClassDetailPage: React.FC = () => {
                         <Badge className={person.roleInClass === "TEACHER" ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-violet-50 text-violet-700 border-violet-200"}>
                           {person.roleInClass === "TEACHER" ? "Giảng viên" : "Trợ giảng"}
                         </Badge>
-                        <Button
+                        {!isStudentRoute && <Button
                           variant="ghost"
                           size="sm"
                           disabled={!person.userId}
@@ -534,7 +619,7 @@ export const ClassDetailPage: React.FC = () => {
                           className="h-8 text-xs text-indigo-600 hover:bg-indigo-50 rounded-lg gap-1"
                         >
                           <Eye className="h-3.5 w-3.5" /> Chi Tiết
-                        </Button>
+                        </Button>}
                       </div>
                     </CardContent>
                   </Card>
@@ -590,7 +675,7 @@ export const ClassDetailPage: React.FC = () => {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1.5">
-                            <Button
+                            {(!isStudentRoute || String(member.studentId) === String(auth.user?.id)) && <Button
                               variant="ghost"
                               size="sm"
                               disabled={!member.studentId}
@@ -598,7 +683,7 @@ export const ClassDetailPage: React.FC = () => {
                               onClick={() => setDetailUserId(member.studentId)}
                             >
                               <Eye className="h-3.5 w-3.5" /> Xem Chi Tiết
-                            </Button>
+                            </Button>}
                             {isAdminOrHR && (
                             <Button
                               variant="ghost"
@@ -796,6 +881,22 @@ export const ClassDetailPage: React.FC = () => {
 
         {/* TAB 4: BUỔI HỌC ĐÃ/SẮP DIỄN RA */}
         <TabsContent value="sessions" className="space-y-4">
+          {!isStudentRoute && (
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="font-bold text-slate-900">Quản lý buổi học</h3>
+                <p className="text-xs text-slate-500">Quota chỉ giảm sau khi buổi học kết thúc và đã gửi nhận xét.</p>
+              </div>
+              <Button size="sm" onClick={() => { setSessionActionError(""); setScheduleSessionOpen(true); }} disabled={cls.status === "CLOSED"}>
+                <CalendarPlus className="mr-1.5 h-4 w-4" /> Đặt lịch học
+              </Button>
+            </div>
+          )}
+          {sessionActionMessage && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700">
+              {sessionActionMessage}
+            </div>
+          )}
           {/* Toolbar: Search, Status Filter & Date Sort */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-200">
             <div className="relative flex-1 w-full sm:w-auto">
@@ -850,12 +951,13 @@ export const ClassDetailPage: React.FC = () => {
                   <TableHead>Trạng Thái Buổi Học</TableHead>
                   <TableHead>Giáo Viên Dạy Buổi Đó</TableHead>
                   <TableHead className="text-right">Thanh Toán Buổi Dạy</TableHead>
+                  {!isStudentRoute && <TableHead className="text-right">Thao tác</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {cls.sessions.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-6 text-slate-400 text-sm">
+                    <TableCell colSpan={isStudentRoute ? 5 : 6} className="text-center py-6 text-slate-400 text-sm">
                       Không tìm thấy dữ liệu buổi học nào.
                     </TableCell>
                   </TableRow>
@@ -871,7 +973,10 @@ export const ClassDetailPage: React.FC = () => {
                         {s.status === "COMPLETED" ? (
                           <Badge className="bg-emerald-100 text-emerald-800">Đã Diễn Ra</Badge>
                         ) : s.status === "CANCELLED" ? (
-                          <Badge className="bg-red-100 text-red-800">Đã Hủy</Badge>
+                          <div className="space-y-1">
+                            <Badge className="bg-red-100 text-red-800">Đã Hủy</Badge>
+                            {s.cancellationReason && <p className="max-w-48 text-[10px] text-red-600">{s.cancellationReason}</p>}
+                          </div>
                         ) : (
                           <Badge className="bg-blue-100 text-blue-800">Sắp Diễn Ra</Badge>
                         )}
@@ -904,6 +1009,23 @@ export const ClassDetailPage: React.FC = () => {
                           <Badge variant="outline" className="text-slate-500">Chưa tạo payment</Badge>
                         )}
                       </TableCell>
+                      {!isStudentRoute && (
+                        <TableCell className="text-right">
+                          {s.status === "UPCOMING" && s.scheduledAt
+                            && new Date(s.scheduledAt).getTime() - Date.now() >= 60 * 60 * 1000 ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 border-red-200 text-xs text-red-600 hover:bg-red-50"
+                              onClick={() => { setSessionActionError(""); setCancelReason(""); setSessionToCancel(s); }}
+                            >
+                              <Ban className="mr-1 h-3.5 w-3.5" /> Hủy lịch
+                            </Button>
+                          ) : s.status === "UPCOMING" ? (
+                            <span className="text-[10px] text-slate-400">Không thể hủy trong 1 giờ</span>
+                          ) : null}
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))
                 )}
@@ -983,6 +1105,70 @@ export const ClassDetailPage: React.FC = () => {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Form đặt lịch học; người dạy được backend lấy từ JWT. */}
+      {!isStudentRoute && (
+        <Dialog open={scheduleSessionOpen} onOpenChange={(open) => !sessionActionLoading && setScheduleSessionOpen(open)}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Đặt lịch học mới</DialogTitle>
+              <DialogDescription>Lịch mới sẽ xuất hiện trên bảng tin và gửi thông báo tới học viên đang học.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-700">Tiêu đề</label>
+                <Input value={newSession.title} onChange={(event) => setNewSession((value) => ({ ...value, title: event.target.value }))} placeholder="Ví dụ: Buổi 5 - Luyện tập" maxLength={255} />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-700">Bắt đầu *</label>
+                  <Input type="datetime-local" value={newSession.scheduledAt} onChange={(event) => setNewSession((value) => ({ ...value, scheduledAt: event.target.value }))} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-700">Thời lượng (phút) *</label>
+                  <Input type="number" min={15} max={480} value={newSession.durationMin} onChange={(event) => setNewSession((value) => ({ ...value, durationMin: event.target.value }))} />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-700">Link phòng học</label>
+                <Input value={newSession.meetingUrl} onChange={(event) => setNewSession((value) => ({ ...value, meetingUrl: event.target.value }))} placeholder="https://meet.google.com/..." />
+              </div>
+              {sessionActionError && <p className="text-xs text-red-600">{sessionActionError}</p>}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setScheduleSessionOpen(false)} disabled={sessionActionLoading}>Đóng</Button>
+              <Button onClick={() => void handleScheduleSession()} disabled={sessionActionLoading || !newSession.scheduledAt || Number(newSession.durationMin) < 15}>
+                {sessionActionLoading && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />} Đặt lịch
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Form hủy lịch bắt buộc nhập lý do. */}
+      {!isStudentRoute && (
+        <Dialog open={Boolean(sessionToCancel)} onOpenChange={(open) => !open && !sessionActionLoading && setSessionToCancel(null)}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Hủy lịch học</DialogTitle>
+              <DialogDescription>
+                Chỉ được hủy trước giờ bắt đầu ít nhất 1 tiếng. Lý do sẽ được gửi tới học viên và đăng trên bảng tin lớp.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2">
+              <p className="text-sm font-semibold text-slate-800">{sessionToCancel?.title || "Buổi học online"} · {sessionToCancel?.date} {sessionToCancel?.startTime}</p>
+              <Textarea value={cancelReason} onChange={(event) => setCancelReason(event.target.value)} placeholder="Nhập lý do hủy lịch..." maxLength={2000} rows={4} />
+              {sessionActionError && <p className="text-xs text-red-600">{sessionActionError}</p>}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setSessionToCancel(null)} disabled={sessionActionLoading}>Giữ lịch</Button>
+              <Button variant="destructive" onClick={() => void handleCancelSession()} disabled={sessionActionLoading || !cancelReason.trim()}>
+                {sessionActionLoading && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />} Xác nhận hủy
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Member Detail Modal */}
       {detailUserId && (

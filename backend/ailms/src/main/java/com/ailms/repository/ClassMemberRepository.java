@@ -12,6 +12,7 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
+import java.time.LocalDateTime;
 
 @Repository
 public interface ClassMemberRepository extends BaseRepository<ClassMemberEntity, Long> {
@@ -37,4 +38,16 @@ public interface ClassMemberRepository extends BaseRepository<ClassMemberEntity,
     // Tìm danh sách thành viên thuộc nhiều lớp học theo trạng thái (Eager load để tối ưu hiệu năng)
     @EntityGraph(attributePaths = {"classEntity", "userEntity"})
     List<ClassMemberEntity> findById_ClassIdInAndStatus(List<Long> classIds, ClassMemberStatusEnum status);
+
+    /** Lấy giáo viên và trợ giảng của lớp theo vai trò. */
+    List<ClassMemberEntity> findById_ClassIdAndRoleInClassInAndStatus(
+            Long classId, List<ClassMemberRole> roles, ClassMemberStatusEnum status);
+
+    /** Lấy học viên đang học để gửi thông báo sự kiện của lớp. */
+    List<ClassMemberEntity> findById_ClassIdAndRoleInClassAndStatus(
+            Long classId, ClassMemberRole role, ClassMemberStatusEnum status);
+
+    /** Lấy học viên vừa ACTIVE để scheduler phát activity cho mọi luồng ghi danh. */
+    List<ClassMemberEntity> findByRoleInClassAndStatusAndJoinedAtBetween(
+            ClassMemberRole role, ClassMemberStatusEnum status, LocalDateTime from, LocalDateTime to);
 }

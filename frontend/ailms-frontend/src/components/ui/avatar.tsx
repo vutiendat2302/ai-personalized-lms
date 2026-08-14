@@ -2,6 +2,7 @@ import * as React from "react"
 import { Avatar as AvatarPrimitive } from "@base-ui/react/avatar"
 
 import { cn } from "@/lib/utils"
+import { resolveAvatarUrl } from "@/utils/avatarUrl"
 
 function Avatar({
   className,
@@ -32,6 +33,7 @@ function AvatarImage({ className, ...props }: AvatarPrimitive.Image.Props) {
         className
       )}
       {...props}
+      src={resolveAvatarUrl(props.src)}
     />
   )
 }

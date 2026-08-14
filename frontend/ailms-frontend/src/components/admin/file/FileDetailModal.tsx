@@ -10,8 +10,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import type { FileMetadataResponse } from "@/types/fileManagement";
+import type { FileMetadataResponse, FileUsageTypeEnum } from "@/types/fileManagement";
 import { formatBytes, formatDateTime, getUsageTypeBadge, getStatusBadge } from "./fileUtils";
 import { fileAdminApi } from "@/api/file/fileAdminApi";
 import { auditLogApi, type AuditLogResponse } from "@/api/audit/auditLogApi";
@@ -67,9 +68,10 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
-  // Edit metadata form state (Rename only)
+  // Edit metadata form state
   const [isEditing, setIsEditing] = useState(false);
   const [nameInput, setNameInput] = useState("");
+  const [usageTypeInput, setUsageTypeInput] = useState<FileUsageTypeEnum>("OTHER");
 
   // Confirm dialogs states
   const [confirmArchiveOpen, setConfirmArchiveOpen] = useState(false);
@@ -85,6 +87,7 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({
   useEffect(() => {
     if (file && isOpen) {
       setNameInput(file.originalName || "");
+      setUsageTypeInput(file.usageType || "OTHER");
       setIsEditing(false);
       setErrorMsg("");
       setSuccessMsg("");
@@ -155,7 +158,8 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({
 
   const entityRoute = getEntityRoute();
 
-  const handleRename = async () => {
+  /** Lưu tên hiển thị và module metadata của file. */
+  const handleUpdateMetadata = async () => {
     if (!file) return;
     const name = nameInput.trim();
     if (!name) {
@@ -188,8 +192,8 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({
       setActionLoading(true);
       setErrorMsg("");
       setSuccessMsg("");
-      const updated = await fileAdminApi.renameFile(file.fileKey, name);
-      const msg = "Đã đổi tên file gốc thành công!";
+      const updated = await fileAdminApi.updateFileMetadata(file.id, name, usageTypeInput);
+      const msg = "Đã cập nhật thông tin file thành công!";
       setSuccessMsg(msg);
       onActionSuccess?.(msg);
       setIsEditing(false);
@@ -290,7 +294,7 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({
                     onClick={() => setIsEditing(true)}
                     className="text-xs gap-1.5 rounded-xl border-border/80"
                   >
-                    <Edit2 className="h-3.5 w-3.5" /> Đổi tên file
+                    <Edit2 className="h-3.5 w-3.5" /> Chỉnh sửa
                   </Button>
                 ) : (
                   <Button
@@ -299,6 +303,7 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({
                     onClick={() => {
                       setIsEditing(false);
                       setNameInput(file.originalName);
+                      setUsageTypeInput(file.usageType || "OTHER");
                     }}
                     className="text-xs gap-1 rounded-xl"
                   >
@@ -338,32 +343,52 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({
             </div>
           )}
 
-          {/* Form Đổi tên file gốc bằng hàm renameFile */}
+          {/* Form chỉnh sửa metadata file */}
           {isEditing && (
             <div className="p-4 rounded-xl border border-primary/30 bg-primary/5 space-y-3 animate-in fade-in duration-200">
               <h4 className="text-xs font-bold uppercase tracking-wider text-primary flex items-center gap-1.5">
-                <Edit2 className="h-3.5 w-3.5" /> Đổi tên tệp tin gốc
+                <Edit2 className="h-3.5 w-3.5" /> Chỉnh sửa tệp tin
               </h4>
 
               <div className="space-y-1">
-                <Label className="text-[11px] font-semibold text-muted-foreground">Tên file gốc mới</Label>
+                <Label className="text-[11px] font-semibold text-muted-foreground">Tên hiển thị</Label>
                 <div className="flex gap-2">
                   <Input
                     value={nameInput}
                     onChange={(e) => setNameInput(e.target.value)}
-                    placeholder="Nhập tên file gốc mới..."
+                    placeholder="Nhập tên hiển thị..."
                     className="h-9 text-xs rounded-xl bg-card border-border/80 flex-1"
                   />
                   <Button
                     size="sm"
-                    onClick={handleRename}
+                    onClick={handleUpdateMetadata}
                     disabled={actionLoading || !nameInput.trim()}
                     className="text-xs gap-1.5 rounded-xl shadow-xs"
                   >
                     {actionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                    Lưu tên mới
+                    Lưu thay đổi
                   </Button>
                 </div>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[11px] font-semibold text-muted-foreground">Phân loại Module</Label>
+                <Select value={usageTypeInput} onValueChange={(value) => setUsageTypeInput(value as FileUsageTypeEnum)}>
+                  <SelectTrigger className="h-9 text-xs rounded-xl bg-card border-border/80">
+                    <SelectValue placeholder="Chọn module" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="CONTRACT">Hợp đồng (CONTRACT)</SelectItem>
+                    <SelectItem value="AVATAR">Ảnh đại diện (AVATAR)</SelectItem>
+                    <SelectItem value="LESSON_RESOURCE">Tài liệu bài học (LESSON_RESOURCE)</SelectItem>
+                    <SelectItem value="LESSON_VIDEO">Video bài học (LESSON_VIDEO)</SelectItem>
+                    <SelectItem value="COURSE_LESSON">Bài học khóa học (COURSE_LESSON)</SelectItem>
+                    <SelectItem value="ASSIGNMENT">Bài tập (ASSIGNMENT)</SelectItem>
+                    <SelectItem value="ASSIGNMENT_SUBMISSION">Bài nộp bài tập (ASSIGNMENT_SUBMISSION)</SelectItem>
+                    <SelectItem value="QUIZ_ATTACHMENT">Đính kèm Quiz (QUIZ_ATTACHMENT)</SelectItem>
+                    <SelectItem value="POLICY">Chính sách (POLICY)</SelectItem>
+                    <SelectItem value="OTHER">Khác (OTHER)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           )}

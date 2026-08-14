@@ -1,8 +1,12 @@
-import React, { useState, useMemo, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import React, { useState, useMemo, useEffect, useRef } from "react";
+import { useSearchParams, useLocation, Link, useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
+import { formatCourseLevel } from "@/utils/searchUtils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { courseApi } from "@/api/courses/courseApi";
+import { publicCatalogApi, type PublicCategory, type PublicTeacher } from "@/api/public/publicCatalogApi";
 import { 
   Search, 
   Brain, 
@@ -17,297 +21,321 @@ import {
   Clock, 
   GraduationCap, 
   Award, 
-  BookMarked
+  BookMarked,
+  ChevronLeft,
+  ChevronRight,
+  ArrowLeft,
+  ArrowRight
 } from "lucide-react";
 
-interface Course {
+type CourseLevel = "BEGINNER" | "INTERMEDIATE" | "ADVANCED";
+
+interface SearchCourseItem {
+  id: string | number;
+  name: string;
+  categoryName?: string;
+  level?: string;
+  duration?: number;
+  avgRating?: number;
+  enrollmentCount?: number;
+  thumbnailUrl?: string;
+  image?: string;
+  description?: string;
+  suggestedPrice?: number;
+  createdAt?: string;
+}
+
+interface ExploreCourseCard {
   id: string;
   title: string;
   category: string;
   level: string;
-  duration: number; // in hours
+  duration: number;
   durationText: string;
   rating: number;
   studentsCount: number;
   image: string;
   tags: string[];
   description: string;
+  suggestedPrice?: number;
+  createdAt?: string;
 }
 
-const ALL_COURSES: Course[] = [
-  {
-    id: "1",
-    title: "Lập trình Python từ cơ bản đến nâng cao cho AI",
-    category: "AI & Trí tuệ Nhân tạo",
-    level: "Cơ bản",
-    duration: 40,
-    durationText: "40 giờ học",
-    rating: 4.8,
-    studentsCount: 1240,
-    image: "https://images.unsplash.com/photo-1515879218367-8466d910aaa4?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3",
-    tags: ["Python", "AI", "Machine Learning"],
-    description: "Học ngôn ngữ lập trình Python từ con số 0, chuẩn bị nền tảng vững chắc cho việc nghiên cứu AI và Học máy."
-  },
-  {
-    id: "2",
-    title: "Toán học rời rạc và ứng dụng trong khoa học máy tính",
-    category: "Toán học",
-    level: "Trung cấp",
-    duration: 32,
-    durationText: "32 giờ học",
-    rating: 4.9,
-    studentsCount: 890,
-    image: "https://images.unsplash.com/photo-1635070041078-e363dbe005cb?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3",
-    tags: ["Toán học", "Giải thuật", "Logic"],
-    description: "Trang bị tư duy logic toán học rời rạc nền tảng, tiền đề quan trọng thiết kế cấu trúc dữ liệu và giải thuật."
-  },
-  {
-    id: "3",
-    title: "Xây dựng Web App với React và NestJS",
-    category: "Phát triển Web",
-    level: "Nâng cao",
-    duration: 48,
-    durationText: "48 giờ học",
-    rating: 4.7,
-    studentsCount: 1540,
-    image: "https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3",
-    tags: ["React", "NestJS", "TypeScript"],
-    description: "Làm chủ mô hình Fullstack hoàn thiện với React SPA và NestJS API Gateway theo chuẩn Enterprise."
-  },
-  {
-    id: "4",
-    title: "Nhập môn Machine Learning & Deep Learning",
-    category: "AI & Trí tuệ Nhân tạo",
-    level: "Nâng cao",
-    duration: 50,
-    durationText: "50 giờ học",
-    rating: 4.95,
-    studentsCount: 2100,
-    image: "https://images.unsplash.com/photo-1527474305487-b87b222841cc?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3",
-    tags: ["Machine Learning", "Deep Learning", "PyTorch"],
-    description: "Đi sâu vào kiến trúc Mạng nơ-ron nhân tạo, xử lý dữ liệu và huấn luyện mô hình học sâu thực tế."
-  },
-  {
-    id: "5",
-    title: "Cấu trúc dữ liệu & Giải thuật bằng C++",
-    category: "Khoa học Máy tính",
-    level: "Trung cấp",
-    duration: 36,
-    durationText: "36 giờ học",
-    rating: 4.6,
-    studentsCount: 950,
-    image: "https://images.unsplash.com/photo-1607799279861-4dd421887fb3?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3",
-    tags: ["C++", "DSA", "Giải thuật"],
-    description: "Luyện tập tư duy tối ưu bộ nhớ, độ phức tạp thời gian và không gian thuật toán với ngôn ngữ C++."
-  },
-  {
-    id: "6",
-    title: "Thiết kế UI/UX hiện đại cho ứng dụng Web/Mobile",
-    category: "Thiết kế UI/UX",
-    level: "Cơ bản",
-    duration: 24,
-    durationText: "24 giờ học",
-    rating: 4.75,
-    studentsCount: 620,
-    image: "https://images.unsplash.com/photo-1561070791-26c113006238?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3",
-    tags: ["Figma", "UI/UX", "Design System"],
-    description: "Tìm hiểu nguyên lý thị giác, thiết kế trải nghiệm người dùng, xây dựng Wireframe và Prototype bằng Figma."
-  },
-  {
-    id: "7",
-    title: "Phân tích dữ liệu kinh doanh với SQL & Power BI",
-    category: "Data Science & Phân tích",
-    level: "Trung cấp",
-    duration: 28,
-    durationText: "28 giờ học",
-    rating: 4.85,
-    studentsCount: 780,
-    image: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3",
-    tags: ["SQL", "Power BI", "Data Analysis"],
-    description: "Khai thác dữ liệu từ SQL Server, xử lý ETL và xây dựng các Dashboard trực quan hỗ trợ quyết định kinh doanh."
-  },
-  {
-    id: "8",
-    title: "Kiến trúc hệ thống và Thiết kế hệ thống phân tán",
-    category: "Khoa học Máy tính",
-    level: "Nâng cao",
-    duration: 42,
-    durationText: "42 giờ học",
-    rating: 4.9,
-    studentsCount: 510,
-    image: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3",
-    tags: ["System Design", "Microservices", "Docker"],
-    description: "Tìm hiểu về chịu tải lỗi, tính sẵn sàng cao, cân bằng tải, phân mảnh dữ liệu và kiến trúc Microservices."
+const LEVEL_LABELS: Record<CourseLevel, string> = {
+  BEGINNER: "Cơ bản",
+  INTERMEDIATE: "Trung cấp",
+  ADVANCED: "Nâng cao",
+};
+
+const LEVEL_VALUES: Record<string, CourseLevel> = {
+  "Cơ bản": "BEGINNER",
+  "Trung cấp": "INTERMEDIATE",
+  "Nâng cao": "ADVANCED",
+};
+
+const ITEMS_PER_PAGE = 8;
+
+/**
+ * Sinh danh sách các số trang cần hiển thị trên thanh phân trang (1-indexed).
+ */
+const getPageNumbers = (current: number, total: number) => {
+  const pages: (number | string)[] = [];
+  if (total <= 7) {
+    for (let i = 1; i <= total; i++) pages.push(i);
+  } else {
+    pages.push(1);
+    if (current > 3) pages.push("...");
+    const start = Math.max(2, current - 1);
+    const end = Math.min(total - 1, current + 1);
+    for (let i = start; i <= end; i++) pages.push(i);
+    if (current < total - 2) pages.push("...");
+    pages.push(total);
   }
-];
+  return pages;
+};
 
-const CATEGORY_LIST = [
-  { name: "AI & Trí tuệ Nhân tạo", icon: Brain, count: 2, color: "text-primary bg-primary/10" },
-  { name: "Phát triển Web", icon: Code, count: 1, color: "text-indigo-650 bg-indigo-500/10" },
-  { name: "Thiết kế UI/UX", icon: PenTool, count: 1, color: "text-pink-600 bg-pink-500/10" },
-  { name: "Toán học", icon: BookOpen, count: 1, color: "text-amber-600 bg-amber-500/10" },
-  { name: "Khoa học Máy tính", icon: Binary, count: 2, color: "text-emerald-600 bg-emerald-500/10" },
-  { name: "Data Science & Phân tích", icon: Database, count: 1, color: "text-sky-650 bg-sky-500/10" }
-];
-
-const INSTRUCTORS = [
-  {
-    name: "GS. TS. Nguyễn Hải Nam",
-    role: "Giảng viên AI & Học Máy",
-    bio: "Cựu nghiên cứu sinh sau tiến sĩ tại Stanford University. Hơn 10 năm kinh nghiệm phát triển mô hình NLP tại Thung lũng Silicon.",
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=nam_instructor",
-    school: "Đại học Bách Khoa Hà Nội",
-    coursesCount: 4,
-    rating: "4.95★"
-  },
-  {
-    name: "ThS. Lê Thùy Dương",
-    role: "Chuyên gia Thiết kế UI/UX",
-    bio: "Senior Product Designer tại Grab Singapore. Đam mê xây dựng các sản phẩm thân thiện với người dùng và hệ thống Design System chuẩn mực.",
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=duong_instructor",
-    school: "FPT Arena Multimedia",
-    coursesCount: 3,
-    rating: "4.8★"
-  },
-  {
-    name: "Kỹ sư Trần Tiến Đạt",
-    role: "Kiến trúc sư Web Fullstack",
-    bio: "Tech Lead tại VNG Corporation. Tác giả nhiều thư viện mã nguồn mở Javascript/TypeScript với hàng chục ngàn lượt tải xuống.",
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=dat_instructor",
-    school: "Đại học Khoa học Tự nhiên",
-    coursesCount: 5,
-    rating: "4.9★"
-  }
-];
-
+/**
+ * Component chính hiển thị trang Khám phá Lộ trình học tập, lọc theo chủ đề/trình độ và phân trang danh sách khóa học gợi ý.
+ */
 export const ExplorePathways: React.FC = () => {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [search, setSearch] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("Tất cả");
+  const navigate = useNavigate();
+  const { auth } = useAuth();
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
+  const [search, setSearch] = useState(() => searchParams.get("keyword") ?? searchParams.get("q") ?? searchParams.get("search") ?? "");
+  const [debouncedSearch, setDebouncedSearch] = useState(() => searchParams.get("keyword") ?? searchParams.get("q") ?? searchParams.get("search") ?? "");
+  const [selectedCategory, setSelectedCategory] = useState(() => searchParams.get("category") ?? "Tất cả");
   const [selectedLevel, setSelectedLevel] = useState("Tất cả");
-  const [selectedDuration, setSelectedDuration] = useState("Tất cả");
-  const [realCourses, setRealCourses] = useState<any[]>([]);
+  const [realCourses, setRealCourses] = useState<ExploreCourseCard[]>([]);
+  const [totalCourseResults, setTotalCourseResults] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [teachers, setTeachers] = useState<PublicTeacher[]>([]);
+  const [teacherPage, setTeacherPage] = useState(0);
+  const [hasMoreTeachers, setHasMoreTeachers] = useState(false);
+  const [categories, setCategories] = useState<PublicCategory[]>([]);
+  const categoryScrollRef = useRef<HTMLDivElement>(null);
 
-  // Synchronize URL search params (keyword and category)
-  useEffect(() => {
-    const keywordParam = searchParams.get("keyword") || searchParams.get("q") || searchParams.get("search");
-    if (keywordParam !== null) {
-      setSearch(keywordParam);
+  /** Quay thẳng về trang trước đó (như Dashboard), tránh lùi qua từng từ khóa tìm kiếm trong lịch sử trình duyệt. */
+  const handleBack = () => {
+    const from = (location.state as { from?: string } | null)?.from;
+    if (from && !from.startsWith("/explore")) {
+      void navigate(from, { replace: true });
+      return;
     }
-    const categoryParam = searchParams.get("category");
-    if (categoryParam) {
-      setSelectedCategory(categoryParam);
+    if (auth.accessToken) {
+      const userRoles = auth.user?.roles ?? [];
+      if (userRoles.includes("TEACHER") || userRoles.includes("TA")) {
+        void navigate("/teacher/dashboard", { replace: true });
+      } else if (userRoles.includes("ADMIN")) {
+        void navigate("/admin/dashboard", { replace: true });
+      } else {
+        void navigate("/student/dashboard", { replace: true });
+      }
+      return;
     }
-  }, [searchParams]);
+    void navigate("/", { replace: true });
+  };
 
-  // Fetch real courses from Backend API when search or filters change
+  /** Trì hoãn truy vấn catalog một khoảng ngắn để tìm kiếm realtime không tạo request cho từng phím. */
   useEffect(() => {
-    const fetchCoursesFromApi = async () => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(search.trim());
+    }, 300);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [search]);
+
+  /** Tải đội ngũ giảng viên thật, không dùng avatar hoặc hồ sơ dựng sẵn. */
+  useEffect(() => {
+    let ignore = false;
+    const loadInitialData = async () => {
       try {
-        const searchPayload: any = { size: 50, status: "ACTIVE" };
-        if (search.trim()) {
-          searchPayload.keyword = search.trim();
+        const [teachersRes, categoriesRes] = await Promise.all([
+          publicCatalogApi.getTeachers({ page: 0, size: 6 }),
+          publicCatalogApi.getHotCategories({ page: 0, size: 10 }),
+        ]);
+        if (!ignore) {
+          const teacherData = teachersRes.data.data;
+          setTeachers(teacherData.content);
+          setHasMoreTeachers(!teacherData.last);
+
+          const categoryData = categoriesRes.data.data;
+          setCategories(categoryData.content);
         }
-        if (selectedLevel !== "Tất cả") {
-          searchPayload.level = selectedLevel === "Cơ bản" ? "BEGINNER" : selectedLevel === "Trung cấp" ? "INTERMEDIATE" : "ADVANCED";
+      } catch {
+        if (!ignore) {
+          setTeachers([]);
+          setCategories([]);
         }
-        const res = await courseApi.searchCourses(searchPayload);
-        if (res.data.success && res.data.data?.content?.length > 0) {
-          const mapped = res.data.data.content.map((c: any) => ({
-            id: c.id,
-            title: c.name,
-            category: c.categoryName || "Khóa học AILMS",
-            level: c.level === "ADVANCED" ? "Nâng cao" : c.level === "BEGINNER" ? "Cơ bản" : "Trung cấp",
-            duration: 35,
-            durationText: "30-40 giờ học",
-            rating: c.avgRating || 4.8,
-            studentsCount: c.enrollmentCount || 1200,
-            image: c.image || "https://images.unsplash.com/photo-1515879218367-8466d910aaa4?w=500&auto=format&fit=crop&q=60",
-            tags: [c.categoryName || "AI", c.level || "ALL"],
-            description: c.description || "Khóa học chất lượng cao giúp làm chủ kiến thức thực chiến.",
-            suggestedPrice: c.suggestedPrice
-          }));
-          setRealCourses(mapped);
-        } else {
-          setRealCourses([]);
-        }
-      } catch (err) {
-        console.error("Error searching courses in ExplorePathways:", err);
-        setRealCourses([]);
       }
     };
 
-    fetchCoursesFromApi();
-  }, [search, selectedLevel]);
+    void loadInitialData();
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
-  const filteredCourses = useMemo(() => {
-    const baseList = realCourses.length > 0 ? realCourses : ALL_COURSES;
-    return baseList.filter(course => {
-      // Search text filter
-      const matchesSearch = 
-        !search.trim() ||
-        course.title.toLowerCase().includes(search.toLowerCase()) || 
-        (course.tags && course.tags.some((tag: string) => tag.toLowerCase().includes(search.toLowerCase()))) ||
-        (course.description && course.description.toLowerCase().includes(search.toLowerCase()));
-
-      // Category filter
-      const matchesCategory = 
-        selectedCategory === "Tất cả" || course.category.toLowerCase().includes(selectedCategory.toLowerCase());
-
-      // Level filter
-      const matchesLevel = 
-        selectedLevel === "Tất cả" || course.level === selectedLevel;
-
-      // Duration filter
-      let matchesDuration = true;
-      if (selectedDuration === "Dưới 20 giờ") {
-        matchesDuration = course.duration < 20;
-      } else if (selectedDuration === "20 - 40 giờ") {
-        matchesDuration = course.duration >= 20 && course.duration <= 40;
-      } else if (selectedDuration === "Trên 40 giờ") {
-        matchesDuration = course.duration > 40;
-      }
-
-      return matchesSearch && matchesCategory && matchesLevel && matchesDuration;
-    });
-  }, [realCourses, search, selectedCategory, selectedLevel, selectedDuration]);
-
-  const handleSearchChange = (newVal: string) => {
-    setSearch(newVal);
-    if (newVal.trim()) {
-      setSearchParams({ keyword: newVal.trim() });
-    } else {
-      setSearchParams({});
+  /** Tải thêm giảng viên thật theo trang, không sinh dữ liệu bổ sung ở Frontend. */
+  const loadMoreTeachers = async () => {
+    const nextPage = teacherPage + 1;
+    try {
+      const response = await publicCatalogApi.getTeachers({ page: nextPage, size: 6 });
+      const page = response.data.data;
+      setTeachers((current) => [...current, ...page.content]);
+      setTeacherPage(nextPage);
+      setHasMoreTeachers(!page.last);
+    } catch {
+      setHasMoreTeachers(false);
     }
   };
 
+  /** Thu gọn danh sách giảng viên về đúng 6 người đầu tiên. */
+  const collapseTeachers = () => {
+    setTeachers((current) => current.slice(0, 6));
+    setTeacherPage(0);
+    setHasMoreTeachers(true);
+  };
+
+  /** Tải đúng trang khóa học từ Backend, không cắt kết quả ở giới hạn 50 bản ghi. */
+  useEffect(() => {
+    let ignore = false;
+    const fetchCoursesFromApi = async () => {
+      try {
+        const categoryId = categories.find((category) => category.name === selectedCategory)?.id;
+        const searchPayload: {
+          page: number;
+          size: number;
+          status: string;
+          keyword?: string;
+          categoryId?: string;
+          level?: string;
+        } = { page: currentPage - 1, size: ITEMS_PER_PAGE, status: "ACTIVE" };
+        if (debouncedSearch) {
+          searchPayload.keyword = debouncedSearch;
+        }
+        if (categoryId) {
+          searchPayload.categoryId = categoryId;
+        }
+        if (selectedLevel !== "Tất cả") {
+          searchPayload.level = LEVEL_VALUES[selectedLevel];
+        }
+        const res = await courseApi.searchCourses(searchPayload);
+        if (!ignore) {
+          if (res.data.success && res.data.data) {
+            const data = res.data.data as { totalElements?: number; content: SearchCourseItem[] };
+            setTotalCourseResults(data.totalElements ?? 0);
+            const mapped: ExploreCourseCard[] = data.content.map((c) => ({
+              id: String(c.id),
+              title: c.name,
+              category: c.categoryName ?? "Chưa phân loại",
+              level: (c.level && c.level in LEVEL_LABELS ? LEVEL_LABELS[c.level as CourseLevel] : null) ?? "Chưa cập nhật",
+              duration: c.duration ?? 0,
+              durationText: c.duration ? `${String(c.duration)} giờ học` : "Thời lượng chưa cập nhật",
+              rating: c.avgRating ?? 0,
+              studentsCount: c.enrollmentCount ?? 0,
+              image: c.thumbnailUrl ?? c.image ?? "",
+              tags: [c.categoryName, c.level].filter((item): item is string => Boolean(item)),
+              description: c.description ?? "",
+              suggestedPrice: c.suggestedPrice,
+              createdAt: c.createdAt,
+            }));
+            setRealCourses(mapped);
+          } else {
+            setRealCourses([]);
+            setTotalCourseResults(0);
+          }
+        }
+      } catch (err) {
+        console.error("Error searching courses in ExplorePathways:", err);
+        if (!ignore) {
+          setRealCourses([]);
+          setTotalCourseResults(0);
+        }
+      }
+    };
+
+    void fetchCoursesFromApi();
+    return () => {
+      ignore = true;
+    };
+  }, [debouncedSearch, selectedCategory, selectedLevel, currentPage, categories]);
+
+  /** Giữ dữ liệu từ Backend; keyword/category/level đã được áp dụng ở query server. */
+  const filteredCourses = useMemo(() => realCourses, [realCourses]);
+
+  /** Đưa người dùng thẳng tới danh sách khóa học sau khi tìm kiếm từ Header. */
+  useEffect(() => {
+    if (location.hash === "#courses") {
+      requestAnimationFrame(() => document.getElementById("courses")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    }
+  }, [location.hash, location.search]);
+
+  /** Tính tổng số trang dựa trên danh sách đã lọc. */
+  const totalPages = Math.ceil(totalCourseResults / ITEMS_PER_PAGE);
+
+  /** Cắt danh sách khóa học đã lọc để chỉ hiển thị tối đa 8 khóa học trên trang hiện tại. */
+  const displayedCourses = useMemo(() => filteredCourses, [filteredCourses]);
+
+  /** Xử lý thay đổi từ khóa tìm kiếm và cập nhật URL. */
+  const handleSearchChange = (newVal: string) => {
+    setSearch(newVal);
+    setCurrentPage(1);
+  };
+
+  /** Xử lý thay đổi danh mục và chuyển về trang 1. */
+  const handleCategoryChange = (category: string) => {
+    setSelectedCategory(category);
+    setCurrentPage(1);
+  };
+
+  /** Xử lý thay đổi trình độ và chuyển về trang 1. */
+  const handleLevelChange = (level: string) => {
+    setSelectedLevel(level);
+    setCurrentPage(1);
+  };
+
+  /** Đặt lại tất cả các bộ lọc về mặc định và quay về trang 1. */
   const handleResetFilters = () => {
     setSearch("");
     setSelectedCategory("Tất cả");
     setSelectedLevel("Tất cả");
-    setSelectedDuration("Tất cả");
-    setSearchParams({});
+    setCurrentPage(1);
   };
 
   return (
-    <div className="mx-auto max-w-none w-full px-4 py-8 sm:px-6 lg:px-12 space-y-12 animate-in fade-in-50 duration-300">
+    <div className="mx-auto max-w-none w-full px-4 py-8 sm:px-6 lg:px-12 space-y-6 animate-in fade-in-50 duration-300">
       
+      {/* Nút quay lại trang trước */}
+      <div>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={handleBack}
+          className="rounded-xl px-4 py-2 text-xs font-bold border-border/60 hover:bg-muted text-foreground inline-flex items-center gap-2 cursor-pointer shadow-xs"
+        >
+          <ArrowLeft className="h-4 w-4 text-primary" />
+          Quay lại
+        </Button>
+      </div>
+
       {/* ==========================================
           HERO SECTION & SEARCH BAR WITH SMART FILTERS
           ========================================== */}
-      <div className="relative rounded-3xl bg-gradient-to-r from-primary via-indigo-950 to-neutral-900 p-8 md:p-12 text-white overflow-hidden shadow-2xl shadow-primary/10">
+      <div className="relative rounded-3xl bg-linear-to-r from-primary via-indigo-950 to-neutral-900 p-8 md:p-12 text-white overflow-hidden shadow-2xl shadow-primary/10">
         {/* Background Decorative Circles */}
         <div className="absolute top-0 right-0 -translate-y-12 translate-x-12 w-96 h-96 rounded-full bg-primary/20 blur-3xl pointer-events-none" />
         <div className="absolute bottom-0 left-1/3 translate-y-12 w-64 h-64 rounded-full bg-indigo-500/10 blur-3xl pointer-events-none" />
 
         <div className="relative max-w-4xl space-y-6">
-          <div className="inline-flex items-center gap-1.5 bg-white/10 px-3.5 py-1 rounded-full text-sm font-bold text-neutral-light-gray backdrop-blur-md">
-            <BookMarked className="h-4 w-4 text-primary" />
+          <div className="inline-flex items-center gap-1.5 bg-white/10 px-3.5 py-1 rounded-full text-sm font-bold text-white backdrop-blur-md">
+            <BookMarked className="h-4 w-4 text-white" />
             <span>Lộ trình tối ưu bằng Trí Tuệ Nhân Tạo</span>
           </div>
           <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-white leading-tight">
             Khám Phá Lộ Trình Học Tập <br className="hidden sm:inline" />
-            <span className="bg-gradient-to-r from-blue-400 to-indigo-300 bg-clip-text text-transparent">
+            <span className="bg-linear-to-r from-blue-400 to-indigo-300 bg-clip-text text-transparent">
               Chinh Phục Kiến Thức Mới
             </span>
           </h1>
@@ -318,19 +346,19 @@ export const ExplorePathways: React.FC = () => {
           {/* Search Box & Filters Container */}
           <div className="pt-4 space-y-4 max-w-3xl">
             {/* Search Input */}
-            <div className="relative flex items-center">
+            <div className="relative flex items-center w-full">
               <Search className="absolute left-4 h-5 w-5 text-muted-foreground" />
               <Input
                 type="text"
-                placeholder="Nhập tên khóa học, kỹ năng, hoặc từ khóa (ví dụ: Python, UI/UX...)"
+                placeholder="Nhập tên khóa học, kỹ năng, hoặc từ khóa"
                 value={search}
-                onChange={(e) => handleSearchChange(e.target.value)}
-                className="w-full h-12 pl-12 pr-4 bg-white text-black placeholder:text-muted-foreground rounded-2xl border-0 shadow-lg text-base focus-visible:ring-offset-0 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-white"
+                onChange={(e) => { handleSearchChange(e.target.value); }}
+                className="w-full h-12 pl-12 pr-4 bg-white text-black/90 font-semibold placeholder:text-muted-foreground/50 rounded-2xl border-0 shadow-lg text-base focus-visible:ring-offset-0 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-white"
               />
               {search && (
                 <button 
-                  onClick={() => handleSearchChange("")} 
-                  className="absolute right-4 text-sm font-bold text-muted-foreground hover:text-black transition-colors"
+                  onClick={() => { handleSearchChange(""); }} 
+                  className="absolute right-4 text-sm font-bold text-muted-foreground hover:text-black transition-colors cursor-pointer"
                 >
                   Xóa
                 </button>
@@ -338,59 +366,44 @@ export const ExplorePathways: React.FC = () => {
             </div>
 
             {/* Smart Filters Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
               {/* Category selector */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-bold text-neutral-light-gray">Chủ đề khóa học</label>
-                <select
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="w-full h-10 px-3 bg-white/10 hover:bg-white/15 border border-white/20 rounded-xl text-sm font-medium text-white transition-colors cursor-pointer outline-none focus:border-white focus:bg-neutral-800"
-                >
-                  <option value="Tất cả" className="bg-neutral-900 text-white">Tất cả chủ đề</option>
-                  {CATEGORY_LIST.map((cat, idx) => (
-                    <option key={idx} value={cat.name} className="bg-neutral-900 text-white">{cat.name}</option>
-                  ))}
-                </select>
+                <label className="text-sm font-semibold text-white">Chủ đề khóa học</label>
+                <Select value={selectedCategory} onValueChange={handleCategoryChange}>
+                  <SelectTrigger className="h-10 rounded-xl border-white/20 bg-white/10 text-white/60 font-semibold hover:bg-white/15 focus:ring-white/40">
+                    <SelectValue placeholder="Tất cả chủ đề" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Tất cả">Tất cả chủ đề</SelectItem>
+                    {categories.map((cat) => <SelectItem key={cat.id} value={cat.name}>{cat.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Level selector */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-bold text-neutral-light-gray">Trình độ học lực</label>
-                <select
-                  value={selectedLevel}
-                  onChange={(e) => setSelectedLevel(e.target.value)}
-                  className="w-full h-10 px-3 bg-white/10 hover:bg-white/15 border border-white/20 rounded-xl text-sm font-medium text-white transition-colors cursor-pointer outline-none focus:border-white focus:bg-neutral-800"
-                >
-                  <option value="Tất cả" className="bg-neutral-900 text-white">Tất cả trình độ</option>
-                  <option value="Cơ bản" className="bg-neutral-900 text-white">Cơ bản</option>
-                  <option value="Trung cấp" className="bg-neutral-900 text-white">Trung cấp</option>
-                  <option value="Nâng cao" className="bg-neutral-900 text-white">Nâng cao</option>
-                </select>
-              </div>
-
-              {/* Duration selector */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-bold text-neutral-light-gray">Thời lượng tự học</label>
-                <select
-                  value={selectedDuration}
-                  onChange={(e) => setSelectedDuration(e.target.value)}
-                  className="w-full h-10 px-3 bg-white/10 hover:bg-white/15 border border-white/20 rounded-xl text-sm font-medium text-white transition-colors cursor-pointer outline-none focus:border-white focus:bg-neutral-800"
-                >
-                  <option value="Tất cả" className="bg-neutral-900 text-white">Tất cả thời lượng</option>
-                  <option value="Dưới 20 giờ" className="bg-neutral-900 text-white">Dưới 20 giờ</option>
-                  <option value="20 - 40 giờ" className="bg-neutral-900 text-white">20 đến 40 giờ</option>
-                  <option value="Trên 40 giờ" className="bg-neutral-900 text-white">Trên 40 giờ</option>
-                </select>
+                <label className="text-sm text-white font-semibold">Trình độ học lực</label>
+                <Select value={selectedLevel} onValueChange={handleLevelChange}>
+                  <SelectTrigger className="h-10 rounded-xl border-white/20 bg-white/10 font-semibold text-white/60 hover:bg-white/15 focus:ring-white/40">
+                    <SelectValue placeholder="Tất cả trình độ" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Tất cả">Tất cả trình độ</SelectItem>
+                    <SelectItem value="Cơ bản">Cơ bản</SelectItem>
+                    <SelectItem value="Trung cấp">Trung cấp</SelectItem>
+                    <SelectItem value="Nâng cao">Nâng cao</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
             {/* Clear filters trigger */}
-            {(search || selectedCategory !== "Tất cả" || selectedLevel !== "Tất cả" || selectedDuration !== "Tất cả") && (
+            {(search || selectedCategory !== "Tất cả" || selectedLevel !== "Tất cả") && (
               <div className="flex justify-end">
                 <button
                   onClick={handleResetFilters}
-                  className="inline-flex items-center gap-1.5 text-sm font-bold text-red-400 hover:text-red-300 transition-colors"
+                  className="inline-flex items-center gap-1.5 text-sm font-bold text-red-400 hover:text-red-300 transition-colors cursor-pointer"
                 >
                   <RotateCcw className="h-3.5 w-3.5" />
                   <span>Đặt lại tất cả bộ lọc</span>
@@ -403,114 +416,145 @@ export const ExplorePathways: React.FC = () => {
       </div>
 
       {/* ==========================================
-          POPULAR COURSE CATEGORIES
+          COURSES LISTING GRID (FILTERED & PAGINATED)
           ========================================== */}
-      <div className="space-y-6">
-        <div className="flex flex-col gap-1.5">
-          <h2 className="text-2xl font-extrabold text-foreground tracking-tight">Danh Mục Khóa Học Thịnh Hành</h2>
-          <p className="text-sm text-muted-foreground">Chọn các chủ đề đang được quan tâm nhiều nhất để định hướng lộ trình học tập.</p>
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          {CATEGORY_LIST.map((cat, idx) => {
-            const Icon = cat.icon;
-            const isSelected = selectedCategory === cat.name;
-            return (
-              <button
-                key={idx}
-                onClick={() => setSelectedCategory(isSelected ? "Tất cả" : cat.name)}
-                className={`p-5 rounded-2xl border text-left flex flex-col justify-between h-36 transition-all duration-300 hover:shadow-md hover:-translate-y-1 group ${
-                  isSelected 
-                    ? "border-primary bg-primary/5 ring-2 ring-primary/20" 
-                    : "border-border/40 bg-card hover:border-primary/50"
-                }`}
-              >
-                <div className={`h-10 w-10 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110 ${cat.color}`}>
-                  <Icon className="h-5 w-5" />
-                </div>
-                <div className="space-y-1">
-                  <h3 className="text-sm font-bold text-foreground line-clamp-2 leading-tight group-hover:text-primary transition-colors">
-                    {cat.name}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">
-                    {cat.count} khóa học chuyên sâu
-                  </p>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ==========================================
-          COURSES LISTING GRID (FILTERED)
-          ========================================== */}
-      <div className="space-y-6 pt-4 border-t border-border/40">
+      <div id="courses" className="scroll-mt-24 space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex flex-col gap-1">
             <h2 className="text-2xl font-extrabold text-foreground tracking-tight flex items-center gap-2">
               <span>Danh Sách Khóa Học Gợi Ý</span>
               <span className="text-sm px-2.5 py-0.5 rounded-full bg-primary/10 text-primary font-bold">
-                {filteredCourses.length} kết quả
+                {totalCourseResults} kết quả
               </span>
             </h2>
             <p className="text-sm text-muted-foreground">Các bài học được hiển thị dựa trên thông tin lọc của bạn.</p>
           </div>
         </div>
 
-        {filteredCourses.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {filteredCourses.map((course) => (
-              <div 
-                key={course.id} 
-                className="flex flex-col bg-card rounded-2xl border border-border/40 shadow-sm overflow-hidden hover:shadow-md group transition-all duration-300"
-              >
-                {/* Course Header Image */}
-                <div className="relative aspect-video overflow-hidden">
-                  <img
-                    src={course.image}
-                    alt={course.title}
-                    className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300"
-                  />
-                  <div className="absolute top-3 left-3 bg-card/90 backdrop-blur-sm px-2.5 py-1 rounded-lg text-sm font-bold text-primary shadow-sm border border-border/20">
-                    {course.level}
-                  </div>
-                </div>
-                
-                {/* Course Content */}
-                <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap gap-1.5">
-                      {course.tags.map((t: string, i: number) => (
-                        <span key={i} className="text-sm font-bold uppercase px-2 py-0.5 rounded bg-primary/10 text-primary">
-                          {t}
-                        </span>
-                      ))}
+        {displayedCourses.length > 0 ? (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {displayedCourses.map((course) => (
+                <Link
+                  key={course.id}
+                  to={`/courses/${course.id}`}
+                  className="flex flex-col bg-card rounded-2xl border border-border/40 shadow-sm overflow-hidden hover:shadow-md group transition-all duration-300 hover:-translate-y-1 cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/50"
+                >
+                  {/* Course Header Image */}
+                  <div className="relative aspect-video overflow-hidden">
+                    {course.image ? <img
+                      src={course.image}
+                      alt={course.title}
+                      className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300"
+                    /> : <div className="flex h-full w-full items-center justify-center bg-muted text-muted-foreground"><BookOpen className="h-8 w-8" /></div>}
+                    <div className="absolute top-3 left-3 bg-foreground/90 backdrop-blur-sm px-2.5 py-1 rounded-lg text-sm font-bold text-white shadow-sm border border-border/20">
+                      {formatCourseLevel(course.level)}
                     </div>
-                    <h3 className="font-bold text-foreground text-sm leading-snug line-clamp-2 group-hover:text-primary transition-colors">
-                      {course.title}
-                    </h3>
-                    <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed">
-                      {course.description}
-                    </p>
                   </div>
 
-                  {/* Rating, Students Count & Duration */}
-                  <div className="pt-4 border-t border-border/40 flex items-center justify-between text-sm text-muted-foreground">
-                    <div className="flex items-center gap-1.5">
-                      <Star className="h-4 w-4 fill-amber-400 stroke-amber-400" />
-                      <span className="font-bold text-foreground">{course.rating}</span>
-                      <span>({course.studentsCount})</span>
+                  {/* Course Content */}
+                  <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap gap-1.5">
+                        {course.tags.map((t: string) => (
+                          <span key={t} className="text-sm font-bold uppercase px-2 py-0.5 rounded bg-primary/10 text-primary">
+                            {t}
+                          </span>
+                        ))}
+                      </div>
+                      <h3 className="font-bold text-foreground text-sm leading-snug line-clamp-2 group-hover:text-primary transition-colors">
+                        {course.title}
+                      </h3>
+                      <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed">
+                        {course.description}
+                      </p>
+                      {course.createdAt && <p className="text-xs text-muted-foreground">Tạo ngày {new Date(course.createdAt).toLocaleDateString("vi-VN")}</p>}
                     </div>
-                    <div className="flex items-center gap-1">
-                      <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span>{course.durationText}</span>
+
+                    {/* Rating, Students Count & Duration */}
+                    <div className="pt-4 border-t border-border/40 flex items-center justify-between text-sm text-muted-foreground">
+                      <div className="flex items-center gap-1.5">
+                        <Star className="h-4 w-4 fill-amber-400 stroke-amber-400" />
+                        <span className="font-bold text-foreground">{course.rating.toFixed(1)}</span>
+                        <span>({course.studentsCount})</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span>{course.durationText}</span>
+                      </div>
                     </div>
                   </div>
+                </Link>
+              ))}
+            </div>
+
+            {/* Pagination Bar */}
+            {totalPages > 1 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-border/40">
+                <p className="text-sm text-muted-foreground">
+                  Hiển thị{" "}
+                  <strong className="text-foreground font-bold">
+                    {(currentPage - 1) * ITEMS_PER_PAGE + 1}
+                  </strong>{" "}
+                  -{" "}
+                  <strong className="text-foreground font-bold">
+                    {Math.min(currentPage * ITEMS_PER_PAGE, totalCourseResults)}
+                  </strong>{" "}
+                  trên tổng số{" "}
+                  <strong className="text-foreground font-bold">{totalCourseResults}</strong> khóa học
+                </p>
+
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={currentPage === 1}
+                    onClick={() => { setCurrentPage((prev) => Math.max(1, prev - 1)); }}
+                    className="rounded-xl px-3 h-9 text-xs font-semibold cursor-pointer"
+                  >
+                    <ChevronLeft className="h-4 w-4 mr-1" />
+                    Trước
+                  </Button>
+
+                  {getPageNumbers(currentPage, totalPages).map((p, idx) => {
+                    if (p === "...") {
+                      return (
+                        <span key={`dots-${String(idx)}`} className="px-2 text-sm text-muted-foreground font-bold">
+                          ...
+                        </span>
+                      );
+                    }
+                    const pageNum = p as number;
+                    const isCurrent = pageNum === currentPage;
+                    return (
+                      <Button
+                        key={`page-${String(pageNum)}`}
+                        variant={isCurrent ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => { setCurrentPage(pageNum); }}
+                        className={`rounded-xl w-9 h-9 text-xs font-semibold cursor-pointer ${
+                          isCurrent ? "bg-primary text-white shadow-sm" : ""
+                        }`}
+                      >
+                        {pageNum}
+                      </Button>
+                    );
+                  })}
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={currentPage >= totalPages}
+                    onClick={() => { setCurrentPage((prev) => Math.min(totalPages, prev + 1)); }}
+                    className="rounded-xl px-3 h-9 text-xs font-semibold cursor-pointer"
+                  >
+                    Sau
+                    <ChevronRight className="h-4 w-4 ml-1" />
+                  </Button>
                 </div>
               </div>
-            ))}
-          </div>
+            )}
+          </>
         ) : (
           /* Empty State */
           <div className="py-16 text-center border border-dashed border-border rounded-3xl max-w-xl mx-auto space-y-4">
@@ -532,8 +576,76 @@ export const ExplorePathways: React.FC = () => {
       </div>
 
       {/* ==========================================
-          INSTRUCTORS TEAM SECTION
+          POPULAR COURSE CATEGORIES (HOT CATEGORIES) - BELOW COURSES LISTING
           ========================================== */}
+      <div className="space-y-6 pt-6 border-t border-border/40">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex flex-col gap-1">
+            <h2 className="text-2xl font-extrabold text-foreground tracking-tight">Danh Mục Khóa Học Thịnh Hành</h2>
+            <p className="text-sm text-muted-foreground">Chọn các chủ đề đang được quan tâm nhiều nhất để định hướng lộ trình học tập.</p>
+          </div>
+
+          {/* Scroll Control Buttons */}
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="rounded-full h-9 w-9 border-border/60 hover:bg-muted cursor-pointer shadow-xs"
+              onClick={() => { categoryScrollRef.current?.scrollBy({ left: -320, behavior: "smooth" }); }}
+              aria-label="Cuộn danh mục sang trái"
+            >
+              <ArrowLeft className="h-4 w-4 text-foreground" />
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="rounded-full h-9 w-9 border-border/60 hover:bg-muted cursor-pointer shadow-xs"
+              onClick={() => { categoryScrollRef.current?.scrollBy({ left: 320, behavior: "smooth" }); }}
+              aria-label="Cuộn danh mục sang phải"
+            >
+              <ArrowRight className="h-4 w-4 text-foreground" />
+            </Button>
+          </div>
+        </div>
+
+        <div
+          ref={categoryScrollRef}
+          className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-thin scrollbar-thumb-primary/30 scroll-smooth"
+        >
+          {categories.map((cat, idx) => {
+            const Icon = [Brain, Code, PenTool, BookOpen, Binary, Database][idx % 6];
+            const iconColor = [
+              "text-primary bg-primary/10",
+              "text-indigo-600 bg-indigo-500/10",
+              "text-pink-600 bg-pink-500/10",
+              "text-amber-600 bg-amber-500/10",
+              "text-emerald-600 bg-emerald-500/10",
+              "text-sky-600 bg-sky-500/10",
+            ][idx % 6];
+            return (
+              <Link
+                key={cat.id}
+                to={`/categories/${cat.id}`}
+                className="shrink-0 w-56 p-5 rounded-2xl border border-border/40 bg-card hover:border-primary/50 text-left flex flex-col justify-between h-36 snap-start transition-all duration-300 hover:shadow-md hover:-translate-y-1 group cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/50"
+              >
+                <div className={`h-10 w-10 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110 ${iconColor}`}>
+                  <Icon className="h-5 w-5" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-sm font-bold text-foreground line-clamp-2 leading-tight group-hover:text-primary transition-colors">
+                    {cat.name}
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    {cat.publicCourseCount} khóa học công khai
+                  </p>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      </div>
       <div className="space-y-6 pt-6 border-t border-border/40">
         <div className="flex flex-col gap-1.5">
           <h2 className="text-2xl font-extrabold text-foreground tracking-tight">Đội Ngũ Giảng Viên Chuyên Gia</h2>
@@ -541,34 +653,31 @@ export const ExplorePathways: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {INSTRUCTORS.map((ins, idx) => (
-            <div 
-              key={idx} 
-              className="p-6 bg-card border border-border/40 rounded-2xl shadow-sm space-y-4 hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between"
+          {teachers.map((ins) => (
+            <Link 
+              key={ins.id} 
+              to={`/teachers/${ins.id}`}
+              className="p-6 bg-card border border-border/40 rounded-2xl shadow-sm space-y-4 hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between group cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/50"
             >
               <div className="space-y-4">
                 {/* Header: Photo, Name & Title */}
                 <div className="flex gap-4 items-center">
-                  <div className="h-16 w-16 rounded-full border border-primary/20 bg-primary/5 overflow-hidden flex-shrink-0">
-                    <img
-                      src={ins.avatar}
-                      alt={ins.name}
-                      className="w-full h-full object-cover"
-                    />
+                  <div className="h-16 w-16 rounded-full border border-primary/20 bg-primary/5 overflow-hidden shrink-0">
+                    {ins.avatarUrl ? <img src={ins.avatarUrl} alt={ins.fullName ?? "Giảng viên"} className="w-full h-full object-cover group-hover:scale-105 transition-transform" /> : <span className="flex h-full w-full items-center justify-center text-xl font-bold text-primary">{(ins.fullName ?? "?").charAt(0).toUpperCase()}</span>}
                   </div>
                   <div className="space-y-1">
-                    <h3 className="font-bold text-foreground text-base leading-tight">{ins.name}</h3>
-                    <p className="text-sm font-bold text-primary">{ins.role}</p>
+                    <h3 className="font-bold text-foreground text-base leading-tight group-hover:text-primary transition-colors">{ins.fullName ?? "Giảng viên AILMS"}</h3>
+                    <p className="text-sm font-bold text-primary">{ins.title ?? (ins.categories[0] ? ins.categories[0].name : null) ?? "Giảng viên"}</p>
                     <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
                       <GraduationCap className="h-3.5 w-3.5" />
-                      <span>{ins.school}</span>
+                      <span>{ins.categories.map((category) => category.name).join(", ") || "Chuyên môn đang cập nhật"}</span>
                     </div>
                   </div>
                 </div>
 
                 {/* Bio Description */}
                 <p className="text-sm leading-relaxed text-muted-foreground italic">
-                  &ldquo;{ins.bio}&rdquo;
+                  &ldquo;{ins.bio ?? "Thông tin giới thiệu đang được cập nhật."}&rdquo;
                 </p>
               </div>
 
@@ -576,17 +685,24 @@ export const ExplorePathways: React.FC = () => {
               <div className="pt-4 border-t border-border/20 flex justify-between items-center text-sm text-muted-foreground">
                 <div className="flex items-center gap-1">
                   <Award className="h-4 w-4 text-amber-500" />
-                  <span>Đánh giá: <strong>{ins.rating}</strong></span>
+                    <span>Đánh giá: <strong>{ins.averageRating ? `${ins.averageRating.toFixed(1)} ★` : "Chưa có dữ liệu"}</strong></span>
                 </div>
                 <div>
-                  <span>Giảng dạy: <strong>{ins.coursesCount} khóa học</strong></span>
+                    <span>Giảng dạy: <strong>{ins.courseCount} khóa học</strong></span>
                 </div>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
+        {(hasMoreTeachers || teachers.length > 6) && (
+          <div className="flex justify-center pt-2">
+            {hasMoreTeachers && <Button type="button" variant="outline" className="rounded-xl font-semibold text-primary hover:bg-foreground hover:text-white" onClick={() => { void loadMoreTeachers(); }}>Xem thêm giảng viên</Button>}
+            {teachers.length > 6 && <Button type="button" variant="outline" className="ml-3 rounded-xl font-semibold text-primary hover:bg-foreground hover:text-white" onClick={() => { collapseTeachers(); }}>Thu gọn</Button>}
+          </div>
+        )}
       </div>
 
     </div>
   );
 };
+

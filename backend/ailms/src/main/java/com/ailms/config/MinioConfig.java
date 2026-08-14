@@ -30,6 +30,7 @@ public class MinioConfig {
         MinioClient client = MinioClient.builder()
                 .endpoint(endpoint)
                 .credentials(accessKey, secretKey)
+		.region("us-east-1")
                 .build();
 
         // Tự tạo bucket nếu chưa tồn tại
@@ -46,6 +47,7 @@ public class MinioConfig {
         return MinioClient.builder()
                 .endpoint(externalEndpoint)
                 .credentials(accessKey, secretKey)
+		.region("us-east-1")
                 .build();
     }
 }

@@ -73,107 +73,15 @@ export const OrderManagement: React.FC = () => {
     setJumpPageInput(String(page + 1));
   }, [page]);
 
-  // Mock initial orders if backend returns empty
-  const MOCK_ADMIN_ORDERS: OrderResponse[] = [
-    {
-      id: "ORD-984210",
-      userId: "usr-101",
-      userName: "Bùi Xuân Huấn",
-      userEmail: "huanrose@ailms.edu.vn",
-      status: "PAID",
-      totalAmount: 4100000,
-      discountAmount: 820000,
-      finalAmount: 3280000,
-      couponCode: "AILMS20",
-      paidAt: "2026-07-24T08:15:00Z",
-      createdAt: "2026-07-24T08:10:00Z",
-      items: [
-        {
-          id: "item-1",
-          orderId: "ORD-984210",
-          coursePackageId: "pkg-1",
-          courseName: "Toàn tập Marketing số cho người mới bắt đầu #1994",
-          packageName: "Gói Tự Học Standard (Lifetime)",
-          priceSnapshot: 4100000,
-          discountSnapshot: 820000,
-          finalPrice: 3280000,
-          itemType: "NEW_PURCHASE",
-        },
-      ],
-      transactions: [
-        {
-          id: "tx-1",
-          orderId: "ORD-984210",
-          transactionRef: "VNPAY-20260724-8899",
-          paymentMethod: "VNPAY",
-          status: "SUCCESS",
-          createdAt: "2026-07-24T08:15:00Z",
-        },
-      ],
-    },
-    {
-      id: "ORD-984211",
-      userId: "usr-102",
-      userName: "Nguyễn Hải Yến",
-      userEmail: "yen.nh@gmail.com",
-      status: "PENDING",
-      totalAmount: 3200000,
-      discountAmount: 0,
-      finalAmount: 3200000,
-      createdAt: "2026-07-24T08:30:00Z",
-      items: [
-        {
-          id: "item-2",
-          orderId: "ORD-984211",
-          coursePackageId: "pkg-2",
-          courseName: "Lập trình Web Fullstack với React & NestJS",
-          packageName: "Gói Kèm 1-1 Chuyên sâu",
-          priceSnapshot: 3200000,
-          discountSnapshot: 0,
-          finalPrice: 3200000,
-          itemType: "NEW_PURCHASE",
-        },
-      ],
-    },
-    {
-      id: "ORD-984205",
-      userId: "usr-103",
-      userName: "Lê Minh Triết",
-      userEmail: "triet.lm@outlook.com",
-      status: "REFUNDED",
-      totalAmount: 5500000,
-      discountAmount: 500000,
-      finalAmount: 5000000,
-      couponCode: "STUDENT500K",
-      paidAt: "2026-07-20T10:00:00Z",
-      createdAt: "2026-07-20T09:50:00Z",
-      items: [
-        {
-          id: "item-3",
-          orderId: "ORD-984205",
-          coursePackageId: "pkg-3",
-          courseName: "Nhập môn Trí tuệ Nhân tạo & Machine Learning",
-          packageName: "Gói Nâng cấp (Upgrade 1-1)",
-          priceSnapshot: 5500000,
-          discountSnapshot: 500000,
-          finalPrice: 5000000,
-          itemType: "UPGRADE",
-        },
-      ],
-    },
-  ];
-
+  /** Tải danh sách đơn hàng thật và giữ trạng thái rỗng khi backend không có dữ liệu. */
   const fetchOrders = async () => {
     try {
       const res = await orderApi.getOrders();
-      if (res.data.success && Array.isArray(res.data.data) && res.data.data.length > 0) {
-        setOrders(res.data.data);
-      } else {
-        setOrders(MOCK_ADMIN_ORDERS);
-      }
+      setOrders(res.data.success && Array.isArray(res.data.data) ? res.data.data : []);
     } catch (e) {
       console.error("Error fetching orders:", e);
-      setOrders(MOCK_ADMIN_ORDERS);
+      setOrders([]);
+      showBanner("Không thể tải danh sách đơn hàng.", true);
     }
   };
 
@@ -203,6 +111,7 @@ export const OrderManagement: React.FC = () => {
     setTimeout(() => setActionMessage(null), 4000);
   };
 
+  /** Yêu cầu backend hoàn tiền và chỉ cập nhật giao diện sau khi API thành công. */
   const handleRefund = async (orderId: string) => {
     if (!refundReason.trim()) {
       showBanner("Vui lòng nhập lý do hoàn tiền.", true);
@@ -210,21 +119,14 @@ export const OrderManagement: React.FC = () => {
     }
     try {
       setRefunding(true);
-      try {
-        await orderApi.refundOrder(orderId, refundReason);
-      } catch (e) {
-        console.log("Backend refund call note:", e);
-      }
-
-      setOrders((prev) =>
-        prev.map((ord) =>
-          ord.id === orderId ? { ...ord, status: "REFUNDED" } : ord
-        )
-      );
+      await orderApi.refundOrder(orderId, refundReason);
+      await fetchOrders();
 
       showBanner(`Đã hoàn tiền đơn hàng ${orderId} thành công.`);
       setSelectedOrder(null);
       setRefundReason("");
+    } catch {
+      showBanner("Không thể hoàn tiền đơn hàng. Vui lòng thử lại.", true);
     } finally {
       setRefunding(false);
     }

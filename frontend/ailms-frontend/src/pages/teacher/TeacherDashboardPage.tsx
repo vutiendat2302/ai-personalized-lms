@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { teacherApi, type TeacherDashboardMetrics, type AgendaSessionItem } from "@/api/teacher/teacherApi";
+import { teacherApi, type TeacherDashboardMetrics, type AgendaSessionItem, type TeacherActivityItem } from "@/api/teacher/teacherApi";
 import { CountdownRing } from "@/components/teacher/CountdownRing";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -16,25 +16,42 @@ import {
   ArrowRight,
   Video,
   Clock,
+  Activity,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
+/**
+ * Component hiển thị trang tổng quan dành cho Giảng viên & Trợ giảng (Teacher Dashboard).
+ */
 export const TeacherDashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const [metrics, setMetrics] = useState<TeacherDashboardMetrics | null>(null);
   const [agenda, setAgenda] = useState<AgendaSessionItem[]>([]);
+  const [activities, setActivities] = useState<TeacherActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
 
+  /** Tải dữ liệu các chỉ số KPI và lịch dạy agenda của giảng viên. */
   useEffect(() => {
-    Promise.all([teacherApi.getDashboardMetrics(), teacherApi.getAgenda()]).then(([m, a]) => {
+    Promise.all([teacherApi.getDashboardMetrics(), teacherApi.getAgenda(), teacherApi.getLatestActivities()]).then(([m, a, latest]) => {
       setMetrics(m);
       setAgenda(a);
+      setActivities(latest);
       setLoading(false);
     });
   }, []);
 
+  /** Định dạng số tiền VND hiển thị thu nhập. */
   const formatVND = (val: number) => {
     return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(val);
+  };
+
+  /** Hiển thị thời gian tương đối ngắn gọn cho activity feed. */
+  const relativeTime = (createdAt: string) => {
+    const seconds = Math.max(0, Math.floor((Date.now() - new Date(createdAt).getTime()) / 1000));
+    if (seconds < 60) return "Vừa xong";
+    if (seconds < 3600) return `${Math.floor(seconds / 60)} phút trước`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)} giờ trước`;
+    return `${Math.floor(seconds / 86400)} ngày trước`;
   };
 
   if (loading || !metrics) {
@@ -54,122 +71,49 @@ export const TeacherDashboardPage: React.FC = () => {
           <GraduationCap className="h-6 w-6 text-primary" />
           Tổng quan Giảng dạy
         </h1>
-        <p className="text-xs text-muted-foreground mt-1">
-          Theo dõi hạn chót nhận xét 24h, công việc cần xử lý và thu nhập hôm nay.
+        <p className="text-sm text-foreground mt-1 opacity-80">
+          Theo dõi thông tin các lớp đang đảm nhận, lịch dạy hôm nay và thu nhập của bạn.
         </p>
-      </div>
-
-      {/* Row 1 — Smart Action Bar */}
-      <div className="space-y-3">
-        <h2 className="text-xs font-extrabold tracking-wider text-amber-600 dark:text-amber-400 uppercase flex items-center gap-1.5">
-          <AlertTriangle className="h-4 w-4" />
-          Cảnh báo & Công việc cần xử lý ngay (Smart Action Bar)
-        </h2>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-          {/* Action Card 1 */}
-          <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 flex items-center justify-between gap-3 shadow-xs">
-            <div className="space-y-1">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">Cảnh báo quan trọng</span>
-              <h3 className="text-xs font-extrabold text-foreground">
-                {metrics.unreviewedSessionsCount} buổi học chưa nhận xét
-              </h3>
-              <p className="text-[11px] text-muted-foreground">Hoàn thành để được tính lương 24h</p>
-            </div>
-            <CountdownRing initialSeconds={metrics.unreviewedMinSecondsLeft} />
-          </div>
-
-          {/* Action Card 2 */}
-          <div
-            onClick={() => navigate("/teacher/grading/assignments")}
-            className="p-4 rounded-xl bg-card border border-border/40 hover:border-primary/60 transition cursor-pointer flex items-center justify-between gap-3 shadow-xs"
-          >
-            <div className="space-y-1">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-primary">Bài chờ chấm</span>
-              <h3 className="text-xs font-extrabold text-foreground">
-                {metrics.pendingGradingAssignmentsCount} bài tập + {metrics.pendingFillBlankQuizzesCount} câu điền từ
-              </h3>
-              <p className="text-[11px] text-muted-foreground">Bấm để chấm bài nhanh</p>
-            </div>
-            <div className="p-2.5 bg-primary/10 text-primary rounded-xl border border-primary/20 shrink-0">
-              <ClipboardList className="h-5 w-5" />
-            </div>
-          </div>
-
-          {/* Action Card 3 */}
-          <div
-            onClick={() => navigate("/teacher/suggested-classes")}
-            className="p-4 rounded-xl bg-card border border-border/40 hover:border-purple-600/60 transition cursor-pointer flex items-center justify-between gap-3 shadow-xs"
-          >
-            <div className="space-y-1">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400">Lớp gợi ý mới</span>
-              <h3 className="text-xs font-extrabold text-foreground">
-                {metrics.newSuggestedClassesCount} lớp cần Mentor/Teacher
-              </h3>
-              <p className="text-[11px] text-muted-foreground">Phù hợp chuyên môn của bạn</p>
-            </div>
-            <div className="p-2.5 bg-purple-100 dark:bg-purple-950 text-purple-600 dark:text-purple-400 rounded-xl border border-purple-200 dark:border-purple-800 shrink-0">
-              <Sparkles className="h-5 w-5" />
-            </div>
-          </div>
-
-          {/* Action Card 4 */}
-          <div
-            onClick={() => navigate("/teacher/insights")}
-            className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800/60 hover:border-rose-500 transition cursor-pointer flex items-center justify-between gap-3 shadow-xs"
-          >
-            <div className="space-y-1">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400">Học viên nguy cơ</span>
-              <h3 className="text-xs font-extrabold text-foreground">
-                {metrics.atRiskStudentsCount} học viên có nguy cơ bỏ học
-              </h3>
-              <p className="text-[11px] text-muted-foreground">Cần gửi nhắc nhở học tập</p>
-            </div>
-            <div className="p-2.5 bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-300 rounded-xl border border-rose-200 dark:border-rose-700 shrink-0">
-              <AlertTriangle className="h-5 w-5" />
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Row 2 — KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="bg-card border-border/40 p-4 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground font-semibold">Lớp đang đảm nhận</span>
+            <span className="text-sm text-muted-foreground font-semibold">Lớp đang đảm nhận</span>
             <Users className="h-4 w-4 text-primary" />
           </div>
           <p className="text-2xl font-black text-foreground mt-2">{metrics.activeClassesCount}</p>
-          <p className="text-[11px] text-muted-foreground mt-1">Bao gồm Lớp Nhóm & 1-1</p>
+          <p className="text-sm text-foreground mt-1 opacity-80">Bao gồm nhóm và 1-1</p>
         </Card>
 
         <Card className="bg-card border-border/40 p-4 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground font-semibold">Buổi dạy tuần này</span>
+            <span className="text-sm text-muted-foreground font-semibold">Buổi dạy tuần này</span>
             <Calendar className="h-4 w-4 text-primary" />
           </div>
           <p className="text-2xl font-black text-foreground mt-2">
             {metrics.sessionsThisWeekCompleted}/{metrics.sessionsThisWeekTotal}
           </p>
-          <p className="text-[11px] text-primary font-bold mt-1">Đã dạy {metrics.sessionsThisWeekCompleted} buổi</p>
+          <p className="text-sm text-foreground font-medium mt-1 opacity-80">Đã dạy {metrics.sessionsThisWeekCompleted} buổi</p>
         </Card>
 
         <Card className="bg-card border-border/40 p-4 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground font-semibold">Đánh giá trung bình</span>
-            <Star className="h-4 w-4 text-amber-500 fill-amber-500" />
+            <span className="text-sm text-foreground font-semibold">Đánh giá trung bình</span>
+            <Star className="h-4 w-4" />
           </div>
           <p className="text-2xl font-black text-foreground mt-2">{metrics.averageRating} ⭐</p>
-          <p className="text-[11px] text-muted-foreground mt-1">Dựa trên review học viên</p>
+          <p className="text-sm text-foreground mt-1 opacity-80">Dựa trên review học viên</p>
         </Card>
 
         <Card className="bg-card border-border/40 p-4 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground font-semibold">Thu nhập tạm tính</span>
+            <span className="text-sm text-muted-foreground font-semibold">Thu nhập tạm tính</span>
             <DollarSign className="h-4 w-4 text-primary" />
           </div>
-          <p className="text-xl font-black text-primary mt-2">{formatVND(metrics.estimatedEarningsMonth)}</p>
-          <p className="text-[11px] text-muted-foreground mt-1">CONFIRMED tháng này</p>
+          <p className="text-2xl font-black text-muted-foreground mt-2">{formatVND(metrics.estimatedEarningsMonth)}</p>
+          <p className="text-sm text-foreground mt-1 opacity-80">Tháng này</p>
         </Card>
       </div>
 
@@ -177,17 +121,17 @@ export const TeacherDashboardPage: React.FC = () => {
       <Card className="bg-card border-border/40 p-5 space-y-4 shadow-xs">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+            <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
               <Calendar className="h-4 w-4 text-primary" />
               Lịch dạy hôm nay & sắp tới
             </h3>
-            <p className="text-xs text-muted-foreground">Bấm vào buổi dạy để xem chi tiết hoặc mở phòng học trực tuyến</p>
+            <p className="text-sm text-foreground opacity-80">Bấm vào buổi dạy để xem chi tiết hoặc mở phòng học trực tuyến</p>
           </div>
           <Button
             variant="outline"
             size="sm"
             onClick={() => navigate("/teacher/schedule")}
-            className="text-xs border-border text-foreground hover:bg-muted rounded-lg gap-1.5 cursor-pointer"
+            className="text-xs font-semibold border-border text-foreground hover:bg-foreground hover:text-white rounded-lg gap-1.5 cursor-pointer"
           >
             Mở xem toàn bộ Lịch
             <ArrowRight className="h-3.5 w-3.5" />
@@ -243,17 +187,23 @@ export const TeacherDashboardPage: React.FC = () => {
 
       {/* Row 4 — Activity Feed */}
       <Card className="bg-card border-border/40 p-5 space-y-3 shadow-xs">
-        <h3 className="text-sm font-bold text-foreground">Hoạt động mới nhất</h3>
-        <div className="space-y-2 text-xs text-muted-foreground">
-          <div className="flex items-center justify-between p-2.5 bg-background rounded-lg border border-border/40">
-            <span>Học viên <strong className="text-foreground">Trần Bảo Nam</strong> vừa nộp bài tập JWT Spring Security (trễ 4 giờ)</span>
-            <span className="text-[10px]">10 phút trước</span>
+        <h3 className="text-lg font-bold text-foreground flex items-center gap-2"><Activity className="h-4 w-4 text-primary" />Hoạt động mới nhất</h3>
+        {activities.length === 0 ? (
+          <p className="py-5 text-center text-sm opacity-80 text-muted-foreground">Chưa có hoạt động mới trong các lớp đang phụ trách.</p>
+        ) : (
+          <div className="space-y-2 text-xs text-muted-foreground">
+            {activities.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => item.targetUrl && navigate(item.targetUrl)}
+                className="flex w-full items-start justify-between gap-4 rounded-lg border border-border/40 bg-background p-2.5 text-left transition hover:border-primary/30 hover:bg-muted/40"
+              >
+                <span><strong className="text-foreground">{item.title}</strong><span className="mt-0.5 block">{item.content}</span></span>
+                <span className="shrink-0 text-[10px]">{relativeTime(item.createdAt)}</span>
+              </button>
+            ))}
           </div>
-          <div className="flex items-center justify-between p-2.5 bg-background rounded-lg border border-border/40">
-            <span>Buổi dạy <strong className="text-foreground">Lớp React-Advanced-K9</strong> hoàn thành lúc 21:00 (chờ nhận xét 24h)</span>
-            <span className="text-[10px]">1 giờ trước</span>
-          </div>
-        </div>
+        )}
       </Card>
     </div>
   );

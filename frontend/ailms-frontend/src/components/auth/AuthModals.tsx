@@ -98,7 +98,7 @@ import {
 // ==========================================
 
 const loginSchema = z.object({
-  usernameOrEmail: z.string().min(1, "Vui lòng nhập tài khoản hoặc email"),
+  usernameOrEmail: z.string().transform((value) => value.trimEnd()).pipe(z.string().min(1, "Vui lòng nhập tài khoản hoặc email")),
   password: z.string().min(6, "Mật khẩu phải chứa ít nhất 6 ký tự"),
 });
 
@@ -133,12 +133,12 @@ const changePasswordSchema = z
 
 const registerSchema = z
   .object({
-    username: z.string().min(3, "Tên tài khoản phải chứa ít nhất 3 ký tự"),
+    username: z.string().transform((value) => value.trimEnd()).pipe(z.string().min(3, "Tên tài khoản phải chứa ít nhất 3 ký tự")),
     password: z.string().min(6, "Mật khẩu phải chứa ít nhất 6 ký tự"),
     confirmPassword: z.string().min(6, "Vui lòng xác nhận mật khẩu"),
-    email: z.string().email("Định dạng email không hợp lệ"),
-    phone: z.string().regex(/^\d{10,11}$/, "Số điện thoại phải có 10-11 chữ số"),
-    fullName: z.string().min(2, "Họ và tên phải chứa ít nhất 2 ký tự"),
+    email: z.string().transform((value) => value.trimEnd()).pipe(z.string().email("Định dạng email không hợp lệ")),
+    phone: z.string().transform((value) => value.trimEnd()).pipe(z.string().regex(/^\d{10,11}$/, "Số điện thoại phải có 10-11 chữ số")),
+    fullName: z.string().transform((value) => value.trimEnd()).pipe(z.string().min(2, "Họ và tên phải chứa ít nhất 2 ký tự")),
     gender: z.string().min(1, "Vui lòng chọn giới tính"),
     dateOfBirth: z.string().min(1, "Vui lòng chọn ngày sinh"),
   })
@@ -288,6 +288,7 @@ export const AuthModals: React.FC = () => {
     try {
       setLoading(true);
       setErrorMsg("");
+      loginForm.setValue("usernameOrEmail", data.usernameOrEmail);
       await authLogin(data.usernameOrEmail, data.password);
       closeAll();
       loginForm.reset();
@@ -395,6 +396,10 @@ export const AuthModals: React.FC = () => {
     try {
       setLoading(true);
       setErrorMsg("");
+      registerForm.setValue("username", data.username);
+      registerForm.setValue("email", data.email);
+      registerForm.setValue("phone", data.phone);
+      registerForm.setValue("fullName", data.fullName);
 
       const regPayload = {
         username: data.username,
@@ -1202,4 +1207,3 @@ export const AuthModals: React.FC = () => {
     </>
   );
 };
-

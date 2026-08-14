@@ -12,6 +12,8 @@ import org.springframework.stereotype.Repository;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 @Repository
 public interface EmployeeRepository extends BaseRepository<EmployeeEntity, Long> {
@@ -90,6 +92,28 @@ public interface EmployeeRepository extends BaseRepository<EmployeeEntity, Long>
 
     @Query("SELECT COUNT(e) FROM EmployeeEntity e WHERE e.department IS NULL")
     long countByDepartmentIsNull();
+
+    /** Lấy giáo viên đang hoạt động theo tên và có phân công chuyên môn ACTIVE. */
+    @Query("""
+        SELECT e FROM EmployeeEntity e
+        WHERE e.status IN (com.ailms.entity.enums.EmployeeStatusEnum.ACTIVE,
+                           com.ailms.entity.enums.EmployeeStatusEnum.PROBATION)
+          AND e.userEntity.status = com.ailms.entity.enums.UserStatusEnum.ACTIVE
+          AND EXISTS (SELECT tc.id FROM TeacherCategoryEntity tc WHERE tc.employee.userId = e.userId
+                      AND tc.status = com.ailms.entity.enums.BaseStatusEnum.ACTIVE)
+          AND (:keyword IS NULL OR LOWER(e.userEntity.fullName) LIKE LOWER(CONCAT('%', :keyword, '%')))
+        """)
+    Page<EmployeeEntity> findPublicTeachers(@Param("keyword") String keyword, Pageable pageable);
+
+    /** Lấy toàn bộ giáo viên công khai để service xếp hạng theo thống kê thực tế. */
+    @Query("""
+        SELECT e FROM EmployeeEntity e
+        WHERE e.status IN (com.ailms.entity.enums.EmployeeStatusEnum.ACTIVE,
+                           com.ailms.entity.enums.EmployeeStatusEnum.PROBATION)
+          AND e.userEntity.status = com.ailms.entity.enums.UserStatusEnum.ACTIVE
+          AND EXISTS (SELECT tc.id FROM TeacherCategoryEntity tc WHERE tc.employee.userId = e.userId
+                      AND tc.status = com.ailms.entity.enums.BaseStatusEnum.ACTIVE)
+          AND (:keyword IS NULL OR LOWER(e.userEntity.fullName) LIKE LOWER(CONCAT('%', :keyword, '%')))
+        """)
+    List<EmployeeEntity> findAllPublicTeachers(@Param("keyword") String keyword);
 }
-
-

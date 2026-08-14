@@ -50,6 +50,21 @@ def _generate_class_online_code(cursor):
     raise RuntimeError("Tao ma code that bai BH sau 10 lan")
 
 
+def _package_code_exists(cursor, code):
+    """Kiểm tra mã gói đã tồn tại trong dữ liệu hiện hành."""
+    return _exists(cursor, "SELECT 1 FROM course_package WHERE code=%s LIMIT 1", (code,))
+
+
+def _generate_package_code(cursor):
+    """Sinh mã gói tương thích CodeGenerator của backend."""
+    yy_mm = datetime.now().strftime("%y%m")
+    for _ in range(10):
+        candidate = f"CP-{yy_mm}-{uuid.uuid4().hex[:6].upper()}"
+        if not _package_code_exists(cursor, candidate):
+            return candidate
+    raise RuntimeError("Tao ma code that bai CP sau 10 lan")
+
+
 def _backfill_class_online_codes(cursor):
     cursor.execute("SELECT id FROM class_online WHERE code IS NULL OR TRIM(code) = ''")
     rows = cursor.fetchall()
@@ -83,13 +98,13 @@ def _insert_package(cursor, course, name, mode, price, duration, class_id=None):
     cursor.execute(
         """
         INSERT INTO course_package (
-            id, course_id, class_id, name, description, delivery_mode,
+            id, code, course_id, class_id, name, description, delivery_mode,
             price, original_price, duration_days, included_tutor_sessions,
             max_group_size, status, created_at, updated_at, created_by, updated_by
-        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'ACTIVE',%s,%s,%s,%s)
+        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,'ACTIVE',%s,%s,%s,%s)
         """,
         (
-            snowflake.next_id(), course["id"], class_id, name,
+            snowflake.next_id(), _generate_package_code(cursor), course["id"], class_id, name,
             f"Gói {name} dành cho khóa học {course['name']}", mode,
             price, (price * Decimal("1.15")).quantize(Decimal("1")), duration,
             8 if mode == "ONE_ON_ONE" else 0,
@@ -198,6 +213,7 @@ def _seed_schedules(cursor, class_id, slots, actor_id):
 
 
 def _seed_online_sessions(cursor, class_id, teacher_id, slots, start_date, actor_id):
+    """Sinh các buổi học trực tuyến mẫu cho lớp nếu chưa có dữ liệu."""
     if _exists(cursor, "SELECT 1 FROM class_online WHERE class_id=%s LIMIT 1", (class_id,)):
         return 0
     inserted = 0
@@ -214,8 +230,9 @@ def _seed_online_sessions(cursor, class_id, teacher_id, slots, start_date, actor
                 """
                 INSERT INTO class_online (
                     id, code, class_id, teacher_id, title, meeting_url, meeting_provider, scheduled_at,
-                    duration_min, status, created_at, updated_at, created_by, updated_by
-                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                    duration_min, session_kind, counts_toward_package, payable, status,
+                    created_at, updated_at, created_by, updated_by
+                ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'REGULAR',TRUE,TRUE,%s,%s,%s,%s,%s)
                 """,
                 (
                     snowflake.next_id(), _generate_class_online_code(cursor), class_id, teacher_id,
@@ -326,16 +343,18 @@ def seed(cursor):
         else:
             class_id = snowflake.next_id()
             class_code = _generate_class_code(cursor)
-            start_date = datetime.now() + timedelta(days=random.randint(-20, 20))
+            # Để lớp seed mới luôn còn thời gian đăng ký, tránh bị chặn ngay bởi late-enrollment.
+            start_date = datetime.now() + timedelta(days=random.randint(3, 20))
             end_date = start_date + timedelta(days=random.choice([60, 75, 90]))
             capacity = random.choice([10, 12, 15, 20])
             cursor.execute(
                 """
                 INSERT INTO class (
                     id, code, course_id, category_id, name, package_type, type,
-                    max_members, current_member_count, status, start_date, end_date,
+                    max_members, current_member_count, registration_open, allow_late_enrollment,
+                    status, start_date, end_date,
                     created_at, updated_at, created_by, updated_by
-                ) VALUES (%s,%s,%s,%s,%s,'GROUP_CLASS',0,%s,0,'ACTIVE',%s,%s,%s,%s,%s,%s)
+                ) VALUES (%s,%s,%s,%s,%s,'GROUP_CLASS',0,%s,0,TRUE,FALSE,'ACTIVE',%s,%s,%s,%s,%s,%s)
                 """,
                 (
                     class_id, class_code, course["id"], course["category_id"],

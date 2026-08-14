@@ -2,8 +2,8 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { courseApi } from "@/api/courses/courseApi";
 import { studentApi } from "@/api/students/studentApi";
+import { studentApi as studentPortalApi } from "@/api/student/studentApi";
 import { userApi } from "@/api/users/userApi";
 import { interestApi, type InterestResponse } from "@/api/interests/interestApi";
 import type {
@@ -79,6 +79,9 @@ export const StudentOnboardingModal: React.FC<StudentOnboardingModalProps> = ({
   // Step 4: Interests State
   const [interests, setInterests] = useState<InterestResponse[]>([]);
   const [selectedInterestIds, setSelectedInterestIds] = useState<string[]>([]);
+  const [interestsLoading, setInterestsLoading] = useState(false);
+  const [interestsError, setInterestsError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   // Preset options for quick selection
@@ -161,34 +164,63 @@ export const StudentOnboardingModal: React.FC<StudentOnboardingModalProps> = ({
 
   const [step1Error, setStep1Error] = useState<string | null>(null);
 
-  // Load Categories for Step 4 & User Profile for dateOfBirth under 18 check
+  // Load fixed interests for Step 4 & User Profile for dateOfBirth under 18 check
   useEffect(() => {
     if (!isOpen) return;
 
-    // Set initial step based on prop or user completed status
-    const isCompleted = localStorage.getItem(`hasGoal_${userId}`) === "true";
-    const startStep = initialStep ? initialStep : isCompleted ? 3 : 1;
+    // Always start at step 1 or initialStep if passed
+    const startStep = initialStep ? initialStep : 1;
     setStep(startStep);
 
+    /** Tải dữ liệu onboarding và chỉ giữ các sở thích đang hoạt động từ backend. */
     const initModalData = async () => {
+      setInterestsLoading(true);
+      setInterestsError(null);
       try {
         const res = await interestApi.getInterests();
-        if (res.data?.success && Array.isArray(res.data?.data) && res.data.data.length > 0) {
-          setInterests(res.data.data);
-        } else {
-          // Fallback to courseApi categories if interest table has no items
-          const catRes = await courseApi.getAllCategories();
-          if (catRes.data?.success && Array.isArray(catRes.data?.data)) {
-            const mapped = catRes.data.data.map((c: any) => ({
-              id: String(c.id),
-              name: c.name,
-              categoryName: c.name,
-            }));
-            setInterests(mapped);
-          }
+        const activeInterests = Array.isArray(res.data?.data)
+          ? res.data.data.filter((item) => item.status == null || item.status === 1)
+          : [];
+        setInterests(activeInterests);
+        if (activeInterests.length === 0) {
+          setInterestsError("Hệ thống chưa cấu hình sở thích để lựa chọn.");
         }
       } catch (err) {
         console.error("Error fetching interests for onboarding:", err);
+        setInterests([]);
+        setInterestsError("Không thể tải danh sách sở thích từ hệ thống.");
+      } finally {
+        setInterestsLoading(false);
+      }
+
+      // Pre-fill personalization data if already created (for Update flow)
+      try {
+        const personalization = await studentPortalApi.getPersonalization();
+        if (personalization) {
+          if (personalization.educationLevel) {
+            setEducationLevel(personalization.educationLevel);
+          }
+          if (personalization.goal) {
+            setGoal(personalization.goal);
+          }
+          if (personalization.description) {
+            setDescription(personalization.description);
+          }
+          if (personalization.schoolName) {
+            setSchoolName(personalization.schoolName);
+          }
+          if (personalization.interests && Array.isArray(personalization.interests)) {
+            const ids = personalization.interests.map((i: any) => String(i.id));
+            if (ids.length > 0) setSelectedInterestIds(ids);
+          }
+          if (personalization.studyGoals && personalization.studyGoals.length > 0) {
+            const firstGoal = personalization.studyGoals[0];
+            if (firstGoal.studyGoalTypeEnum) setStudyGoalType(firstGoal.studyGoalTypeEnum as StudyGoalTypeEnum);
+            if (firstGoal.targetValue) setTargetValue(firstGoal.targetValue);
+          }
+        }
+      } catch (pErr) {
+        console.warn("Could not fetch existing personalization data for prefill:", pErr);
       }
 
       try {
@@ -293,20 +325,26 @@ export const StudentOnboardingModal: React.FC<StudentOnboardingModalProps> = ({
     setStep(4);
   };
 
+  /** Chọn hoặc bỏ chọn một sở thích có thật từ backend. */
   const handleToggleInterest = (id: string) => {
     setSelectedInterestIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
     );
   };
 
-  // Complete Onboarding logic
+  /** Lưu onboarding và chỉ hoàn tất khi các sở thích đã chọn được backend ghi nhận. */
   const handleFinishOnboarding = async (skip: boolean = false) => {
     if (!userId) {
       onClose();
       return;
     }
+    if (!skip && selectedInterestIds.length === 0) {
+      setSubmitError("Vui lòng chọn ít nhất một sở thích từ danh sách.");
+      return;
+    }
     try {
       setSubmitting(true);
+      setSubmitError(null);
       if (!skip) {
         // 1. Submit Profile
         const finalEdu = customEducationLevel.trim() || educationLevel;
@@ -344,25 +382,26 @@ export const StudentOnboardingModal: React.FC<StudentOnboardingModalProps> = ({
           }
         }
 
-        // 3. Submit Study Goal
-        const goalPayload: CreateStudyGoalRequest = {
-          userId,
+        // 3. Create or update the single general Study Goal
+        const goalPayload: Pick<CreateStudyGoalRequest, "studyGoalTypeEnum" | "targetValue"> = {
           studyGoalTypeEnum: studyGoalType,
           targetValue,
         };
         try {
-          await studentApi.createStudyGoal(goalPayload);
+          const existingGoals = await studentPortalApi.getGoals();
+          const existingGoal = existingGoals.find((item) => item.courseId == null);
+          if (existingGoal) {
+            await studentPortalApi.updateGoal(existingGoal.id, goalPayload);
+          } else {
+            await studentPortalApi.createGoal(goalPayload);
+          }
         } catch (e) {
           console.log("Goal API note:", e);
         }
 
         // 4. Assign Interests if selected
         if (selectedInterestIds.length > 0) {
-          try {
-            await studentApi.assignInterests({ interestIds: selectedInterestIds });
-          } catch (e) {
-            console.log("Interests API note:", e);
-          }
+          await studentApi.assignInterests({ interestIds: selectedInterestIds });
         }
       }
 
@@ -380,7 +419,8 @@ export const StudentOnboardingModal: React.FC<StudentOnboardingModalProps> = ({
       onClose();
     } catch (err) {
       console.error("Error completing onboarding:", err);
-      onClose();
+      setStep(4);
+      setSubmitError("Không thể lưu sở thích. Vui lòng thử lại để hệ thống cá nhân hóa khóa học chính xác.");
     } finally {
       setSubmitting(false);
     }
@@ -778,7 +818,17 @@ export const StudentOnboardingModal: React.FC<StudentOnboardingModalProps> = ({
                 </p>
               </div>
 
-              {interests.length > 0 ? (
+              {interestsLoading ? (
+                <div className="rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+                  <div className="mx-auto mb-3 h-7 w-7 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                  Đang tải danh sách sở thích...
+                </div>
+              ) : interestsError ? (
+                <div className="flex items-center gap-3 rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+                  <AlertCircle className="h-5 w-5 shrink-0" />
+                  <span>{interestsError}</span>
+                </div>
+              ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {interests.map((item) => {
                     const isChecked = selectedInterestIds.includes(item.id);
@@ -814,41 +864,11 @@ export const StudentOnboardingModal: React.FC<StudentOnboardingModalProps> = ({
                     );
                   })}
                 </div>
-              ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {[
-                    { id: "1", name: "AI & Trí tuệ Nhân tạo" },
-                    { id: "2", name: "Lập trình Web Fullstack" },
-                    { id: "3", name: "Marketing số (Digital)" },
-                    { id: "4", name: "Thiết kế UI/UX" },
-                    { id: "5", name: "Data Science & SQL" },
-                    { id: "6", name: "Khoa học Máy tính" },
-                  ].map((cat) => {
-                    const isChecked = selectedInterestIds.includes(cat.id);
-                    return (
-                      <button
-                        key={cat.id}
-                        type="button"
-                        onClick={() => handleToggleInterest(cat.id)}
-                        className={`p-4 rounded-2xl border text-left flex items-center justify-between transition-all ${
-                          isChecked
-                            ? "border-primary bg-primary/10 ring-2 ring-primary/20 text-primary font-bold"
-                            : "border-border/70 bg-card hover:border-primary/50 text-foreground"
-                        }`}
-                      >
-                        <span className="text-xs font-bold">{cat.name}</span>
-                        <div
-                          className={`h-5 w-5 rounded-md border flex items-center justify-center shrink-0 ${
-                            isChecked
-                              ? "bg-primary border-primary text-white"
-                              : "border-muted-foreground/30 bg-muted/40"
-                          }`}
-                        >
-                          {isChecked && <CheckCircle2 className="h-3.5 w-3.5" />}
-                        </div>
-                      </button>
-                    );
-                  })}
+              )}
+              {submitError && (
+                <div className="flex items-center gap-3 rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+                  <AlertCircle className="h-5 w-5 shrink-0" />
+                  <span>{submitError}</span>
                 </div>
               )}
             </div>
@@ -907,7 +927,7 @@ export const StudentOnboardingModal: React.FC<StudentOnboardingModalProps> = ({
               <Button
                 type="button"
                 onClick={() => handleFinishOnboarding(false)}
-                disabled={submitting}
+                disabled={submitting || interestsLoading || Boolean(interestsError) || selectedInterestIds.length === 0}
                 className="rounded-xl font-extrabold px-8 bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/20"
               >
                 {submitting ? "Đang lưu..." : isEditGoalsOnly ? "Cập nhật Mục tiêu & Sở thích" : "Hoàn tất & Khám phá Dashboard"}

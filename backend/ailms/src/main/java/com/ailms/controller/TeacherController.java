@@ -1,487 +1,333 @@
 package com.ailms.controller;
 
+import com.ailms.exception.UnauthorizedException;
+import com.ailms.request.TeacherWorkspaceRequest;
+import com.ailms.request.AssignmentRequest;
+import com.ailms.request.AssignmentSearchRequest;
+import com.ailms.request.QuizRequest;
+import com.ailms.request.QuizSearchRequest;
 import com.ailms.response.ApiResponse;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import com.ailms.response.AssignmentResponse;
+import com.ailms.response.PageResponse;
+import com.ailms.response.QuizResponse;
+import com.ailms.response.TeacherWorkspaceResponse;
+import com.ailms.security.CustomUserDetails;
+import com.ailms.service.ITeacherWorkspaceService;
+import com.ailms.service.ITeacherActivityService;
+import com.ailms.service.IAssignmentService;
+import com.ailms.service.IQuizService;
+import com.ailms.response.NotificationResponse;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
-import java.util.ArrayList;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
+/** API workspace lấy dữ liệu thật và luôn giới hạn theo Teacher/TA trong JWT. */
 @RestController
-@RequestMapping("${api.prefix}/v1/teacher")
+@RequestMapping("${api.prefix}/teacher")
 @RequiredArgsConstructor
+@PreAuthorize("hasAnyAuthority('ROLE_TEACHER', 'ROLE_TA', 'ROLE_ADMIN')")
 public class TeacherController {
 
-    // --- DTO DEFINITIONS ---
+    private final ITeacherWorkspaceService teacherWorkspaceService;
+    private final ITeacherActivityService teacherActivityService;
+    private final IQuizService quizService;
+    private final IAssignmentService assignmentService;
 
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class TeacherDashboardMetricsResponse {
-        private Integer unreviewedSessionsCount;
-        private Integer unreviewedMinSecondsLeft;
-        private Integer pendingGradingAssignmentsCount;
-        private Integer pendingFillBlankQuizzesCount;
-        private Integer newSuggestedClassesCount;
-        private Integer atRiskStudentsCount;
-        private Integer activeClassesCount;
-        private Integer sessionsThisWeekCompleted;
-        private Integer sessionsThisWeekTotal;
-        private Double averageRating;
-        private Double estimatedEarningsMonth;
-        private Boolean hasAssignedCategory;
-    }
-
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class AgendaSessionResponse {
-        private String id;
-        private String className;
-        private String courseName;
-        private String sessionTime;
-        private Integer studentCount;
-        private String roomUrl;
-        private String status; // SCHEDULED, UNREVIEWED, REVIEWED
-        private Integer secondsLeftToReview;
-    }
-
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class TeacherClassCardResponse {
-        private String id;
-        private String className;
-        private String courseName;
-        private String deliveryMode; // GROUP_CLASS, ONE_ON_ONE
-        private String roleInClass; // TEACHER, TA
-        private Integer currentStudents;
-        private Integer maxStudents;
-        private String scheduleSummary;
-        private Integer avgProgressPercent;
-        private String status; // ACTIVE, COMPLETED
-    }
-
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class StudentRiskResponse {
-        private String id;
-        private String studentName;
-        private String studentEmail;
-        private String studentAvatar;
-        private String courseName;
-        private String className;
-        private Integer daysInactive;
-        private Integer progressPercent;
-        private Integer expectedPercent;
-        private Double avgQuizScore;
-        private String riskReason;
-    }
-
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class OnlineSessionResponse {
-        private String id;
-        private String classId;
-        private String className;
-        private String courseName;
-        private String title;
-        private String startTime;
-        private String endTime;
-        private Integer startHour;
-        private Double endHour;
-        private String dateStr;
-        private Integer dayOfWeek; // 0: Mon, 1: Tue, ..., 6: Sun
-        private String roomUrl;
-        private String status; // SCHEDULED, UNREVIEWED, REVIEWED
-        private Integer secondsLeftToReview;
-    }
-
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class TeachingSessionPaymentResponse {
-        private String id;
-        private String className;
-        private String date;
-        private Double durationHours;
-        private Double hourlyRate;
-        private Double totalAmount;
-        private String status; // DRAFT, PENDING, CONFIRMED, PAID
-    }
-
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class LeaveRequestResponse {
-        private String id;
-        private String startDate;
-        private String endDate;
-        private String reason;
-        private String status; // PENDING, APPROVED, REJECTED
-        private String createdAt;
-    }
-
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class SubmissionQueueResponse {
-        private String id;
-        private String studentName;
-        private String studentEmail;
-        private String assignmentTitle;
-        private String className;
-        private String submittedAt;
-        private Boolean isLate;
-        private String content;
-        private String attachmentUrl;
-        private Double maxScore;
-    }
-
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class FillBlankQueueResponse {
-        private String id;
-        private String attemptId;
-        private String quizTitle;
-        private String studentName;
-        private String questionText;
-        private String studentAnswer;
-        private String correctAnswer;
-        private Double maxPoints;
-    }
-
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class QuestionDifficultyResponse {
-        private String id;
-        private String quizTitle;
-        private String questionText;
-        private Integer totalAttempts;
-        private Integer errorCount;
-        private Double errorRatePercent;
-    }
-
-    // --- REST ENDPOINTS ---
-
+    /** Kiểm tra điều kiện đã được gán chuyên môn. */
     @GetMapping("/categories/prerequisite")
-    public ResponseEntity<ApiResponse<Map<String, Boolean>>> checkPrerequisiteCategory() {
-        return ResponseEntity.ok(ApiResponse.of("Check teacher category assignment", Map.of("hasAssignedCategory", true)));
+    public ResponseEntity<ApiResponse<Map<String, Boolean>>> checkPrerequisiteCategory(
+            @AuthenticationPrincipal CustomUserDetails currentUser) {
+        boolean assigned = teacherWorkspaceService.hasAssignedCategory(requireUserId(currentUser));
+        return ResponseEntity.ok(ApiResponse.of("Teacher category prerequisite retrieved successfully",
+                Map.of("hasAssignedCategory", assigned)));
     }
 
+    /** Lấy toàn bộ KPI dashboard của user hiện tại. */
     @GetMapping("/dashboard/metrics")
-    public ResponseEntity<ApiResponse<TeacherDashboardMetricsResponse>> getDashboardMetrics() {
-        TeacherDashboardMetricsResponse metrics = TeacherDashboardMetricsResponse.builder()
-                .unreviewedSessionsCount(1)
-                .unreviewedMinSecondsLeft(18 * 3600 + 15 * 60)
-                .pendingGradingAssignmentsCount(5)
-                .pendingFillBlankQuizzesCount(3)
-                .newSuggestedClassesCount(4)
-                .atRiskStudentsCount(3)
-                .activeClassesCount(4)
-                .sessionsThisWeekCompleted(8)
-                .sessionsThisWeekTotal(12)
-                .averageRating(4.9)
-                .estimatedEarningsMonth(18500000.0)
-                .hasAssignedCategory(true)
-                .build();
-        return ResponseEntity.ok(ApiResponse.of("Dashboard metrics retrieved successfully", metrics));
+    public ResponseEntity<ApiResponse<TeacherWorkspaceResponse.Metrics>> getDashboardMetrics(
+            @AuthenticationPrincipal CustomUserDetails currentUser) {
+        return ResponseEntity.ok(ApiResponse.of("Dashboard metrics retrieved successfully",
+                teacherWorkspaceService.getMetrics(requireUserId(currentUser))));
     }
 
+    /** Lấy ca dạy hôm nay và buổi trong 24 giờ đang chờ nhận xét. */
     @GetMapping("/dashboard/agenda")
-    public ResponseEntity<ApiResponse<List<AgendaSessionResponse>>> getAgenda() {
-        List<AgendaSessionResponse> agenda = List.of(
-                AgendaSessionResponse.builder()
-                        .id("sess-101")
-                        .className("Lớp Fullstack Web FS-2026-K1")
-                        .courseName("Fullstack Web Pro 1-1")
-                        .sessionTime("19:00 - 21:00 (Hôm nay)")
-                        .studentCount(1)
-                        .roomUrl("https://meet.jit.si/ailms-fs2026")
-                        .status("SCHEDULED")
-                        .build(),
-                AgendaSessionResponse.builder()
-                        .id("sess-103")
-                        .className("Lớp React-Advanced-K9")
-                        .courseName("Frontend React & Next.js")
-                        .sessionTime("19:00 - 21:00 (Hôm qua)")
-                        .studentCount(18)
-                        .roomUrl("https://meet.jit.si/ailms-react9")
-                        .status("UNREVIEWED")
-                        .secondsLeftToReview(18 * 3600 + 15 * 60)
-                        .build()
-        );
-        return ResponseEntity.ok(ApiResponse.of("Agenda retrieved successfully", agenda));
+    public ResponseEntity<ApiResponse<List<TeacherWorkspaceResponse.AgendaSession>>> getAgenda(
+            @AuthenticationPrincipal CustomUserDetails currentUser) {
+        return ResponseEntity.ok(ApiResponse.of("Agenda retrieved successfully",
+                teacherWorkspaceService.getAgenda(requireUserId(currentUser))));
     }
 
-    @GetMapping("/classes")
-    public ResponseEntity<ApiResponse<List<TeacherClassCardResponse>>> getClasses() {
-        List<TeacherClassCardResponse> classes = List.of(
-                TeacherClassCardResponse.builder()
-                        .id("cls-1")
-                        .className("Lớp Fullstack Web FS-2026-K1")
-                        .courseName("Fullstack Web Pro với Next.js & Spring Boot")
-                        .deliveryMode("ONE_ON_ONE")
-                        .roleInClass("TEACHER")
-                        .currentStudents(1)
-                        .maxStudents(1)
-                        .scheduleSummary("T2-T4-T6 (19:00 - 21:00)")
-                        .avgProgressPercent(68)
-                        .status("ACTIVE")
-                        .build(),
-                TeacherClassCardResponse.builder()
-                        .id("cls-2")
-                        .className("Lớp AI Specialist K2")
-                        .courseName("AI Application Specialist & LangChain")
-                        .deliveryMode("GROUP_CLASS")
-                        .roleInClass("TEACHER")
-                        .currentStudents(15)
-                        .maxStudents(20)
-                        .scheduleSummary("T3-T5 (20:00 - 21:30)")
-                        .avgProgressPercent(42)
-                        .status("ACTIVE")
-                        .build(),
-                TeacherClassCardResponse.builder()
-                        .id("cls-3")
-                        .className("Lớp Frontend React Advanced K9")
-                        .courseName("Frontend React & Next.js Pro")
-                        .deliveryMode("GROUP_CLASS")
-                        .roleInClass("TA")
-                        .currentStudents(18)
-                        .maxStudents(25)
-                        .scheduleSummary("T7-CN (19:00 - 21:00)")
-                        .avgProgressPercent(85)
-                        .status("ACTIVE")
-                        .build()
-        );
-        return ResponseEntity.ok(ApiResponse.of("Assigned classes retrieved successfully", classes));
+    /** Lấy tối đa năm hoạt động lớp học mới nhất để hiển thị dashboard. */
+    @GetMapping("/dashboard/activities")
+    public ResponseEntity<ApiResponse<List<NotificationResponse>>> getLatestActivities(
+            @AuthenticationPrincipal CustomUserDetails currentUser) {
+        return ResponseEntity.ok(ApiResponse.of("Latest teaching activities retrieved successfully",
+                teacherActivityService.getLatest(requireUserId(currentUser), 5)));
     }
 
-    @GetMapping("/classes/{id}/students")
-    public ResponseEntity<ApiResponse<List<StudentRiskResponse>>> getClassStudents(@PathVariable String id) {
-        List<StudentRiskResponse> students = List.of(
-                StudentRiskResponse.builder()
-                        .id("std-101")
-                        .studentName("Trần Bảo Nam")
-                        .studentEmail("nam.tran@example.com")
-                        .courseName("Fullstack Web Pro")
-                        .className("Lớp FS-2026-K1")
-                        .daysInactive(9)
-                        .progressPercent(25)
-                        .expectedPercent(65)
-                        .avgQuizScore(4.5)
-                        .riskReason("Chưa đăng nhập 9 ngày & Tiến độ chậm 40% so với kế hoạch")
-                        .build(),
-                StudentRiskResponse.builder()
-                        .id("std-102")
-                        .studentName("Nguyễn Phương Thảo")
-                        .studentEmail("thao.nguyen@example.com")
-                        .courseName("AI Specialist")
-                        .className("Lớp AI-K2")
-                        .daysInactive(8)
-                        .progressPercent(30)
-                        .expectedPercent(70)
-                        .avgQuizScore(5.0)
-                        .riskReason("Điểm Quiz thấp & Trễ 2 bài tập về nhà")
-                        .build()
-        );
-        return ResponseEntity.ok(ApiResponse.of("Class students retrieved successfully", students));
-    }
-
+    /** Lấy lịch tuần/tháng bằng khoảng ngày from-to, mặc định tuần hiện tại. */
     @GetMapping("/sessions/online")
-    public ResponseEntity<ApiResponse<List<OnlineSessionResponse>>> getOnlineSessions() {
-        List<OnlineSessionResponse> sessions = List.of(
-                OnlineSessionResponse.builder()
-                        .id("sess-101")
-                        .classId("cls-1")
-                        .className("Lớp Fullstack Web FS-2026-K1")
-                        .courseName("Fullstack Web Pro 1-1")
-                        .title("Buổi 12: Thực hành JWT Filter Spring Security")
-                        .startTime("19:00")
-                        .endTime("21:00")
-                        .startHour(19)
-                        .endHour(21.0)
-                        .dateStr("2026-08-03")
-                        .dayOfWeek(0)
-                        .roomUrl("https://meet.jit.si/ailms-fs2026")
-                        .status("SCHEDULED")
-                        .build(),
-                OnlineSessionResponse.builder()
-                        .id("sess-103")
-                        .classId("cls-3")
-                        .className("Lớp React-Advanced-K9")
-                        .courseName("Frontend React & Next.js")
-                        .title("Buổi 8: Server Actions & React Server Components")
-                        .startTime("19:00")
-                        .endTime("21:00")
-                        .startHour(19)
-                        .endHour(21.0)
-                        .dateStr("2026-08-02")
-                        .dayOfWeek(6)
-                        .roomUrl("https://meet.jit.si/ailms-react9")
-                        .status("UNREVIEWED")
-                        .secondsLeftToReview(18 * 3600 + 15 * 60)
-                        .build()
-        );
-        return ResponseEntity.ok(ApiResponse.of("Online sessions retrieved successfully", sessions));
+    public ResponseEntity<ApiResponse<List<TeacherWorkspaceResponse.OnlineSession>>> getOnlineSessions(
+            @AuthenticationPrincipal CustomUserDetails currentUser,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return ResponseEntity.ok(ApiResponse.of("Online sessions retrieved successfully",
+                teacherWorkspaceService.getOnlineSessions(requireUserId(currentUser), from, to)));
     }
 
+    /** Gửi nhận xét sau buổi học và kích hoạt tính draft thù lao khi đủ cấu hình. */
     @PostMapping("/sessions/{id}/review")
-    public ResponseEntity<ApiResponse<Boolean>> submitSessionReview(
-            @PathVariable String id,
-            @RequestBody Map<String, Object> body) {
-        return ResponseEntity.ok(ApiResponse.of("Session review submitted successfully and payment triggered", true));
+    public ResponseEntity<ApiResponse<Void>> submitSessionReview(
+            @AuthenticationPrincipal CustomUserDetails currentUser,
+            @PathVariable Long id,
+            @Valid @RequestBody TeacherWorkspaceRequest.SessionReview request) {
+        teacherWorkspaceService.reviewSession(requireUserId(currentUser), id, request);
+        return ResponseEntity.ok(ApiResponse.message("Session review submitted successfully"));
     }
 
+    /** Lấy hàng đợi assignment chưa chấm. */
     @GetMapping("/grading/assignments")
-    public ResponseEntity<ApiResponse<List<SubmissionQueueResponse>>> getGradingAssignments() {
-        List<SubmissionQueueResponse> queue = List.of(
-                SubmissionQueueResponse.builder()
-                        .id("sub-201")
-                        .studentName("Trần Bảo Nam")
-                        .studentEmail("nam.tran@example.com")
-                        .assignmentTitle("Bài tập 2: JWT Filter Spring Security")
-                        .className("Lớp FS-2026-K1")
-                        .submittedAt("2026-08-02 23:15")
-                        .isLate(true)
-                        .content("Em đã hoàn thành cấu hình OncePerRequestFilter và mã hóa mật khẩu bằng BCryptPasswordEncoder. Link github: https://github.com/namtran/jwt-demo")
-                        .maxScore(10.0)
-                        .build()
-        );
-        return ResponseEntity.ok(ApiResponse.of("Assignment grading queue retrieved successfully", queue));
+    public ResponseEntity<ApiResponse<List<TeacherWorkspaceResponse.SubmissionQueueItem>>> getGradingAssignments(
+            @AuthenticationPrincipal CustomUserDetails currentUser) {
+        return ResponseEntity.ok(ApiResponse.of("Assignment grading queue retrieved successfully",
+                teacherWorkspaceService.getPendingSubmissions(requireUserId(currentUser))));
     }
 
-    @PostMapping("/submissions/{id}/grade")
-    public ResponseEntity<ApiResponse<Boolean>> gradeSubmission(
-            @PathVariable String id,
-            @RequestBody Map<String, Object> body) {
-        return ResponseEntity.ok(ApiResponse.of("Submission graded successfully", true));
+    /** Chấm một bài nộp assignment. */
+    @PostMapping({"/grading/assignments/{id}", "/submissions/{id}/grade"})
+    public ResponseEntity<ApiResponse<Void>> gradeSubmission(
+            @AuthenticationPrincipal CustomUserDetails currentUser,
+            @PathVariable Long id,
+            @Valid @RequestBody TeacherWorkspaceRequest.SubmissionGrade request) {
+        teacherWorkspaceService.gradeSubmission(requireUserId(currentUser), id, request);
+        return ResponseEntity.ok(ApiResponse.message("Submission graded successfully"));
     }
 
+    /** Lấy các câu quiz/bài thi cần chấm tay. */
     @GetMapping("/grading/quizzes/fill-blank")
-    public ResponseEntity<ApiResponse<List<FillBlankQueueResponse>>> getFillBlankQuizzes() {
-        List<FillBlankQueueResponse> items = List.of(
-                FillBlankQueueResponse.builder()
-                        .id("fb-301")
-                        .attemptId("att-99")
-                        .quizTitle("Quiz 1: Tổng quan Spring Security & Authorization")
-                        .studentName("Trần Bảo Nam")
-                        .questionText("Điền tên Interface duy nhất của Spring Security dùng để load thông tin người dùng từ DB?")
-                        .studentAnswer("UserDetailsService")
-                        .correctAnswer("UserDetailsService")
-                        .maxPoints(2.0)
-                        .build()
-        );
-        return ResponseEntity.ok(ApiResponse.of("Fill blank quizzes queue retrieved successfully", items));
+    public ResponseEntity<ApiResponse<List<TeacherWorkspaceResponse.FillBlankQueueItem>>> getFillBlankQuizzes(
+            @AuthenticationPrincipal CustomUserDetails currentUser) {
+        return ResponseEntity.ok(ApiResponse.of("Fill blank grading queue retrieved successfully",
+                teacherWorkspaceService.getPendingQuizAnswers(requireUserId(currentUser))));
     }
 
+    /** Chấm một câu quiz tự luận theo answer ID. */
     @PostMapping("/grading/quizzes/fill-blank/{id}")
-    public ResponseEntity<ApiResponse<Boolean>> gradeFillBlankQuestion(
-            @PathVariable String id,
-            @RequestBody Map<String, Object> body) {
-        return ResponseEntity.ok(ApiResponse.of("Fill blank question graded successfully", true));
+    public ResponseEntity<ApiResponse<Void>> gradeFillBlankQuestion(
+            @AuthenticationPrincipal CustomUserDetails currentUser,
+            @PathVariable Long id,
+            @Valid @RequestBody TeacherWorkspaceRequest.AnswerGrade request) {
+        teacherWorkspaceService.gradeQuizAnswer(requireUserId(currentUser), id, request);
+        return ResponseEntity.ok(ApiResponse.message("Fill blank answer graded successfully"));
     }
 
+    /** Lấy thống kê tỷ lệ sai của câu hỏi thuộc quiz được quản lý. */
     @GetMapping("/grading/quizzes/difficulty-stats")
-    public ResponseEntity<ApiResponse<List<QuestionDifficultyResponse>>> getQuestionDifficultyStats() {
-        List<QuestionDifficultyResponse> stats = List.of(
-                QuestionDifficultyResponse.builder()
-                        .id("qd-1")
-                        .quizTitle("Quiz 2: JWT Authentication & Filter Order")
-                        .questionText("Thứ tự chính xác của SecurityContextPersistenceFilter và UsernamePasswordAuthenticationFilter?")
-                        .totalAttempts(45)
-                        .errorCount(28)
-                        .errorRatePercent(62.2)
-                        .build()
-        );
-        return ResponseEntity.ok(ApiResponse.of("Question difficulty stats retrieved successfully", stats));
+    public ResponseEntity<ApiResponse<List<TeacherWorkspaceResponse.QuestionDifficulty>>> getQuestionDifficultyStats(
+            @AuthenticationPrincipal CustomUserDetails currentUser) {
+        return ResponseEntity.ok(ApiResponse.of("Question difficulty statistics retrieved successfully",
+                teacherWorkspaceService.getQuestionDifficulty(requireUserId(currentUser))));
     }
 
-    @GetMapping("/earnings")
-    public ResponseEntity<ApiResponse<List<TeachingSessionPaymentResponse>>> getEarnings() {
-        List<TeachingSessionPaymentResponse> payments = List.of(
-                TeachingSessionPaymentResponse.builder()
-                        .id("pay-1")
-                        .className("Lớp React-Advanced-K9")
-                        .date("02/08/2026")
-                        .durationHours(2.0)
-                        .hourlyRate(250000.0)
-                        .totalAmount(500000.0)
-                        .status("DRAFT")
-                        .build(),
-                TeachingSessionPaymentResponse.builder()
-                        .id("pay-2")
-                        .className("Lớp Fullstack Web FS-2026-K1")
-                        .date("31/07/2026")
-                        .durationHours(2.0)
-                        .hourlyRate(300000.0)
-                        .totalAmount(600000.0)
-                        .status("CONFIRMED")
-                        .build(),
-                TeachingSessionPaymentResponse.builder()
-                        .id("pay-3")
-                        .className("Lớp AI Specialist K2")
-                        .date("28/07/2026")
-                        .durationHours(1.5)
-                        .hourlyRate(350000.0)
-                        .totalAmount(525000.0)
-                        .status("PAID")
-                        .build()
-        );
-        return ResponseEntity.ok(ApiResponse.of("Teaching session payments retrieved successfully", payments));
+    /** Lấy quiz, bài thi và assignment do chính Teacher/TA tạo. */
+    @GetMapping("/assessments/authored")
+    public ResponseEntity<ApiResponse<List<TeacherWorkspaceResponse.AuthoredAssessment>>> getAuthoredAssessments(
+            @AuthenticationPrincipal CustomUserDetails currentUser,
+            @RequestParam(required = false) String type) {
+        return ResponseEntity.ok(ApiResponse.of("Authored assessments retrieved successfully",
+                teacherWorkspaceService.getAuthoredAssessments(requireUserId(currentUser), type)));
     }
 
+    /** Alias danh sách quiz/bài thi do chính user tạo. */
+    @GetMapping("/quizzes/authored")
+    public ResponseEntity<ApiResponse<List<TeacherWorkspaceResponse.AuthoredAssessment>>> getAuthoredQuizzes(
+            @AuthenticationPrincipal CustomUserDetails currentUser) {
+        return ResponseEntity.ok(ApiResponse.of("Authored quizzes and exams retrieved successfully",
+                teacherWorkspaceService.getAuthoredAssessments(requireUserId(currentUser), "QUIZ_OR_EXAM")));
+    }
+
+    /** Tìm kiếm quiz do chính Teacher/TA hiện tại tạo. */
+    @GetMapping("/assessment-library/quizzes/search")
+    public ResponseEntity<ApiResponse<PageResponse<QuizResponse>>> searchAuthoredQuizzes(
+            @AuthenticationPrincipal CustomUserDetails currentUser,
+            QuizSearchRequest request) {
+        return ResponseEntity.ok(ApiResponse.of("Authored quizzes retrieved successfully",
+                quizService.searchAuthored(request, requireUserId(currentUser))));
+    }
+
+    /** Lấy chi tiết quiz do chính Teacher/TA hiện tại tạo. */
+    @GetMapping("/assessment-library/quizzes/{id}")
+    public ResponseEntity<ApiResponse<QuizResponse>> getAuthoredQuiz(
+            @AuthenticationPrincipal CustomUserDetails currentUser,
+            @PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.of("Authored quiz retrieved successfully",
+                quizService.getAuthoredById(id, requireUserId(currentUser))));
+    }
+
+    /** Tạo quiz và lấy createdBy từ JWT. */
+    @PostMapping("/assessment-library/quizzes")
+    public ResponseEntity<ApiResponse<QuizResponse>> createAuthoredQuiz(
+            @AuthenticationPrincipal CustomUserDetails currentUser,
+            @Valid @RequestBody QuizRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of("Quiz created successfully",
+                quizService.createForAuthor(request, requireUserId(currentUser))));
+    }
+
+    /** Cập nhật quiz nếu người dùng hiện tại là người tạo. */
+    @PutMapping("/assessment-library/quizzes/{id}")
+    public ResponseEntity<ApiResponse<QuizResponse>> updateAuthoredQuiz(
+            @AuthenticationPrincipal CustomUserDetails currentUser,
+            @PathVariable Long id,
+            @Valid @RequestBody QuizRequest request) {
+        return ResponseEntity.ok(ApiResponse.of("Quiz updated successfully",
+                quizService.updateAuthored(id, request, requireUserId(currentUser))));
+    }
+
+    /** Xóa quiz nếu người dùng hiện tại là người tạo. */
+    @DeleteMapping("/assessment-library/quizzes/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteAuthoredQuiz(
+            @AuthenticationPrincipal CustomUserDetails currentUser,
+            @PathVariable Long id) {
+        quizService.deleteAuthored(id, requireUserId(currentUser));
+        return ResponseEntity.ok(ApiResponse.message("Quiz deleted successfully"));
+    }
+
+    /** Tìm kiếm bài tập do chính Teacher/TA hiện tại tạo. */
+    @GetMapping("/assessment-library/assignments/search")
+    public ResponseEntity<ApiResponse<PageResponse<AssignmentResponse>>> searchAuthoredAssignments(
+            @AuthenticationPrincipal CustomUserDetails currentUser,
+            AssignmentSearchRequest request) {
+        return ResponseEntity.ok(ApiResponse.of("Authored assignments retrieved successfully",
+                assignmentService.searchAuthored(request, requireUserId(currentUser))));
+    }
+
+    /** Lấy chi tiết bài tập do chính Teacher/TA hiện tại tạo. */
+    @GetMapping("/assessment-library/assignments/{id}")
+    public ResponseEntity<ApiResponse<AssignmentResponse>> getAuthoredAssignment(
+            @AuthenticationPrincipal CustomUserDetails currentUser,
+            @PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.of("Authored assignment retrieved successfully",
+                assignmentService.getAuthoredById(id, requireUserId(currentUser))));
+    }
+
+    /** Tạo bài tập và lấy createdBy từ JWT. */
+    @PostMapping("/assessment-library/assignments")
+    public ResponseEntity<ApiResponse<AssignmentResponse>> createAuthoredAssignment(
+            @AuthenticationPrincipal CustomUserDetails currentUser,
+            @Valid @RequestBody AssignmentRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of("Assignment created successfully",
+                assignmentService.createForAuthor(request, requireUserId(currentUser))));
+    }
+
+    /** Cập nhật bài tập nếu người dùng hiện tại là người tạo. */
+    @PutMapping("/assessment-library/assignments/{id}")
+    public ResponseEntity<ApiResponse<AssignmentResponse>> updateAuthoredAssignment(
+            @AuthenticationPrincipal CustomUserDetails currentUser,
+            @PathVariable Long id,
+            @Valid @RequestBody AssignmentRequest request) {
+        return ResponseEntity.ok(ApiResponse.of("Assignment updated successfully",
+                assignmentService.updateAuthored(id, request, requireUserId(currentUser))));
+    }
+
+    /** Xóa bài tập nếu người dùng hiện tại là người tạo. */
+    @DeleteMapping("/assessment-library/assignments/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteAuthoredAssignment(
+            @AuthenticationPrincipal CustomUserDetails currentUser,
+            @PathVariable Long id) {
+        assignmentService.deleteAuthored(id, requireUserId(currentUser));
+        return ResponseEntity.ok(ApiResponse.message("Assignment deleted successfully"));
+    }
+
+    /** Tạo một yêu cầu nghiệp vụ tổng quát. */
+    @PostMapping("/requests")
+    public ResponseEntity<ApiResponse<TeacherWorkspaceResponse.WorkRequest>> createRequest(
+            @AuthenticationPrincipal CustomUserDetails currentUser,
+            @Valid @RequestBody TeacherWorkspaceRequest.WorkRequestCreate request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of("Request created successfully",
+                teacherWorkspaceService.createWorkRequest(requireUserId(currentUser), request)));
+    }
+
+    /** Lấy lịch sử yêu cầu của chính user. */
+    @GetMapping("/requests")
+    public ResponseEntity<ApiResponse<List<TeacherWorkspaceResponse.WorkRequest>>> getRequests(
+            @AuthenticationPrincipal CustomUserDetails currentUser) {
+        return ResponseEntity.ok(ApiResponse.of("Requests retrieved successfully",
+                teacherWorkspaceService.getWorkRequests(requireUserId(currentUser))));
+    }
+
+    /** Tạo yêu cầu chuyển phân công lớp. */
+    @PostMapping("/requests/class-transfer")
+    public ResponseEntity<ApiResponse<TeacherWorkspaceResponse.WorkRequest>> createClassTransfer(
+            @AuthenticationPrincipal CustomUserDetails currentUser,
+            @Valid @RequestBody TeacherWorkspaceRequest.ClassTransferCreate request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of("Class transfer request created successfully",
+                teacherWorkspaceService.createClassTransfer(requireUserId(currentUser), request)));
+    }
+
+    /** Lấy đơn nghỉ của chính Teacher/TA. */
     @GetMapping("/leave-requests")
-    public ResponseEntity<ApiResponse<List<LeaveRequestResponse>>> getLeaveRequests() {
-        List<LeaveRequestResponse> requests = List.of(
-                LeaveRequestResponse.builder()
-                        .id("lr-1")
-                        .startDate("2026-08-10")
-                        .endDate("2026-08-12")
-                        .reason("Tham gia hội thảo Công nghệ AI & Spring Cloud tại Đà Nẵng")
-                        .status("APPROVED")
-                        .createdAt("2026-08-01T09:00:00Z")
-                        .build()
-        );
-        return ResponseEntity.ok(ApiResponse.of("Leave requests retrieved successfully", requests));
+    public ResponseEntity<ApiResponse<List<TeacherWorkspaceResponse.LeaveRequestItem>>> getLeaveRequests(
+            @AuthenticationPrincipal CustomUserDetails currentUser) {
+        return ResponseEntity.ok(ApiResponse.of("Leave requests retrieved successfully",
+                teacherWorkspaceService.getLeaves(requireUserId(currentUser))));
     }
 
+    /** Tạo đơn nghỉ bằng employee ID lấy từ JWT. */
     @PostMapping("/leave-requests")
-    public ResponseEntity<ApiResponse<LeaveRequestResponse>> createLeaveRequest(@RequestBody Map<String, String> body) {
-        LeaveRequestResponse created = LeaveRequestResponse.builder()
-                .id("lr-" + System.currentTimeMillis())
-                .startDate(body.getOrDefault("startDate", "2026-08-15"))
-                .endDate(body.getOrDefault("endDate", "2026-08-16"))
-                .reason(body.getOrDefault("reason", "Báo bận cá nhân"))
-                .status("PENDING")
-                .createdAt(LocalDateTime.now().toString())
-                .build();
-        return ResponseEntity.ok(ApiResponse.of("Leave request created successfully", created));
+    public ResponseEntity<ApiResponse<TeacherWorkspaceResponse.LeaveRequestItem>> createLeaveRequest(
+            @AuthenticationPrincipal CustomUserDetails currentUser,
+            @Valid @RequestBody TeacherWorkspaceRequest.LeaveCreate request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of("Leave request created successfully",
+                teacherWorkspaceService.createLeave(requireUserId(currentUser), request)));
     }
 
+    /** Lấy các lớp đang phụ trách. */
+    @GetMapping("/classes")
+    public ResponseEntity<ApiResponse<List<TeacherWorkspaceResponse.ClassCard>>> getClasses(
+            @AuthenticationPrincipal CustomUserDetails currentUser) {
+        return ResponseEntity.ok(ApiResponse.of("Assigned classes retrieved successfully",
+                teacherWorkspaceService.getClasses(requireUserId(currentUser))));
+    }
+
+    /** Lấy học viên và tín hiệu risk của một lớp được quản lý. */
+    @GetMapping("/classes/{id}/students")
+    public ResponseEntity<ApiResponse<List<TeacherWorkspaceResponse.StudentRisk>>> getClassStudents(
+            @AuthenticationPrincipal CustomUserDetails currentUser, @PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.of("Class students retrieved successfully",
+                teacherWorkspaceService.getClassStudents(requireUserId(currentUser), id)));
+    }
+
+    /** Gửi thông báo nhắc học tới học viên thuộc lớp đang phụ trách. */
     @PostMapping("/insights/at-risk-students/{id}/reminder")
-    public ResponseEntity<ApiResponse<Boolean>> sendStudentReminder(@PathVariable String id) {
-        return ResponseEntity.ok(ApiResponse.of("Reminder notification and email sent to student successfully", true));
+    public ResponseEntity<ApiResponse<Void>> sendStudentReminder(
+            @AuthenticationPrincipal CustomUserDetails currentUser, @PathVariable Long id) {
+        teacherWorkspaceService.sendStudentReminder(requireUserId(currentUser), id);
+        return ResponseEntity.ok(ApiResponse.message("Student reminder sent successfully"));
+    }
+
+    /** Lấy các khoản thu nhập theo buổi dạy. */
+    @GetMapping("/earnings")
+    public ResponseEntity<ApiResponse<List<TeacherWorkspaceResponse.EarningItem>>> getEarnings(
+            @AuthenticationPrincipal CustomUserDetails currentUser) {
+        return ResponseEntity.ok(ApiResponse.of("Teaching earnings retrieved successfully",
+                teacherWorkspaceService.getEarnings(requireUserId(currentUser))));
+    }
+
+    /** Bắt buộc principal JWT hợp lệ và trả user ID Snowflake. */
+    private Long requireUserId(CustomUserDetails currentUser) {
+        if (currentUser == null || currentUser.getUser() == null) {
+            throw new UnauthorizedException("Vui lòng đăng nhập.");
+        }
+        return currentUser.getUser().getId();
     }
 }

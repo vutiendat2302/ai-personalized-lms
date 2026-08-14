@@ -59,6 +59,9 @@ public class JwtAuthenticationResponse {
      */
     private String fullName;
 
+    /** URL đọc avatar qua backend, không để lộ raw MinIO file key. */
+    private String avatarUrl;
+
     /**
      * Danh sách vai trò của người dùng.
      * Ví dụ: ["ROLE_ADMIN", "ROLE_STUDENT"].

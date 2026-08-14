@@ -7,6 +7,7 @@ import org.springframework.data.jpa.domain.Specification;
 
 public class CourseSpecification {
 
+    /** Tạo điều kiện tìm kiếm khóa học theo mã, tên và các bộ lọc nghiệp vụ. */
     public static Specification<CourseEntity> filterAndSearch(CourseSearchRequest request) {
         SpecificationBuilder<CourseEntity> builder = SpecificationBuilder.of();
 
@@ -14,7 +15,7 @@ public class CourseSpecification {
             return builder.build();
         }
 
-        builder.likeAnyIfPresent(request.getKeyword(), "name");
+        builder.likeAnyIfPresent(request.getKeyword(), "code", "name");
         if (request.getStatus() != null) {
             builder.equalIfPresent("status", request.getStatus());
         } else {

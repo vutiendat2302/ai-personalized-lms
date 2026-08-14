@@ -37,4 +37,8 @@ public class CartItemEntity extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "course_package_id")
     private CoursePackageEntity coursePackageEntity;
+
+    /** Bản nháp nhu cầu 1-1, chỉ được chuyển thành matching request sau khi thanh toán thành công. */
+    @Column(name = "one_on_one_needs", columnDefinition = "TEXT")
+    private String oneOnOneNeeds;
 }

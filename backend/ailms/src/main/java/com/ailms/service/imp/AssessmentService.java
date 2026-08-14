@@ -10,6 +10,7 @@ import com.ailms.response.StudentProgressReportResponse;
 import com.ailms.response.SystemDashboardResponse;
 import com.ailms.service.IAssessmentService;
 import com.ailms.service.ICertificateService;
+import com.ailms.service.ITeacherActivityService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -44,6 +45,7 @@ public class AssessmentService implements IAssessmentService {
     private final CertificateRepository certificateRepository;
     private final ICertificateService certificateService;
     private final ApplicationEventPublisher applicationEventPublisher;
+    private final ITeacherActivityService teacherActivityService;
 
     @Transactional
     @Override
@@ -122,12 +124,14 @@ public class AssessmentService implements IAssessmentService {
         QuizEntity quiz = quizRepository.findById(quizId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Quiz", quizId));
 
-        // Check user enrollment
-        List<EnrollmentEntity> enrollments = enrollmentRepository.findByUserEntity_Id(userId);
-        if (enrollments.isEmpty()) {
-            throw new BusinessException("User is not enrolled in any course.");
+        if (quiz.getDueAt() != null && LocalDateTime.now().isAfter(quiz.getDueAt())) {
+            throw new BusinessException("Quiz đã hết hạn làm bài.");
         }
-        EnrollmentEntity enrollment = enrollments.get(0);
+        EnrollmentEntity enrollment = enrollmentRepository.findByUserEntity_Id(userId).stream()
+                .filter(item -> quiz.getCourseId() != null
+                        && item.getCourseEntity().getId().equals(quiz.getCourseId()))
+                .findFirst().orElseThrow(() -> new BusinessException("Bạn chưa ghi danh khóa học của quiz này."));
+        validateClassMembership(userId, quiz.getClassId());
 
         // Check attempts limit
         List<QuizAttemptEntity> existingAttempts = quizAttemptRepository.findByQuizIdAndUserId(quizId, userId);
@@ -231,7 +235,23 @@ public class AssessmentService implements IAssessmentService {
         }
 
         quizAttemptRepository.save(attempt);
+        teacherActivityService.quizSubmitted(attempt, quiz);
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "SUBMIT_QUIZ_ATTEMPT", "QUIZ_ATTEMPT", attemptId, null, attempt));
+    }
+
+    /** Xác minh chủ sở hữu attempt trước khi dùng luồng chấm quiz hiện có. */
+    @Override
+    @Transactional
+    public void submitQuizAttemptForUser(Long userId, Long attemptId, SubmitQuizAttemptRequest request) {
+        QuizAttemptEntity attempt = quizAttemptRepository.findById(attemptId)
+                .filter(item -> item.getUserId().equals(userId))
+                .orElseThrow(() -> ResourceNotFoundException.of("StudentQuizAttempt", attemptId));
+        QuizEntity quiz = quizRepository.findById(attempt.getQuizId())
+                .orElseThrow(() -> ResourceNotFoundException.of("Quiz", attempt.getQuizId()));
+        if (quiz.getDueAt() != null && LocalDateTime.now().isAfter(quiz.getDueAt())) {
+            throw new BusinessException("Quiz đã hết hạn nộp bài.");
+        }
+        submitQuizAttempt(attemptId, request);
     }
 
     @Transactional
@@ -303,6 +323,7 @@ public class AssessmentService implements IAssessmentService {
                 .lessonId(request.getLessonId())
                 .courseId(request.getCourseId())
                 .sectionId(request.getSectionId())
+                .classId(request.getClassId())
                 .title(request.getTitle())
                 .description(request.getDescription())
                 .maxScore(request.getMaxScore())
@@ -333,15 +354,19 @@ public class AssessmentService implements IAssessmentService {
             isLate = true;
         }
 
-        List<EnrollmentEntity> enrollments = enrollmentRepository.findByUserEntity_Id(userId);
-        if (enrollments.isEmpty()) {
-            throw new BusinessException("User is not enrolled in any course.");
+        EnrollmentEntity enrollment = enrollmentRepository.findByUserEntity_Id(userId).stream()
+                .filter(item -> assignment.getCourseId() != null
+                        && item.getCourseEntity().getId().equals(assignment.getCourseId()))
+                .findFirst().orElseThrow(() -> new BusinessException("Bạn chưa ghi danh khóa học của bài tập này."));
+        validateClassMembership(userId, assignment.getClassId());
+        if (submissionRepository.findByAssignmentIdAndUserId(assignmentId, userId).isPresent()) {
+            throw new BusinessException("Bạn đã nộp bài tập này.");
         }
 
         SubmissionEntity submission = SubmissionEntity.builder()
                 .assignmentId(assignmentId)
                 .userId(userId)
-                .enrollmentId(enrollments.get(0).getId())
+                .enrollmentId(enrollment.getId())
                 .contentText(request.getContentText())
                 .fileUrl(request.getFileUrl())
                 .submittedAt(now)
@@ -350,7 +375,17 @@ public class AssessmentService implements IAssessmentService {
                 .build();
 
         SubmissionEntity saved = submissionRepository.save(submission);
+        teacherActivityService.assignmentSubmitted(saved, assignment);
         return saved.getId();
+    }
+
+    /** Kiểm tra học viên là thành viên ACTIVE khi nội dung được giao riêng theo lớp. */
+    private void validateClassMembership(Long userId, Long classId) {
+        if (classId == null) return;
+        classMemberRepository.findById_ClassIdAndId_UserId(classId, userId)
+                .filter(item -> item.getStatus() == com.ailms.entity.enums.ClassMemberStatusEnum.ACTIVE
+                        && item.getRoleInClass() == com.ailms.entity.enums.ClassMemberRole.STUDENT)
+                .orElseThrow(() -> new BusinessException("Bạn không thuộc lớp được giao nội dung này."));
     }
 
     @Transactional

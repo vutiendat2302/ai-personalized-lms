@@ -29,6 +29,22 @@ public interface ReviewRepository extends JpaRepository<ReviewEntity, Long>, Jpa
     @Query("SELECT COUNT(r) FROM ReviewEntity r WHERE r.courseId = :courseId AND r.status = 'APPROVED'")
     Long getReviewCountForCourse(@Param("courseId") Long courseId);
 
+    /** Đếm các đánh giá tích cực từ bốn sao trở lên của một khóa học. */
+    long countByCourseIdAndStatusAndRatingGreaterThanEqual(Long courseId, ReviewStatusEnum status, Integer rating);
+
+    /** Đếm toàn bộ đánh giá đang hiển thị của một khóa học. */
+    long countByCourseIdAndStatus(Long courseId, ReviewStatusEnum status);
+
+    /** Tính điểm trung bình theo trạng thái đánh giá của khóa học. */
+    @Query("SELECT AVG(r.rating) FROM ReviewEntity r WHERE r.courseId = :courseId AND r.status = :status")
+    Double getAverageRatingForCourseAndStatus(@Param("courseId") Long courseId,
+                                               @Param("status") ReviewStatusEnum status);
+
     @Query("SELECT AVG(r.rating) FROM ReviewEntity r WHERE r.status = 'ACTIVE'")
     Double getAverageRatingOfActiveReviews();
+
+    /** Tính rating trung bình cho toàn bộ khóa học người dạy đang phụ trách. */
+    @Query("SELECT AVG(r.rating) FROM ReviewEntity r WHERE r.courseId IN :courseIds AND r.status = :status")
+    Double getAverageRatingByCourseIdsAndStatus(@Param("courseIds") List<Long> courseIds,
+                                                 @Param("status") ReviewStatusEnum status);
 }

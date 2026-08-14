@@ -211,6 +211,7 @@ Hầu hết các bảng dữ liệu chính đều kế thừa từ `BaseEntity`:
 | `employee_code` | VARCHAR(50) | NOT NULL, UNIQUE | Mã nhân viên (VD: `EMP001`) |
 | `department_id` | BIGINT | NULLABLE, FK -> `department.id` | Phòng ban trực thuộc |
 | `position` | VARCHAR(100) | NULLABLE | Chức danh công việc |
+| `bio` | TEXT | NULLABLE | Phần giới thiệu công khai của nhân sự/giảng viên |
 | `employment_type` | VARCHAR(30) | NOT NULL | `FULL_TIME`, `PART_TIME`, `CONTRACT`, `INTERNSHIP` |
 | `start_date` | DATETIME | NULLABLE | Ngày bắt đầu làm việc |
 | `end_date` | DATETIME | NULLABLE | Ngày kết thúc hợp đồng |
@@ -392,12 +393,12 @@ Hầu hết các bảng dữ liệu chính đều kế thừa từ `BaseEntity`:
 |---|---|---|---|
 | `id` | BIGINT | PK | ID gói bán |
 | `course_id` | BIGINT | NOT NULL, FK -> `course.id` | Khóa học tương ứng |
-| `class_id` | BIGINT | NULLABLE, FK -> `class.id` | Gán sẵn lớp (nếu là GROUP_CLASS) |
+| `class_id` | BIGINT | NULLABLE, FK -> `class.id` | Gán sẵn lớp cho GROUP_CLASS/COMBO; một lớp có thể được nhiều gói tham chiếu |
 | `name` | VARCHAR(255) | NOT NULL | Tên gói học (Gói Tự học, Gói Lớp Nhóm, Gói 1-1) |
 | `description` | TEXT | NULLABLE | Mô tả chi tiết quyền lợi gói |
 | `price` | DECIMAL(15,2) | NOT NULL | Giá bán thực tế của gói |
 | `duration_days` | INT | DEFAULT 365 | Thời hạn truy cập (ngày) |
-| `delivery_mode` | VARCHAR(30) | NOT NULL | `SELF_STUDY`, `GROUP_CLASS`, `ONE_ON_ONE` |
+| `delivery_mode` | VARCHAR(30) | NOT NULL | `SELF_STUDY`, `GROUP_CLASS`, `ONE_ON_ONE`, `COMBO` |
 | `status` | VARCHAR(30) | DEFAULT 'ACTIVE' | `ACTIVE`, `INACTIVE` |
 
 ### 6.2 Bảng `cart_item` (Giỏ hàng người dùng)
@@ -439,11 +440,28 @@ Hầu hết các bảng dữ liệu chính đều kế thừa từ `BaseEntity`:
 | `order` | `discount_amount` | DECIMAL(15,2) | DEFAULT 0 | Số tiền được giảm giá |
 | `order` | `final_amount` | DECIMAL(15,2) | NOT NULL | Số tiền thanh toán cuối |
 | `order` | `coupon_id` | BIGINT | NULLABLE, FK -> `coupon.id` | Mã giảm giá đã áp dụng |
+| `order` | `user_coupon_id` | BIGINT | NULLABLE, FK -> `user_coupon.id` | Quyền voucher cụ thể của học viên |
 | `order` | `status` | VARCHAR(30) | DEFAULT 'PENDING' | `PENDING`, `PAID`, `CANCELLED`, `REFUNDED` |
 | `order_item` | `id` | BIGINT | PK | ID chi tiết |
 | `order_item` | `order_id` | BIGINT | NOT NULL, FK -> `order.id` | Thuộc đơn hàng nào |
 | `order_item` | `course_package_id` | BIGINT | NOT NULL, FK -> `course_package.id` | Gói học trong đơn |
 | `order_item` | `price` | DECIMAL(15,2) | NOT NULL | Giá gói tại thời điểm mua |
+| `order_item` | `discount_snapshot` | DECIMAL(15,2) | NOT NULL | Phần giảm giá phân bổ cho dòng |
+| `order_item` | `final_price` | DECIMAL(15,2) | NOT NULL | Thành tiền dòng sau voucher |
+
+### 6.4.1 Bảng `user_coupon` (Ví voucher học viên)
+
+| Tên trường | Kiểu dữ liệu | Ràng buộc | Mô tả |
+|---|---|---|---|
+| `id` | BIGINT | PK | ID quyền voucher |
+| `user_id` | BIGINT | FK -> `user.id` | Học viên được cấp |
+| `coupon_id` | BIGINT | FK -> `coupon.id` | Coupon gốc |
+| `status` | VARCHAR(20) | NOT NULL | `AVAILABLE`, `RESERVED`, `USED`, `EXPIRED` |
+| `reserved_order_id` | BIGINT | NULLABLE | Order PENDING đang giữ voucher |
+| `used_order_id` | BIGINT | NULLABLE | Order đã capture sử dụng voucher |
+| `reserved_at`, `used_at` | DATETIME | NULLABLE | Mốc vòng đời voucher |
+
+**Unique:** `(user_id, coupon_id)`.
 
 ### 6.5 Bảng `payment_transaction` (Giao dịch thanh toán)
 * **Khóa chính**: `id` (BIGINT)
@@ -452,11 +470,18 @@ Hầu hết các bảng dữ liệu chính đều kế thừa từ `BaseEntity`:
 |---|---|---|---|
 | `id` | BIGINT | PK | ID giao dịch |
 | `order_id` | BIGINT | NOT NULL, FK -> `order.id` | Đơn hàng cần thanh toán |
-| `transaction_code` | VARCHAR(100) | NULLABLE | Mã giao dịch cổng thanh toán (VNPAY/MOMO/Banking) |
-| `payment_method` | VARCHAR(50) | NOT NULL | Phương thức (VNPAY, BANK_TRANSFER, CASH, MOMO) |
+| `transaction_code` | VARCHAR(100) | NULLABLE | Mã giao dịch cổng thanh toán (PAYPAL/VNPAY/Banking) |
+| `payment_method` | VARCHAR(50) | NOT NULL | Phương thức (PAYPAL, VNPAY, BANK_TRANSFER, CASH) |
 | `amount` | DECIMAL(15,2) | NOT NULL | Số tiền giao dịch |
-| `status` | VARCHAR(30) | DEFAULT 'PENDING' | `PENDING`, `SUCCESS`, `FAILED`, `CANCELLED` |
+| `status` | VARCHAR(30) | DEFAULT 'PENDING' | `PENDING`, `SUCCESS`, `FAILED`, `REFUNDED` |
 | `transacted_at` | DATETIME | NULLABLE | Thời điểm giao dịch hoàn tất |
+| `paypal_capture_id` | VARCHAR(100) | UNIQUE, NULLABLE | ID capture PayPal đã thanh toán |
+| `paypal_refund_request_id` | VARCHAR(100) | UNIQUE, NULLABLE | Khóa idempotent của yêu cầu refund |
+| `paypal_refund_id` | VARCHAR(100) | UNIQUE, NULLABLE | ID refund do PayPal xác nhận |
+| `refund_amount` | DECIMAL(15,2) | NULLABLE | Số tiền thực tế đã hoàn theo gateway |
+| `refund_currency` | VARCHAR(3) | NULLABLE | Currency của refund |
+| `refund_reason` | VARCHAR(255) | NULLABLE | Lý do hoàn tiền |
+| `refunded_at` | DATETIME | NULLABLE | Thời điểm PayPal hoàn tiền hoàn tất |
 
 ### 6.6 Bảng `enrollment` & `enrollment_package` (Ghi danh học viên)
 * **Khóa chính**: `id` (BIGINT)
@@ -471,6 +496,7 @@ Hầu hết các bảng dữ liệu chính đều kế thừa từ `BaseEntity`:
 | `enrollment` | `expired_at` | DATETIME | NULLABLE | Ngày hết hạn quyền truy cập |
 | `enrollment` | `status` | TINYINT | DEFAULT 1 | `1` (ACTIVE), `2` (PENDING_MATCHING), `0` (EXPIRED/CANCELLED) |
 | `enrollment_package` | `id` | BIGINT | PK | Bảng phụ nối enrollment - package |
+| `enrollment_package` | `status` | VARCHAR(20) | NOT NULL, DEFAULT `ACTIVE` | Trạng thái quyền riêng của gói: `ACTIVE`, `REFUNDED`, `CANCELLED`, `REVOKED`, `EXPIRED` |
 
 ---
 
@@ -483,11 +509,13 @@ Hầu hết các bảng dữ liệu chính đều kế thừa từ `BaseEntity`:
 |---|---|---|---|
 | `id` | BIGINT | PK | ID bài quiz |
 | `lesson_id` | BIGINT | NOT NULL, FK -> `lesson.id` | Thuộc bài học nào |
+| `class_id` | BIGINT | NULLABLE, FK -> `class.id` | Lớp được giao riêng |
 | `title` | VARCHAR(255) | NOT NULL | Tiêu đề quiz |
 | `description` | TEXT | NULLABLE | Hướng dẫn làm bài |
 | `pass_score` | DOUBLE | DEFAULT 50.0 | Điểm tối thiểu để đạt (% hoặc điểm) |
 | `time_limit_minutes` | INT | DEFAULT 30 | Thời gian làm bài (phút, 0=không giới hạn) |
 | `max_attempts` | INT | DEFAULT 3 | Số lần làm bài tối đa |
+| `due_at` | DATETIME | NULLABLE | Hạn làm quiz/lịch thi |
 | `status` | VARCHAR(20) | DEFAULT 'ACTIVE' | Trạng thái |
 
 ### 7.2 Bảng `question` (Câu hỏi trắc nghiệm)
@@ -540,6 +568,7 @@ Hầu hết các bảng dữ liệu chính đều kế thừa từ `BaseEntity`:
 |---|---|---|---|---|
 | `assignment` | `id` | BIGINT | PK | ID bài tập tự luận |
 | `assignment` | `lesson_id` | BIGINT | NOT NULL, FK -> `lesson.id` | Bài học liên quan |
+| `assignment` | `class_id` | BIGINT | NULLABLE, FK -> `class.id` | Lớp được giao riêng |
 | `assignment` | `title` | VARCHAR(255) | NOT NULL | Tiêu đề bài tập |
 | `assignment` | `description` | LONGTEXT | NULLABLE | Đề bài / Yêu cầu chi tiết |
 | `assignment` | `max_score` | DOUBLE | DEFAULT 10.0 | Thang điểm tối đa |
@@ -644,6 +673,8 @@ Hầu hết các bảng dữ liệu chính đều kế thừa từ `BaseEntity`:
 | `interest` | `id` | BIGINT | PK | ID sở thích |
 | `interest` | `code` | VARCHAR(50) | NOT NULL, UNIQUE | Mã chủ đề quan tâm (AI, WEB, MOBILE, ...) |
 | `interest` | `name` | VARCHAR(100) | NOT NULL | Tên chủ đề |
+| `interest_category` | `interest_id` | BIGINT | PK, FK -> `interest.id` | Sở thích cố định |
+| `interest_category` | `category_id` | BIGINT | PK, FK -> `category.id` | Danh mục khóa học cố định được đề xuất |
 | `student_interest` | `user_id` | BIGINT | PK, FK -> `user.id` | ID học viên |
 | `student_interest` | `interest_id` | BIGINT | PK, FK -> `interest.id` | ID sở thích chọn |
 
@@ -669,11 +700,12 @@ Hầu hết các bảng dữ liệu chính đều kế thừa từ `BaseEntity`:
 | Tên trường | Kiểu dữ liệu | Ràng buộc | Mô tả |
 |---|---|---|---|
 | `id` | BIGINT | PK | ID yêu cầu duyệt |
-| `target_type` | VARCHAR(50) | NOT NULL | `COURSE_PUBLISH`, `CLASS_TRANSFER_REQUEST`, `TEACHER_CHANGE_REQUEST`, `LEAVE_REQUEST` |
+| `target_type` | VARCHAR(50) | NOT NULL | `COURSE_PUBLISH`, `CLASS_TRANSFER_REQUEST`, `TEACHER_CHANGE_REQUEST`, `LEAVE_REQUEST`, `REFUND_ORDER` |
 | `target_id` | BIGINT | NOT NULL | ID đối tượng cần duyệt |
 | `approver_id` | BIGINT | NULLABLE, FK -> `user.id` | Người duyệt / Admin / HR |
 | `status` | VARCHAR(30) | DEFAULT 'PENDING' | `PENDING`, `CONFIRMED`, `REJECTED` |
 | `comment` | TEXT | NULLABLE | Nhận xét / Lý do từ chối |
+| `request_reason` | VARCHAR(255) | NULLABLE | Lý do gốc của yêu cầu, giữ nguyên khi người duyệt ghi chú quyết định |
 | `decided_at` | DATETIME | NULLABLE | Thời điểm đưa ra quyết định |
 
 ### 9.2 Bảng `audit_log` (Nhật ký thay đổi dữ liệu hệ thống)
@@ -765,3 +797,39 @@ erDiagram
 
 > [!NOTE]
 > Tất cả các bảng trên đều được thiết kế chuẩn hóa (3NF) tương thích hoàn toàn 100% với các `@Entity` JPA Java trong codebase backend `ai-personalized-lms`.
+
+## Migration v4-v5: Course Commerce, PayPal và matching 1-1
+
+Nguồn migration: `database/v4_course_commerce_momo_one_on_one.sql`, `database/v5_add_paypal_gateway_fields.sql`, `database/v6_add_paypal_refund_fields.sql`.
+
+- Khóa học có ảnh đại diện, mục tiêu và yêu cầu đầu vào.
+- Lớp phân biệt `STANDARD`, `ONE_ON_ONE_TRIAL`, `ONE_ON_ONE`; buổi học phân biệt `REGULAR`, `TRIAL`.
+- Các cột MoMo v4 được giữ vì tương thích schema cũ; PayPal dùng các ID create/capture/refund, số tiền/currency gateway và thời điểm refund. Refund ID và refund request ID là unique.
+- `enrollment(user_id, course_id)` và `enrollment_package(order_item_id)` là unique để capture PayPal lặp không cấp quyền nhiều lần.
+- `one_on_one_request` chứa state machine, nhu cầu, nhận xét buổi thử, assignee, lớp/buổi thử và `version`.
+- `one_on_one_rejected_instructor(request_id, instructor_id)` ngăn người đã bị từ chối nhận lại cùng request.
+
+## Migration v9: Cart draft, quyền package và thảo luận lớp
+
+- `cart_item.one_on_one_needs` lưu draft JSON của form 1-1 theo đúng package trong giỏ.
+- `enrollment_package.status` là nguồn quyết định quyền sau refund/cancel/revoke/expire.
+
+## Support chat
+
+`anonymous_visitor.id` dùng Snowflake `BIGINT`, liên kết với `support_conversation.visitor_id`. Policy guided là tài liệu MinIO trong `policies/`; `file_metadata.usage_type = POLICY` và bản `ACTIVE` mới nhất xác định phiên bản hiện hành.
+
+`support_conversation` lưu riêng `last_hr_message_at`, `last_visitor_message_at`, `close_requested_at` để countdown đóng phiên không phụ thuộc audit `updated_at`.
+
+`support_conversation.full_name` và `email` bắt buộc với yêu cầu mới để supporter nhận diện khách; số điện thoại là tùy chọn và không hiển thị trên card hàng đợi.
+
+`support_chat_message.message_type` có `TEXT`, `QUICK_REPLIES`, `COURSE_RESULTS`, `RESOURCE_CARD`, `ATTACHMENT`, `SYSTEM`. `metadata` JSON lưu card course/category/package đã xác thực hoặc metadata file MinIO; attachment tối đa 10MB và chỉ hợp lệ ở conversation `ACTIVE`. Thay đổi không cần migration mới vì hai cột đã dùng `VARCHAR`/`JSON` từ v14.
+
+`support_hr_presence` là trạng thái hệ thống: heartbeat 30 giây, timeout 90 giây. Workload mở làm trạng thái thành `ONLINE_BUSY`; không có workload là `ONLINE_AVAILABLE`. Ticket ưu tiên người available, sau đó vào hàng đợi cá nhân của người busy có workload thấp nhất; supporter offline làm ticket quay lại queue chung.
+- `class_stream_post` hỗ trợ `QUESTION`, `DISCUSSION`, `ANNOUNCEMENT`, ghim, khóa bình luận và ẩn.
+- `class_stream_comment` lưu bình luận/trả lời có audit và phân trang theo bài đăng.
+
+## Migration v11: Sửa liên kết lớp cho COMBO
+
+- COMBO có `max_group_size > 1` phải tham chiếu lớp `ACTIVE` thuộc cùng khóa học.
+- Lớp có thể được bán qua cả package `GROUP_CLASS` và `COMBO`; giới hạn chỗ dựa trên `class_member` thay vì số package tham chiếu.
+- COMBO cũ không có lớp được chuẩn hóa thành tự học + 1-1 (`max_group_size = NULL`) và vẫn yêu cầu form nhu cầu nếu có buổi gia sư.

@@ -35,6 +35,12 @@ export const getUsageTypeBadge = (usageType?: FileUsageTypeEnum) => {
       return <Badge variant="outline" className="bg-indigo-500/10 text-indigo-600 border-indigo-500/30 font-semibold text-[10px]">Assignment</Badge>;
     case "LESSON_RESOURCE":
       return <Badge variant="outline" className="bg-teal-500/10 text-teal-600 border-teal-500/30 font-semibold text-[10px]">Bài học</Badge>;
+    case "LESSON_VIDEO":
+      return <Badge variant="outline" className="bg-violet-500/10 text-violet-600 border-violet-500/30 font-semibold text-[10px]">Video bài học</Badge>;
+    case "COURSE_LESSON":
+      return <Badge variant="outline" className="bg-cyan-500/10 text-cyan-600 border-cyan-500/30 font-semibold text-[10px]">Bài học khóa học</Badge>;
+    case "POLICY":
+      return <Badge variant="outline" className="bg-rose-500/10 text-rose-600 border-rose-500/30 font-semibold text-[10px]">Chính sách</Badge>;
     default:
       return <Badge variant="outline" className="bg-gray-500/10 text-gray-600 border-gray-500/30 font-semibold text-[10px]">Khác</Badge>;
   }

@@ -57,6 +57,10 @@ public class EmployeeEntity extends BaseEntity {
     @Column(name = "position", length = 100)
     private String position;
 
+    /** Phần giới thiệu công khai do giảng viên/nhân sự cập nhật. */
+    @Column(name = "bio", columnDefinition = "TEXT")
+    private String bio;
+
     /**
      * Loại hình làm việc (FULL_TIME, PART_TIME, CONTRACT, INTERN).
      */

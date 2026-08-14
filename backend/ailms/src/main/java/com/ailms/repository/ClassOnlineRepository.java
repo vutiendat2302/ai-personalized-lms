@@ -17,9 +17,37 @@ public interface ClassOnlineRepository extends BaseRepository<ClassOnlineEntity,
     List<ClassOnlineEntity> findByTeacherEntity_Id(Long teacherId);
     boolean existsByCode(String code);
 
+    /** Khóa buổi học để hai yêu cầu hủy đồng thời không phát thông báo trùng. */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT session FROM ClassOnlineEntity session WHERE session.id = :id")
+    java.util.Optional<ClassOnlineEntity> findByIdForUpdate(@Param("id") Long id);
+
+    /** Lấy lịch dạy của nhiều lớp trong một khoảng thời gian, đã nạp thông tin lớp và khóa học. */
+    @EntityGraph(attributePaths = {"classEntity", "classEntity.courseEntity", "teacherEntity"})
+    List<ClassOnlineEntity> findByClassEntity_IdInAndScheduledAtGreaterThanEqualAndScheduledAtLessThanOrderByScheduledAtAsc(
+            List<Long> classIds, LocalDateTime from, LocalDateTime to);
+
     @EntityGraph(attributePaths = {"classEntity", "classEntity.courseEntity", "teacherEntity"})
     List<ClassOnlineEntity> findByScheduledAtGreaterThanEqualAndScheduledAtLessThanOrderByScheduledAtAsc(
             LocalDateTime from, LocalDateTime to);
+
+    /** Lấy buổi học của đúng các lớp còn quyền và nằm trong thời hạn lớp. */
+    @EntityGraph(attributePaths = {"classEntity", "classEntity.courseEntity", "teacherEntity"})
+    @Query("""
+        SELECT session FROM ClassOnlineEntity session
+        WHERE session.classEntity.id IN :classIds
+          AND session.status = com.ailms.entity.enums.BaseStatusEnum.ACTIVE
+          AND session.classEntity.status = com.ailms.entity.enums.BaseStatusEnum.ACTIVE
+          AND session.scheduledAt >= :from
+          AND session.scheduledAt < :to
+          AND (session.classEntity.startDate IS NULL OR session.scheduledAt >= session.classEntity.startDate)
+          AND (session.classEntity.endDate IS NULL OR session.scheduledAt <= session.classEntity.endDate)
+        ORDER BY session.scheduledAt ASC
+        """)
+    List<ClassOnlineEntity> findStudentSchedule(
+            @Param("classIds") List<Long> classIds,
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to);
 
     @Query("""
             select session from ClassOnlineEntity session

@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Optional;
 
 import com.ailms.entity.enums.BaseStatusEnum;
+import com.ailms.entity.enums.FileUsageTypeEnum;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -18,6 +19,11 @@ import java.util.List;
 import java.util.Optional;
 
 public interface FileMetadataRepository extends BaseRepository<FileMetadataEntity, Long> {
+    /** Lấy policy file mới nhất đang hoạt động để support công bố đúng phiên bản hiện hành. */
+    Optional<FileMetadataEntity> findFirstByUsageTypeAndStatusOrderByCreatedAtDesc(
+            FileUsageTypeEnum usageType, BaseStatusEnum status);
+    /** Lấy các phiên bản policy active để dọn vector cũ. */
+    List<FileMetadataEntity> findByUsageTypeAndStatus(FileUsageTypeEnum usageType, BaseStatusEnum status);
     Optional<FileMetadataEntity> findByFileKey(String fileKey);
     List<FileMetadataEntity> findByFileType(FileTypeEnum fileType);
     List<FileMetadataEntity> findByStatusAndOrphanedDetectedAtIsNull(BaseStatusEnum status);

@@ -1,5 +1,5 @@
 import React from "react";
-import { Bot, Sparkles, Trash2, Minimize2 } from "lucide-react";
+import { Bot, Sparkles, Trash2, Minimize2, History, Plus } from "lucide-react";
 import type { UserSystemRole } from "@/types/ai";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,8 @@ interface ChatHeaderProps {
   userRoleLabel?: UserSystemRole;
   hasMessages: boolean;
   onClearHistory: () => void;
+  onToggleHistory: () => void;
+  onNewConversation: () => void;
   onClose: () => void;
 }
 
@@ -15,8 +17,16 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   userRoleLabel,
   hasMessages,
   onClearHistory,
+  onToggleHistory,
+  onNewConversation,
   onClose,
 }) => {
+  const subtitle = userRoleLabel === "STUDENT"
+    ? "Trợ lý hỗ trợ học tập AILMS"
+    : userRoleLabel === "TEACHER" || userRoleLabel === "TA"
+      ? "Trợ lý hỗ trợ giảng dạy AILMS"
+      : "Trợ lý hỗ trợ quản trị AILMS";
+
   return (
     <div className="px-4 py-3 bg-primary/10 border-b border-border/60 flex items-center justify-between">
       <div className="flex items-center gap-2.5">
@@ -33,10 +43,26 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
               </Badge>
             )}
           </div>
-          <p className="text-[11px] text-muted-foreground">Trợ lý hỗ trợ quản trị AILMS</p>
+          <p className="text-[11px] text-muted-foreground">{subtitle}</p>
         </div>
       </div>
       <div className="flex items-center gap-1">
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          onClick={onToggleHistory}
+          title="Lịch sử hội thoại"
+        >
+          <History className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          onClick={onNewConversation}
+          title="Cuộc trò chuyện mới"
+        >
+          <Plus className="h-4 w-4" />
+        </Button>
         {hasMessages && (
           <Button
             variant="ghost"

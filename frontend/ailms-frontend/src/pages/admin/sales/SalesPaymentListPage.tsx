@@ -124,7 +124,7 @@ export const SalesPaymentListPage: React.FC = () => {
           >
             <option value="ALL">Tất cả cổng thanh toán</option>
             <option value="VNPAY">VNPAY</option>
-            <option value="MOMO">MOMO</option>
+            <option value="PAYPAL">PAYPAL</option>
             <option value="BANK_TRANSFER">Chuyển khoản</option>
           </select>
 

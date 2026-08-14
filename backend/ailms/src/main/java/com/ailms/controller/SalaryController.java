@@ -51,6 +51,7 @@ public class SalaryController {
     }
 
     @GetMapping("/payroll-batches")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_HR')")
     public ResponseEntity<ApiResponse<List<PayrollBatchResponse>>> getPayrollBatches(
             @RequestParam @DateTimeFormat(pattern = "yyyy-MM") YearMonth periodFrom,
             @RequestParam @DateTimeFormat(pattern = "yyyy-MM") YearMonth periodTo) {
@@ -128,6 +129,7 @@ public class SalaryController {
     }
 
     @GetMapping("/summary")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_HR')")
     public ResponseEntity<ApiResponse<SalarySummaryResponse>> getSummary(
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM") YearMonth period) {
         SalarySummaryResponse summary = salaryService.getSummary(period);
@@ -135,6 +137,7 @@ public class SalaryController {
     }
 
     @GetMapping("/summary-range")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_HR')")
     public ResponseEntity<ApiResponse<SalarySummaryResponse>> getSummaryRange(
             @RequestParam @DateTimeFormat(pattern = "yyyy-MM") YearMonth periodFrom,
             @RequestParam @DateTimeFormat(pattern = "yyyy-MM") YearMonth periodTo) {
@@ -150,6 +153,7 @@ public class SalaryController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_HR')")
     public ResponseEntity<ApiResponse<SalaryResponse>> create(@Valid @RequestBody CreateSalaryRequest request) {
         SalaryResponse response = salaryService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of("Salary record created successfully", response));
@@ -177,12 +181,14 @@ public class SalaryController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_HR')")
     public ResponseEntity<ApiResponse<PageResponse<SalaryResponse>>> getAll(SalarySearchRequest request) {
         PageResponse<SalaryResponse> result = salaryService.search(request);
         return ResponseEntity.ok(ApiResponse.of("Salary records retrieved successfully", result));
     }
 
     @GetMapping("/search")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_HR')")
     public ResponseEntity<ApiResponse<PageResponse<SalaryResponse>>> search(SalarySearchRequest request) {
         PageResponse<SalaryResponse> result = salaryService.search(request);
         return ResponseEntity.ok(ApiResponse.of("Search Salary successfully", result));
@@ -238,6 +244,7 @@ public class SalaryController {
     }
 
     @GetMapping("/export")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_HR')")
     public ResponseEntity<byte[]> exportCsv(
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM") YearMonth period,
             @RequestParam(required = false) Long departmentId,
@@ -252,6 +259,7 @@ public class SalaryController {
     }
 
     @GetMapping("/export-range")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_HR')")
     public ResponseEntity<byte[]> exportCsvRange(
             @RequestParam @DateTimeFormat(pattern = "yyyy-MM") YearMonth periodFrom,
             @RequestParam @DateTimeFormat(pattern = "yyyy-MM") YearMonth periodTo,

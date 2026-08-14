@@ -88,9 +88,20 @@ const resolveBackendUrl = (url?: string | null): string | undefined => {
     return url;
   }
   const base = (import.meta.env.VITE_BE_URL || "").replace(/\/$/, "");
-  if (!base) return url;
+  if (!base) return url.startsWith("/v1/") ? `/api${url}` : url;
   const normalized = url.startsWith("/") ? url : `/${url}`;
+  if (base.endsWith("/api") && normalized.startsWith("/api/")) {
+    return `${base.slice(0, -4)}${normalized}`;
+  }
   return `${base}${normalized}`;
+};
+
+/** Thêm phiên bản cập nhật để trình duyệt không giữ ảnh avatar cũ trong cache. */
+const resolveAvatarUrl = (url?: string | null, version?: string | null): string | undefined => {
+  const resolved = resolveBackendUrl(url);
+  if (!resolved) return undefined;
+  if (!version) return resolved;
+  return `${resolved}${resolved.includes("?") ? "&" : "?"}v=${encodeURIComponent(version)}`;
 };
 
 const displayText = (value?: string | number | null): string => {
@@ -116,7 +127,7 @@ const studentProfileSchema = z.object({
   isMinor: z.boolean(),
 });
 
-// 3. EmployeeEntity Schema (Dùng chung cho Teacher, TA, HR, Admin)
+// 3. EmployeeEntity Schema (Dùng chung cho Teacher, TA, HR, Support, Admin)
 const employeeProfileSchema = z.object({
   employeeCode: z.string().optional(),
   departmentId: z.string().optional(),
@@ -140,10 +151,10 @@ const changePasswordSchema = z
 
 export const Profile: React.FC = () => {
   const navigate = useNavigate();
-  const { auth } = useAuth();
+  const { auth, updateCurrentUser } = useAuth();
   const [profile, setProfile] = useState<UserEntity | null>(null);
 
-  // Profile Type: "STUDENT" (Học viên) hoặc "EMPLOYEE" (Giảng viên, TA, HR, Admin)
+  // Profile Type: "STUDENT" hoặc "EMPLOYEE" (Giảng viên, TA, HR, Support, Admin)
   const [profileCategory, setProfileCategory] = useState<"STUDENT" | "EMPLOYEE">("STUDENT");
   const [roleTitle, setRoleTitle] = useState<string>("Học Viên");
 
@@ -155,6 +166,7 @@ export const Profile: React.FC = () => {
   const [roleInfoStatus, setRoleInfoStatus] = useState({ success: "", error: "", loading: false });
   const [passwordStatus, setPasswordStatus] = useState({ success: "", error: "", loading: false });
   const [avatarStatus, setAvatarStatus] = useState({ success: "", error: "", loading: false });
+  const [avatarVersion, setAvatarVersion] = useState<string>();
 
   // Password visibility
   const [showOldPass, setShowOldPass] = useState(false);
@@ -278,7 +290,7 @@ export const Profile: React.FC = () => {
     }
   };
 
-  // Strictly categorize user profile: STUDENT vs EMPLOYEE (Teacher, TA, HR, Admin)
+  // Strictly categorize user profile: STUDENT vs EMPLOYEE (Teacher, TA, HR, Support, Admin)
   const detectCategoryAndTitle = (userData: any, authState: any) => {
     const rolesList = authState?.user?.roles || userData?.roles || [];
     const roleStr = JSON.stringify(rolesList).toUpperCase();
@@ -297,6 +309,10 @@ export const Profile: React.FC = () => {
     }
     if (roleStr.includes("HR")) {
       setRoleTitle("Nhân Sự");
+      return "EMPLOYEE";
+    }
+    if (roleStr.includes("SUPPORT")) {
+      setRoleTitle("Nhân Viên Hỗ Trợ");
       return "EMPLOYEE";
     }
     setRoleTitle("Học Viên");
@@ -352,7 +368,7 @@ export const Profile: React.FC = () => {
             setGuardians([]);
           }
         } else {
-          // EMPLOYEE (Teacher, TA, HR, Admin share EmployeeEntity)
+          // EMPLOYEE (Teacher, TA, HR, Support, Admin share EmployeeEntity)
           employeeForm.reset({
             employeeCode: attrs.employeeCode || "",
             departmentId: attrs.departmentId ? String(attrs.departmentId) : "",
@@ -397,6 +413,7 @@ export const Profile: React.FC = () => {
         gender: data.gender ? parseInt(data.gender) : undefined,
       });
       setProfile(updated);
+      setAvatarVersion(String(Date.now()));
       await fetchProfile();
       setBasicStatus({ success: "Đã lưu thông tin cá nhân cơ bản vào CSDL!", error: "", loading: false });
       setTimeout(() => setBasicStatus((s) => ({ ...s, success: "" })), 3500);
@@ -597,6 +614,13 @@ export const Profile: React.FC = () => {
 
 
       setProfile(updated);
+      const nextAvatarVersion = String(Date.now());
+      setAvatarVersion(nextAvatarVersion);
+      updateCurrentUser({
+        avatarUrl: updated.avatarUrl
+          ? `${updated.avatarUrl}${updated.avatarUrl.includes("?") ? "&" : "?"}v=${nextAvatarVersion}`
+          : null,
+      });
       setAvatarStatus({ success: "Đã tải avatar lên MinIO & lưu CSDL!", error: "", loading: false });
       setAvatarEditOpen(false);
       setSelectedAvatarFile(null);
@@ -615,6 +639,8 @@ export const Profile: React.FC = () => {
     try {
       const updated = await userService.deleteAvatar();
       setProfile(updated);
+      setAvatarVersion(String(Date.now()));
+      updateCurrentUser({ avatarUrl: null });
       setAvatarStatus({ success: "Đã xóa ảnh đại diện về mặc định trong CSDL!", error: "", loading: false });
       setTimeout(() => setAvatarStatus((s) => ({ ...s, success: "" })), 3000);
     } catch (e) {
@@ -652,6 +678,7 @@ export const Profile: React.FC = () => {
     if (roleTitle.includes("Giảng Viên")) return <Badge className="bg-blue-600 text-white font-bold text-xs gap-1"><Award className="h-3.5 w-3.5" /> {roleTitle}</Badge>;
     if (roleTitle.includes("Trợ Giảng")) return <Badge className="bg-cyan-600 text-white font-bold text-xs gap-1"><Award className="h-3.5 w-3.5" /> {roleTitle}</Badge>;
     if (roleTitle.includes("Nhân Sự")) return <Badge className="bg-purple-600 text-white font-bold text-xs gap-1"><Briefcase className="h-3.5 w-3.5" /> {roleTitle}</Badge>;
+    if (roleTitle.includes("Hỗ Trợ")) return <Badge className="bg-indigo-600 text-white font-bold text-xs gap-1"><Briefcase className="h-3.5 w-3.5" /> {roleTitle}</Badge>;
     return <Badge className="bg-emerald-600 text-white font-bold text-xs gap-1"><GraduationCap className="h-3.5 w-3.5" /> {roleTitle}</Badge>;
   };
 
@@ -788,7 +815,7 @@ export const Profile: React.FC = () => {
                     title="Click vào ảnh để xem phóng to HD"
                   >
                     <Avatar className="h-24 w-24 border-4 border-primary/20 group-hover:border-primary/60 transition-all shadow-md">
-                      <AvatarImage src={resolveBackendUrl(profile?.avatarUrl) || `https://api.dicebear.com/7.x/adventurer/svg?seed=${profile?.username}`} />
+                      <AvatarImage src={resolveAvatarUrl(profile?.avatarUrl, avatarVersion || profile?.updatedAt)} />
                       <AvatarFallback className="bg-primary/10 text-primary font-extrabold uppercase text-2xl">
                         {profile?.username.slice(0, 2)}
                       </AvatarFallback>
@@ -944,7 +971,7 @@ export const Profile: React.FC = () => {
               <CardDescription className="text-xs text-muted-foreground">
                 {profileCategory === "STUDENT"
                   ? "Quản lý trình độ, trường học, mục tiêu và người giám hộ khi học viên chưa thành niên."
-                  : "Hồ sơ công tác dành cho Giảng viên, Trợ giảng, Nhân sự HR và Admin."}
+                  : "Hồ sơ công tác dành cho Giảng viên, Trợ giảng, Nhân sự HR, Support và Admin."}
               </CardDescription>
             </CardHeader>
 
@@ -1149,7 +1176,7 @@ export const Profile: React.FC = () => {
               )}
 
               {/* ==========================================
-                  HỒ SƠ 2: CHỈ HIỂN THỊ KHI LÀ CÁN BỘ / NHÂN SỰ (TEACHER, TA, HR, ADMIN)
+                  HỒ SƠ 2: CHỈ HIỂN THỊ KHI LÀ CÁN BỘ / NHÂN SỰ (TEACHER, TA, HR, SUPPORT, ADMIN)
                   ========================================== */}
               {profileCategory === "EMPLOYEE" && (
                 <div className="space-y-6 animate-in fade-in-50">
@@ -1204,7 +1231,7 @@ export const Profile: React.FC = () => {
                     </div>
                   )}
 
-                  {/* FORM EMPLOYEEENTITY (TEACHER, TA, HR, ADMIN) */}
+                  {/* FORM EMPLOYEEENTITY (TEACHER, TA, HR, SUPPORT, ADMIN) */}
                   <form onSubmit={employeeForm.handleSubmit(onRoleInfoSubmit)} className="space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div className="space-y-1.5">
@@ -1404,12 +1431,18 @@ export const Profile: React.FC = () => {
 
           <div className="flex flex-col items-center justify-center gap-4 py-4">
             <div className="w-80 h-80 rounded-full border-4 border-primary/40 shadow-2xl overflow-hidden bg-black flex items-center justify-center">
-              <img
-                src={resolveBackendUrl(profile?.avatarUrl) || `https://api.dicebear.com/7.x/adventurer/svg?seed=${profile?.username}`}
-                alt="Avatar Large Preview"
-                style={{ transform: `scale(${detailZoom}) rotate(${detailRotate}deg)`, transition: "transform 0.2s ease" }}
-                className="w-full h-full object-cover"
-              />
+              {resolveAvatarUrl(profile?.avatarUrl, avatarVersion || profile?.updatedAt) ? (
+                <img
+                  src={resolveAvatarUrl(profile?.avatarUrl, avatarVersion || profile?.updatedAt)}
+                  alt="Avatar Large Preview"
+                  style={{ transform: `scale(${detailZoom}) rotate(${detailRotate}deg)`, transition: "transform 0.2s ease" }}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span className="text-6xl font-extrabold uppercase text-white">
+                  {profile?.username.slice(0, 2)}
+                </span>
+              )}
             </div>
 
             {/* Zoom / Rotate Controls for enlarged preview */}

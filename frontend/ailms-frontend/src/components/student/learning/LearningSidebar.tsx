@@ -6,6 +6,7 @@ interface LearningSidebarProps {
   curriculum: CourseCurriculumResponse | null;
   activeLessonId: string | null;
   onSelectLesson: (lesson: LessonCurriculumItem) => void;
+  onLockedLesson?: () => void;
   isCanBypassLock?: boolean;
 }
 
@@ -13,6 +14,7 @@ export const LearningSidebar: React.FC<LearningSidebarProps> = ({
   curriculum,
   activeLessonId,
   onSelectLesson,
+  onLockedLesson,
   isCanBypassLock = false,
 }) => {
   const getIcon = (type: string) => {
@@ -50,12 +52,12 @@ export const LearningSidebar: React.FC<LearningSidebarProps> = ({
               {section.lessons?.map((lesson) => {
                 const isActive = activeLessonId === lesson.id;
                 const isCompleted = lesson.completed;
-                const isLocked = !isCanBypassLock && lesson.previewType === "LOCKED";
+                const isLocked = !isCanBypassLock && Boolean(lesson.locked);
 
                 return (
                   <div
                     key={lesson.id}
-                    onClick={() => !isLocked && onSelectLesson(lesson)}
+                    onClick={() => isLocked ? onLockedLesson?.() : onSelectLesson(lesson)}
                     className={`flex items-center gap-2.5 p-2 rounded-lg text-xs cursor-pointer transition ${
                       isActive
                         ? "bg-blue-50 text-blue-700 font-semibold"

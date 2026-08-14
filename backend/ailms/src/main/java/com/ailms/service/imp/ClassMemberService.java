@@ -17,6 +17,7 @@ import com.ailms.event.AuditLogEvent;
 import com.ailms.response.MemberDetailResponse;
 import com.ailms.response.PageResponse;
 import com.ailms.service.IClassMemberService;
+import com.ailms.service.ITeacherActivityService;
 import com.ailms.response.ClassMemberResponse;
 import com.ailms.service.lock.CapacityLockStrategy;
 import lombok.RequiredArgsConstructor;
@@ -45,6 +46,7 @@ public class ClassMemberService implements IClassMemberService {
     private final StudentProfileRepository studentProfileRepository;
     private final DegreeRepository degreeRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final ITeacherActivityService teacherActivityService;
 
     @Qualifier("pessimisticLockStrategy")
     private final CapacityLockStrategy capacityLockStrategy;
@@ -159,6 +161,11 @@ public class ClassMemberService implements IClassMemberService {
             }
 
             ClassMemberEntity saved = classMemberRepository.save(member);
+
+            if (role == ClassMemberRole.STUDENT && newStatus == ClassMemberStatusEnum.ACTIVE
+                    && oldStatus != ClassMemberStatusEnum.ACTIVE) {
+                teacherActivityService.studentJoined(saved);
+            }
 
             // Sync enrollment status
             if (role == ClassMemberRole.STUDENT) {

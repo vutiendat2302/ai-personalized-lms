@@ -3,12 +3,20 @@ package com.ailms.controller;
 import com.ailms.request.*;
 import com.ailms.response.*;
 import com.ailms.service.ICourseAuthoringService;
+import com.ailms.service.imp.AiAssessmentAuthoringService;
+import com.ailms.request.ai.AiAssessmentApplyRequest;
+import com.ailms.response.ai.AiAssessmentApplyResponse;
+import com.ailms.response.ai.AiAssessmentDraftResponse;
+import com.ailms.security.CustomUserDetails;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -24,6 +32,7 @@ import java.util.List;
 public class CourseAuthoringController {
 
     private final ICourseAuthoringService courseAuthoringService;
+    private final AiAssessmentAuthoringService aiAssessmentAuthoringService;
 
     // ────────────── CURRICULUM TREE ──────────────
 
@@ -123,6 +132,32 @@ public class CourseAuthoringController {
             @PathVariable Long assignmentId,
             @Valid @RequestBody AssignmentRequest request) {
         return ResponseEntity.ok(ApiResponse.of("Cập nhật bài tập tự luận Assignment thành công", courseAuthoringService.updateAssignment(assignmentId, request)));
+    }
+
+    // ────────────── AI ASSESSMENT DRAFT ──────────────
+
+    /** Sinh draft quiz/assignment từ block lesson và tối đa ba file nguồn, chưa lưu assessment thật. */
+    @PostMapping(value = "/lessons/{lessonId}/ai-assessment-drafts", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<AiAssessmentDraftResponse>> generateAssessmentDraft(
+            @PathVariable Long lessonId,
+            @RequestParam(value = "assessmentType", required = false) String assessmentType,
+            @RequestParam(value = "questionCount", required = false) Integer questionCount,
+            @RequestPart(value = "materials", required = false) MultipartFile[] materials,
+            @AuthenticationPrincipal CustomUserDetails currentUser) {
+        return ResponseEntity.ok(ApiResponse.of("Đã tạo draft assessment AI, hãy xem và xác nhận trước khi lưu",
+                aiAssessmentAuthoringService.generateDraft(
+                        lessonId, assessmentType, questionCount, materials, currentUser)));
+    }
+
+    /** Áp dụng một lần draft đã xem vào quiz/assignment block thật của lesson. */
+    @PostMapping("/ai-assessment-drafts/{draftId}/apply")
+    public ResponseEntity<ApiResponse<AiAssessmentApplyResponse>> applyAssessmentDraft(
+            @PathVariable String draftId,
+            @Valid @RequestBody AiAssessmentApplyRequest request,
+            @AuthenticationPrincipal CustomUserDetails currentUser) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.of("Đã tạo assessment từ draft AI", aiAssessmentAuthoringService
+                        .applyDraft(draftId, request, currentUser)));
     }
 
     // ────────────── WORKFLOW & APPROVAL ──────────────

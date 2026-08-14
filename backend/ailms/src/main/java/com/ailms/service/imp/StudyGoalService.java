@@ -6,6 +6,8 @@ import com.ailms.entity.enums.StudyGoalStatusEnum;
 import com.ailms.entity.enums.StudyGoalTypeEnum;
 import com.ailms.event.AuditLogEvent;
 import com.ailms.exception.ResourceNotFoundException;
+import com.ailms.exception.DuplicateResourceException;
+import com.ailms.exception.BadRequestException;
 import com.ailms.mapper.StudyGoalMapper;
 import com.ailms.repository.StudyGoalRepository;
 import com.ailms.repository.specification.StudyGoalSpecification;
@@ -99,6 +101,9 @@ public class StudyGoalService implements IStudyGoalService {
     @Override
     public StudyGoalResponse create(CreateStudyGoalRequest request) {
         log.info("Creating study goal for user: {}", request.getUserId());
+        validateGoalInput(request.getStudyGoalTypeEnum(), request.getTargetValue());
+        validateGeneralGoal(request.getUserId(), null);
+        request.setCourseId(null);
         StudyGoalEntity entity = studyGoalMapper.toEntity(request);
         StudyGoalEntity saved = studyGoalRepository.save(entity);
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CREATE", "STUDY_GOAL", saved.getId(), null, saved));
@@ -111,7 +116,10 @@ public class StudyGoalService implements IStudyGoalService {
         log.info("Updating study goal: {}", id);
         StudyGoalEntity existing = studyGoalRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
+        validateGoalInput(request.getStudyGoalTypeEnum(), request.getTargetValue());
+        validateGeneralGoal(existing.getUserId(), id);
         studyGoalMapper.updateFromRequest(request, existing);
+        existing.setCourseId(null);
         StudyGoalEntity updated = studyGoalRepository.save(existing);
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "UPDATE", "STUDY_GOAL", id, null, updated));
         return studyGoalMapper.toResponse(updated);
@@ -135,6 +143,10 @@ public class StudyGoalService implements IStudyGoalService {
         log.info("Evaluating progress for study goal: {}", goalId);
         StudyGoalEntity goal = studyGoalRepository.findById(goalId)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, goalId));
+
+        if (goal.getCourseId() != null) {
+            throw new IllegalArgumentException("Study goals must be general and cannot be attached to a course");
+        }
 
 
         StudyGoalProgressCalculator calc = calculatorMap.get(goal.getStudyGoalTypeEnum());
@@ -172,12 +184,30 @@ public class StudyGoalService implements IStudyGoalService {
     @Override
     public List<GoalProgress> evaluateUserGoals(Long userId) {
         log.info("Evaluating all active study goals for user: {}", userId);
-        List<StudyGoalEntity> userGoals = studyGoalRepository.findByUserId(userId);
+        List<StudyGoalEntity> userGoals = studyGoalRepository.findByUserId(userId).stream()
+                .filter(goal -> goal.getCourseId() == null).toList();
         List<GoalProgress> results = new ArrayList<>();
 
         for (StudyGoalEntity goal : userGoals) {
             results.add(evaluateGoal(goal.getId()));
         }
         return results;
+    }
+
+    /** Chỉ cho phép một mục tiêu chung, không gắn với khóa học, trên mỗi học viên. */
+    private void validateGeneralGoal(Long userId, Long excludedGoalId) {
+        boolean exists = studyGoalRepository.findByUserId(userId).stream()
+                .anyMatch(goal -> goal.getCourseId() == null
+                        && (excludedGoalId == null || !goal.getId().equals(excludedGoalId)));
+        if (exists) {
+            throw DuplicateResourceException.of(RESOURCE_NAME, "userId", userId.toString());
+        }
+    }
+
+    /** Kiểm tra mục tiêu có loại và giá trị dương trước khi lưu. */
+    private void validateGoalInput(StudyGoalTypeEnum type, Integer targetValue) {
+        if (type == null || targetValue == null || targetValue <= 0) {
+            throw new BadRequestException("Goal type and a positive target value are required");
+        }
     }
 }

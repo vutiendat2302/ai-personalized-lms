@@ -71,7 +71,7 @@ public class SalaryService implements ISalaryService {
     @Override
     public List<SalaryResponse> getAll() {
         log.info("Getting all salary records");
-        return salaryMapper.toResponseList(salaryRepository.findAll());
+        return salaryMapper.toResponseList(restrictPayrollCreatorScope(salaryRepository.findAll()));
     }
 
     @Override
@@ -156,6 +156,8 @@ public class SalaryService implements ISalaryService {
 
         SalaryEntity existing = salaryRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
+
+        verifySalaryAccess(existing);
 
         String oldValue = SimpleJsonWriter.toJson(existing);
         if (existing.getStatus() != SalaryStatusEnum.DRAFT
@@ -506,6 +508,8 @@ public class SalaryService implements ISalaryService {
         SalaryEntity existing = salaryRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
 
+        verifySalaryAccess(existing);
+
         String oldValue = SimpleJsonWriter.toJson(existing);
         if (existing.getStatus() != SalaryStatusEnum.DRAFT) {
             throw new BusinessException("Bảng lương đã duyệt hoặc đã thanh toán. Không thể xóa.");
@@ -584,7 +588,8 @@ public class SalaryService implements ISalaryService {
             throw new BusinessException("Salary period range must be between 1 and 600 months");
         }
 
-        List<SalaryEntity> slips = salaryRepository.findByPeriodBetweenAndDeletedAtIsNull(from, to);
+        List<SalaryEntity> slips = restrictPayrollCreatorScope(
+                salaryRepository.findByPeriodBetweenAndDeletedAtIsNull(from, to));
 
         long totalSlips = slips.size();
         long draftCount = slips.stream().filter(s -> s.getStatus() == SalaryStatusEnum.DRAFT).count();
@@ -612,7 +617,8 @@ public class SalaryService implements ISalaryService {
 
         List<SalaryTrendPoint> trend = new ArrayList<>();
         YearMonth startMonth = from.equals(to) ? to.minusMonths(5) : from;
-        List<SalaryEntity> historicalSlips = salaryRepository.findByPeriodBetweenAndDeletedAtIsNull(startMonth, to);
+        List<SalaryEntity> historicalSlips = restrictPayrollCreatorScope(
+                salaryRepository.findByPeriodBetweenAndDeletedAtIsNull(startMonth, to));
 
         DateTimeFormatter fmt = DateTimeFormatter.ofPattern("MM/yyyy");
         YearMonth curr = startMonth;
@@ -651,7 +657,7 @@ public class SalaryService implements ISalaryService {
         YearMonth from = periodFrom != null ? periodFrom : YearMonth.now();
         YearMonth to = periodTo != null ? periodTo : from;
         if (to.isBefore(from)) throw new BusinessException("Invalid payroll period range");
-        return salaryRepository.findByPeriodBetweenAndDeletedAtIsNull(from, to).stream()
+        return restrictPayrollCreatorScope(salaryRepository.findByPeriodBetweenAndDeletedAtIsNull(from, to)).stream()
                 .collect(Collectors.groupingBy(SalaryEntity::getPeriod))
                 .entrySet().stream().sorted(Map.Entry.<YearMonth, List<SalaryEntity>>comparingByKey().reversed())
                 .map(entry -> {
@@ -721,6 +727,7 @@ public class SalaryService implements ISalaryService {
     public int submitPayroll(YearMonth period) {
         List<SalaryEntity> slips = salaryRepository.findByPeriodAndDeletedAtIsNull(period);
         if (slips.isEmpty()) throw new BusinessException("Payroll does not exist");
+        if (isHrWithoutAdmin()) assertPayrollOwnedByCurrentHr(slips);
         if (slips.stream().anyMatch(item -> item.getStatus() != SalaryStatusEnum.DRAFT))
             throw new BusinessException("Only a fully draft payroll can be submitted");
         LocalDateTime submittedAt = LocalDateTime.now();
@@ -775,6 +782,7 @@ public class SalaryService implements ISalaryService {
     public int resubmitPayroll(YearMonth period) {
         List<SalaryEntity> slips = requirePayrollStatus(period, SalaryStatusEnum.REJECTED,
                 "Only a rejected payroll can be resubmitted");
+        if (isHrWithoutAdmin()) assertPayrollOwnedByCurrentHr(slips);
         LocalDateTime resubmittedAt = LocalDateTime.now();
         slips.forEach(item -> { item.setStatus(SalaryStatusEnum.PENDING); item.setSubmittedAt(resubmittedAt); item.setApprovedAt(null); });
         salaryRepository.saveAll(slips);
@@ -927,6 +935,9 @@ public class SalaryService implements ISalaryService {
         log.info("Generating batch salary slips for period: {}", period);
 
         List<SalaryEntity> existingPeriod = salaryRepository.findByPeriodAndDeletedAtIsNull(period);
+        if (isHrWithoutAdmin() && !existingPeriod.isEmpty()) {
+            assertPayrollOwnedByCurrentHr(existingPeriod);
+        }
         if (existingPeriod.stream().anyMatch(item -> item.getStatus() != SalaryStatusEnum.DRAFT
                 && item.getStatus() != SalaryStatusEnum.REJECTED)) {
             throw new BusinessException("Bảng lương kỳ " + period + " đã gửi duyệt hoặc đã duyệt, không thể tính lại");
@@ -1035,7 +1046,8 @@ public class SalaryService implements ISalaryService {
         if (to.isBefore(from) || ChronoUnit.MONTHS.between(from, to) > 599) {
             throw new BusinessException("Salary period range must be between 1 and 600 months");
         }
-        List<SalaryEntity> list = salaryRepository.findByPeriodBetweenAndDeletedAtIsNull(from, to);
+        List<SalaryEntity> list = restrictPayrollCreatorScope(
+                salaryRepository.findByPeriodBetweenAndDeletedAtIsNull(from, to));
 
         if (departmentId != null) {
             list = list.stream()
@@ -1146,6 +1158,9 @@ public class SalaryService implements ISalaryService {
     }
 
     private void verifySalaryAccess(SalaryEntity salary) {
+        if (isHrWithoutAdmin() && !Objects.equals(salary.getCreatedBy(), getCurrentUserId())) {
+            throw new BusinessException("HR chỉ được xem và chỉnh sửa bảng lương do mình tạo");
+        }
         verifyEmployeeAccess(salary.getEmployee().getUserId());
     }
 
@@ -1153,10 +1168,27 @@ public class SalaryService implements ISalaryService {
         Long currentUserId = getCurrentUserId();
         List<String> roles = getCurrentUserRoles();
 
-        if (roles.contains("ROLE_ADMIN") || roles.contains("ROLE_HR")) {
+        if (roles.contains("ROLE_ADMIN")) {
             return Specification.unrestricted();
         }
 
+        if (roles.contains("ROLE_HR")) {
+            return (root, ignoredQuery, cb) -> cb.equal(root.get("createdBy"), currentUserId);
+        }
+
         return (root, ignoredQuery, cb) -> cb.equal(root.get("employee").get("userId"), currentUserId);
+    }
+
+    /** Giới hạn dữ liệu bảng lương của HR theo createdBy; Admin giữ phạm vi toàn hệ thống. */
+    private List<SalaryEntity> restrictPayrollCreatorScope(List<SalaryEntity> salaries) {
+        if (!isHrWithoutAdmin()) return salaries;
+        Long currentUserId = getCurrentUserId();
+        return salaries.stream().filter(item -> Objects.equals(item.getCreatedBy(), currentUserId)).toList();
+    }
+
+    /** Kiểm tra người dùng chỉ có vai trò HR mà không đồng thời là Admin. */
+    private boolean isHrWithoutAdmin() {
+        List<String> roles = getCurrentUserRoles();
+        return roles.contains("ROLE_HR") && !roles.contains("ROLE_ADMIN");
     }
 }

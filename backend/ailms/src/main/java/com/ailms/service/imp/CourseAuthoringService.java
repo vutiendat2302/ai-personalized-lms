@@ -373,7 +373,7 @@ public class CourseAuthoringService implements ICourseAuthoringService {
         log.info("Creating quiz for courseId: {}, sectionId: {}, lessonId: {}",
                 request.getCourseId(), request.getSectionId(), request.getLessonId());
         QuizEntity quiz = quizMapper.toEntity(request);
-        if (quiz.getStatus() == null) quiz.setStatus((byte) 0);
+        if (quiz.getStatus() == null) quiz.setStatus(BaseStatusEnum.DRAFT);
         QuizEntity saved = quizRepository.save(quiz);
         saveQuizQuestionsToDb(saved.getId(), request.getDescription());
         return mapQuizToResponse(saved);

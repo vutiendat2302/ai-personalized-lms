@@ -30,7 +30,11 @@ public interface IClassService {
      */
     List<ClassResponse> getAll();
 
+    /** Lấy các lớp người dùng đang dạy hoặc trợ giảng. */
     List<ClassResponse> getTeachingClassesByUserId(Long userId);
+
+    /** Lấy các lớp người dùng đang tham gia với vai trò học viên. */
+    List<ClassResponse> getStudentClassesByUserId(Long userId);
 
     /**
      * Lấy thông tin chi tiết của bản ghi theo ID.

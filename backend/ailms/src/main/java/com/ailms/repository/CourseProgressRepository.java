@@ -12,4 +12,7 @@ public interface CourseProgressRepository extends BaseRepository<CourseProgressE
     List<CourseProgressEntity> findByUserId(Long userId);
     List<CourseProgressEntity> findByCourseId(Long courseId);
     List<CourseProgressEntity> findByEnrollmentId(Long enrollmentId);
+
+    /** Lấy tiến độ của nhiều học viên trong các khóa học người dạy phụ trách. */
+    List<CourseProgressEntity> findByUserIdInAndCourseIdIn(List<Long> userIds, List<Long> courseIds);
 }

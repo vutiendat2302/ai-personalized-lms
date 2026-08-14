@@ -2,11 +2,16 @@ import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { courseAuthoringApi } from "../../../api/courses/courseAuthoringApi";
 import type { SubmissionResponseDTO } from "../../../api/courses/courseAuthoringApi";
+import { useToast } from "@/hooks/useToast";
 import { ArrowLeft, FileText, Send } from "lucide-react";
 
+/**
+ * Component chấm bài tự luận của học viên trong giao diện giảng viên khóa học.
+ */
 export const CourseGradingPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { success, error } = useToast();
 
   const [submissions, setSubmissions] = useState<SubmissionResponseDTO[]>([]);
   const [selectedSub, setSelectedSub] = useState<SubmissionResponseDTO | null>(null);
@@ -16,6 +21,7 @@ export const CourseGradingPage: React.FC = () => {
   const [returnForResubmission, setReturnForResubmission] = useState(false);
   const [grading, setGrading] = useState(false);
 
+  /** Tải danh sách bài nộp của học viên trong khóa học. */
   const fetchSubmissions = async () => {
     if (!id) return;
     try {
@@ -38,6 +44,7 @@ export const CourseGradingPage: React.FC = () => {
     fetchSubmissions();
   }, [id]);
 
+  /** Xử lý gửi kết quả chấm điểm và nhận xét cho bài nộp tự luận. */
   const handleGradeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedSub) return;
@@ -48,10 +55,10 @@ export const CourseGradingPage: React.FC = () => {
         feedback,
         returnForResubmission,
       });
-      alert("Đã hoàn tất chấm bài!");
+      success("Đã hoàn tất chấm bài!");
       fetchSubmissions();
     } catch (err) {
-      alert("Chấm điểm thất bại.");
+      error("Chấm điểm thất bại.");
     } finally {
       setGrading(false);
     }

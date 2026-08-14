@@ -14,20 +14,27 @@ import java.time.LocalDateTime;
 @Builder
 public class CoursePackageResponse {
     private Long id;
+    private String code;
     private Long courseId;
     private String courseName;
     private Long classId;
     private String className;
+    private CourseClassDetailResponse classDetail;
     private Integer currentMemberCount;
     private Integer maxMembers;
     private String name;
+    private String description;
     private DeliveryModeEnum deliveryMode;
     private BigDecimal price;
     private BigDecimal originalPrice;
+    private BigDecimal discountPercentage;
     private Integer durationDays;
     private Integer includedTutorSessions;
     private Integer maxGroupSize;
     private CoursePackageStatusEnum status;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private Long createdBy;
+    private Long updatedBy;
+
 }

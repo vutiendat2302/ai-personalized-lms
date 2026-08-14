@@ -41,6 +41,9 @@ public interface SearchHistoryRepository extends BaseRepository<SearchHistoryEnt
         JOIN c.categoryEntity cat
         WHERE (sh.updatedAt >= :fromDate OR (sh.updatedAt IS NULL AND sh.createdAt >= :fromDate))
           AND c.status = com.ailms.entity.enums.CourseStatusEnum.ACTIVE
+          AND EXISTS (SELECT p.id FROM CoursePackageEntity p
+                      WHERE p.courseEntity.id = c.id
+                        AND p.status = com.ailms.entity.enums.CoursePackageStatusEnum.ACTIVE)
         GROUP BY c.id, c.name, c.link, cat.name, c.suggestedPrice, c.avgRating, c.reviewCount
         ORDER BY COUNT(sh.id) DESC, c.reviewCount DESC
         """)

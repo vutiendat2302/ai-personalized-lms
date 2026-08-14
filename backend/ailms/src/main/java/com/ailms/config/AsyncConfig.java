@@ -36,4 +36,16 @@ public class AsyncConfig {
         executor.initialize();
         return executor;
     }
+
+    /** Tạo thread pool riêng cho các tác vụ đồng bộ dữ liệu sang AI Service. */
+    @Bean(name = "aiIngestionTaskExecutor")
+    public Executor aiIngestionTaskExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(4);
+        executor.setQueueCapacity(200);
+        executor.setThreadNamePrefix("ai-ingestion-");
+        executor.initialize();
+        return executor;
+    }
 }

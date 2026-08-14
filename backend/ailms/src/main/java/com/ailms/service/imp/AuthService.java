@@ -25,6 +25,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
@@ -44,6 +45,9 @@ import java.util.Objects;
 @Service
 @RequiredArgsConstructor
 public class AuthService implements IAuthService { // login - register
+
+    @Value("${api.prefix}")
+    private String apiPrefix;
 
     /**
      * Quản lý quá trình xác thực người dùng.
@@ -256,9 +260,20 @@ public class AuthService implements IAuthService { // login - register
                 .username(userDetails.getUsername())
                 .email(userDetails.getUser().getEmail())
                 .fullName(userDetails.getUser().getFullName())
+                .avatarUrl(toAvatarViewUrl(userDetails.getUser()))
                 .roles(roles)
                 .permissions(permissions)
                 .build();
+    }
+
+    /** Chỉ trả endpoint đọc ảnh khi tài khoản thực sự có avatar trong database. */
+    private String toAvatarViewUrl(UserEntity user) {
+        if (user.getAvatarUrl() == null || user.getAvatarUrl().isBlank()) return null;
+        String value = user.getAvatarUrl().trim();
+        if (value.startsWith("http://") || value.startsWith("https://") || value.startsWith("/api/")) {
+            return value;
+        }
+        return apiPrefix + "/users/" + user.getId() + "/avatar";
     }
 
     /**

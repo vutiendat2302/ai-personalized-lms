@@ -18,6 +18,12 @@ public class CreateClassRequest {
 
     private String name;
 
+    private String description;
+
+    private Boolean registrationOpen;
+
+    private Boolean allowLateEnrollment;
+
     private Byte type;
 
     private DeliveryModeEnum packageType;

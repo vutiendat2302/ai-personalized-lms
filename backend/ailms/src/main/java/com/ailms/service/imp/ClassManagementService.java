@@ -7,16 +7,14 @@ import com.ailms.event.AuditLogEvent;
 import com.ailms.exception.BusinessException;
 import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.mapper.ClassMapper;
-import com.ailms.mapper.CoursePackageMapper;
 import com.ailms.repository.*;
 import com.ailms.request.*;
 import com.ailms.response.ClassResponse;
 import com.ailms.response.CoursePackageResponse;
 import com.ailms.service.IClassManagementService;
+import com.ailms.service.ICoursePackageService;
 import com.ailms.service.IEmailService;
 import com.ailms.service.ITeacherMatchingService;
-import tools.jackson.core.type.TypeReference;
-import tools.jackson.databind.json.JsonMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -47,13 +45,13 @@ public class ClassManagementService implements IClassManagementService {
     private final ApprovalRequestRepository approvalRequestRepository;
     private final ITeacherMatchingService teacherMatchingService;
     private final ClassMapper classMapper;
-    private final CoursePackageMapper coursePackageMapper;
+    private final ICoursePackageService coursePackageService;
     private final IEmailService emailService;
     private final ApplicationEventPublisher applicationEventPublisher;
-    private final JsonMapper objectMapper;
 
     private static final String RESOURCE_NAME = "Class";
 
+    /** Tạo lớp nhóm mới và kiểm tra điều kiện giảng viên, lịch học. */
     @Transactional
     @Override
     public ClassResponse createGroupClass(CreateGroupClassRequest request) {
@@ -143,45 +141,11 @@ public class ClassManagementService implements IClassManagementService {
         return resp;
     }
 
+    /** Chuyển luồng tạo gói về service dùng chung để thống nhất mã, validation và audit. */
     @Transactional
     @Override
     public CoursePackageResponse createCoursePackage(CreateCoursePackageRequest request) {
-        log.info("Creating course package: {} for course: {}", request.getName(), request.getCourseId());
-
-        CourseEntity course = courseRepository.findById(request.getCourseId())
-                .orElseThrow(() -> ResourceNotFoundException.of("Course", request.getCourseId()));
-        if (course.getStatus() != CourseStatusEnum.ACTIVE) {
-            throw new BusinessException("Chỉ khóa học ở trạng thái ACTIVE mới được tạo gói bán.");
-        }
-
-        ClassEntity clazz = null;
-
-        if (request.getDeliveryMode() == DeliveryModeEnum.GROUP_CLASS) {
-            if (request.getClassId() == null) {
-                throw new BusinessException("GROUP_CLASS package requires a pre-created READY classId.");
-            }
-            clazz = classRepository.findById(request.getClassId())
-                    .orElseThrow(() -> ResourceNotFoundException.of("Class", request.getClassId()));
-
-            if (!clazz.getCourseEntity().getId().equals(request.getCourseId())) {
-                throw new BusinessException("Class does not belong to course: " + request.getCourseId());
-            }
-        }
-
-        CoursePackageEntity pkg = CoursePackageEntity.builder()
-                .courseEntity(course)
-                .classEntity(clazz)
-                .name(request.getName())
-                .description(request.getDescription())
-                .price(request.getPrice())
-                .durationDays(request.getDurationDays())
-                .deliveryMode(request.getDeliveryMode())
-                .status(CoursePackageStatusEnum.ACTIVE)
-                .build();
-
-        CoursePackageEntity saved = coursePackageRepository.save(pkg);
-        applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CREATE_COURSE_PACKAGE", "COURSE_PACKAGE", saved.getId(), null, saved));
-        return coursePackageMapper.toResponse(saved);
+        return coursePackageService.create(request);
     }
 
     @Transactional
@@ -231,76 +195,8 @@ public class ClassManagementService implements IClassManagementService {
                 classMemberRepository.save(member);
             }
         } else if (pkg.getDeliveryMode() == DeliveryModeEnum.ONE_ON_ONE) {
-            // 9.4 1-1 Tutor Matching & Dynamic Class Creation
-            List<CreateGroupClassRequest.ScheduleSlotRequest> requestedSlots = null;
-            if (requestedScheduleJson != null && !requestedScheduleJson.trim().isEmpty()) {
-                try {
-                    requestedSlots = objectMapper.readValue(requestedScheduleJson, new TypeReference<>() {});
-                } catch (Exception e) {
-                    log.error("Failed to parse requestedScheduleJson", e);
-                }
-            }
-
-            Long categoryId = pkg.getCourseEntity().getCategoryEntity() != null ? pkg.getCourseEntity().getCategoryEntity().getId() : 1L;
-            EmployeeEntity teacher = teacherMatchingService.matchTeacherFor1on1(categoryId, requestedSlots).orElse(null);
-
-            if (teacher != null) {
-                ClassEntity new1on1Class = ClassEntity.builder()
-                        .courseEntity(pkg.getCourseEntity())
-                        .categoryEntity(pkg.getCourseEntity().getCategoryEntity())
-                        .name("1-1 Tutor: " + pkg.getCourseEntity().getName() + " (" + user.getUsername() + ")")
-                        .code(CodeGenerator.generate("LH", classRepository::existsByCode))
-                        .packageType(DeliveryModeEnum.ONE_ON_ONE)
-                        .maxMembers(1)
-                        .currentMemberCount(1)
-                        .status(BaseStatusEnum.ACTIVE)
-                        .startDate(LocalDateTime.now())
-                        .build();
-
-                ClassEntity saved1on1 = classRepository.save(new1on1Class);
-
-                // Add teacher & student to class_member
-                ClassMemberEntity teacherMem = ClassMemberEntity.builder()
-                        .id(new ClassMemberId(saved1on1.getId(), teacher.getUserEntity().getId()))
-                        .classEntity(saved1on1)
-                        .userEntity(teacher.getUserEntity())
-                        .roleInClass(ClassMemberRole.TEACHER)
-                        .status(ClassMemberStatusEnum.ACTIVE)
-                        .joinedAt(LocalDateTime.now())
-                        .build();
-                classMemberRepository.save(teacherMem);
-
-                ClassMemberEntity studentMem = ClassMemberEntity.builder()
-                        .id(new ClassMemberId(saved1on1.getId(), userId))
-                        .classEntity(saved1on1)
-                        .userEntity(user)
-                        .roleInClass(ClassMemberRole.STUDENT)
-                        .status(ClassMemberStatusEnum.ACTIVE)
-                        .joinedAt(LocalDateTime.now())
-                        .build();
-                classMemberRepository.save(studentMem);
-
-                // Save schedule
-                if (requestedSlots != null) {
-                    for (CreateGroupClassRequest.ScheduleSlotRequest slot : requestedSlots) {
-                        ClassScheduleEntity sched = ClassScheduleEntity.builder()
-                                .classEntity(saved1on1)
-                                .dayOfWeek(slot.getDayOfWeek())
-                                .startTime(slot.getStartTime())
-                                .endTime(slot.getEndTime())
-                                .status(BaseStatusEnum.ACTIVE)
-                                .build();
-                        classScheduleRepository.save(sched);
-                    }
-                }
-            } else {
-                // Pending HR matching
-                enrollmentRepository.findByUserEntity_IdAndCourseEntity_Id(userId, pkg.getCourseEntity().getId())
-                        .ifPresent(en -> {
-                            en.setStatus((byte) 2); // PENDING_MATCHING
-                            enrollmentRepository.save(en);
-                        });
-            }
+            throw new BusinessException(
+                    "Gói ONE_ON_ONE chỉ tạo yêu cầu tìm người dạy sau khi PayPal capture thanh toán thành công.");
         }
     }
 

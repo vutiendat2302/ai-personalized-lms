@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -46,13 +47,45 @@ import {
   RotateCcw,
   BookOpen,
 } from "lucide-react";
-import type { CourseExtended, CourseStatus } from "@/types/adminCourseClass";
+import type { CourseExtended, CourseLevel, CourseStatus } from "@/types/adminCourseClass";
 import { adminCourseClassApi } from "@/api/courses/adminCourseClassApi";
 import { courseApi } from "@/api/courses/courseApi";
 import { useAuth } from "@/hooks/useAuth";
 
-const DEFAULT_AVATAR = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80";
-const DEFAULT_COVER = "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=600&q=80";
+/** Hiển thị avatar thật hoặc initials, không dùng ảnh người giả. */
+const TeacherAvatar = ({ src, name, className }: { src?: string; name: string; className: string }) => (
+  src ? <img src={src} alt={name} title={name} className={className} /> : (
+    <div title={name} className={`${className} flex items-center justify-center bg-primary/10 text-[10px] font-bold text-primary`}>
+      {name.slice(0, 2).toUpperCase()}
+    </div>
+  )
+);
+
+/** Hiển thị placeholder khi khóa học chưa có ảnh bìa thật từ Backend. */
+const CourseCover = ({ src, name, className }: { src?: string | null; name: string; className: string }) => (
+  src?.trim() ? <img src={src} alt={name} className={className} /> : (
+    <div className={`${className} flex items-center justify-center bg-primary/5 text-primary`} aria-label={`${name} chưa có ảnh bìa`}>
+      <BookOpen className="h-10 w-10 opacity-40" />
+    </div>
+  )
+);
+
+/** Đổi mã enum Backend sang nhãn hiển thị, giữ nguyên mã khi chưa có bản dịch. */
+const enumLabel = (value: string) => ({
+  BEGINNER: "Cơ bản",
+  INTERMEDIATE: "Trung cấp",
+  ADVANCED: "Nâng cao",
+  SELF_STUDY: "Tự học",
+  GROUP_CLASS: "Lớp nhóm",
+  ONE_ON_ONE: "1 kèm 1",
+  COMBO: "Kết hợp",
+  DRAFT: "Nháp",
+  PENDING: "Chờ duyệt",
+  ACTIVE: "Đang hoạt động",
+  REJECTED: "Từ chối",
+  INACTIVE: "Ẩn / Lưu trữ",
+  DELETED: "Đã xóa",
+}[value] ?? value);
 
 type SortField = "createdAt" | "rating" | "enrollmentCount" | "referencePrice" | "name";
 
@@ -119,6 +152,17 @@ export const CourseCatalogPage: React.FC = () => {
     return initialSavedState?.page ?? 0;
   }, [searchParams, initialSavedState]);
 
+  const initialPageSize = useMemo(() => {
+    const psParam = searchParams.get("pageSize");
+    if (psParam) {
+      const parsed = parseInt(psParam, 10);
+      if (!isNaN(parsed) && parsed >= 1) return parsed;
+    }
+    const savedSize = initialSavedState?.pageSize;
+    if (savedSize === 9) return 8;
+    return savedSize ?? 8;
+  }, [searchParams, initialSavedState]);
+
   const [courses, setCourses] = useState<CourseExtended[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
@@ -126,7 +170,7 @@ export const CourseCatalogPage: React.FC = () => {
   const [error, setError] = useState("");
 
   const [page, setPage] = useState<number>(initialPage);
-  const [pageSize, setPageSize] = useState<number>(initialSavedState?.pageSize ?? 9);
+  const [pageSize, setPageSize] = useState<number>(initialPageSize);
   const [viewMode, setViewMode] = useState<"grid" | "table">(initialSavedState?.viewMode ?? "grid");
 
   // Notifications & Modals
@@ -141,6 +185,7 @@ export const CourseCatalogPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState<string>(initialSavedState?.searchTerm ?? "");
   const [selectedCategory, setSelectedCategory] = useState<string>(initialSavedState?.selectedCategory ?? "ALL");
   const [selectedStatus, setSelectedStatus] = useState<string>(initialSavedState?.selectedStatus ?? "ALL");
+  const [selectedLevel, setSelectedLevel] = useState<string>(initialSavedState?.selectedLevel ?? "ALL");
   const [selectedTeacher, setSelectedTeacher] = useState<string>(initialSavedState?.selectedTeacher ?? "ALL");
   const [selectedDeliveryMode, setSelectedDeliveryMode] = useState<string>(initialSavedState?.selectedDeliveryMode ?? "ALL");
   const [filterStartDate, setFilterStartDate] = useState<string>(initialSavedState?.filterStartDate ?? "");
@@ -158,6 +203,7 @@ export const CourseCatalogPage: React.FC = () => {
       searchTerm,
       selectedCategory,
       selectedStatus,
+      selectedLevel,
       selectedTeacher,
       selectedDeliveryMode,
       filterStartDate,
@@ -169,7 +215,7 @@ export const CourseCatalogPage: React.FC = () => {
     } catch (e) {
       console.warn("Could not save catalog state to sessionStorage", e);
     }
-  }, [viewMode, page, pageSize, searchTerm, selectedCategory, selectedStatus, selectedTeacher, selectedDeliveryMode, filterStartDate, filterEndDate, sortRules]);
+  }, [viewMode, page, pageSize, searchTerm, selectedCategory, selectedStatus, selectedLevel, selectedTeacher, selectedDeliveryMode, filterStartDate, filterEndDate, sortRules]);
 
   useEffect(() => {
     setJumpPageInput(String(page + 1));
@@ -252,7 +298,7 @@ export const CourseCatalogPage: React.FC = () => {
             assignment.username ||
             emp?.fullName ||
             emp?.username ||
-            `Giảng viên #${assignment.userId}`;
+            "Chưa xác định";
           const teacherAvatar =
             assignment.teacherAvatar ||
             assignment.avatarUrl ||
@@ -262,7 +308,7 @@ export const CourseCatalogPage: React.FC = () => {
           return {
             id: String(assignment.userId),
             name: teacherName,
-            avatar: teacherAvatar && teacherAvatar.trim() !== "" ? teacherAvatar : DEFAULT_AVATAR,
+            avatar: teacherAvatar && teacherAvatar.trim() !== "" ? teacherAvatar : "",
             category: isPrimary ? "Giảng viên chính" : "Đồng phụ trách",
             isPrimary,
             status: assignment.status || "ACTIVE",
@@ -274,7 +320,7 @@ export const CourseCatalogPage: React.FC = () => {
           id: String(course.id),
           categoryId: String(course.categoryId),
           status: course.status as CourseStatus,
-          level: course.level === "BEGINNER" ? "BASIC" : course.level,
+          level: course.level as CourseLevel,
           teachers: mappedTeachers,
           rating: Number(course.avgRating || 0),
           reviewCount: Number(course.reviewCount || 0),
@@ -326,6 +372,7 @@ export const CourseCatalogPage: React.FC = () => {
       searchTerm,
       selectedCategory,
       selectedStatus,
+      selectedLevel,
       selectedTeacher,
       selectedDeliveryMode,
       filterStartDate,
@@ -341,10 +388,11 @@ export const CourseCatalogPage: React.FC = () => {
 
     const params = new URLSearchParams();
     if (page > 0) params.set("page", String(page + 1));
-    if (pageSize !== 9) params.set("pageSize", String(pageSize));
+    if (pageSize !== 8) params.set("pageSize", String(pageSize));
     if (searchTerm) params.set("search", searchTerm);
     if (selectedCategory !== "ALL") params.set("category", selectedCategory);
     if (selectedStatus !== "ALL") params.set("status", selectedStatus);
+    if (selectedLevel !== "ALL") params.set("level", selectedLevel);
     if (selectedTeacher !== "ALL") params.set("teacher", selectedTeacher);
     if (selectedDeliveryMode !== "ALL") params.set("delivery", selectedDeliveryMode);
 
@@ -359,6 +407,7 @@ export const CourseCatalogPage: React.FC = () => {
     setSearchTerm("");
     setSelectedCategory("ALL");
     setSelectedStatus("ALL");
+    setSelectedLevel("ALL");
     setSelectedTeacher("ALL");
     setSelectedDeliveryMode("ALL");
     setFilterStartDate("");
@@ -461,6 +510,8 @@ export const CourseCatalogPage: React.FC = () => {
         selectedCategory === "ALL" || course.categoryId === selectedCategory;
       const matchesStatus =
         selectedStatus === "ALL" || course.status === selectedStatus;
+      const matchesLevel =
+        selectedLevel === "ALL" || course.level === selectedLevel;
       const matchesTeacher =
         selectedTeacher === "ALL" ||
         course.teachers.some((t) => t.id === selectedTeacher);
@@ -485,12 +536,43 @@ export const CourseCatalogPage: React.FC = () => {
         matchesSearch &&
         matchesCategory &&
         matchesStatus &&
+        matchesLevel &&
         matchesTeacher &&
         matchesDelivery &&
         matchesDate
       );
     });
-  }, [courses, searchTerm, selectedCategory, selectedStatus, selectedTeacher, selectedDeliveryMode, filterStartDate, filterEndDate]);
+  }, [courses, searchTerm, selectedCategory, selectedStatus, selectedLevel, selectedTeacher, selectedDeliveryMode, filterStartDate, filterEndDate]);
+
+  const availableStatuses = useMemo(
+    () => Array.from(new Set(courses.map((course) => course.status))),
+    [courses],
+  );
+  const availableLevels = useMemo(
+    () => Array.from(new Set(courses.map((course) => course.level))),
+    [courses],
+  );
+  const availableDeliveryModes = useMemo(
+    () => Array.from(new Set(courses.flatMap((course) => course.packages.map((pkg) => pkg.deliveryMode)))),
+    [courses],
+  );
+  const formLevels = useMemo(
+    () => Array.from(new Set([...availableLevels, editingCourse?.level].filter(Boolean) as CourseLevel[])),
+    [availableLevels, editingCourse?.level],
+  );
+  const formStatuses = useMemo(
+    () => Array.from(new Set([...availableStatuses, editingCourse?.status].filter(Boolean) as CourseStatus[])),
+    [availableStatuses, editingCourse?.status],
+  );
+
+  /** Xóa filter cũ không còn tồn tại trong dữ liệu Backend hiện tại. */
+  useEffect(() => {
+    if (selectedStatus !== "ALL" && !availableStatuses.includes(selectedStatus as CourseStatus)) setSelectedStatus("ALL");
+    if (selectedLevel !== "ALL" && !availableLevels.includes(selectedLevel as CourseLevel)) setSelectedLevel("ALL");
+    if (selectedDeliveryMode !== "ALL" && !availableDeliveryModes.includes(selectedDeliveryMode as CourseExtended["packages"][number]["deliveryMode"])) {
+      setSelectedDeliveryMode("ALL");
+    }
+  }, [availableStatuses, availableLevels, availableDeliveryModes, selectedStatus, selectedLevel, selectedDeliveryMode]);
 
   // Multi-column sorting algorithm (Exact EmployeeManagement / RoleManagement algorithm)
   const sortedCourses = useMemo(() => {
@@ -694,13 +776,13 @@ export const CourseCatalogPage: React.FC = () => {
       )}
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/30 pb-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">
             Quản Lý Khóa Học
           </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Tổng quan tất cả khóa học trong hệ thống (Nội dung & Các gói bán)
+          <p className="text-sm text-foreground opacity-80 mt-1">
+            Tổng quan tất cả khóa học trong hệ thống
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -709,19 +791,19 @@ export const CourseCatalogPage: React.FC = () => {
             onClick={() => { setEditingCourse(null); setCourseModalOpen(true); }}
             variant="default"
             size="sm"
-            className="h-8 gap-1.5 bg-blue-600 text-white hover:bg-blue-700 text-xs font-semibold"
+            className="h-8 gap-1.5 bg-white rounded-lg border-border/30 text-foreground hover:bg-foreground text-xs font-semibold hover:text-white"
           >
             <Plus className="h-4 w-4" />
             <span>Thêm khóa học</span>
           </Button>
 
           {/* Toggle View Mode */}
-          <div className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200">
+          <div className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-100">
             <Button
               variant={viewMode === "grid" ? "default" : "ghost"}
               size="sm"
               className={`h-8 px-3 text-xs ${
-                viewMode === "grid" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"
+                viewMode === "grid" ? "bg-white text-foreground font-semibold shadow-sm hover:bg-foreground hover:text-white" : "text-muted-foreground font-semibold hover:bg-foreground hover:text-white"
               }`}
               onClick={() => setViewMode("grid")}
             >
@@ -732,7 +814,7 @@ export const CourseCatalogPage: React.FC = () => {
               variant={viewMode === "table" ? "default" : "ghost"}
               size="sm"
               className={`h-8 px-3 text-xs ${
-                viewMode === "table" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"
+                viewMode === "table" ? "bg-white text-foreground font-semibold shadow-sm hover:bg-foreground hover:text-white" : "text-muted-foreground font-semibold hover:bg-foreground hover:text-white"
               }`}
               onClick={() => setViewMode("table")}
             >
@@ -750,7 +832,7 @@ export const CourseCatalogPage: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
             {/* Search */}
             <div className="relative lg:col-span-1">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-foreground" />
               <Input
                 placeholder="Tìm tên khóa học..."
                 value={searchTerm}
@@ -777,11 +859,18 @@ export const CourseCatalogPage: React.FC = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">Tất cả trạng thái</SelectItem>
-                <SelectItem value="ACTIVE">● Đang hoạt động (ACTIVE)</SelectItem>
-                <SelectItem value="PENDING">● Chờ duyệt (PENDING)</SelectItem>
-                <SelectItem value="REJECTED">● Từ chối (REJECTED)</SelectItem>
-                <SelectItem value="DRAFT">● Nháp (DRAFT)</SelectItem>
-                <SelectItem value="INACTIVE">● Ẩn / Lưu trữ (INACTIVE)</SelectItem>
+                {availableStatuses.map((status) => <SelectItem key={status} value={status}>{enumLabel(status)} ({status})</SelectItem>)}
+              </SelectContent>
+            </Select>
+
+            {/* Course level filter uses values returned by Backend. */}
+            <Select value={selectedLevel} onValueChange={(val) => { setSelectedLevel(val); setPage(0); }}>
+              <SelectTrigger className="bg-white h-9 text-sm">
+                <SelectValue placeholder="Cấp độ" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Tất cả cấp độ</SelectItem>
+                {availableLevels.map((level) => <SelectItem key={level} value={level}>{enumLabel(level)} ({level})</SelectItem>)}
               </SelectContent>
             </Select>
 
@@ -808,33 +897,30 @@ export const CourseCatalogPage: React.FC = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">Tất cả hình thức</SelectItem>
-                <SelectItem value="SELF_STUDY">Tự học (SELF_STUDY)</SelectItem>
-                <SelectItem value="GROUP_CLASS">Lớp nhóm (GROUP_CLASS)</SelectItem>
-                <SelectItem value="ONE_ON_ONE">1 Kèm 1 (ONE_ON_ONE)</SelectItem>
-                <SelectItem value="COMBO">Combo</SelectItem>
+                {availableDeliveryModes.map((mode) => <SelectItem key={mode} value={mode}>{enumLabel(mode)} ({mode})</SelectItem>)}
               </SelectContent>
             </Select>
 
             {/* Sort Preset Selector */}
             <Select value={getCurrentPresetValue()} onValueChange={handlePresetSortChange}>
-              <SelectTrigger className="bg-white h-9 text-sm font-semibold text-blue-600">
+              <SelectTrigger className="bg-white h-9 text-sm text-foreground">
                 <SelectValue placeholder="Sắp xếp theo" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="NEWEST">🔥 Mới tạo nhất (Mặc định)</SelectItem>
+                <SelectItem value="NEWEST">Mới nhất</SelectItem>
                 <SelectItem value="OLDEST">Cũ nhất</SelectItem>
-                <SelectItem value="RATING_DESC">Đánh giá: Cao → Thấp</SelectItem>
-                <SelectItem value="RATING_ASC">Đánh giá: Thấp → Cao</SelectItem>
-                <SelectItem value="ENROLLMENT_DESC">Đăng ký: Nhiều → Ít</SelectItem>
-                <SelectItem value="ENROLLMENT_ASC">Đăng ký: Ít → Nhiều</SelectItem>
-                <SelectItem value="PRICE_DESC">Giá: Cao → Thấp</SelectItem>
-                <SelectItem value="PRICE_ASC">Giá: Thấp → Cao</SelectItem>
+                <SelectItem value="RATING_DESC">Rating (Desc)</SelectItem>
+                <SelectItem value="RATING_ASC">Rating(ASC)</SelectItem>
+                <SelectItem value="ENROLLMENT_DESC">Đăng ký(DESC)</SelectItem>
+                <SelectItem value="ENROLLMENT_ASC">Đăng ký(ASC)</SelectItem>
+                <SelectItem value="PRICE_DESC">Giá(DESC)</SelectItem>
+                <SelectItem value="PRICE_ASC">Giá(ASC)</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           {/* Row 2: Date Range Filter (Từ ngày tạo / Đến ngày tạo) + Reset Button */}
-          <div className="flex flex-wrap items-end gap-3 pt-1 border-t border-slate-200/60">
+          <div className="flex flex-wrap items-end gap-3 pt-1">
             <div className="w-44">
               <DatePickerInput
                 label="Từ ngày tạo"
@@ -844,6 +930,7 @@ export const CourseCatalogPage: React.FC = () => {
                   setFilterStartDate(isoDate);
                   setPage(0);
                 }}
+                className="border-border"
                 clearable
               />
             </div>
@@ -857,6 +944,7 @@ export const CourseCatalogPage: React.FC = () => {
                   setFilterEndDate(isoDate);
                   setPage(0);
                 }}
+                className="border-border"
                 clearable
               />
             </div>
@@ -866,41 +954,10 @@ export const CourseCatalogPage: React.FC = () => {
               onClick={handleResetFilters}
               variant="outline"
               size="sm"
-              className="h-9 text-xs text-slate-600 hover:text-slate-900 rounded-lg px-3 bg-white border border-slate-200 flex items-center gap-1.5 font-medium"
+              className="h-9 text-sm text-foreground border-border hover:text-white hover:bg-foreground rounded-lg px-3 bg-white border flex items-center gap-1.5 font-medium"
             >
-              <RotateCcw className="h-3.5 w-3.5" />
-              <span>Đặt lại bộ lọc</span>
+              <RotateCcw className="h-3.5 w-3.5 font-semibold" />
             </Button>
-
-            {/* Active Sort Rules Indicator */}
-            {sortRules.length > 0 && (
-              <div className="flex items-center gap-2 text-xs text-slate-500 font-medium ml-auto">
-                <span>Tiêu chí sắp xếp ({sortRules.length}):</span>
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {sortRules.map((rule, idx) => (
-                    <Badge key={rule.field} variant="outline" className="bg-white text-blue-700 border-blue-200 gap-1 text-[11px] font-semibold">
-                      <span>{idx + 1}. {rule.field === "createdAt" ? "Ngày tạo" : rule.field === "rating" ? "Đánh giá" : rule.field === "enrollmentCount" ? "Đăng ký" : rule.field === "referencePrice" ? "Giá" : "Tên"} ({rule.dir})</span>
-                      <button
-                        type="button"
-                        onClick={() => handleSort(rule.field)}
-                        className="text-slate-400 hover:text-slate-600 ml-0.5"
-                      >
-                        ×
-                      </button>
-                    </Badge>
-                  ))}
-                  {sortRules.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => setSortRules([{ field: "createdAt", dir: "DESC" }])}
-                      className="text-blue-600 hover:underline text-xs ml-1 font-semibold"
-                    >
-                      Mặc định
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
         </CardContent>
       </Card>
@@ -911,31 +968,31 @@ export const CourseCatalogPage: React.FC = () => {
 
       {/* Content Section */}
       {!loading && !error && sortedCourses.length > 0 && (viewMode === "grid" ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {paginatedCourses.map((course) => (
             <Card
               key={course.id}
-              className="group cursor-pointer hover:shadow-md transition-all border-slate-200 overflow-hidden flex flex-col justify-between"
+              className="group cursor-pointer hover:-translate-y-1.5 hover:shadow-xl hover:border-primary/40 transition-all duration-300 border-border/70 overflow-hidden flex flex-col justify-between bg-card"
               onClick={() => handleNavigateToDetail(course.id)}
             >
               <div>
                 {/* Cover Image Container */}
                 <div className="relative h-44 w-full bg-slate-100 overflow-hidden">
-                  <img
-                    src={course.coverImage && course.coverImage.trim() !== "" ? course.coverImage : DEFAULT_COVER}
-                    alt={course.name}
+                  <CourseCover
+                    src={course.coverImage}
+                    name={course.name}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   />
                   <div className="absolute top-3 left-3">
                     {getStatusBadge(course.status)}
                   </div>
-                  <div className="absolute top-3 right-3 bg-slate-900/70 text-white text-xs font-semibold px-2 py-1 rounded backdrop-blur-sm">
+                  <div className="absolute top-3 right-3 bg-foreground/80 text-white text-xs font-semibold px-2 py-1 rounded backdrop-blur-sm">
                     {course.categoryName}
                   </div>
                 </div>
 
                 <CardContent className="p-5 space-y-3">
-                  <h3 className="font-semibold text-slate-900 line-clamp-2 text-base group-hover:text-blue-600 transition-colors">
+                  <h3 className="font-semibold text-foreground line-clamp-2 text-base group-hover:text-primary transition-colors">
                     {course.name}
                   </h3>
 
@@ -948,45 +1005,44 @@ export const CourseCatalogPage: React.FC = () => {
                     <span>•</span>
                     <span>{course.reviewCount || 0} đánh giá</span>
                     <span>•</span>
-                    <span className="flex items-center gap-1 font-semibold text-slate-700">
-                      <Users className="w-3.5 h-3.5 text-blue-600" />
+                    <span className="flex items-center gap-1 font-semibold text-foreground">
+                      <Users className="w-3.5 h-3.5 text-foreground" />
                       ({(course as any).enrollmentCount || 0} người đăng ký)
                     </span>
                   </div>
 
                   {/* Instructor name text */}
-                  <div className="flex items-center gap-2 pt-2 border-t border-slate-100 text-xs text-slate-500">
-                    <span className="shrink-0">Giảng viên:</span>
+                  <div className="flex items-center gap-2 pt-2 border-t border-foreground/30 text-xs text-foreground">
+                    <span className="shrink-0 font-semibold">Giảng viên:</span>
                     {course.teachers.length > 0 ? (
                       <div className="flex items-center gap-1.5 min-w-0">
                         <div className="flex items-center -space-x-1.5 shrink-0">
                           {course.teachers.slice(0, 2).map((t) => (
-                            <img
+                            <TeacherAvatar
                               key={t.id}
-                              src={t.avatar && t.avatar.trim() !== "" ? t.avatar : DEFAULT_AVATAR}
-                              alt={t.name}
-                              title={t.name}
+                              src={t.avatar || undefined}
+                              name={t.name}
                               className="w-5 h-5 rounded-full border border-white object-cover"
                             />
                           ))}
                         </div>
-                        <span className="font-semibold text-slate-700 truncate">
+                        <span className="font-semibold text-foreground">
                           {course.teachers[0].name}
                           {course.teachers.length > 1 && (
-                            <span className="text-slate-400 font-normal"> +{course.teachers.length - 1}</span>
+                            <span className="text-foreground font-normal"> +{course.teachers.length - 1}</span>
                           )}
                         </span>
                       </div>
                     ) : (
-                      <span className="text-slate-400 italic">Chưa phân công</span>
+                      <span className="text-foreground italic">Chưa phân công</span>
                     )}
                   </div>
                 </CardContent>
               </div>
 
-              <div className="px-5 pb-4 pt-3 flex items-center justify-between border-t border-slate-100">
-                <div className="flex items-center gap-1.5 text-xs text-slate-600 font-medium">
-                  <Package className="w-3.5 h-3.5 text-blue-500" />
+              <div className="px-5 pb-4 pt-3 flex items-center justify-between border-t border-border/30">
+                <div className="flex items-center gap-1.5 text-xs text-foreground font-medium">
+                  <Package className="w-3.5 h-3.5 text-foreground" />
                   <span>{course.packages.length} gói bán</span>
                 </div>
 
@@ -994,8 +1050,8 @@ export const CourseCatalogPage: React.FC = () => {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-7 px-2 text-xs font-semibold text-blue-600 hover:bg-blue-50"
-                    title="Soạn thảo chương & bài học (Course Builder Studio)"
+                    className="h-7 px-2 text-xs font-semibold text-foreground hover:bg-slate-50"
+                    title="Soạn thảo chương & bài học"
                     onClick={(e) => {
                       e.stopPropagation();
                       navigate(`${baseRoute}/${course.id}/builder`);
@@ -1008,7 +1064,7 @@ export const CourseCatalogPage: React.FC = () => {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-7 w-7 p-0 text-slate-600 hover:bg-slate-100"
+                    className="h-7 w-7 p-0 text-foreground hover:bg-slate-100"
                     title="Chỉnh sửa thông tin khóa học"
                     onClick={(e) => {
                       e.stopPropagation();
@@ -1041,7 +1097,7 @@ export const CourseCatalogPage: React.FC = () => {
                       e.stopPropagation();
                       handleNavigateToDetail(course.id);
                     }}
-                    className="text-xs text-blue-600 font-semibold flex items-center gap-1 hover:underline cursor-pointer group-hover:translate-x-0.5 transition-transform"
+                    className="text-xs text-foreground font-semibold flex items-center gap-1 hover:underline cursor-pointer group-hover:translate-x-0.5 transition-transform"
                   >
                     Chi tiết <ChevronRight className="w-3.5 h-3.5" />
                   </span>
@@ -1139,11 +1195,7 @@ export const CourseCatalogPage: React.FC = () => {
                     <TableCell className="font-semibold text-foreground">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded bg-slate-100 overflow-hidden shrink-0 border border-border/20">
-                          <img
-                            src={course.coverImage && course.coverImage.trim() !== "" ? course.coverImage : DEFAULT_COVER}
-                            alt=""
-                            className="w-full h-full object-cover"
-                          />
+                          <CourseCover src={course.coverImage} name={course.name} className="w-full h-full object-cover" />
                         </div>
                         <span className="hover:text-blue-600 line-clamp-1">{course.name}</span>
                       </div>
@@ -1157,11 +1209,10 @@ export const CourseCatalogPage: React.FC = () => {
                       <div className="flex items-center -space-x-2">
                         {course.teachers.length > 0 ? (
                           course.teachers.map((t) => (
-                            <img
+                            <TeacherAvatar
                               key={t.id}
-                              src={t.avatar && t.avatar.trim() !== "" ? t.avatar : DEFAULT_AVATAR}
-                              alt={t.name}
-                              title={t.name}
+                              src={t.avatar || undefined}
+                              name={t.name}
                               className="w-7 h-7 rounded-full border-2 border-background object-cover"
                             />
                           ))
@@ -1262,9 +1313,9 @@ export const CourseCatalogPage: React.FC = () => {
       {!loading && !error && sortedCourses.length > 0 && (
         <div className="px-5 py-3 border border-border/30 bg-background flex flex-col md:flex-row items-center justify-between gap-4 text-sm font-medium rounded-xl shadow-xs">
           <div className="text-slate-500">
-            Hiển thị <span className="font-semibold text-slate-900">{sortedCourses.length === 0 ? 0 : page * pageSize + 1}</span> đến{" "}
-            <span className="font-semibold text-slate-900">{Math.min((page + 1) * pageSize, sortedCourses.length)}</span> trên{" "}
-            <span className="font-semibold text-slate-900">{sortedCourses.length}</span> khóa học
+            Hiển thị <span className="font-semibold text-foreground/70">{sortedCourses.length === 0 ? 0 : page * pageSize + 1}</span> đến{" "}
+            <span className="font-semibold text-foreground/70">{Math.min((page + 1) * pageSize, sortedCourses.length)}</span> trên{" "}
+            <span className="font-semibold text-foreground/70">{sortedCourses.length}</span> khóa học
           </div>
 
           <div className="flex flex-wrap items-center gap-4">
@@ -1281,9 +1332,10 @@ export const CourseCatalogPage: React.FC = () => {
                   <SelectValue placeholder={String(pageSize)} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="6">6</SelectItem>
-                  <SelectItem value="9">9</SelectItem>
+                  <SelectItem value="4">4</SelectItem>
+                  <SelectItem value="8">8</SelectItem>
                   <SelectItem value="12">12</SelectItem>
+                  <SelectItem value="16">16</SelectItem>
                   <SelectItem value="24">24</SelectItem>
                 </SelectContent>
               </Select>
@@ -1356,12 +1408,16 @@ export const CourseCatalogPage: React.FC = () => {
       {courseModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
           <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-2xl relative animate-in fade-in-50 zoom-in-95 duration-200">
-            <button
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label="Đóng biểu mẫu"
+              className="absolute right-4 top-4 p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
               onClick={() => setCourseModalOpen(false)}
-              className="absolute right-4 top-4 p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600"
             >
               <X className="h-4 w-4" />
-            </button>
+            </Button>
 
             <h3 className="text-lg font-bold text-slate-900 mb-4">
               {editingCourse ? "Cập nhật khóa học" : "Tạo khóa học mới"}
@@ -1370,9 +1426,9 @@ export const CourseCatalogPage: React.FC = () => {
             {/* Creator info (only shown when editing) */}
             {editingCourse && editingCourse.teachers && editingCourse.teachers.length > 0 && (
               <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-lg bg-slate-50 border border-slate-200">
-                <img
-                  src={editingCourse.teachers[0].avatar && editingCourse.teachers[0].avatar.trim() !== "" ? editingCourse.teachers[0].avatar : DEFAULT_AVATAR}
-                  alt={editingCourse.teachers[0].name}
+                <TeacherAvatar
+                  src={editingCourse.teachers[0].avatar || undefined}
+                  name={editingCourse.teachers[0].name}
                   className="w-8 h-8 rounded-full object-cover border border-slate-300"
                 />
                 <div className="text-xs">
@@ -1391,20 +1447,26 @@ export const CourseCatalogPage: React.FC = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <Label className="text-xs font-semibold">Danh mục</Label>
-                  <select name="categoryId" defaultValue={editingCourse?.categoryId || (categories[0]?.id || "")} className="flex h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none" required>
-                    {categories.map((c) => (
-                      <option key={c.id} value={String(c.id)}>{c.name}</option>
-                    ))}
-                  </select>
+                  <Select name="categoryId" defaultValue={String(editingCourse?.categoryId || categories[0]?.id || "")}>
+                    <SelectTrigger className="h-9 bg-white text-sm">
+                      <SelectValue placeholder="Chọn danh mục" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map((category) => <SelectItem key={category.id} value={String(category.id)}>{category.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="space-y-1">
                   <Label className="text-xs font-semibold">Cấp độ</Label>
-                  <select name="level" defaultValue={editingCourse?.level === "BASIC" ? "BEGINNER" : (editingCourse?.level || "BEGINNER")} className="flex h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none">
-                    <option value="BEGINNER">BEGINNER</option>
-                    <option value="INTERMEDIATE">INTERMEDIATE</option>
-                    <option value="ADVANCED">ADVANCED</option>
-                  </select>
+                  <Select name="level" defaultValue={editingCourse?.level || formLevels[0]}>
+                    <SelectTrigger className="h-9 bg-white text-sm">
+                      <SelectValue placeholder="Chọn cấp độ" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {formLevels.map((level) => <SelectItem key={level} value={level}>{enumLabel(level)} ({level})</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
@@ -1412,29 +1474,29 @@ export const CourseCatalogPage: React.FC = () => {
               {editingCourse && isAdminUser && (
                 <div className="space-y-1">
                   <Label className="text-xs font-semibold">Trạng thái khóa học</Label>
-                  <select
+                  <Select
                     name="status"
                     defaultValue={editingCourse.status || "DRAFT"}
-                    className="flex h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none font-semibold"
                   >
-                    <option value="ACTIVE">✅ Đang hoạt động (ACTIVE)</option>
-                    <option value="INACTIVE">🔒 Ẩn khóa học / Lưu trữ (INACTIVE)</option>
-                    <option value="DRAFT">📝 Nháp (DRAFT)</option>
-                    <option value="PENDING">⏳ Gửi chờ duyệt (PENDING)</option>
-                    <option value="REJECTED">❌ Từ chối (REJECTED)</option>
-                  </select>
+                    <SelectTrigger className="h-9 bg-white text-sm font-semibold">
+                      <SelectValue placeholder="Chọn trạng thái" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {formStatuses.map((status) => <SelectItem key={status} value={status}>{enumLabel(status)} ({status})</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                   <p className="text-[10px] text-slate-400 mt-0.5">Chọn &quot;INACTIVE&quot; để tạm ẩn khóa học khỏi học viên, &quot;DRAFT&quot; để tiếp tục soạn thảo</p>
                 </div>
               )}
 
               <div className="space-y-1">
                 <Label className="text-xs font-semibold">Mô tả khóa học</Label>
-                <textarea
+                <Textarea
                   name="description"
                   defaultValue={editingCourse?.description || ""}
                   placeholder="E.g. Giới thiệu tổng quan về khóa học, giáo án chi tiết và lộ trình học tập..."
                   required
-                  className="flex min-h-20 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none"
+                  className="min-h-20 bg-white text-sm"
                 />
               </div>
 

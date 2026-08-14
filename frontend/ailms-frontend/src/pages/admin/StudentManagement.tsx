@@ -85,6 +85,7 @@ import { studentApi, type LearningActivityDetailData, type StudentProfileData } 
 import { interestApi, type InterestResponse } from "@/api/interests/interestApi";
 
 import { StudentDetailModal } from "@/components/admin/student/StudentDetailModal";
+import { useAuth } from "@/hooks/useAuth";
 
 const ROLE_COLORS = ["#7b2525", "#ba6a4c", "#ff97d0", "#fe7f2d", "#2b5748", "#4e220f"];
 const GOAL_COLORS = ["#2563eb", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899"];
@@ -110,6 +111,11 @@ const getPageNumbers = (currentPage: number, total: number) => {
 export const StudentManagement: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { auth } = useAuth();
+  const currentRoles = (auth.user?.roles || []).map((role: any) =>
+    (typeof role === "object" ? role?.code || role?.name || "" : String(role)).replace("ROLE_", "").toUpperCase()
+  );
+  const isHrOnly = currentRoles.includes("HR") && !currentRoles.includes("ADMIN");
 
   // Data States
   const [students, setStudents] = useState<StudentProfileData[]>([]);
@@ -303,7 +309,7 @@ export const StudentManagement: React.FC = () => {
         studentApi.getOnboardingStats(),
         studentApi.getGoalTypeStats(),
         studentApi.getStreakLeaderboard(),
-        studentApi.getActivityTrend(),
+        isHrOnly ? Promise.resolve({}) : studentApi.getActivityTrend(),
         studentApi.getInactiveWarningCount(inactiveDaysConfig),
         studentApi.getTopInterests()
       ]);
@@ -330,7 +336,10 @@ export const StudentManagement: React.FC = () => {
 
       setGoalTypeStats(goals.status === "fulfilled" ? Object.entries(goals.value).map(([name, value]) => ({ name, value: Number(value) })) : []);
       setLeaderboardData(leaderboard.status === "fulfilled" ? leaderboard.value : { currentStreakTop: [], longestStreakTop: [] });
-      if (trend.status === "fulfilled") {
+      if (isHrOnly) {
+        setActivityTrendData([]);
+        setActivityTrendError("");
+      } else if (trend.status === "fulfilled") {
         setActivityTrendData(Object.entries(trend.value || {}).map(([name, value]) => ({ name, value: Number(value) || 0 })));
         setActivityTrendError("");
       } else {
@@ -353,6 +362,7 @@ export const StudentManagement: React.FC = () => {
   };
 
   const openActivityDetails = async (date: string) => {
+    if (isHrOnly) return;
     setActivityDate(date); setActivityLogPage(0); setActivityDialogOpen(true); setActivityLogs([]); setActivityLogsError(""); setActivityLogsLoading(true);
     try { setActivityLogs(await studentApi.getActivityLogsByDate(date)); }
     catch (err: any) { setActivityLogsError(err.message || "Không thể tải nhật ký hoạt động học tập."); }
@@ -837,7 +847,7 @@ export const StudentManagement: React.FC = () => {
           </Card>
 
           {/* 5. Line Chart Activity Trend 30 Days */}
-          <Card className="lg:col-span-6 border-border shadow-xs bg-card">
+          {!isHrOnly && <Card className="lg:col-span-6 border-border shadow-xs bg-card">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
                 <Activity className="h-4 w-4 text-emerald-600" />
@@ -868,7 +878,7 @@ export const StudentManagement: React.FC = () => {
                 </LineChart>
               </ResponsiveContainer>}
             </CardContent>
-          </Card>
+          </Card>}
 
           {/* 6. KPI Card Cảnh báo Không hoạt động > N ngày (Configurable N) */}
           <Card
@@ -1450,7 +1460,7 @@ export const StudentManagement: React.FC = () => {
         </Card>
       </section>
 
-      <Dialog open={activityDialogOpen} onOpenChange={setActivityDialogOpen}>
+      {!isHrOnly && <Dialog open={activityDialogOpen} onOpenChange={setActivityDialogOpen}>
         <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden p-0 gap-0">
           <DialogHeader className="px-5 py-4 border-b bg-muted/20">
             <DialogTitle className="flex items-center gap-2"><Activity className="h-5 w-5 text-emerald-600" /> Nhật ký hoạt động học tập</DialogTitle>
@@ -1476,7 +1486,7 @@ export const StudentManagement: React.FC = () => {
               </div>}
           </div>
         </DialogContent>
-      </Dialog>
+      </Dialog>}
 
       <Dialog open={studentFormOpen} onOpenChange={open => { setStudentFormOpen(open); if (!open) setNewStudentErrors({}); }}>
         <DialogContent className="max-w-lg">
