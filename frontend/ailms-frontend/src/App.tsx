@@ -60,8 +60,8 @@ import { TeacherSchedulePage } from "./pages/teacher/TeacherSchedulePage";
 import { TeacherCoursesPage } from "./pages/teacher/TeacherCoursesPage";
 import { TeacherCourseDetailPage } from "./pages/teacher/courses/TeacherCourseDetailPage";
 import { TeacherSuggestedClassesPage } from "./pages/teacher/TeacherSuggestedClassesPage";
-import { TeacherGradingAssignmentsPage } from "./pages/teacher/TeacherGradingAssignmentsPage";
-import { TeacherGradingQuizzesPage } from "./pages/teacher/TeacherGradingQuizzesPage";
+import { TeacherGradingPage } from "./pages/teacher/TeacherGradingPage";
+import { TeacherAssessmentsPage } from "./pages/teacher/TeacherAssessmentsPage";
 import { TeacherAttendancePage } from "./pages/teacher/TeacherAttendancePage";
 import { TeacherInsightsPage } from "./pages/teacher/TeacherInsightsPage";
 import { TeacherEarningsPage } from "./pages/teacher/TeacherEarningsPage";
@@ -100,6 +100,7 @@ import { MainLayout } from "./layouts/MainLayout";
 import { AdminLayout } from "./layouts/AdminLayout";
 import { TeacherLayout } from "./layouts/TeacherLayout";
 import { StudentLayout } from "./layouts/StudentLayout";
+import { SupportPage } from "./pages/support/SupportPage";
 
 import { UserRole } from "./config/roles";
 import { getPortalHomePath } from "./utils/workspaceUtils";
@@ -244,59 +245,59 @@ function App() {
               <Route element={<AdminLayout />}>
                 <Route path="/management" element={<Dashboard />} />
                 <Route path="/admin" element={<Navigate to="/management" replace />} />
-                <Route path="/admin/users" element={<UserManagement />} />
                 <Route path="/admin/students" element={<StudentManagement />} />
                 <Route path="/admin/employees" element={<EmployeeManagement />} />
-                <Route path="/admin/roles" element={<RoleManagement />} />
-                <Route path="/admin/permissions" element={<PermissionManagement />} />
-                <Route path="/admin/activity-log" element={<ActivityLog />} />
-                <Route path="/admin/courses" element={<CourseCatalogPage />} />
-                <Route path="/admin/courses/:id" element={<CourseAdminDetailPage />} />
-                <Route path="/admin/classrooms" element={<ClassManagementPage />} />
-                <Route path="/admin/classes" element={<ClassManagementPage />} />
-                <Route path="/admin/sessions" element={<ClassSessionManagementPage />} />
-                <Route path="/admin/classes/create" element={<CreateGroupClassPage />} />
-                <Route path="/admin/classes/:id" element={<ClassDetailPage />} />
                 <Route path="/admin/pending-requests" element={<ApprovalCenterPage />} />
-                <Route path="/admin/pending-requests/matching/:id" element={<TeacherMatchingRequestPage />} />
-                <Route path="/admin/orders" element={<OrderManagement />} />
-                <Route path="/admin/coupons" element={<CouponManagement />} />
                 <Route path="/admin/hr" element={<HRManagement />} />
-                <Route path="/admin/trash" element={<TrashManagement />} />
                 <Route path="/admin/approval-center" element={<ApprovalCenterPage />} />
-                <Route path="/admin/category-teachers" element={<CategoryTeacherAssignPage />} />
                 <Route path="/admin/department" element={<DepartmentManagement />} />
                 <Route path="/admin/contracts" element={<ContractManagement />} />
-                <Route path="/admin/revenue" element={<RevenueManagement />} />
-                <Route path="/admin/quizzes" element={<QuizManagement />} />
-                <Route path="/admin/assignments" element={<AssignmentManagement />} />
-                <Route path="/admin/online-schedule" element={<OnlineScheduleManagement />} />
                 <Route path="/admin/work-schedule" element={<WorkScheduleManagement />} />
                 <Route path="/admin/fulltime-attendance" element={<AttendanceManagement />} />
                 <Route path="/admin/attendance" element={<AttendanceManagement />} />
                 <Route path="/admin/salaries" element={<SalaryManagement />} />
                 <Route path="/admin/salary-payroll" element={<SalaryManagement />} />
-                <Route path="/admin/files" element={<FileManagement />} />
-                <Route path="/admin/reviews/moderation" element={<ReviewModerationPage />} />
-                <Route path="/admin/courses/approvals" element={<CourseApprovalPage />} />
-                <Route path="/analytics" element={<LearningAnalytics />} />
-
-                {/* SALES & REVENUE MANAGEMENT MODULE */}
-                <Route path="/sales" element={<Navigate to="/sales/dashboard" replace />} />
-                <Route path="/sales/dashboard" element={<SalesDashboardPage />} />
-                <Route path="/sales/orders" element={<SalesOrderListPage />} />
-                <Route path="/sales/orders/:id" element={<SalesOrderDetailPage />} />
-                <Route path="/sales/payments" element={<SalesPaymentListPage />} />
-                <Route path="/sales/payments/:id" element={<SalesPaymentDetailPage />} />
-                <Route path="/sales/coupons" element={<SalesCouponListPage />} />
-                <Route path="/sales/coupons/new" element={<SalesCouponFormPage />} />
-                <Route path="/sales/coupons/:id" element={<SalesCouponFormPage />} />
-                <Route path="/sales/course-packages" element={<SalesCoursePackageListPage />} />
-                <Route path="/sales/course-packages/new" element={<SalesCoursePackageFormPage />} />
-                <Route path="/sales/course-packages/:id" element={<SalesCoursePackageFormPage />} />
-                <Route path="/sales/enrollments" element={<SalesEnrollmentListPage />} />
-                <Route path="/sales/enrollments/:id" element={<SalesEnrollmentDetailPage />} />
-                <Route path="/sales/carts" element={<SalesCartListPage />} />
+                <Route element={<ProtectedRoute allowedRoles={[UserRole.ADMIN]} />}>
+                  <Route path="/admin/users" element={<UserManagement />} />
+                  <Route path="/admin/roles" element={<RoleManagement />} />
+                  <Route path="/admin/permissions" element={<PermissionManagement />} />
+                  <Route path="/admin/activity-log" element={<ActivityLog />} />
+                  <Route path="/admin/courses" element={<CourseCatalogPage />} />
+                  <Route path="/admin/courses/:id" element={<CourseAdminDetailPage />} />
+                  <Route path="/admin/classrooms" element={<ClassManagementPage />} />
+                  <Route path="/admin/classes" element={<ClassManagementPage />} />
+                  <Route path="/admin/sessions" element={<ClassSessionManagementPage />} />
+                  <Route path="/admin/classes/create" element={<CreateGroupClassPage />} />
+                  <Route path="/admin/classes/:id" element={<ClassDetailPage />} />
+                  <Route path="/admin/pending-requests/matching/:id" element={<TeacherMatchingRequestPage />} />
+                  <Route path="/admin/orders" element={<OrderManagement />} />
+                  <Route path="/admin/coupons" element={<CouponManagement />} />
+                  <Route path="/admin/trash" element={<TrashManagement />} />
+                  <Route path="/admin/category-teachers" element={<CategoryTeacherAssignPage />} />
+                  <Route path="/admin/revenue" element={<RevenueManagement />} />
+                  <Route path="/admin/quizzes" element={<QuizManagement />} />
+                  <Route path="/admin/assignments" element={<AssignmentManagement />} />
+                  <Route path="/admin/online-schedule" element={<OnlineScheduleManagement />} />
+                  <Route path="/admin/files" element={<FileManagement />} />
+                  <Route path="/admin/reviews/moderation" element={<ReviewModerationPage />} />
+                  <Route path="/admin/courses/approvals" element={<CourseApprovalPage />} />
+                  <Route path="/analytics" element={<LearningAnalytics />} />
+                  <Route path="/sales" element={<Navigate to="/sales/dashboard" replace />} />
+                  <Route path="/sales/dashboard" element={<SalesDashboardPage />} />
+                  <Route path="/sales/orders" element={<SalesOrderListPage />} />
+                  <Route path="/sales/orders/:id" element={<SalesOrderDetailPage />} />
+                  <Route path="/sales/payments" element={<SalesPaymentListPage />} />
+                  <Route path="/sales/payments/:id" element={<SalesPaymentDetailPage />} />
+                  <Route path="/sales/coupons" element={<SalesCouponListPage />} />
+                  <Route path="/sales/coupons/new" element={<SalesCouponFormPage />} />
+                  <Route path="/sales/coupons/:id" element={<SalesCouponFormPage />} />
+                  <Route path="/sales/course-packages" element={<SalesCoursePackageListPage />} />
+                  <Route path="/sales/course-packages/new" element={<SalesCoursePackageFormPage />} />
+                  <Route path="/sales/course-packages/:id" element={<SalesCoursePackageFormPage />} />
+                  <Route path="/sales/enrollments" element={<SalesEnrollmentListPage />} />
+                  <Route path="/sales/enrollments/:id" element={<SalesEnrollmentDetailPage />} />
+                  <Route path="/sales/carts" element={<SalesCartListPage />} />
+                </Route>
               </Route>
             </Route>
 
@@ -312,8 +313,11 @@ function App() {
                 <Route path="/teacher/courses/:id" element={<TeacherCourseDetailPage />} />
                 <Route path="/teacher/courses/:id/edit" element={<TeacherCoursesPage />} />
                 <Route path="/teacher/suggested-classes" element={<TeacherSuggestedClassesPage />} />
-                <Route path="/teacher/grading/assignments" element={<TeacherGradingAssignmentsPage />} />
-                <Route path="/teacher/grading/quizzes" element={<TeacherGradingQuizzesPage />} />
+                <Route path="/teacher/assessments" element={<TeacherAssessmentsPage />} />
+                <Route path="/teacher/assignments-exams" element={<Navigate to="/teacher/assessments" replace />} />
+                <Route path="/teacher/grading" element={<TeacherGradingPage />} />
+                <Route path="/teacher/grading/assignments" element={<Navigate to="/teacher/grading" replace />} />
+                <Route path="/teacher/grading/quizzes" element={<Navigate to="/teacher/grading" replace />} />
                 <Route path="/teacher/attendance" element={<TeacherAttendancePage />} />
                 <Route path="/teacher/insights" element={<TeacherInsightsPage />} />
                 <Route path="/teacher/earnings" element={<TeacherEarningsPage />} />
@@ -328,11 +332,9 @@ function App() {
               <Route path="/admin/courses/:id/builder" element={<CourseBuilderShell />} />
             </Route>
 
-            {/* Student Learning Experience Fullscreen Page */}
-            <Route element={<ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.STUDENT, UserRole.TEACHER, UserRole.TA]} />}>
-              <Route path="/learn/courses/:courseId" element={<StudentLearningPage />} />
-              <Route path="/learn/courses/:courseId/lessons/:lessonId" element={<StudentLearningPage />} />
-            </Route>
+            {/* Student Learning Experience: cho phép khách mở các bài được đánh dấu FREE/preview. */}
+            <Route path="/learn/courses/:courseId" element={<StudentLearningPage />} />
+            <Route path="/learn/courses/:courseId/lessons/:lessonId" element={<StudentLearningPage />} />
 
             {/* 3. STUDENT PORTAL (STUDENT & ADMIN) */}
             <Route element={<ProtectedRoute requiredPortal="STUDENT" allowedRoles={[UserRole.ADMIN, UserRole.STUDENT]} />}>
@@ -356,6 +358,11 @@ function App() {
                 <Route path="/student/orders" element={<StudentOrdersPage />} />
                 <Route path="/activity-log" element={<ActivityLog />} />
               </Route>
+            </Route>
+
+            {/* 4. SUPPORT PORTAL: chỉ role SUPPORT quản lý chat landing page. */}
+            <Route element={<ProtectedRoute requiredPortal="SUPPORT" allowedRoles={[UserRole.SUPPORT]} />}>
+              <Route path="/support" element={<SupportPage />} />
             </Route>
 
           </Route>

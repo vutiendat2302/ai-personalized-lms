@@ -140,6 +140,7 @@ public class UserController {
     public ResponseEntity<InputStreamResource> viewAvatar(@PathVariable Long id) {
         InputStream stream = userService.downloadAvatar(id);
         return ResponseEntity.ok()
+                .cacheControl(org.springframework.http.CacheControl.noStore())
                 .contentType(MediaType.IMAGE_JPEG)
                 .body(new InputStreamResource(stream));
     }
@@ -382,4 +383,3 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.of("Bulk hard delete processed successfully", response));
     }
 }
-

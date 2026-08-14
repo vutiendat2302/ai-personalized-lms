@@ -14,6 +14,7 @@ import type { CategoryResponse } from "@/types/admin";
 import { OnboardingModal } from "@/components/student/OnboardingModal";
 import { useToast } from "@/hooks/useToast";
 import { useAuth } from "@/hooks/useAuth";
+import { formatCourseLevel } from "@/utils/searchUtils";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
@@ -23,6 +24,8 @@ import {
   Star,
   BookOpen,
   Sparkles,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { CourseScrollContainer } from "@/components/courses/CourseScrollContainer";
 
@@ -48,6 +51,7 @@ export const StudentDashboardPage: React.FC = () => {
   const [loadingCats, setLoadingCats] = useState(false);
   const [catPage, setCatPage] = useState(0);
   const [hasMoreCats, setHasMoreCats] = useState(true);
+  const [isExpandedCats, setIsExpandedCats] = useState(false);
 
   // Featured course states from Landing page
   const [outstandingCourses, setOutstandingCourses] = useState<any[]>([]);
@@ -66,7 +70,7 @@ export const StudentDashboardPage: React.FC = () => {
   const fetchCategories = async (page: number) => {
     try {
       setLoadingCats(true);
-      const res = await courseApi.searchCategories({ page, size: 6, status: "ACTIVE" });
+      const res = await courseApi.searchCategories({ page, size: 8, status: "ACTIVE" });
       if (res.data.success) {
         const pageData = res.data.data;
         const newCats = pageData.content || [];
@@ -164,15 +168,14 @@ export const StudentDashboardPage: React.FC = () => {
     }
   };
 
-  const handleLoadMoreCats = () => {
-    const nextPage = catPage + 1;
-    setCatPage(nextPage);
-    void fetchCategories(nextPage);
-  };
-
-  const handleCollapseCats = () => {
-    setCatPage(0);
-    void fetchCategories(0);
+  /** Chuyển đổi mở rộng / thu gọn các chủ đề học tập nổi bật. */
+  const handleToggleExpandCats = async () => {
+    if (!isExpandedCats && hasMoreCats) {
+      const nextPage = catPage + 1;
+      setCatPage(nextPage);
+      await fetchCategories(nextPage);
+    }
+    setIsExpandedCats((prev) => !prev);
   };
 
   useEffect(() => {
@@ -524,7 +527,7 @@ export const StudentDashboardPage: React.FC = () => {
                     )}
                     {course.level && (
                       <div className="absolute top-3 left-3 bg-card/90 backdrop-blur-sm px-2.5 py-1 rounded-lg text-sm font-bold text-primary shadow">
-                        {course.level}
+                        {formatCourseLevel(course.level)}
                       </div>
                     )}
                   </div>
@@ -563,51 +566,50 @@ export const StudentDashboardPage: React.FC = () => {
           [SECTION 3] CHỦ ĐỀ HỌC TẬP NỔI BẬT (ÁP ĐÚNG LANDING PAGE)
           ========================================== */}
       <section className="py-10 text-center border-t border-border/40 space-y-6 max-w-6xl mx-auto px-6">
-        <h3 className="text-3xl font-extrabold uppercase tracking-wider text-muted-foreground mb-6 mt-6">
+        <h3 className="text-3xl font-extrabold uppercase tracking-wider text-muted-foreground mb-6 mt-6 text-center">
           Chủ đề học tập nổi bật
         </h3>
 
-        <div className="flex flex-wrap justify-center gap-3 max-w-4xl mx-auto">
-          {categories.map((cat) => (
+        <div className="flex flex-wrap justify-center gap-3 sm:gap-4 max-w-5xl mx-auto px-4">
+          {(isExpandedCats ? categories : categories.slice(0, 4)).map((cat) => (
             <Link
               key={cat.id}
               to={`/categories/${cat.id}`}
-              className="px-4 py-2 cursor-pointer hover:scale-105 rounded-full border border-border/70 bg-card text-sm font-bold text-foreground hover:border-primary hover:text-primary transition-all shadow-sm animate-in fade-in duration-200 focus:outline-none focus:ring-2 focus:ring-primary/50"
+              className="inline-flex items-center justify-center px-5 py-2.5 sm:px-6 sm:py-3 cursor-pointer hover:scale-105 rounded-2xl border border-border/70 bg-card text-sm font-bold text-foreground hover:border-primary hover:text-primary transition-all shadow-xs animate-in fade-in duration-200 focus:outline-none focus:ring-2 focus:ring-primary/50"
             >
               {cat.name}
             </Link>
           ))}
         </div>
 
-        <div className="flex justify-center gap-3 pt-2">
-          {hasMoreCats && (
+        {(categories.length > 4 || hasMoreCats) && (
+          <div className="flex justify-center pt-2">
             <Button
-              onClick={handleLoadMoreCats}
-              disabled={loadingCats}
+              type="button"
               variant="outline"
-              size="sm"
-              className="rounded-full px-6 py-2 text-sm font-bold border-border/60 hover:bg-neutral-soft-gray/50 hover:text-primary transition-all duration-200 cursor-pointer"
+              onClick={handleToggleExpandCats}
+              className="rounded-xl px-5 py-2 text-xs font-bold border-border/60 hover:bg-muted text-foreground inline-flex items-center gap-1.5 cursor-pointer shadow-xs"
             >
-              {loadingCats ? "Đang tải..." : "Xem thêm chủ đề"}
+              {isExpandedCats ? (
+                <>
+                  Thu gọn
+                  <ChevronUp className="h-4 w-4" />
+                </>
+              ) : (
+                <>
+                  Xem thêm
+                  <ChevronDown className="h-4 w-4" />
+                </>
+              )}
             </Button>
-          )}
-          {categories.length > 6 && !loadingCats && (
-            <Button
-              onClick={handleCollapseCats}
-              variant="outline"
-              size="sm"
-              className="rounded-full px-6 py-2 text-sm font-bold border-border/60 hover:bg-neutral-soft-gray/50 hover:text-primary transition-all duration-200 cursor-pointer"
-            >
-              Thu gọn
-            </Button>
-          )}
-        </div>
+          </div>
+        )}
       </section>
 
       {/* ==========================================
           [SECTION 4] KHÓA HỌC NỔI BẬT (ÁP ĐÚNG LANDING PAGE WITH TABS)
           ========================================== */}
-      <section id="courses" className="py-16 border-t border-border/40 max-w-6xl mx-auto px-6">
+      <section id="courses" className="py-16 border-t border-border/40 max-w-6xl mx-auto px-6 sm:px-12 md:px-16">
         <div className="text-center max-w-2xl mx-auto mb-10">
           <h2 className="text-3xl uppercase font-extrabold text-foreground tracking-tight">
             Khóa học nổi bật
@@ -686,7 +688,7 @@ export const StudentDashboardPage: React.FC = () => {
                             )}
                             {course.level && (
                               <div className="absolute top-3 left-3 bg-card/90 backdrop-blur-sm px-2.5 py-1 rounded-lg text-sm font-bold text-primary shadow">
-                                {course.level}
+                                {formatCourseLevel(course.level)}
                               </div>
                             )}
                           </div>

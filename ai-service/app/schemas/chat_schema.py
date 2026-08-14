@@ -1,5 +1,6 @@
 import base64
 from typing import Literal, Optional
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -20,6 +21,39 @@ class ConversationTitleResponse(BaseModel):
     """Tiêu đề một dòng đã được Gemini rút gọn."""
 
     title: str
+
+
+class SupportQuickAnswerRequest(BaseModel):
+    """Quick action công khai đã được Backend ánh xạ sang câu hỏi và context tin cậy."""
+
+    option_id: Literal[
+        "COURSE_CONSULTING", "LEARNING_PATH", "PRICING", "DELIVERY", "POLICY"
+    ] = Field(alias="optionId")
+    question: str = Field(min_length=1, max_length=500)
+    context: str = Field(min_length=1, max_length=20000)
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class SupportQuickAnswerResponse(BaseModel):
+    """Câu trả lời ngắn đã giới hạn để lưu vào support conversation."""
+
+    answer: str = Field(min_length=1, max_length=4000)
+
+
+class SupportIntentSuggestionRequest(BaseModel):
+    """Câu mô tả nhu cầu để local embedding xếp hạng quick intent phù hợp."""
+
+    question: str = Field(min_length=2, max_length=1000)
+
+
+class SupportIntentSuggestion(BaseModel):
+    """Intent được xếp hạng bằng cosine similarity, không sinh nội dung nghiệp vụ."""
+
+    option_id: str = Field(alias="optionId")
+    score: float
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class ChatStreamRequest(BaseModel):

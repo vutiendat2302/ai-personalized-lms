@@ -29,6 +29,9 @@ public interface IAssignmentService {
      */
     PageResponse<AssignmentResponse> search(AssignmentSearchRequest request);
 
+    /** Tìm kiếm bài tập do đúng user hiện tại tạo. */
+    PageResponse<AssignmentResponse> searchAuthored(AssignmentSearchRequest request, Long userId);
+
     /**
      * Lấy danh sách tất cả các bản ghi.
      * @return danh sách các đối tượng phù hợp
@@ -42,6 +45,9 @@ public interface IAssignmentService {
      * @return đối tượng chứa thông tin chi tiết kết quả
      */
     AssignmentResponse getById(Long id);
+
+    /** Lấy chi tiết bài tập nếu user hiện tại là người tạo. */
+    AssignmentResponse getAuthoredById(Long id, Long userId);
 
     /**
      * Lấy danh sách bài tập thuộc một bài học cụ thể.
@@ -78,6 +84,9 @@ public interface IAssignmentService {
      */
     AssignmentResponse create(AssignmentRequest request);
 
+    /** Tạo bài tập và gắn người tạo từ JWT. */
+    AssignmentResponse createForAuthor(AssignmentRequest request, Long userId);
+
     /**
      * Cập nhật thông tin bản ghi theo ID.
      *
@@ -87,10 +96,16 @@ public interface IAssignmentService {
      */
     AssignmentResponse update(Long id, AssignmentRequest request);
 
+    /** Cập nhật bài tập nếu user hiện tại là người tạo. */
+    AssignmentResponse updateAuthored(Long id, AssignmentRequest request, Long userId);
+
     /**
      * Xóa bản ghi khỏi hệ thống theo ID.
      *
      * @param id ID của bản ghi cần xử lý
      */
     void delete(Long id);
+
+    /** Xóa bài tập nếu user hiện tại là người tạo. */
+    void deleteAuthored(Long id, Long userId);
 }

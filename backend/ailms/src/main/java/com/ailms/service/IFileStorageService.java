@@ -4,6 +4,8 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
 import java.time.Duration;
+import java.util.Collection;
+import java.util.Set;
 
 /**
  * Service lưu trữ tệp vật lý tương tác trực tiếp với hệ thống lưu trữ (như MinIO, S3).
@@ -59,4 +61,7 @@ public interface IFileStorageService {
      * @return true nếu xử lý thành công hoặc hợp lệ, ngược lại là false
      */
     boolean exists(String fileKey);
+
+    /** Trả về các file key thực sự tồn tại trong storage từ danh sách metadata cần đối chiếu. */
+    Set<String> findExistingKeys(Collection<String> fileKeys);
 }

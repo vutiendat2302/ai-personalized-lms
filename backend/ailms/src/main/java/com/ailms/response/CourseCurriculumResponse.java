@@ -26,6 +26,7 @@ public class CourseCurriculumResponse {
     private Integer totalLessons;
     private Integer totalDurationMin;
     private Long enrollmentId;
+    private Boolean staffPreviewAccess;
 
     @Getter
     @Setter

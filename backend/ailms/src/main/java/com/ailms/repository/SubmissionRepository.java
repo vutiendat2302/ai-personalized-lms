@@ -16,4 +16,7 @@ public interface SubmissionRepository extends BaseRepository<SubmissionEntity, L
     List<SubmissionEntity> findByEnrollmentId(Long enrollmentId);
     Optional<SubmissionEntity> findByAssignmentIdAndUserId(Long assignmentId, Long userId);
     List<SubmissionEntity> findByAssignmentIdOrderBySubmittedAtDesc(Long assignmentId);
+
+    /** Lấy hàng đợi bài nộp theo tập bài tập và trạng thái chấm. */
+    List<SubmissionEntity> findByAssignmentIdInAndStatusOrderBySubmittedAtAsc(List<Long> assignmentIds, Byte status);
 }

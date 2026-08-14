@@ -48,6 +48,11 @@ export interface CheckoutPaymentResponse {
   payUrl: string;
 }
 
+export interface TutorScheduleCheckResponse {
+  conflict: boolean;
+  message?: string | null;
+}
+
 export interface OrderStatusResponse {
   orderId: string;
   orderStatus: OrderStatus;
@@ -130,6 +135,15 @@ export interface CreateCouponRequest {
 }
 
 export const orderApi = {
+  /** Kiểm tra lịch 1-1 mong muốn với các lớp hiện tại mà chưa tạo đơn hàng. */
+  checkTutorScheduleConflict: async (oneOnOneNeeds: OneOnOneNeedsPayload): Promise<TutorScheduleCheckResponse> => {
+    const response = await httpClient.post<ApiResponse<TutorScheduleCheckResponse>>(
+      "/v1/orders/tutor-schedule/check",
+      oneOnOneNeeds,
+    );
+    return response.data.data;
+  },
+
   /** Tạo checkout trực tiếp và nhận approval URL PayPal Sandbox từ backend. */
   checkoutCoursePackage: async (
     coursePackageId: string,

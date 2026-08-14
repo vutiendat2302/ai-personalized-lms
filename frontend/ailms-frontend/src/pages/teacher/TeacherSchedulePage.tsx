@@ -18,11 +18,13 @@ import {
   Columns,
   ListOrdered,
 } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 
 type CalendarViewMode = "WEEK" | "MONTH" | "TIMELINE";
 
 export const TeacherSchedulePage: React.FC = () => {
   const { success } = useToast();
+  const [searchParams] = useSearchParams();
   const [sessions, setSessions] = useState<OnlineClassSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<CalendarViewMode>("WEEK");
@@ -49,9 +51,16 @@ export const TeacherSchedulePage: React.FC = () => {
   useEffect(() => {
     teacherApi.getOnlineSessions().then((res) => {
       setSessions(res);
+      const linked = res.find((item) => item.id === searchParams.get("sessionId"));
+      if (linked) {
+        setSelectedSession(linked);
+        setClassFilter(linked.classId);
+        setViewMode("TIMELINE");
+        if (linked.status === "UNREVIEWED") setShowReviewModal(true);
+      }
       setLoading(false);
     });
-  }, []);
+  }, [searchParams]);
 
   const availableClasses = React.useMemo(() => {
     const map = new Map<string, string>();

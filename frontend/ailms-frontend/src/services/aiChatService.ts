@@ -4,6 +4,7 @@ import { getAccessToken, httpClient } from "@/api/httpClient";
 import type { ApiResponse, PageResponse } from "@/types/base";
 
 const CHAT_STREAM_ENDPOINT = "/api/v1/ai/chat/stream";
+const PUBLIC_CHAT_STREAM_ENDPOINT = "/api/v1/public/ai/chat/stream";
 
 export async function streamChat(
   payload: AiChatRequestPayload,
@@ -27,6 +28,26 @@ export async function streamChat(
   const conversationId = response.headers.get("X-Conversation-Id");
   if (conversationId) options.onConversationId?.(conversationId);
 
+  return readSSE(response, options);
+}
+
+/** Stream tư vấn catalog cho khách chưa đăng nhập qua Backend public gateway. */
+export async function streamPublicCatalogChat(
+  payload: { question: string; conversationId?: string },
+  options: Omit<SSEReaderOptions, "signal"> & {
+    signal?: AbortSignal;
+    onConversationId?: (conversationId: string) => void;
+  },
+): Promise<void> {
+  const response = await fetch(PUBLIC_CHAT_STREAM_ENDPOINT, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+    signal: options.signal,
+  });
+  const conversationId = response.headers.get("X-Conversation-Id");
+  if (conversationId) options.onConversationId?.(conversationId);
   return readSSE(response, options);
 }
 

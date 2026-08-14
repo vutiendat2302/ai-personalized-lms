@@ -18,9 +18,11 @@ import com.ailms.repository.specification.CoursePackageSpecification;
 import com.ailms.request.CreateCoursePackageRequest;
 import com.ailms.request.CoursePackageSearchRequest;
 import com.ailms.request.UpdateCoursePackageRequest;
+import com.ailms.request.CoursePackageStatusRequest;
 import com.ailms.response.CoursePackageResponse;
 import com.ailms.response.CoursePackageStatsResponse;
 import com.ailms.service.ICoursePackageService;
+import com.ailms.search.MeilisearchCourseService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -45,6 +47,7 @@ public class CoursePackageService implements ICoursePackageService {
     private final ClassRepository classRepository;
     private final CoursePackageMapper coursePackageMapper;
     private final ApplicationEventPublisher applicationEventPublisher;
+    private final MeilisearchCourseService meilisearchCourseService;
 
     private static final String RESOURCE_NAME = "CoursePackage";
     private static final String AUDIT_ENTITY_TYPE = "COURSE_PACKAGE";
@@ -115,6 +118,7 @@ public class CoursePackageService implements ICoursePackageService {
                 request.getDeliveryMode(), request.getClassId(), request.getMaxGroupSize(), course));
 
         CoursePackageEntity saved = coursePackageRepository.saveAndFlush(entity);
+        refreshCourseSearchIndex(course);
         CoursePackageResponse response = coursePackageMapper.toResponse(saved);
         publishAudit("CREATE", saved.getId(), null, response);
         return response;
@@ -131,15 +135,32 @@ public class CoursePackageService implements ICoursePackageService {
         CourseEntity course = existing.getCourseEntity();
 
         validateStatusForDeliveryMode(request.getStatus(), existing.getDeliveryMode());
-        preventRemovingLastSelfStudy(existing, request.getStatus());
         validatePricing(request.getPrice(), request.getOriginalPrice());
         coursePackageMapper.updateFromRequest(request, existing);
         existing.setClassEntity(resolveClass(
                 existing.getDeliveryMode(), request.getClassId(), request.getMaxGroupSize(), course));
 
         CoursePackageEntity updated = coursePackageRepository.saveAndFlush(existing);
+        refreshCourseSearchIndex(course);
         CoursePackageResponse response = coursePackageMapper.toResponse(updated);
         publishAudit("UPDATE", id, oldValue, response);
+        return response;
+    }
+
+    /** Cập nhật trạng thái gói mà không bắt buộc gửi lại toàn bộ thông tin giá. */
+    @Override
+    @Transactional
+    public CoursePackageResponse updateStatus(Long id, CoursePackageStatusRequest request) {
+        log.info("Updating status for course package: {}", id);
+        CoursePackageEntity existing = coursePackageRepository.findById(id)
+                .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
+        validateStatusForDeliveryMode(request.getStatus(), existing.getDeliveryMode());
+        CoursePackageResponse oldValue = coursePackageMapper.toResponse(existing);
+        existing.setStatus(request.getStatus());
+        CoursePackageEntity updated = coursePackageRepository.saveAndFlush(existing);
+        refreshCourseSearchIndex(existing.getCourseEntity());
+        CoursePackageResponse response = coursePackageMapper.toResponse(updated);
+        publishAudit("UPDATE_STATUS", id, oldValue, response);
         return response;
     }
 
@@ -153,6 +174,7 @@ public class CoursePackageService implements ICoursePackageService {
         CoursePackageResponse oldValue = coursePackageMapper.toResponse(existing);
         preventRemovingLastSelfStudy(existing, CoursePackageStatusEnum.INACTIVE);
         coursePackageRepository.delete(existing);
+        refreshCourseSearchIndex(existing.getCourseEntity());
         publishAudit("DELETE", id, oldValue, null);
     }
 
@@ -209,6 +231,15 @@ public class CoursePackageService implements ICoursePackageService {
             throw new BusinessException(
                     "Không thể xóa hoặc vô hiệu hóa gói tự học cuối cùng của khóa học đang được bán.");
         }
+    }
+
+    /** Đồng bộ cờ hiển thị của khóa học trong Meilisearch sau khi package thay đổi. */
+    private void refreshCourseSearchIndex(CourseEntity course) {
+        boolean activeForSale = course != null
+                && course.getStatus() == CourseStatusEnum.ACTIVE
+                && !coursePackageRepository.findByCourseEntity_IdAndStatus(
+                        course.getId(), CoursePackageStatusEnum.ACTIVE).isEmpty();
+        meilisearchCourseService.index(course, activeForSale);
     }
 
     /** Phát sự kiện audit cho thao tác thay đổi dữ liệu gói khóa học. */

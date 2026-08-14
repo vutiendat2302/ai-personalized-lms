@@ -211,6 +211,7 @@ Hầu hết các bảng dữ liệu chính đều kế thừa từ `BaseEntity`:
 | `employee_code` | VARCHAR(50) | NOT NULL, UNIQUE | Mã nhân viên (VD: `EMP001`) |
 | `department_id` | BIGINT | NULLABLE, FK -> `department.id` | Phòng ban trực thuộc |
 | `position` | VARCHAR(100) | NULLABLE | Chức danh công việc |
+| `bio` | TEXT | NULLABLE | Phần giới thiệu công khai của nhân sự/giảng viên |
 | `employment_type` | VARCHAR(30) | NOT NULL | `FULL_TIME`, `PART_TIME`, `CONTRACT`, `INTERNSHIP` |
 | `start_date` | DATETIME | NULLABLE | Ngày bắt đầu làm việc |
 | `end_date` | DATETIME | NULLABLE | Ngày kết thúc hợp đồng |
@@ -812,6 +813,18 @@ Nguồn migration: `database/v4_course_commerce_momo_one_on_one.sql`, `database/
 
 - `cart_item.one_on_one_needs` lưu draft JSON của form 1-1 theo đúng package trong giỏ.
 - `enrollment_package.status` là nguồn quyết định quyền sau refund/cancel/revoke/expire.
+
+## Support chat
+
+`anonymous_visitor.id` dùng Snowflake `BIGINT`, liên kết với `support_conversation.visitor_id`. Policy guided là tài liệu MinIO trong `policies/`; `file_metadata.usage_type = POLICY` và bản `ACTIVE` mới nhất xác định phiên bản hiện hành.
+
+`support_conversation` lưu riêng `last_hr_message_at`, `last_visitor_message_at`, `close_requested_at` để countdown đóng phiên không phụ thuộc audit `updated_at`.
+
+`support_conversation.full_name` và `email` bắt buộc với yêu cầu mới để supporter nhận diện khách; số điện thoại là tùy chọn và không hiển thị trên card hàng đợi.
+
+`support_chat_message.message_type` có `TEXT`, `QUICK_REPLIES`, `COURSE_RESULTS`, `RESOURCE_CARD`, `ATTACHMENT`, `SYSTEM`. `metadata` JSON lưu card course/category/package đã xác thực hoặc metadata file MinIO; attachment tối đa 10MB và chỉ hợp lệ ở conversation `ACTIVE`. Thay đổi không cần migration mới vì hai cột đã dùng `VARCHAR`/`JSON` từ v14.
+
+`support_hr_presence` là trạng thái hệ thống: heartbeat 30 giây, timeout 90 giây. Workload mở làm trạng thái thành `ONLINE_BUSY`; không có workload là `ONLINE_AVAILABLE`. Ticket ưu tiên người available, sau đó vào hàng đợi cá nhân của người busy có workload thấp nhất; supporter offline làm ticket quay lại queue chung.
 - `class_stream_post` hỗ trợ `QUESTION`, `DISCUSSION`, `ANNOUNCEMENT`, ghim, khóa bình luận và ẩn.
 - `class_stream_comment` lưu bình luận/trả lời có audit và phân trang theo bài đăng.
 

@@ -19,6 +19,9 @@ import com.ailms.response.PageResponse;
 import com.ailms.request.BaseSearchRequest;
 import com.ailms.service.ICourseService;
 import com.ailms.service.INotificationService;
+import com.ailms.search.MeilisearchCourseService;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -28,6 +31,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.text.Normalizer;
 import java.time.LocalDateTime;
@@ -60,6 +64,10 @@ public class CourseService implements ICourseService {
     private final CoursePackageRepository coursePackageRepository;
     private final CourseSectionRepository courseSectionRepository;
     private final ReviewRepository reviewRepository;
+    private final MeilisearchCourseService meilisearchCourseService;
+    private final PublicCatalogVectorService publicCatalogVectorService;
+    @Value("${public-catalog.vector-startup-sync:false}")
+    private boolean vectorStartupSync;
 
     private static final String RESOURCE_NAME = "Course";
     private static final String CODE_PREFIX = "KH";
@@ -88,6 +96,8 @@ public class CourseService implements ICourseService {
         CourseEntity entity = prepareCourse(request, category, CourseStatusEnum.DRAFT);
 
         CourseEntity savedEntity = courseRepository.save(entity);
+        meilisearchCourseService.index(savedEntity, false);
+        publicCatalogVectorService.indexCourse(savedEntity);
         Long creatorId = savedEntity.getCreatedBy();
         if (creatorId != null && userRoleRepository.hasActiveTeacherRole(creatorId, LocalDateTime.now())) {
             assignCreatorAsCourseTeacher(savedEntity, creatorId);
@@ -118,6 +128,8 @@ public class CourseService implements ICourseService {
         entity.setCreatedBy(teacherUserId);
 
         CourseEntity savedEntity = courseRepository.save(entity);
+        meilisearchCourseService.index(savedEntity, false);
+        publicCatalogVectorService.indexCourse(savedEntity);
         if (userRoleRepository.hasActiveTeacherRole(teacherUserId, LocalDateTime.now())) {
             assignCreatorAsCourseTeacher(savedEntity, teacherUserId);
         }
@@ -155,6 +167,8 @@ public class CourseService implements ICourseService {
         existingEntity.setLink(resolveLink(request.getLink(), request.getName()));
 
         CourseEntity updatedEntity = courseRepository.save(existingEntity);
+        meilisearchCourseService.index(updatedEntity, hasActivePackage(updatedEntity));
+        publicCatalogVectorService.indexCourse(updatedEntity);
         deactivatePackagesIfCourseNotActive(updatedEntity);
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "UPDATE", "COURSE", id, null, updatedEntity));
         return courseMapper.toResponse(updatedEntity);
@@ -174,6 +188,8 @@ public class CourseService implements ICourseService {
         existingEntity.setStatus(request.getStatus());
 
         CourseEntity updatedEntity = courseRepository.save(existingEntity);
+        meilisearchCourseService.index(updatedEntity, hasActivePackage(updatedEntity));
+        publicCatalogVectorService.indexCourse(updatedEntity);
         deactivatePackagesIfCourseNotActive(updatedEntity);
         notifyAssignedTeachers(
                 updatedEntity,
@@ -207,6 +223,8 @@ public class CourseService implements ICourseService {
         }
 
         CourseEntity saved = courseRepository.save(course);
+        meilisearchCourseService.index(saved, isActiveForSale(saved));
+        publicCatalogVectorService.indexCourse(saved);
         deactivatePackagesIfCourseNotActive(saved);
         ApprovalRequestEntity approvalHistory = ApprovalRequestEntity.builder()
                 .targetType("COURSE")
@@ -245,6 +263,8 @@ public class CourseService implements ICourseService {
 
         entity.setStatus(CourseStatusEnum.DELETED);
         CourseEntity saved = courseRepository.save(entity);
+        meilisearchCourseService.delete(saved.getId());
+        publicCatalogVectorService.deleteCourse(saved.getId());
         deactivatePackagesIfCourseNotActive(saved);
 
         notifyAssignedTeachers(
@@ -254,6 +274,30 @@ public class CourseService implements ICourseService {
         );
 
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "SOFT_DELETE", "COURSE", id, null, null));
+    }
+
+    /** Khởi tạo cấu hình và đồng bộ lại index khóa học sau khi ứng dụng sẵn sàng. */
+    @EventListener(ApplicationReadyEvent.class)
+    public void initializeCourseSearchIndex() {
+        if (meilisearchCourseService.isEnabled()) {
+            courseRepository.findAll().forEach(course -> meilisearchCourseService.index(course, isActiveForSale(course)));
+            meilisearchCourseService.configureIndex();
+        }
+        if (vectorStartupSync) {
+            publicCatalogVectorService.indexCourses(courseRepository.findAll());
+        }
+    }
+
+    /** Kiểm tra khóa học có package đang hoạt động để phục vụ index tìm kiếm. */
+    private boolean hasActivePackage(CourseEntity course) {
+        return isActiveForSale(course);
+    }
+
+    /** Xác định khóa học public dựa trên trạng thái và bất kỳ package đang hoạt động. */
+    private boolean isActiveForSale(CourseEntity course) {
+        return course.getStatus() == CourseStatusEnum.ACTIVE
+                && coursePackageRepository.findByCourseEntity_Id(course.getId()).stream()
+                .anyMatch(pkg -> pkg.getStatus() == CoursePackageStatusEnum.ACTIVE);
     }
 
     private void notifyAssignedTeachers(CourseEntity course, String title, String content) {
@@ -383,6 +427,11 @@ public class CourseService implements ICourseService {
     @Override
     public PageResponse<CourseResponse> search(CourseSearchRequest request) {
         log.info("Searching courses with keyword: {}", request.getKeyword());
+
+        PageResponse<CourseResponse> indexedResult = meilisearchCourseService.search(request);
+        if (indexedResult != null) {
+            return indexedResult;
+        }
 
         Page<CourseEntity> page = request.getStatus() == CourseStatusEnum.ACTIVE
                 ? courseRepository.findActiveCoursesForSale(

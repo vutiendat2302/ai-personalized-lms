@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { courseApi } from "@/api/courses/courseApi";
 import { degreeApi } from "@/api/degrees/degreeApi";
@@ -123,6 +123,7 @@ const CATEGORY_DATA = [
 
 export const Dashboard: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { auth } = useAuth();
   const user = auth.user;
   
@@ -1591,7 +1592,7 @@ export const Dashboard: React.FC = () => {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => navigate("/categories")}
+              onClick={() => navigate("/categories", { state: { from: `${location.pathname}${location.search}${location.hash}` } })}
               className="rounded-xl text-xs font-bold gap-1 self-start sm:self-auto"
             >
               <span>Xem tất cả danh mục</span>
@@ -1630,7 +1631,7 @@ export const Dashboard: React.FC = () => {
               <span>Khóa Học Cá Nhân Hóa Dành Cho Bạn</span>
             </h2>
             <span
-              onClick={() => navigate("/explore")}
+              onClick={() => navigate("/explore", { state: { from: `${location.pathname}${location.search}${location.hash}` } })}
               className="text-xs font-bold text-primary cursor-pointer hover:underline flex items-center gap-0.5"
             >
               Xem tất cả <ChevronRight className="h-3.5 w-3.5" />
@@ -1739,7 +1740,7 @@ export const Dashboard: React.FC = () => {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => navigate("/categories")}
+              onClick={() => navigate("/categories", { state: { from: `${location.pathname}${location.search}${location.hash}` } })}
               className="text-xs font-bold text-primary hover:underline"
             >
               Xem tất cả bằng cấp
@@ -1783,7 +1784,7 @@ export const Dashboard: React.FC = () => {
             ]).map((d: any) => (
               <div
                 key={d.id}
-                onClick={() => navigate("/categories")}
+                onClick={() => navigate("/categories", { state: { from: `${location.pathname}${location.search}${location.hash}` } })}
                 className="flex flex-col bg-card rounded-2xl border border-border/80 shadow-sm overflow-hidden hover:shadow-lg hover:border-primary/40 transition-all duration-300 cursor-pointer group"
               >
                 <div className="aspect-video w-full overflow-hidden relative bg-muted">
@@ -1849,61 +1850,7 @@ export const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Management Tabs Navigation */}
-      <div className="flex border-b border-border gap-2 overflow-x-auto pb-px">
-        <button
-          onClick={() => setActiveTab("overview")}
-          className={`px-4 py-2.5 text-sm font-bold border-b-2 transition-all shrink-0 ${
-            activeTab === "overview"
-              ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          Tổng quan
-        </button>
-        <button
-          onClick={() => navigate("/admin/users")}
-          className="px-4 py-2.5 text-sm font-bold border-b-2 border-transparent text-muted-foreground hover:text-foreground transition-all shrink-0"
-        >
-          Quản lý Người dùng
-        </button>
-        <button
-          onClick={() => navigate("/admin/students")}
-          className="px-4 py-2.5 text-sm font-bold border-b-2 border-transparent text-muted-foreground hover:text-foreground transition-all shrink-0"
-        >
-          Quản lý Học viên
-        </button>
-        <button
-          onClick={() => navigate("/admin/employees")}
-          className="px-4 py-2.5 text-sm font-bold border-b-2 border-transparent text-muted-foreground hover:text-foreground transition-all shrink-0"
-        >
-          Quản lý Nhân viên
-        </button>
-        <button
-          onClick={() => navigate("/admin/roles")}
-          className="px-4 py-2.5 text-sm font-bold border-b-2 border-transparent text-muted-foreground hover:text-foreground transition-all shrink-0"
-        >
-          Quản lý Vai trò
-        </button>
-        <button
-          onClick={() => navigate("/admin/permissions")}
-          className="px-4 py-2.5 text-sm font-bold border-b-2 border-transparent text-muted-foreground hover:text-foreground transition-all shrink-0"
-        >
-          Quản lý Quyền
-        </button>
-        <button
-          onClick={() => navigate("/admin/courses")}
-          className="px-4 py-2.5 text-sm font-bold border-b-2 border-transparent text-muted-foreground hover:text-foreground transition-all shrink-0"
-        >
-          Quản lý Khóa học
-        </button>
-        <button
-          onClick={() => navigate("/activity-log")}
-          className="px-4 py-2.5 text-sm font-bold border-b-2 border-transparent text-muted-foreground hover:text-foreground transition-all shrink-0"
-        >
-          Nhật ký hệ thống
-        </button>
-      </div>
+
 
       {/* ==========================================
           TAB 1: OVERVIEW PANEL

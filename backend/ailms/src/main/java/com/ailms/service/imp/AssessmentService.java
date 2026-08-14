@@ -10,6 +10,7 @@ import com.ailms.response.StudentProgressReportResponse;
 import com.ailms.response.SystemDashboardResponse;
 import com.ailms.service.IAssessmentService;
 import com.ailms.service.ICertificateService;
+import com.ailms.service.ITeacherActivityService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -44,6 +45,7 @@ public class AssessmentService implements IAssessmentService {
     private final CertificateRepository certificateRepository;
     private final ICertificateService certificateService;
     private final ApplicationEventPublisher applicationEventPublisher;
+    private final ITeacherActivityService teacherActivityService;
 
     @Transactional
     @Override
@@ -233,6 +235,7 @@ public class AssessmentService implements IAssessmentService {
         }
 
         quizAttemptRepository.save(attempt);
+        teacherActivityService.quizSubmitted(attempt, quiz);
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "SUBMIT_QUIZ_ATTEMPT", "QUIZ_ATTEMPT", attemptId, null, attempt));
     }
 
@@ -372,6 +375,7 @@ public class AssessmentService implements IAssessmentService {
                 .build();
 
         SubmissionEntity saved = submissionRepository.save(submission);
+        teacherActivityService.assignmentSubmitted(saved, assignment);
         return saved.getId();
     }
 

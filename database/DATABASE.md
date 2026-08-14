@@ -670,6 +670,7 @@ Migration áp dụng tuần tự từ `v4_course_commerce_momo_one_on_one.sql` �
 - `course`: bổ sung `thumbnail_url`, `learning_objectives`, `prerequisites`.
 - `class`: bổ sung `class_kind`, `description`, `registration_open`, `allow_late_enrollment`.
 - `class_online`: bổ sung `session_kind`, `counts_toward_package`, `payable`. Buổi thử dùng `TRIAL`, không trừ số buổi và không tạo thù lao.
+- Migration `v16_add_class_session_cancellation.sql` bổ sung `cancellation_reason`, `cancelled_at`, `cancelled_by_user_id` để lưu đầy đủ lịch sử hủy buổi học.
 
 ## payment_transaction và idempotency
 
@@ -690,6 +691,17 @@ Các cột MoMo ở v4 được giữ để tương thích migration đã áp d�
 
 - `cart_item.one_on_one_needs` giữ bản nháp nhu cầu của gói 1-1; bản nháp chỉ được chuyển thành yêu cầu matching sau capture thanh toán thành công.
 - `enrollment_package.status` quản lý riêng `ACTIVE`, `REFUNDED`, `CANCELLED`, `REVOKED`, `EXPIRED`; quyền học chỉ tính từ package `ACTIVE` chưa hết hạn.
+
+## Support chat
+
+- `anonymous_visitor.id` và `support_conversation.visitor_id` dùng `BIGINT` Snowflake.
+- `support_conversation.last_hr_message_at`, `last_visitor_message_at` và `close_requested_at` lưu mốc timeout: supporter được yêu cầu đóng sau 5 phút visitor chưa phản hồi; hệ thống tự đóng sau 20 phút.
+- `support_conversation.full_name` và `email` là thông tin định danh chính trên hàng đợi supporter; `phone` chỉ còn tùy chọn và không hiển thị trên card.
+- Policy support không dùng bảng riêng. Tài liệu được lưu ở MinIO dưới `policies/`, metadata dùng `file_metadata.usage_type = POLICY`; bản `ACTIVE` mới nhất là bản hiện hành.
+- Migration `v19_expand_file_usage_type_for_policy.sql` bổ sung giá trị `POLICY` vào enum `file_metadata.usage_type` của MySQL, đồng bộ với backend.
+- `support_chat_message.message_type` hỗ trợ thêm `RESOURCE_CARD` và `ATTACHMENT`. Card catalog và thông tin file MinIO được lưu trong cột JSON `metadata`.
+- Attachment dùng prefix MinIO `support/{conversationId}/`, giới hạn 10MB và chỉ được gửi khi conversation `ACTIVE`; schema không cần migration mới vì `message_type` là `VARCHAR` và `metadata` đã là JSON.
+- `support_hr_presence.status` do heartbeat/workload tự suy ra. Heartbeat quá 90 giây chuyển `OFFLINE`; ticket của supporter offline được trả về queue và ưu tiên phân phối cho `ONLINE_AVAILABLE`, sau đó tới `ONLINE_BUSY` có workload thấp nhất.
 - `class_stream_post` bổ sung loại bài, ghim, khóa bình luận và ẩn nội dung.
 - `class_stream_comment` lưu trả lời phân trang; khóa ngoại bài dùng cascade để không để lại bình luận mồ côi.
 

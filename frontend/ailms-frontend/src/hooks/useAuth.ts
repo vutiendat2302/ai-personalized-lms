@@ -1,5 +1,5 @@
 import { createContext, useContext } from "react";
-import type { AuthState } from "@/types/jwtAuthentication";
+import type { AuthState, AuthUser } from "@/types/jwtAuthentication";
 import type { PortalType } from "@/utils/workspaceUtils";
 
 export interface AuthContextType {
@@ -11,6 +11,7 @@ export interface AuthContextType {
   setDefaultWorkspace: (portal: PortalType | null) => void;
   login: (usernameOrEmail: string, pass: string) => Promise<void>;
   logout: () => void;
+  updateCurrentUser: (patch: Partial<AuthUser>) => void;
 }
 
 // Context lưu trạng thái xác thực và các hàm đăng nhập/đăng xuất/chuyển đổi không gian làm việc

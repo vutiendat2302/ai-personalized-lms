@@ -39,7 +39,7 @@ import teacher_category
 import teacher_availability
 import course
 import course_teacher
-import course_sectiton
+import course_section
 import lesson
 import review
 import degree
@@ -81,7 +81,7 @@ def main():
             teacher_availability.seed(cursor)
             course.seed(cursor)
             course_teacher.seed(cursor)
-            course_sectiton.seed(cursor)
+            course_section.seed(cursor)
             lesson.seed(cursor)
             # Nhật ký cần course/section/lesson tồn tại để gắn đúng đối tượng học tập.
             learning_activity_log.seed(cursor)

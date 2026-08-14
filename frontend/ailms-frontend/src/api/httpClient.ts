@@ -2,6 +2,7 @@
 import axios from "axios";
 import type { JwtAuthenticationResponse } from "@/types/jwtAuthentication";
 import type { ApiResponse, ErrorResponse } from "@/types/base";
+import { normalizeAvatarFields } from "@/utils/avatarUrl";
 
 /* ============================================================
  * ACCESS TOKEN
@@ -38,7 +39,7 @@ export const clearAuth = () => {
  *  - Cho phép Browser tự động gửi HttpOnly Cookie.
  *  - Đây là điều kiện bắt buộc để Refresh Token hoạt động.
  * ============================================================ */
-const BASE_URL = import.meta.env.VITE_BE_URL || import.meta.env.VITE_API_BASE_URL || "/api";
+const BASE_URL = (import.meta.env.VITE_BE_URL || import.meta.env.VITE_API_BASE_URL || "/api").replace(/\/+$/, "");
 
 const httpClient = axios.create({
   baseURL: BASE_URL,
@@ -110,7 +111,10 @@ let queue: Array<{
  *      Gửi lại Request cũ.
  * ============================================================ */
 httpClient.interceptors.response.use(
-  (res) => res, // Response thành công
+  (res) => {
+    normalizeAvatarFields(res.data);
+    return res;
+  }, // Response thành công
   async (error) => { // Response lỗi
     // Request ban đầu
     const originalReq = error.config;

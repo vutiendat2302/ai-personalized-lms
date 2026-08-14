@@ -96,6 +96,7 @@ import type { EmployeeExtended } from "@/types/employee";
 
 import { EmployeeDetailModal } from "@/components/admin/employee/EmployeeDetailModal";
 import { CreateSingleEmployeeModal } from "@/components/admin/employee/CreateSingleEmployeeModal";
+import { useAuth } from "@/hooks/useAuth";
 
 interface EmployeeUser extends UserResponse {
   userId: string;
@@ -142,6 +143,11 @@ const getPageNumbers = (currentPage: number, total: number) => {
 
 export const EmployeeManagement: React.FC = () => {
   const location = useLocation();
+  const { auth } = useAuth();
+  const currentRoles = (auth.user?.roles || []).map((role: any) =>
+    (typeof role === "object" ? role?.code || role?.name || "" : String(role)).replace("ROLE_", "").toUpperCase()
+  );
+  const isHrOnly = currentRoles.includes("HR") && !currentRoles.includes("ADMIN");
 
   // Data States
   const [users, setUsers] = useState<EmployeeUser[]>([]);
@@ -559,7 +565,7 @@ export const EmployeeManagement: React.FC = () => {
       const [empRes, statusRes, probationRes] = await Promise.all([
         employeeApi.getEmployeeCount().catch(() => null),
         employeeApi.getEmployeeStatsByStatus().catch(() => null),
-        employeeApi.getExpiringProbationCount().catch(() => 0),
+        isHrOnly ? Promise.resolve(0) : employeeApi.getExpiringProbationCount().catch(() => 0),
       ]);
 
       if (empRes?.data?.success && empRes.data.data != null) {
@@ -1577,8 +1583,8 @@ export const EmployeeManagement: React.FC = () => {
               </CardContent>
             </Card>
 
-            {/* Card 4: Probation Expiring Warning Card */}
-            <Card
+            {/* Card cảnh báo và hành động gửi mail chỉ dành cho Admin. */}
+            {!isHrOnly && <Card
               onClick={handleSelectExpiringProbation}
               className="lg:col-span-4 border-2 border-amber-500/40 bg-gradient-to-br from-amber-500/10 via-card to-card shadow-xs cursor-pointer group flex flex-col justify-between"
             >
@@ -1607,7 +1613,7 @@ export const EmployeeManagement: React.FC = () => {
                 <span>Luồng 5.2</span>
                 <span className="underline">Filter bảng danh sách &rarr;</span>
               </div>
-            </Card>
+            </Card>}
 
             {/* Chart 3: Donut Contract Status */}
             <Card className="lg:col-span-6 border-border shadow-xs bg-card">

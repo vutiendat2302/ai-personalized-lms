@@ -6,6 +6,7 @@ import com.ailms.service.IFileService;
 
 import com.ailms.entity.enums.BaseStatusEnum;
 import com.ailms.entity.enums.FileTypeEnum;
+import com.ailms.exception.BadRequestException;
 import com.ailms.exception.FileStorageException;
 import com.ailms.request.CreateFileMetadataRequest;
 import com.ailms.response.FileMetadataResponse;
@@ -44,39 +45,51 @@ public class FileService implements IFileService {
             Long referenceEntityId,
             String referenceEntityType
     ) {
+        return uploadFile(file, fileType, usageType, referenceEntityId, referenceEntityType, null);
+    }
+
+    /** Upload file với tên metadata do người dùng chọn trước khi ghi object vào MinIO. */
+    @Override
+    @Transactional
+    public FileMetadataResponse uploadFile(
+            MultipartFile file,
+            FileTypeEnum fileType,
+            FileUsageTypeEnum usageType,
+            Long referenceEntityId,
+            String referenceEntityType,
+            String originalName
+    ) {
         log.info("Uploading physical file to MinIO with usageType: {}", usageType);
         if (file == null || file.isEmpty()) {
             throw new FileStorageException("File cannot be empty");
         }
 
+        String uploadedFilename = StringUtils.cleanPath(file.getOriginalFilename());
+
+        String extension = "";
+        int dotIndex = uploadedFilename.lastIndexOf('.');
+        if (dotIndex > 0) {
+            extension = uploadedFilename.substring(dotIndex);
+        }
+        String displayName = resolveOriginalName(originalName, uploadedFilename, extension);
+
         try {
-            String originalFilename = StringUtils.cleanPath(file.getOriginalFilename());
-
-            String extension = "";
-            int dotIndex = originalFilename.lastIndexOf('.');
-            if (dotIndex > 0) {
-                extension = originalFilename.substring(dotIndex);
-            }
-
             if (fileType == null) {
                 fileType = detectFileType(file.getContentType(), extension);
             }
 
-            String folder = (usageType != null ? usageType.name().toLowerCase() : fileType.name().toLowerCase()) + "s";
+            String folder = usageType == FileUsageTypeEnum.POLICY ? "policies"
+                    : (usageType != null ? usageType.name().toLowerCase() : fileType.name().toLowerCase()) + "s";
             String uniqueName = UUID.randomUUID() + extension;
             String fileKey = folder + "/" + uniqueName;
 
-            // 1. Upload physical file bytes to MinIO Storage (with graceful fallback if MinIO is unavailable locally)
-            try {
-                fileStorageService.upload(file, fileKey);
-            } catch (Exception minioEx) {
-                log.warn("MinIO storage unavailable or connection refused locally, saving metadata fallback fileKey: {}", fileKey, minioEx);
-            }
+            // 1. Chỉ lưu metadata sau khi object được ghi thành công vào MinIO.
+            fileStorageService.upload(file, fileKey);
 
             // 2. Save metadata to Database
             CreateFileMetadataRequest metadataRequest = CreateFileMetadataRequest.builder()
                     .fileKey(fileKey)
-                    .originalName(originalFilename)
+                    .originalName(displayName)
                     .fileSize(file.getSize())
                     .contentType(file.getContentType())
                     .fileType(fileType)
@@ -91,6 +104,23 @@ public class FileService implements IFileService {
             log.error("Failed to upload file to MinIO and create metadata", e);
             throw new FileStorageException("Failed to upload file: " + e.getMessage(), e);
         }
+    }
+
+    /** Chuẩn hóa tên hiển thị và bảo đảm tên mới không đổi đuôi file. */
+    private String resolveOriginalName(String requestedName, String uploadedFilename, String extension) {
+        if (!StringUtils.hasText(requestedName)) return uploadedFilename;
+
+        String sanitized = StringUtils.cleanPath(requestedName).replaceAll("[\\\\/\\r\\n\\t]", "").trim();
+        if (!StringUtils.hasText(sanitized) || sanitized.length() > 255) {
+            throw new BadRequestException("Tên tệp phải có từ 1 đến 255 ký tự hợp lệ");
+        }
+
+        int dotIndex = sanitized.lastIndexOf('.');
+        String requestedExtension = dotIndex > 0 ? sanitized.substring(dotIndex) : "";
+        if (StringUtils.hasText(requestedExtension) && !requestedExtension.equalsIgnoreCase(extension)) {
+            throw new BadRequestException("Định dạng tệp không hợp lệ: tên mới phải giữ đuôi " + extension);
+        }
+        return StringUtils.hasText(requestedExtension) ? sanitized : sanitized + extension;
     }
 
     private FileTypeEnum detectFileType(String contentType, String extension) {

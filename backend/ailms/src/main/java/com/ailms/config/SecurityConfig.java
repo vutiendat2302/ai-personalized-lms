@@ -150,6 +150,7 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable) // Không sử dụng CSRF do xác thực bằng JWT
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))// Không tạo HTTP Session
                 .authorizeHttpRequests(auth -> auth.requestMatchers(authPrefix + "/**").permitAll() // Cho phép truy cập các API Authentication, các API khác yêu cầu đăng nhập
+                        .requestMatchers(HttpMethod.GET, apiPrefix + "/users/*/avatar").permitAll()
 //                        .requestMatchers(HttpMethod.GET, apiPrefix + "/**").permitAll()
 //                        .anyRequest().authenticated()
                         .anyRequest().permitAll());

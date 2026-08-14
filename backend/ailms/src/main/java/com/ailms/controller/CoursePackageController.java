@@ -3,6 +3,7 @@ package com.ailms.controller;
 import com.ailms.request.CreateCoursePackageRequest;
 import com.ailms.request.CoursePackageSearchRequest;
 import com.ailms.request.UpdateCoursePackageRequest;
+import com.ailms.request.CoursePackageStatusRequest;
 import com.ailms.response.ApiResponse;
 import com.ailms.response.CoursePackageResponse;
 import com.ailms.response.CoursePackageStatsResponse;
@@ -52,6 +53,16 @@ public class CoursePackageController {
             @Valid @RequestBody UpdateCoursePackageRequest request) {
         CoursePackageResponse response = coursePackageService.update(id, request);
         return ResponseEntity.ok(ApiResponse.of("Course package updated successfully", response));
+    }
+
+    /** Cập nhật trạng thái bán/ẩn của gói theo quyền quản lý khóa học. */
+    @PatchMapping("/{id}/status")
+    @PreAuthorize("@courseAccess.canManagePackage(#id, authentication)")
+    public ResponseEntity<ApiResponse<CoursePackageResponse>> updateStatus(
+            @PathVariable Long id,
+            @Valid @RequestBody CoursePackageStatusRequest request) {
+        CoursePackageResponse response = coursePackageService.updateStatus(id, request);
+        return ResponseEntity.ok(ApiResponse.of("Course package status updated successfully", response));
     }
 
     /** Lấy chi tiết gói theo ID. */

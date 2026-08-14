@@ -29,6 +29,16 @@ public interface IFileService {
             String referenceEntityType
     );
 
+    /** Tải file cùng tên hiển thị tùy chọn, giữ nguyên đuôi file vật lý. */
+    FileMetadataResponse uploadFile(
+            MultipartFile file,
+            FileTypeEnum fileType,
+            FileUsageTypeEnum usageType,
+            Long referenceEntityId,
+            String referenceEntityType,
+            String originalName
+    );
+
     /**
      * Tạo liên kết tải tệp tin dựa trên fileKey.
      *

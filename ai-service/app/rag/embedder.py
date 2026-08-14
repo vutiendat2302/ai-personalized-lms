@@ -36,12 +36,16 @@ class GeminiEmbedder(BaseEmbedder):
         """Embedding tài liệu theo batch để giảm số request."""
         vectors: list[list[float]] = []
         for offset in range(0, len(texts), settings.EMBEDDING_BATCH_SIZE):
-            vectors.extend(
-                await self._embed(
-                    texts[offset : offset + settings.EMBEDDING_BATCH_SIZE],
-                    "RETRIEVAL_DOCUMENT",
-                )
-            )
+            batch = texts[offset : offset + settings.EMBEDDING_BATCH_SIZE]
+            batch_vectors = await self._embed(batch, "RETRIEVAL_DOCUMENT")
+            if len(batch_vectors) != len(batch):
+                batch_vectors = []
+                for text in batch:
+                    single = await self._embed([text], "RETRIEVAL_DOCUMENT")
+                    if len(single) != 1:
+                        raise RuntimeError("Gemini không trả đủ embedding cho document")
+                    batch_vectors.append(single[0])
+            vectors.extend(batch_vectors)
         return vectors
 
     async def embed_query(self, text: str) -> list[float]:

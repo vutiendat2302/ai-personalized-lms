@@ -2,6 +2,7 @@ package com.ailms.service;
 
 import com.ailms.request.*;
 import com.ailms.response.OneOnOneRequestResponse;
+import com.ailms.response.OneOnOneInstructorCandidateResponse;
 
 import java.util.List;
 
@@ -33,6 +34,15 @@ public interface IOneOnOneService {
 
     /** HR đánh dấu đã kết nối thông tin liên hệ giữa hai bên. */
     OneOnOneRequestResponse markContacted(Long requestId);
+
+    /** HR từ chối người đang nhận và mở lại yêu cầu cho người dạy khác. */
+    OneOnOneRequestResponse rejectConnection(Long requestId, String reason);
+
+    /** Lấy người dạy ACTIVE đúng danh mục và chưa bị loại khỏi yêu cầu. */
+    List<OneOnOneInstructorCandidateResponse> getInstructorCandidates(Long requestId);
+
+    /** Gửi thông báo yêu cầu 1-1 tới các người dạy được HR chọn. */
+    void notifyInstructors(Long requestId, List<Long> instructorIds);
 
     /** HR hủy yêu cầu trong trường hợp cần can thiệp. */
     OneOnOneRequestResponse cancel(Long requestId, String reason);

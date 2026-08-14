@@ -20,9 +20,13 @@ import com.ailms.response.PageResponse;
 import com.ailms.service.base.BaseService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import com.ailms.search.MeilisearchCategoryService;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.util.List;
 
@@ -39,6 +43,10 @@ public class CategoryService
     private final CourseRepository courseRepository;
     private final DegreeRepository degreeRepository;
     private final CategoryMapper categoryMapper;
+    private final MeilisearchCategoryService meilisearchCategoryService;
+    private final PublicCatalogVectorService publicCatalogVectorService;
+    @Value("${public-catalog.vector-startup-sync:false}")
+    private boolean vectorStartupSync;
 
     @Override
     protected BaseRepository<CategoryEntity, Long> getRepository() {
@@ -61,7 +69,10 @@ public class CategoryService
         if (categoryRepository.existsByNameIgnoreCase(request.getName())) {
             throw DuplicateResourceException.of(RESOURCE_NAME, "name", request.getName());
         }
-        return super.create(request);
+        CategoryResponse response = super.create(request);
+        categoryRepository.findById(response.getId()).ifPresent(meilisearchCategoryService::index);
+        categoryRepository.findById(response.getId()).ifPresent(publicCatalogVectorService::indexCategory);
+        return response;
     }
 
     @Override
@@ -70,7 +81,10 @@ public class CategoryService
         if (categoryRepository.existsByNameIgnoreCaseAndIdNot(request.getName(), id)) {
             throw DuplicateResourceException.of(RESOURCE_NAME, "name", request.getName());
         }
-        return super.update(id, request);
+        CategoryResponse response = super.update(id, request);
+        categoryRepository.findById(response.getId()).ifPresent(meilisearchCategoryService::index);
+        categoryRepository.findById(response.getId()).ifPresent(publicCatalogVectorService::indexCategory);
+        return response;
     }
 
     @Override
@@ -79,13 +93,30 @@ public class CategoryService
         CategoryEntity entity = categoryRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
         entity.setStatus(request.getStatus());
-        return categoryMapper.toResponse(categoryRepository.save(entity));
+        CategoryEntity saved = categoryRepository.save(entity);
+        meilisearchCategoryService.index(saved);
+        publicCatalogVectorService.indexCategory(saved);
+        return categoryMapper.toResponse(saved);
     }
 
     @Override
     @Transactional
     public void delete(Long id) {
         super.delete(id);
+        meilisearchCategoryService.delete(id);
+        publicCatalogVectorService.deleteCategory(id);
+    }
+
+    /** Khởi tạo cấu hình và đồng bộ lại index danh mục sau khi ứng dụng sẵn sàng. */
+    @EventListener(ApplicationReadyEvent.class)
+    public void initializeCategorySearchIndex() {
+        if (meilisearchCategoryService.isEnabled()) {
+            categoryRepository.findAll().forEach(meilisearchCategoryService::index);
+            meilisearchCategoryService.configureIndex();
+        }
+        if (vectorStartupSync) {
+            publicCatalogVectorService.indexCategories(categoryRepository.findAll());
+        }
     }
 
     @Override
@@ -119,6 +150,11 @@ public class CategoryService
 
     @Override
     public PageResponse<CategoryResponse> search(CategorySearchRequest request) {
+        PageResponse<CategoryResponse> indexedResult = meilisearchCategoryService.search(request);
+        if (indexedResult != null) {
+            return indexedResult;
+        }
+
         Page<CategoryEntity> page = categoryRepository.findAll(
                 CategorySpecification.filterAndSearch(request),
                 request.toPageable()

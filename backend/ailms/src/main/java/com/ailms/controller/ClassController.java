@@ -3,10 +3,14 @@ package com.ailms.controller;
 import com.ailms.request.CreateClassRequest;
 import com.ailms.request.UpdateClassRequest;
 import com.ailms.request.UpdateClassScheduleSlotRequest;
+import com.ailms.request.CancelClassSessionRequest;
+import com.ailms.request.ScheduleClassSessionRequest;
 import com.ailms.response.PageResponse;
 import com.ailms.request.ClassSearchRequest;
 import com.ailms.response.ClassResponse;
 import com.ailms.response.ClassScheduleResponse;
+import com.ailms.response.ClassOnlineResponse;
+import com.ailms.response.ClassSessionUsageResponse;
 
 
 import com.ailms.response.ApiResponse;
@@ -14,6 +18,7 @@ import com.ailms.security.CustomUserDetails;
 import com.ailms.service.IClassService;
 import com.ailms.service.IAssignmentService;
 import com.ailms.service.IQuizService;
+import com.ailms.service.IClassSessionManagementService;
 import com.ailms.request.AssignmentRequest;
 import com.ailms.request.QuizRequest;
 import com.ailms.response.AssignmentResponse;
@@ -36,6 +41,7 @@ public class ClassController {
     private final IClassService classService;
     private final IAssignmentService assignmentService;
     private final IQuizService quizService;
+    private final IClassSessionManagementService classSessionManagementService;
 
     @PostMapping
     @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_HR', 'ROLE_TEACHER', 'ROLE_TA')")
@@ -104,6 +110,40 @@ public class ClassController {
             @PathVariable Long id,
             @RequestBody List<UpdateClassScheduleSlotRequest> schedules) {
         return ResponseEntity.ok(ApiResponse.of("Class schedules updated successfully", classService.updateSchedules(id, schedules)));
+    }
+
+    /** Lấy số buổi đã nhận xét, còn lại và đã đặt theo quota gói. */
+    @GetMapping("/{id}/session-usage")
+    @PreAuthorize("@classAccess.canView(#id, authentication)")
+    public ResponseEntity<ApiResponse<ClassSessionUsageResponse>> getSessionUsage(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.of("Class session usage retrieved successfully",
+                classSessionManagementService.getUsage(id)));
+    }
+
+    /** Giáo viên/TA đặt lịch mới bằng user trong JWT và thông báo cả lớp. */
+    @PostMapping("/{id}/sessions")
+    @PreAuthorize("@classAccess.canManage(#id, authentication)")
+    public ResponseEntity<ApiResponse<ClassOnlineResponse>> scheduleSession(
+            @PathVariable Long id,
+            @AuthenticationPrincipal CustomUserDetails currentUser,
+            @Valid @RequestBody ScheduleClassSessionRequest request) {
+        ClassOnlineResponse response = classSessionManagementService.schedule(
+                id, currentUser.getUser().getId(), request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.of("Class session scheduled successfully", response));
+    }
+
+    /** Hủy buổi học với lý do bắt buộc và điều kiện báo trước một tiếng. */
+    @PostMapping("/{id}/sessions/{sessionId}/cancel")
+    @PreAuthorize("@classAccess.canManage(#id, authentication)")
+    public ResponseEntity<ApiResponse<ClassOnlineResponse>> cancelSession(
+            @PathVariable Long id,
+            @PathVariable Long sessionId,
+            @AuthenticationPrincipal CustomUserDetails currentUser,
+            @Valid @RequestBody CancelClassSessionRequest request) {
+        return ResponseEntity.ok(ApiResponse.of("Class session cancelled successfully",
+                classSessionManagementService.cancel(
+                        id, sessionId, currentUser.getUser().getId(), request)));
     }
 
     /** Giáo viên/trợ giảng giao bài tập có hạn cho đúng lớp mình quản lý. */

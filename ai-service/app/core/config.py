@@ -11,6 +11,11 @@ class Settings(BaseSettings):
     QDRANT_API_KEY: str = ""
     QDRANT_CONTENT_COLLECTION: str = "management_knowledge"
     QDRANT_MEMORY_COLLECTION: str = "long_term_memory"
+    QDRANT_CATALOG_COLLECTION_PREFIX: str = "public_catalog"
+    QDRANT_CATALOG_LOCAL_COLLECTION_PREFIX: str = "public_catalog_local"
+    CATALOG_EMBEDDING_MODEL: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+    CATALOG_EMBEDDING_BATCH_SIZE: int = 32
+    CATALOG_EMBEDDING_DIMENSION: int = 384
     EMBEDDING_DIMENSION: int = 768
     EMBEDDING_BATCH_SIZE: int = 32
     CHUNK_SIZE: int = 2000

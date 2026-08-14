@@ -42,11 +42,16 @@ import java.time.LocalDateTime;
 import java.util.Set;
 import java.util.HashSet;
 
+import com.ailms.search.MeilisearchClassService;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
 @Transactional(readOnly = true)
 public class ClassService implements IClassService {
+
     private final ApplicationEventPublisher applicationEventPublisher;
     private final ClassRepository classRepository;
     private final CourseRepository courseRepository;
@@ -55,16 +60,30 @@ public class ClassService implements IClassService {
     private final ClassScheduleRepository classScheduleRepository;
     private final ClassScheduleMapper classScheduleMapper;
     private final EnrollmentPackageRepository enrollmentPackageRepository;
+    private final MeilisearchClassService meilisearchClassService;
 
     private static final String RESOURCE_NAME = "Class";
 
     @Override
     public PageResponse<ClassResponse> search(ClassSearchRequest request) {
+        PageResponse<ClassResponse> indexedResult = meilisearchClassService.search(request);
+        if (indexedResult != null) {
+            return indexedResult;
+        }
+
         log.info("Searching Class via specification");
         Specification<ClassEntity> spec = ClassSpecification.filterAndSearch(request);
         Pageable pageable = request.toPageable();
         Page<ClassEntity> page = classRepository.findAll(spec, pageable);
         return PageResponse.from(page.map(this::enrichClassResponse));
+    }
+
+    /** Khởi tạo cấu hình và đồng bộ lại index lớp học sau khi ứng dụng sẵn sàng. */
+    @EventListener(ApplicationReadyEvent.class)
+    public void initializeClassSearchIndex() {
+        if (!meilisearchClassService.isEnabled()) return;
+        classRepository.findAll().forEach(meilisearchClassService::index);
+        meilisearchClassService.configureIndex();
     }
 
     private ClassResponse enrichClassResponse(ClassEntity entity) {
@@ -192,6 +211,7 @@ public class ClassService implements IClassService {
         entity.setCode(CodeGenerator.generate("LH", classRepository::existsByCode));
 
         ClassEntity saved = classRepository.save(entity);
+        meilisearchClassService.index(saved);
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CREATE", "CLASS", saved.getId(), null, saved));
         return enrichClassResponse(saved);
     }
@@ -205,6 +225,7 @@ public class ClassService implements IClassService {
         classMapper.updateFromRequest(request, existing);
 
         ClassEntity updated = classRepository.save(existing);
+        meilisearchClassService.index(updated);
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "UPDATE", "CLASS", id, oldValue, updated));
         return enrichClassResponse(updated);
     }
@@ -216,6 +237,7 @@ public class ClassService implements IClassService {
             throw ResourceNotFoundException.of(RESOURCE_NAME, id);
         }
         classRepository.deleteById(id);
+        meilisearchClassService.delete(id);
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "DELETE", "CLASS", id, id, null));
     }
 }

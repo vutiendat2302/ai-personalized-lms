@@ -10,6 +10,8 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
+import com.ailms.entity.enums.NotificationTypeEnum;
 
 @Repository
 public interface NotificationRepository extends BaseRepository<NotificationEntity, Long> {
@@ -24,6 +26,13 @@ public interface NotificationRepository extends BaseRepository<NotificationEntit
      * Đếm số thông báo chưa đọc của user.
      */
     long countByUserIdAndIsReadFalse(Long userId);
+
+    /** Lấy activity notification mới nhất theo tập loại sự kiện. */
+    Page<NotificationEntity> findByUserIdAndTypeInOrderByCreatedAtDesc(
+            Long userId, Collection<NotificationTypeEnum> types, Pageable pageable);
+
+    /** Chống tạo lặp cùng một sự kiện nghiệp vụ cho một người nhận. */
+    boolean existsByUserIdAndTypeAndTargetId(Long userId, NotificationTypeEnum type, Long targetId);
 
     /**
      * Đánh dấu tất cả thông báo chưa đọc của user thành đã đọc.

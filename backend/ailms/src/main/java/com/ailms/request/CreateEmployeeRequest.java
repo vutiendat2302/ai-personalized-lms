@@ -59,6 +59,9 @@ public class CreateEmployeeRequest {
     @Size(min = 2, max = 100)
     private String position;
 
+    @Size(max = 2000, message = "Bio must not exceed 2000 characters")
+    private String bio;
+
     @NotNull(message = "Employment type is required")
     private EmploymentTypeEnum employmentTypeEnum;
 

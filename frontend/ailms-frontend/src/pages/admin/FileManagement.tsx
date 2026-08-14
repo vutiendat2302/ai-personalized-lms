@@ -81,6 +81,9 @@ const USAGE_COLORS: Record<string, string> = {
   ASSIGNMENT: "#6366f1",
   ASSIGNMENT_SUBMISSION: "#8b5cf6",
   LESSON_RESOURCE: "#14b8a6",
+  LESSON_VIDEO: "#a855f7",
+  COURSE_LESSON: "#06b6d4",
+  POLICY: "#f43f5e",
   OTHER: "#6b7280",
 };
 
@@ -101,6 +104,7 @@ const DEFAULT_FILTERS: FileSearchFilters = {
 export const FileManagement: React.FC = () => {
   const [summary, setSummary] = useState<FileManagementSummaryResponse | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
+  const [summaryError, setSummaryError] = useState(false);
 
   const [files, setFiles] = useState<FileMetadataResponse[]>([]);
   const [loadingFiles, setLoadingFiles] = useState(false);
@@ -156,10 +160,13 @@ export const FileManagement: React.FC = () => {
   const fetchSummaryData = async () => {
     try {
       setLoadingSummary(true);
+      setSummaryError(false);
       const data = await fileAdminApi.getSummary();
       setSummary(data);
     } catch (err) {
       console.error("Failed to load summary:", err);
+      setSummary(null);
+      setSummaryError(true);
     } finally {
       setLoadingSummary(false);
     }
@@ -320,20 +327,24 @@ export const FileManagement: React.FC = () => {
     }
   };
 
-  // Prepare chart data with numeric conversion
+  /** Chuyển số liệu dung lượng theo module do Backend trả về thành dữ liệu biểu đồ. */
   const donutData = useMemo(() => {
     if (!summary?.sizeByUsageType) return [];
-    return Object.entries(summary.sizeByUsageType).map(([key, val]) => ({
-      name: key,
-      value: Number(val || 0),
-      color: USAGE_COLORS[key] || "#6b7280",
-    }));
+    return Object.entries(summary.sizeByUsageType)
+      .map(([key, val]) => ({
+        name: key,
+        value: Number(val || 0),
+        color: USAGE_COLORS[key] || "#6b7280",
+      }))
+      .filter((item) => item.value > 0);
   }, [summary]);
 
+  /** Tính tổng dung lượng của các module thực sự có dữ liệu. */
   const totalDonutBytes = useMemo(() => {
     return donutData.reduce((acc, curr) => acc + curr.value, 0);
   }, [donutData]);
 
+  /** Chuẩn hóa chuỗi xu hướng upload do Backend trả về sang MB để hiển thị chart. */
   const lineData = useMemo(() => {
     if (!summary?.uploadTrend) return [];
     return summary.uploadTrend.map((item) => ({
@@ -342,6 +353,9 @@ export const FileManagement: React.FC = () => {
       sizeMB: parseFloat((Number(item.sizeBytes || 0) / (1024 * 1024)).toFixed(2)),
     }));
   }, [summary]);
+
+  /** Kiểm tra Backend có phát sinh upload trong khoảng xu hướng hay không. */
+  const hasUploadTrendData = lineData.some((item) => item.sizeMB > 0 || item.count > 0);
 
   const renderFileIcon = (type: FileTypeEnum) => {
     switch (type) {
@@ -458,9 +472,11 @@ export const FileManagement: React.FC = () => {
           ) : (
             <>
               <div className="text-lg md:text-xl font-bold text-foreground">
-                {formatBytes(summary?.totalSizeBytes)}
+                {summary ? formatBytes(summary.totalSizeBytes) : "Chưa có dữ liệu"}
               </div>
-              <span className="text-[10px] text-muted-foreground/80 mt-1 block">Toàn bộ file Active</span>
+              <span className="text-[10px] text-muted-foreground/80 mt-1 block">
+                {summaryError ? "Không thể tải dữ liệu" : "Toàn bộ file Active"}
+              </span>
             </>
           )}
         </Card>
@@ -478,7 +494,7 @@ export const FileManagement: React.FC = () => {
           ) : (
             <>
               <div className="text-lg md:text-xl font-bold text-foreground">
-                {summary?.totalFiles?.toLocaleString() || 0}
+                {summary ? summary.totalFiles.toLocaleString() : "Chưa có dữ liệu"}
               </div>
               <span className="text-[10px] text-muted-foreground/80 mt-1 block">Tập tin trong hệ thống</span>
             </>
@@ -498,7 +514,7 @@ export const FileManagement: React.FC = () => {
           ) : (
             <>
               <div className="text-lg md:text-xl font-black text-amber-800 dark:text-amber-200">
-                {summary?.orphanedFilesCount?.toLocaleString() || 0}
+                {summary ? summary.orphanedFilesCount.toLocaleString() : "Chưa có dữ liệu"}
               </div>
               <span className="text-[10px] text-amber-700/80 dark:text-amber-400 mt-1 block font-medium">
                 Không còn entity tham chiếu
@@ -520,7 +536,7 @@ export const FileManagement: React.FC = () => {
           ) : (
             <>
               <div className="text-lg md:text-xl font-bold text-foreground">
-                {summary?.uploadedThisMonth?.toLocaleString() || 0}
+                {summary ? summary.uploadedThisMonth.toLocaleString() : "Chưa có dữ liệu"}
               </div>
               <span className="text-[10px] text-muted-foreground/80 mt-1 block">Tập tin mới trong tháng</span>
             </>
@@ -540,7 +556,7 @@ export const FileManagement: React.FC = () => {
           ) : (
             <>
               <div className="text-lg md:text-xl font-bold text-foreground">
-                {summary?.archivedOrDeletedCount?.toLocaleString() || 0}
+                {summary ? summary.archivedOrDeletedCount.toLocaleString() : "Chưa có dữ liệu"}
               </div>
               <span className="text-[10px] text-muted-foreground/80 mt-1 block">ARCHIVED / DELETED</span>
             </>
@@ -634,7 +650,7 @@ export const FileManagement: React.FC = () => {
           <div className="h-56 w-full">
             {loadingSummary ? (
               <Skeleton className="h-full w-full rounded-xl" />
-            ) : lineData.length > 0 ? (
+            ) : hasUploadTrendData ? (
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={lineData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <defs>
@@ -769,7 +785,11 @@ export const FileManagement: React.FC = () => {
                 <SelectItem value="AVATAR">Avatar</SelectItem>
                 <SelectItem value="QUIZ_ATTACHMENT">Quiz</SelectItem>
                 <SelectItem value="ASSIGNMENT">Assignment</SelectItem>
+                <SelectItem value="ASSIGNMENT_SUBMISSION">Bài nộp bài tập</SelectItem>
                 <SelectItem value="LESSON_RESOURCE">Bài học</SelectItem>
+                <SelectItem value="LESSON_VIDEO">Video bài học</SelectItem>
+                <SelectItem value="COURSE_LESSON">Bài học khóa học</SelectItem>
+                <SelectItem value="POLICY">Chính sách</SelectItem>
                 <SelectItem value="OTHER">Khác</SelectItem>
               </SelectContent>
             </Select>
@@ -969,7 +989,6 @@ export const FileManagement: React.FC = () => {
                     )}
                   </div>
                 </TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground">Đối tượng liên kết</TableHead>
                 <TableHead className="text-xs font-semibold text-muted-foreground">Tham chiếu</TableHead>
                 <TableHead className="text-xs font-semibold text-muted-foreground">Trạng thái</TableHead>
               </TableRow>
@@ -993,14 +1012,13 @@ export const FileManagement: React.FC = () => {
                     <TableCell><Skeleton className="h-4 w-16 rounded" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-20 rounded" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-24 rounded" /></TableCell>
-                    <TableCell><Skeleton className="h-4 w-28 rounded" /></TableCell>
                     <TableCell><Skeleton className="h-5 w-16 rounded-full" /></TableCell>
                     <TableCell><Skeleton className="h-5 w-16 rounded-full" /></TableCell>
                   </TableRow>
                 ))
               ) : files.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="h-32 text-center text-xs text-muted-foreground italic">
+                  <TableCell colSpan={9} className="h-32 text-center text-xs text-muted-foreground italic">
                     Không tìm thấy file phù hợp với bộ lọc hiện tại.
                   </TableCell>
                 </TableRow>
@@ -1059,16 +1077,6 @@ export const FileManagement: React.FC = () => {
 
                       <TableCell className="text-muted-foreground whitespace-nowrap font-mono">
                         {formatDateTime(file.createdAt)}
-                      </TableCell>
-
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        {file.referenceEntityType && file.referenceEntityId ? (
-                          <span className="text-primary font-semibold hover:underline inline-flex items-center gap-1">
-                            {file.referenceEntityType} #{file.referenceEntityId}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground italic">None</span>
-                        )}
                       </TableCell>
 
                       <TableCell>

@@ -1,5 +1,6 @@
 export type DeliveryMode = "SELF_STUDY" | "GROUP_CLASS" | "ONE_ON_ONE" | "COMBO";
-export type CourseStatus = "DRAFT" | "PENDING" | "PENDING_APPROVAL" | "ACTIVE" | "REJECTED" | "INACTIVE" | "DELETED";
+export type CourseLevel = "BEGINNER" | "INTERMEDIATE" | "ADVANCED";
+export type CourseStatus = "DRAFT" | "PENDING" | "ACTIVE" | "REJECTED" | "INACTIVE" | "DELETED";
 export type ClassStatus = "OPEN" | "READY" | "CLOSED";
 export type RequestType = "CLASS_TRANSFER_REQUEST" | "TEACHER_CHANGE_REQUEST" | "PENDING_MATCHING" | "CLASS_TEACHER_LEAVE_REQUEST";
 export type SessionStatus = "COMPLETED" | "UPCOMING" | "CANCELLED";
@@ -39,7 +40,7 @@ export interface CourseExtended {
   categoryName: string;
   description: string;
   coverImage?: string;
-  level: "BASIC" | "INTERMEDIATE" | "ADVANCED";
+  level: CourseLevel;
   status: CourseStatus;
   teachers: TeacherInfo[];
   rating: number;
@@ -91,6 +92,8 @@ export interface ClassSessionLog {
   meetingUrl?: string;
   amount?: number;
   actualDurationMin?: number;
+  cancellationReason?: string;
+  scheduledAt?: string;
 }
 
 export interface Classroom {

@@ -95,7 +95,9 @@ const STATUS_COLORS: Record<string, string> = {
 export const SalaryManagement: React.FC = () => {
   const { success, error } = useToast();
   const { auth } = useAuth();
-  const normalizedRoles = (auth.user?.roles || []).map(role => String(role).replace("ROLE_", "").toUpperCase());
+  const normalizedRoles = (auth.user?.roles || []).map((role: any) =>
+    (typeof role === "object" ? role?.code || role?.name || "" : String(role)).replace("ROLE_", "").toUpperCase()
+  );
   const isAdmin = normalizedRoles.includes("ADMIN");
   const isHr = normalizedRoles.includes("HR") && !isAdmin;
   const currentYear = new Date().getFullYear();

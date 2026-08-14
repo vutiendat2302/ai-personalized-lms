@@ -7,6 +7,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -30,13 +31,16 @@ export const FileUploadModal: React.FC<FileUploadModalProps> = ({
   onSuccess,
 }) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [originalName, setOriginalName] = useState("");
   const [usageType, setUsageType] = useState<string>("OTHER");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setSelectedFile(e.target.files[0]);
+      const file = e.target.files[0];
+      setSelectedFile(file);
+      setOriginalName(file.name);
       setErrorMsg("");
     }
   };
@@ -50,9 +54,11 @@ export const FileUploadModal: React.FC<FileUploadModalProps> = ({
     try {
       setLoading(true);
       setErrorMsg("");
-      await fileAdminApi.uploadFile(selectedFile, "AUTO", usageType);
-      onSuccess(`Tải tệp tin "${selectedFile.name}" lên MinIO và lưu Metadata thành công!`);
+      const displayName = originalName.trim() || selectedFile.name;
+      await fileAdminApi.uploadFile(selectedFile, "AUTO", usageType, displayName);
+      onSuccess(`Tải tệp tin "${displayName}" lên MinIO và lưu Metadata thành công!`);
       setSelectedFile(null);
+      setOriginalName("");
       onClose();
     } catch (err: any) {
       setErrorMsg(err?.response?.data?.message || err?.message || "Tải tệp tin thất bại");
@@ -121,6 +127,21 @@ export const FileUploadModal: React.FC<FileUploadModalProps> = ({
             )}
           </div>
 
+          <div className="space-y-1.5">
+            <Label htmlFor="file-original-name" className="text-xs font-semibold text-muted-foreground">
+              Tên hiển thị
+            </Label>
+            <Input
+              id="file-original-name"
+              value={originalName}
+              onChange={(event) => setOriginalName(event.target.value)}
+              placeholder="Tự lấy từ tên file đã chọn"
+              disabled={!selectedFile}
+              className="h-9 text-xs rounded-xl border-border/80"
+            />
+            <p className="text-[11px] text-muted-foreground">Có thể đổi tên; hệ thống luôn giữ đúng đuôi file.</p>
+          </div>
+
           {/* Module Usage Type Selector */}
           <div className="space-y-1.5">
             <Label className="text-xs font-semibold text-muted-foreground">Phân loại Module (Usage Type)</Label>
@@ -132,8 +153,12 @@ export const FileUploadModal: React.FC<FileUploadModalProps> = ({
                 <SelectItem value="CONTRACT">Hợp đồng (CONTRACT)</SelectItem>
                 <SelectItem value="AVATAR">Ảnh đại diện (AVATAR)</SelectItem>
                 <SelectItem value="LESSON_RESOURCE">Tài liệu Bài học (LESSON_RESOURCE)</SelectItem>
+                <SelectItem value="LESSON_VIDEO">Video bài học (LESSON_VIDEO)</SelectItem>
+                <SelectItem value="COURSE_LESSON">Bài học khóa học (COURSE_LESSON)</SelectItem>
                 <SelectItem value="ASSIGNMENT">Bài tập (ASSIGNMENT)</SelectItem>
+                <SelectItem value="ASSIGNMENT_SUBMISSION">Bài nộp bài tập (ASSIGNMENT_SUBMISSION)</SelectItem>
                 <SelectItem value="QUIZ_ATTACHMENT">Đính kèm Quiz (QUIZ_ATTACHMENT)</SelectItem>
+                <SelectItem value="POLICY">Chính sách (POLICY)</SelectItem>
                 <SelectItem value="OTHER">Khác (OTHER)</SelectItem>
               </SelectContent>
             </Select>

@@ -237,7 +237,7 @@ public class SalesController {
                     .userName("Trần Bảo Nam")
                     .userEmail("baonam.tran@gmail.com")
                     .userPhone("0944556677")
-                    .userAvatar("https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=150")
+                    .userAvatar(null)
                     .cartItems(Collections.singletonList(
                             SalesPendingCartResponse.CartItemDetail.builder()
                                     .id("ci-1")

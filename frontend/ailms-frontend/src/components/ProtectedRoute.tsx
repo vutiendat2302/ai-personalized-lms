@@ -52,9 +52,12 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   // 4. KIỂM TRA PHÂN QUYỀN ROLES CỤ THỂ
   if (
     allowedRoles?.length &&
-    !user.roles.some((role) =>
+    !user.roles.some((role: unknown) =>
       allowedRoles.some(
-        (allowed) => allowed.toUpperCase() === String(role).replace("ROLE_", "").toUpperCase()
+        (allowed) => allowed.toUpperCase() === (typeof role === "object"
+          ? String((role as { code?: string; name?: string } | null)?.code
+            || (role as { code?: string; name?: string } | null)?.name || "")
+          : String(role)).replace("ROLE_", "").toUpperCase()
       )
     )
   ) {

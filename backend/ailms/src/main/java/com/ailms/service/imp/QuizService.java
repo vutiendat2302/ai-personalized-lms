@@ -23,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -35,6 +36,15 @@ public class QuizService implements IQuizService {
         Specification<QuizEntity> spec = QuizSpecification.filterAndSearch(request);
         Pageable pageable = request.toPageable();
         Page<QuizEntity> page = quizRepository.findAll(spec, pageable);
+        return PageResponse.from(page.map(quizMapper::toResponse));
+    }
+
+    /** Tìm kiếm có phân trang và bắt buộc lọc createdBy theo user trong JWT. */
+    @Override
+    public PageResponse<QuizResponse> searchAuthored(QuizSearchRequest request, Long userId) {
+        Specification<QuizEntity> spec = QuizSpecification.filterAndSearch(request)
+                .and((root, query, criteriaBuilder) -> criteriaBuilder.equal(root.get("createdBy"), userId));
+        Page<QuizEntity> page = quizRepository.findAll(spec, request.toPageable());
         return PageResponse.from(page.map(quizMapper::toResponse));
     }
 
@@ -54,6 +64,12 @@ public class QuizService implements IQuizService {
         QuizEntity entity = quizRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
         return quizMapper.toResponse(entity);
+    }
+
+    /** Trả chi tiết quiz thuộc quyền sở hữu của user hiện tại. */
+    @Override
+    public QuizResponse getAuthoredById(Long id, Long userId) {
+        return quizMapper.toResponse(requireAuthored(id, userId));
     }
 
     public List<QuizResponse> getByLessonId(Long lessonId) {
@@ -86,6 +102,16 @@ public class QuizService implements IQuizService {
         return quizMapper.toResponse(saved);
     }
 
+    /** Tạo quiz với createdBy lấy từ JWT thay vì nhận từ payload. */
+    @Override
+    @Transactional
+    public QuizResponse createForAuthor(QuizRequest request, Long userId) {
+        normalizeClassCourse(request);
+        QuizEntity entity = quizMapper.toEntity(request);
+        entity.setCreatedBy(userId);
+        return quizMapper.toResponse(quizRepository.save(entity));
+    }
+
     @Transactional
     public QuizResponse update(Long id, QuizRequest request) {
         log.info("Updating quiz: {}", id);
@@ -97,6 +123,16 @@ public class QuizService implements IQuizService {
         return quizMapper.toResponse(updated);
     }
 
+    /** Chỉ cập nhật quiz do chính user hiện tại tạo. */
+    @Override
+    @Transactional
+    public QuizResponse updateAuthored(Long id, QuizRequest request, Long userId) {
+        QuizEntity existing = requireAuthored(id, userId);
+        normalizeClassCourse(request);
+        quizMapper.updateFromRequest(request, existing);
+        return quizMapper.toResponse(quizRepository.save(existing));
+    }
+
     @Transactional
     public void delete(Long id) {
         log.info("Deleting quiz: {}", id);
@@ -104,6 +140,20 @@ public class QuizService implements IQuizService {
             throw ResourceNotFoundException.of(RESOURCE_NAME, id);
         }
         quizRepository.deleteById(id);
+    }
+
+    /** Chỉ xóa quiz do chính user hiện tại tạo. */
+    @Override
+    @Transactional
+    public void deleteAuthored(Long id, Long userId) {
+        quizRepository.delete(requireAuthored(id, userId));
+    }
+
+    /** Tìm quiz theo ID và che giấu bản ghi nếu không thuộc người tạo hiện tại. */
+    private QuizEntity requireAuthored(Long id, Long userId) {
+        return quizRepository.findById(id)
+                .filter(item -> Objects.equals(item.getCreatedBy(), userId))
+                .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
     }
 
     /** Đồng bộ courseId từ lớp để quiz không thể trỏ sang khóa học khác. */

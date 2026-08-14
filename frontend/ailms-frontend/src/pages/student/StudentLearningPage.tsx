@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { studentLearningApi } from "../../api/courses/studentLearningApi";
 import type { CourseCurriculumResponse, LessonCurriculumItem } from "../../api/courses/courseAuthoringApi";
 import { LearningSidebar } from "../../components/student/learning/LearningSidebar";
@@ -18,6 +18,7 @@ import { Skeleton } from "../../components/ui/skeleton";
 export const StudentLearningPage: React.FC = () => {
   const { courseId, lessonId } = useParams<{ courseId: string; lessonId?: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { auth } = useAuth();
   const user = auth.user;
   const { error: showError } = useToast();
@@ -43,7 +44,7 @@ export const StudentLearningPage: React.FC = () => {
 
         if (lessonId) {
           for (const s of data.sections) {
-            const found = s.lessons?.find((l) => l.id === lessonId);
+            const found = s.lessons?.find((l) => String(l.id) === String(lessonId));
             if (found?.accessible && !found.locked) {
               targetLesson = found;
               break;
@@ -80,7 +81,10 @@ export const StudentLearningPage: React.FC = () => {
         description: accessible.description ?? lesson.description,
         durationMin: accessible.durationMin ?? lesson.durationMin,
       });
-      navigate(`/learn/courses/${courseId}/lessons/${lesson.id}`, { replace: true });
+      navigate(`/learn/courses/${courseId}/lessons/${lesson.id}`, {
+        replace: true,
+        state: location.state,
+      });
     } catch {
       showError("Bạn cần đăng ký khóa học để mở bài học này.");
     }
@@ -114,15 +118,11 @@ export const StudentLearningPage: React.FC = () => {
     (typeof r === "object" ? r?.code || r?.name || "" : String(r)).replace("ROLE_", "").toUpperCase()
   );
   const isAdmin = userRoles.includes("ADMIN") || userRoles.includes("MANAGER");
-  const isPrivilegedRole =
-    isAdmin ||
-    userRoles.includes("TEACHER") ||
-    userRoles.includes("TA") ||
-    userRoles.includes("HR");
 
   // Toggle for Admin/Teacher to switch between Admin bypass mode and Student simulation mode
   const [simulateStudentView, setSimulateStudentView] = useState<boolean>(false);
-  const canBypassLock = isPrivilegedRole && !simulateStudentView;
+  const hasStaffPreviewAccess = Boolean(curriculum?.staffPreviewAccess);
+  const canBypassLock = hasStaffPreviewAccess && !simulateStudentView;
 
   // Reading Timer Enforcement State for TEXT/PDF Lessons
   const [readingTimeLeftSec, setReadingTimeLeftSec] = useState<number>(0);
@@ -183,7 +183,7 @@ export const StudentLearningPage: React.FC = () => {
       );
     }
 
-    if (readingTimeLeftSec > 0 && !isPrivilegedRole) {
+    if (readingTimeLeftSec > 0 && !canBypassLock) {
       const progressPercent = Math.min(
         100,
         Math.max(0, ((readingDurationTotalSec - readingTimeLeftSec) / readingDurationTotalSec) * 100)
@@ -216,7 +216,7 @@ export const StudentLearningPage: React.FC = () => {
 
     return (
       <div className="flex items-center gap-2">
-        {isPrivilegedRole && readingTimeLeftSec > 0 && (
+        {canBypassLock && readingTimeLeftSec > 0 && (
           <span className="text-[11px] text-amber-700 font-medium bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200">
             [GV / Admin: Cho phép bỏ qua {formatMMSS(readingTimeLeftSec)}]
           </span>
@@ -233,6 +233,12 @@ export const StudentLearningPage: React.FC = () => {
   };
 
   const handleGoBack = () => {
+    const navigationState = location.state as { returnTo?: string } | null;
+    if (navigationState?.returnTo) {
+      navigate(navigationState.returnTo);
+      return;
+    }
+
     // If opened as a new tab from studio, focus parent and close preview tab
     if (window.opener && !window.opener.closed) {
       try {
@@ -295,7 +301,7 @@ export const StudentLearningPage: React.FC = () => {
           </button>
           <div className="h-4 w-px bg-gray-700" />
           <h1 className="text-sm font-bold truncate max-w-md">{curriculum?.courseName || "Khóa học"}</h1>
-          {isPrivilegedRole && (
+          {hasStaffPreviewAccess && (
             <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
               Chế độ Preview (Admin / Giảng viên)
             </span>
@@ -303,7 +309,7 @@ export const StudentLearningPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
-          {isPrivilegedRole && (
+          {hasStaffPreviewAccess && (
             <button
               onClick={() => setSimulateStudentView(!simulateStudentView)}
               className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition flex items-center gap-1.5 cursor-pointer ${
@@ -317,7 +323,7 @@ export const StudentLearningPage: React.FC = () => {
             </button>
           )}
 
-          {isPrivilegedRole && (
+          {hasStaffPreviewAccess && (
             <button
               onClick={handleGoBack}
               className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition cursor-pointer"

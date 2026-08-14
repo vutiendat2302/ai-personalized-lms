@@ -18,6 +18,12 @@ public interface QuizRepository extends BaseRepository<QuizEntity, Long> {
 
     List<QuizEntity> findBySectionId(Long sectionId);
 
+    /** Lấy quiz/bài thi do đúng người dùng hiện tại tạo. */
+    List<QuizEntity> findByCreatedByOrderByCreatedAtDesc(Long createdBy);
+
+    /** Lấy quiz thuộc các lớp hoặc khóa học người dạy đang phụ trách. */
+    List<QuizEntity> findByClassIdInOrCourseIdInOrderByDueAtAsc(List<Long> classIds, List<Long> courseIds);
+
     /** Lấy quiz/bài thi được giao riêng cho một lớp. */
     List<QuizEntity> findByClassIdOrderByDueAtAsc(Long classId);
 

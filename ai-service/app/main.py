@@ -5,6 +5,7 @@ from app.routers import chat
 from app.routers import ingest
 from app.routers import memory
 from app.routers import assessments
+from app.routers import catalog
 
 app = FastAPI(
     title="AILMS - AI Service",
@@ -17,6 +18,7 @@ app.include_router(chat.router)
 app.include_router(ingest.router)
 app.include_router(memory.router)
 app.include_router(assessments.router)
+app.include_router(catalog.router)
 
 
 @app.get("/")

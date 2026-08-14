@@ -62,19 +62,28 @@ export const CourseScrollContainer: React.FC<CourseScrollContainerProps> = ({
    * Cập nhật biên cuộn khi component mount, itemCount thay đổi hoặc container đổi kích thước qua ResizeObserver.
    */
   useEffect(() => {
-    checkScrollBounds();
+    const id = requestAnimationFrame(() => {
+      checkScrollBounds();
+    });
     const el = containerRef.current;
-    if (!el) return;
+    if (!el) {
+      return () => {
+        cancelAnimationFrame(id);
+      };
+    }
 
     const observer = new ResizeObserver(() => {
       checkScrollBounds();
     });
     observer.observe(el);
 
-    const handleResize = () => checkScrollBounds();
+    const handleResize = () => {
+      checkScrollBounds();
+    };
     window.addEventListener("resize", handleResize);
 
     return () => {
+      cancelAnimationFrame(id);
       observer.disconnect();
       window.removeEventListener("resize", handleResize);
     };
@@ -169,7 +178,7 @@ export const CourseScrollContainer: React.FC<CourseScrollContainerProps> = ({
   }, [stopHoldScroll]);
 
   return (
-    <div className="relative group/carousel px-14 sm:px-16 w-full">
+    <div className="relative group/carousel w-full">
       {/* Nút quay lui (Left Arrow) shadcn Button */}
       <Button
         type="button"
@@ -177,16 +186,22 @@ export const CourseScrollContainer: React.FC<CourseScrollContainerProps> = ({
         size="icon"
         aria-label="Quay lui"
         disabled={!canScrollLeft}
-        onMouseDown={() => startHoldScroll(-1)}
+        onMouseDown={() => {
+          startHoldScroll(-1);
+        }}
         onMouseUp={stopHoldScroll}
         onMouseLeave={stopHoldScroll}
         onTouchStart={(e) => {
           e.preventDefault();
           startHoldScroll(-1);
         }}
-        onTouchEnd={(e) => handleTouchEnd(e, -1)}
-        onClick={() => handleButtonClick(-1)}
-        className="absolute sm:-left-16 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-card/95 border-border/50 text-foreground shadow-xl backdrop-blur-md transition-all duration-200 hover:bg-primary hover:text-primary-foreground hover:border-primary hover:scale-110 active:scale-95 disabled:opacity-20 disabled:pointer-events-none disabled:scale-100 disabled:shadow-none select-none cursor-pointer"
+        onTouchEnd={(e) => {
+          handleTouchEnd(e, -1);
+        }}
+        onClick={() => {
+          handleButtonClick(-1);
+        }}
+        className="absolute -left-4 sm:-left-7 md:-left-10 lg:-left-14 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-card/95 border border-border/70 text-foreground shadow-lg backdrop-blur-md transition-all duration-200 hover:bg-primary hover:text-primary-foreground hover:border-primary hover:scale-110 hover:shadow-xl active:scale-95 disabled:opacity-0 disabled:pointer-events-none select-none cursor-pointer"
       >
         <ChevronLeft className="w-6 h-6 shrink-0" />
       </Button>
@@ -207,16 +222,22 @@ export const CourseScrollContainer: React.FC<CourseScrollContainerProps> = ({
         size="icon"
         aria-label="Đi tiếp"
         disabled={!canScrollRight}
-        onMouseDown={() => startHoldScroll(1)}
+        onMouseDown={() => {
+          startHoldScroll(1);
+        }}
         onMouseUp={stopHoldScroll}
         onMouseLeave={stopHoldScroll}
         onTouchStart={(e) => {
           e.preventDefault();
           startHoldScroll(1);
         }}
-        onTouchEnd={(e) => handleTouchEnd(e, 1)}
-        onClick={() => handleButtonClick(1)}
-        className="absolute sm:-right-16 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-card/95 border-border/50 text-foreground shadow-xl backdrop-blur-md transition-all duration-200 hover:bg-primary hover:text-primary-foreground hover:border-primary hover:scale-110 active:scale-95 disabled:opacity-20 disabled:pointer-events-none disabled:scale-100 disabled:shadow-none select-none cursor-pointer"
+        onTouchEnd={(e) => {
+          handleTouchEnd(e, 1);
+        }}
+        onClick={() => {
+          handleButtonClick(1);
+        }}
+        className="absolute -right-4 sm:-right-7 md:-right-10 lg:-right-14 top-1/2 -translate-y-1/2 z-20 w-11 h-11 rounded-full bg-card/95 border border-border/70 text-foreground shadow-lg backdrop-blur-md transition-all duration-200 hover:bg-primary hover:text-primary-foreground hover:border-primary hover:scale-110 hover:shadow-xl active:scale-95 disabled:opacity-0 disabled:pointer-events-none select-none cursor-pointer"
       >
         <ChevronRight className="w-6 h-6 shrink-0" />
       </Button>
