@@ -49,4 +49,20 @@ export const assignmentApi = {
 
   deleteAssignment: (id: string | number) =>
     httpClient.delete<ApiResponse<void>>(`/v1/assignments/${id}`),
+
+  /** Tìm kiếm bài tập do chính Teacher/TA đang đăng nhập tạo. */
+  searchAuthoredAssignments: (params?: AssignmentSearchRequest) =>
+    httpClient.get<ApiResponse<PageResponse<AssignmentResponseItem>>>("/v1/teacher/assessment-library/assignments/search", { params }),
+
+  /** Tạo bài tập trong thư viện cá nhân của Teacher/TA. */
+  createAuthoredAssignment: (data: any) =>
+    httpClient.post<ApiResponse<AssignmentResponseItem>>("/v1/teacher/assessment-library/assignments", data),
+
+  /** Sửa bài tập thuộc quyền sở hữu của Teacher/TA. */
+  updateAuthoredAssignment: (id: string | number, data: any) =>
+    httpClient.put<ApiResponse<AssignmentResponseItem>>(`/v1/teacher/assessment-library/assignments/${id}`, data),
+
+  /** Xóa bài tập thuộc quyền sở hữu của Teacher/TA. */
+  deleteAuthoredAssignment: (id: string | number) =>
+    httpClient.delete<ApiResponse<void>>(`/v1/teacher/assessment-library/assignments/${id}`),
 };

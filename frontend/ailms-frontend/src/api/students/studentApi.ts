@@ -79,7 +79,7 @@ export interface StudentPaymentData { id: string; orderId: string; transactionRe
 
 export const studentApi = {
   getStudentProfilesCount: () =>
-    httpClient.get<ApiResponse<number>>("/v1/students/count"),
+    httpClient.get<ApiResponse<number | string>>("/v1/users/students/count"),
 
   createProfile: (payload: CreateStudentProfileRequest) =>
     httpClient.post<ApiResponse<StudentProfileData>>("/v1/students", payload),

@@ -1,6 +1,6 @@
 import type { RoleCode } from "@/types/jwtAuthentication";
 
-export type PortalType = "MANAGEMENT" | "TEACHER" | "STUDENT";
+export type PortalType = "MANAGEMENT" | "TEACHER" | "STUDENT" | "SUPPORT";
 
 export interface PortalConfig {
   id: PortalType;
@@ -47,6 +47,17 @@ export const PORTAL_CONFIGS: Record<PortalType, PortalConfig> = {
     color: "from-violet-600 to-purple-700",
     iconName: "BookOpen",
     roles: ["STUDENT"]
+  },
+  SUPPORT: {
+    id: "SUPPORT",
+    title: "Tư vấn khách hàng",
+    subtitle: "Support Portal",
+    description: "Tiếp nhận hàng đợi và trò chuyện realtime với khách truy cập landing page.",
+    badge: "Support",
+    path: "/support",
+    color: "from-amber-500 to-orange-600",
+    iconName: "MessageCircle",
+    roles: ["SUPPORT"]
   }
 };
 
@@ -75,6 +86,11 @@ export function getAvailablePortals(roles?: RoleCode[] | null): PortalType[] {
   // Student Portal: ADMIN hoặc STUDENT
   if (isAdmin || normalizedRoles.includes("STUDENT")) {
     portals.push("STUDENT");
+  }
+
+  // Support Portal: chỉ tài khoản SUPPORT, không dùng chung với HR.
+  if (normalizedRoles.includes("SUPPORT")) {
+    portals.push("SUPPORT");
   }
 
   return portals;

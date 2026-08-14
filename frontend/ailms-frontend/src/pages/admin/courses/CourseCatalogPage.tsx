@@ -51,8 +51,16 @@ import { adminCourseClassApi } from "@/api/courses/adminCourseClassApi";
 import { courseApi } from "@/api/courses/courseApi";
 import { useAuth } from "@/hooks/useAuth";
 
-const DEFAULT_AVATAR = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80";
 const DEFAULT_COVER = "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=600&q=80";
+
+/** Hiển thị avatar thật hoặc initials, không dùng ảnh người giả. */
+const TeacherAvatar = ({ src, name, className }: { src?: string; name: string; className: string }) => (
+  src ? <img src={src} alt={name} title={name} className={className} /> : (
+    <div title={name} className={`${className} flex items-center justify-center bg-primary/10 text-[10px] font-bold text-primary`}>
+      {name.slice(0, 2).toUpperCase()}
+    </div>
+  )
+);
 
 type SortField = "createdAt" | "rating" | "enrollmentCount" | "referencePrice" | "name";
 
@@ -262,7 +270,7 @@ export const CourseCatalogPage: React.FC = () => {
           return {
             id: String(assignment.userId),
             name: teacherName,
-            avatar: teacherAvatar && teacherAvatar.trim() !== "" ? teacherAvatar : DEFAULT_AVATAR,
+            avatar: teacherAvatar && teacherAvatar.trim() !== "" ? teacherAvatar : "",
             category: isPrimary ? "Giảng viên chính" : "Đồng phụ trách",
             isPrimary,
             status: assignment.status || "ACTIVE",
@@ -961,11 +969,10 @@ export const CourseCatalogPage: React.FC = () => {
                       <div className="flex items-center gap-1.5 min-w-0">
                         <div className="flex items-center -space-x-1.5 shrink-0">
                           {course.teachers.slice(0, 2).map((t) => (
-                            <img
+                            <TeacherAvatar
                               key={t.id}
-                              src={t.avatar && t.avatar.trim() !== "" ? t.avatar : DEFAULT_AVATAR}
-                              alt={t.name}
-                              title={t.name}
+                              src={t.avatar || undefined}
+                              name={t.name}
                               className="w-5 h-5 rounded-full border border-white object-cover"
                             />
                           ))}
@@ -1157,11 +1164,10 @@ export const CourseCatalogPage: React.FC = () => {
                       <div className="flex items-center -space-x-2">
                         {course.teachers.length > 0 ? (
                           course.teachers.map((t) => (
-                            <img
+                            <TeacherAvatar
                               key={t.id}
-                              src={t.avatar && t.avatar.trim() !== "" ? t.avatar : DEFAULT_AVATAR}
-                              alt={t.name}
-                              title={t.name}
+                              src={t.avatar || undefined}
+                              name={t.name}
                               className="w-7 h-7 rounded-full border-2 border-background object-cover"
                             />
                           ))
@@ -1370,9 +1376,9 @@ export const CourseCatalogPage: React.FC = () => {
             {/* Creator info (only shown when editing) */}
             {editingCourse && editingCourse.teachers && editingCourse.teachers.length > 0 && (
               <div className="flex items-center gap-2 mb-4 px-3 py-2 rounded-lg bg-slate-50 border border-slate-200">
-                <img
-                  src={editingCourse.teachers[0].avatar && editingCourse.teachers[0].avatar.trim() !== "" ? editingCourse.teachers[0].avatar : DEFAULT_AVATAR}
-                  alt={editingCourse.teachers[0].name}
+                <TeacherAvatar
+                  src={editingCourse.teachers[0].avatar || undefined}
+                  name={editingCourse.teachers[0].name}
                   className="w-8 h-8 rounded-full object-cover border border-slate-300"
                 />
                 <div className="text-xs">

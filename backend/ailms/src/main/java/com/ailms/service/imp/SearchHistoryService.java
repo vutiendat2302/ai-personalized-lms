@@ -13,6 +13,7 @@ import com.ailms.repository.UserRepository;
 import com.ailms.request.SaveSearchHistoryRequest;
 import com.ailms.response.SearchHistoryResponse;
 import com.ailms.service.ISearchHistoryService;
+import com.ailms.search.MeilisearchCourseService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -26,6 +27,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.text.Normalizer;
+import java.util.Locale;
 
 @Service
 @RequiredArgsConstructor
@@ -37,6 +40,7 @@ public class SearchHistoryService implements ISearchHistoryService {
     private final UserRepository userRepository;
     private final CourseRepository courseRepository;
     private final SearchHistoryMapper searchHistoryMapper;
+    private final MeilisearchCourseService meilisearchCourseService;
 
     private static final int MIN_KEYWORD_LENGTH = 2;
     private static final int MAX_SUGGESTIONS = 10;
@@ -52,13 +56,24 @@ public class SearchHistoryService implements ISearchHistoryService {
             return List.of();
         }
 
-        String normalizedKeyword = keyword.trim();
+        String normalizedKeyword = normalizeKeyword(keyword);
         log.info("Fetching autocomplete suggestions for keyword: {}", normalizedKeyword);
 
-        return courseRepository.findSuggestedKeywords(
-                normalizedKeyword,
-                PageRequest.of(0, MAX_SUGGESTIONS)
-        );
+        List<CourseSuggestion> suggestions = meilisearchCourseService.suggestions(normalizedKeyword, MAX_SUGGESTIONS)
+                .stream()
+                .map(course -> new CourseSuggestion(course.getId(), course.getName(), course.getLink(),
+                        course.getCategoryName(), course.getSuggestedPrice(), course.getAvgRating()))
+                .toList();
+        return suggestions.isEmpty()
+                ? courseRepository.findSuggestedKeywords(normalizedKeyword, PageRequest.of(0, MAX_SUGGESTIONS))
+                : suggestions;
+    }
+
+    /** Chuẩn hóa tiếng Việt không dấu cho autocomplete và fallback MySQL. */
+    private String normalizeKeyword(String keyword) {
+        return Normalizer.normalize(keyword.trim(), Normalizer.Form.NFD)
+                .replaceAll("\\p{M}+", "")
+                .toLowerCase(Locale.ROOT);
     }
 
     @Override

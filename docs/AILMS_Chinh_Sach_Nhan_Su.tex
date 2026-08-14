@@ -1,0 +1,1010 @@
+\documentclass[12pt,a4paper]{article}
+
+% ==================== GÓI CƠ BẢN ====================
+\usepackage[utf8]{inputenc}
+\usepackage[T5]{fontenc}
+\usepackage[vietnamese]{babel}
+\usepackage{geometry}
+\usepackage{parskip}
+\usepackage{enumitem}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{fancyhdr}
+\usepackage{lastpage}
+
+% ==================== ĐỊNH DẠNG TRANG ====================
+\geometry{
+    top=2cm,
+    bottom=2cm,
+    left=2.5cm,
+    right=2cm
+}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.7em}
+\setlist[itemize]{leftmargin=1.8em, itemsep=0.35em}
+\setlist[enumerate]{leftmargin=1.8em, itemsep=0.35em}
+
+\definecolor{ailmsblue}{RGB}{25,84,166}
+\definecolor{ailmsgray}{RGB}{90,90,90}
+\definecolor{ailmsred}{RGB}{180,40,40}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=ailmsblue,
+    urlcolor=ailmsblue,
+    citecolor=ailmsblue,
+    pdftitle={Chính sách Nhân sự và Giảng viên AILMS},
+    pdfauthor={Phòng Nhân sự AILMS}
+}
+
+% ==================== HEADER / FOOTER ====================
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textcolor{ailmsgray}{AILMS}}
+\fancyhead[R]{\textcolor{ailmsgray}{Chính sách Nhân sự \& Giảng viên}}
+\fancyfoot[C]{Trang \thepage/\pageref{LastPage}}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0.4pt}
+
+% ==================== THÔNG TIN TÀI LIỆU ====================
+\title{
+    \textbf{\LARGE CHÍNH SÁCH NHÂN SỰ\\
+    VÀ QUẢN LÝ GIẢNG VIÊN AILMS}
+}
+\author{Phòng Nhân sự AILMS}
+\date{Phiên bản 1.0 -- Ngày hiệu lực: \today}
+
+\begin{document}
+
+\maketitle
+
+\begin{center}
+    \textit{Tài liệu này thiết lập các nguyên tắc tuyển dụng, xác minh,
+    phân quyền, quản lý công việc, đánh giá và bảo vệ quyền lợi
+    của nhân sự, giảng viên và trợ giảng trên hệ thống AILMS.}
+\end{center}
+
+\vspace{0.8cm}
+
+\begin{longtable}{|>{\bfseries}p{4cm}|p{9.5cm}|}
+    \hline
+    Tên tài liệu &
+    Chính sách Nhân sự và Quản lý Giảng viên AILMS \\
+    \hline
+    Phiên bản & 1.0 \\
+    \hline
+    Đơn vị quản lý & Phòng Nhân sự AILMS \\
+    \hline
+    Đối tượng áp dụng &
+    Giảng viên, trợ giảng, nhân viên toàn thời gian, nhân viên bán thời gian,
+    cộng tác viên, nhân sự quản lý và quản trị viên có liên quan \\
+    \hline
+    Căn cứ thực hiện &
+    Hợp đồng đã ký, quy chế nội bộ và pháp luật Việt Nam hiện hành \\
+    \hline
+    Chu kỳ rà soát &
+    Tối thiểu 12 tháng một lần hoặc khi có thay đổi về pháp luật,
+    cơ cấu tổ chức hay chức năng hệ thống \\
+    \hline
+\end{longtable}
+
+\tableofcontents
+\newpage
+
+% =========================================================
+\section{Mục đích}
+
+Chính sách này được ban hành nhằm:
+
+\begin{itemize}
+    \item Thiết lập quy trình tiếp nhận và xác minh hồ sơ nhân sự.
+    \item Quy định nguyên tắc cấp tài khoản, vai trò và quyền truy cập.
+    \item Xác định trách nhiệm chuyên môn của giảng viên và trợ giảng.
+    \item Bảo đảm minh bạch trong phân công, chấm công, tiền lương và đánh giá.
+    \item Bảo vệ dữ liệu cá nhân, hồ sơ lao động và thông tin thu nhập.
+    \item Phòng ngừa xung đột lợi ích, quấy rối và hành vi không phù hợp.
+    \item Thiết lập cơ chế giải trình, khiếu nại và xử lý vi phạm.
+\end{itemize}
+
+Chính sách này không thay thế hợp đồng lao động, hợp đồng cộng tác,
+thỏa thuận giảng dạy hoặc quy định bắt buộc của pháp luật.
+
+Nếu có khác biệt, văn bản có giá trị pháp lý cao hơn và thỏa thuận hợp lệ
+được ưu tiên áp dụng.
+
+% =========================================================
+\section{Giải thích thuật ngữ}
+
+\begin{itemize}
+    \item \textbf{Nhân sự:} Cá nhân làm việc hoặc cung cấp dịch vụ cho AILMS
+    theo hợp đồng hoặc thỏa thuận hợp lệ.
+
+    \item \textbf{Giảng viên -- TEACHER:} Người được giao nhiệm vụ
+    xây dựng khóa học, giảng dạy, đánh giá và hỗ trợ học viên.
+
+    \item \textbf{Trợ giảng -- TA:} Người hỗ trợ giảng viên trong phạm vi
+    chuyên môn và quyền hạn được giao.
+
+    \item \textbf{Nhân sự -- HR:} Người thực hiện công tác tuyển dụng,
+    hồ sơ, hợp đồng, chấm công, hỗ trợ và quản trị nhân sự.
+
+    \item \textbf{Quản trị viên -- ADMIN:} Người quản lý cấu hình,
+    dữ liệu hoặc hoạt động hệ thống theo quyền được cấp.
+
+    \item \textbf{Employee Code:} Mã định danh nội bộ của nhân sự.
+    Mã này không thay thế giấy tờ tùy thân hoặc mã số do cơ quan nhà nước cấp.
+
+    \item \textbf{Teaching Session:} Buổi giảng dạy hoặc tư vấn
+    đã được lập lịch và ghi nhận trên hệ thống.
+
+    \item \textbf{Teaching Rate:} Đơn giá giảng dạy được thỏa thuận
+    cho một giờ, một buổi hoặc một khối lượng công việc.
+
+    \item \textbf{Audit Log:} Nhật ký ghi nhận các thao tác quan trọng
+    phục vụ kiểm tra và truy vết.
+\end{itemize}
+
+% =========================================================
+\section{Nguyên tắc quản lý nhân sự}
+
+AILMS áp dụng các nguyên tắc:
+
+\begin{itemize}
+    \item Tuyển dụng và phân công dựa trên năng lực, yêu cầu công việc
+    và tiêu chí đã công bố.
+    \item Không phân biệt đối xử trái pháp luật.
+    \item Tôn trọng danh dự, nhân phẩm và quyền riêng tư của người lao động.
+    \item Chỉ thu thập dữ liệu nhân sự cần thiết và có mục đích rõ ràng.
+    \item Phân quyền theo nguyên tắc tối thiểu cần thiết.
+    \item Đánh giá dựa trên nhiều nguồn thông tin, không chỉ dựa vào thuật toán.
+    \item Tiền lương, quyền lợi và trách nhiệm phải được xác định bằng
+    hợp đồng hoặc quy chế hợp lệ.
+\end{itemize}
+
+% =========================================================
+\section{Tuyển dụng và tiếp nhận hồ sơ}
+
+\subsection{Hồ sơ cần cung cấp}
+
+Tùy theo vị trí, ứng viên có thể được yêu cầu cung cấp:
+
+\begin{itemize}
+    \item Thông tin định danh và liên hệ.
+    \item Sơ yếu lý lịch hoặc hồ sơ năng lực.
+    \item Bằng cấp, chứng chỉ và minh chứng chuyên môn.
+    \item Kinh nghiệm giảng dạy hoặc làm việc.
+    \item Danh mục công trình, khóa học hoặc tài liệu đã thực hiện.
+    \item Thông tin phục vụ ký kết hợp đồng và thanh toán.
+    \item Thông tin khác cần thiết cho vị trí tuyển dụng.
+\end{itemize}
+
+AILMS không yêu cầu ứng viên cung cấp dữ liệu không liên quan đến công việc
+nếu không có căn cứ phù hợp.
+
+\subsection{Xác minh hồ sơ}
+
+Hồ sơ có thể được xác minh thông qua:
+
+\begin{itemize}
+    \item Đối chiếu giấy tờ và thông tin do ứng viên cung cấp.
+    \item Xác minh bằng cấp hoặc chứng chỉ với đơn vị cấp khi cần thiết.
+    \item Phỏng vấn chuyên môn.
+    \item Giảng thử hoặc thực hiện bài đánh giá năng lực.
+    \item Kiểm tra người tham chiếu sau khi có căn cứ phù hợp.
+\end{itemize}
+
+Ứng viên phải được thông báo khi AILMS cần thực hiện hoạt động xác minh
+có liên quan đến bên thứ ba hoặc dữ liệu cá nhân nhạy cảm.
+
+\subsection{Thông tin không chính xác}
+
+Nếu phát hiện hồ sơ có thông tin sai lệch, AILMS phải tạo điều kiện
+để ứng viên hoặc nhân sự giải trình trước khi đưa ra quyết định,
+trừ trường hợp cần áp dụng biện pháp tạm thời để bảo vệ hệ thống.
+
+Việc làm giả bằng cấp, giấy tờ hoặc kinh nghiệm có thể dẫn đến:
+
+\begin{itemize}
+    \item Từ chối tiếp nhận.
+    \item Tạm dừng phân công.
+    \item Thu hồi quyền truy cập liên quan.
+    \item Xử lý theo hợp đồng và quy định pháp luật.
+\end{itemize}
+
+% =========================================================
+\section{Ký kết và quản lý hợp đồng}
+
+Trước khi bắt đầu công việc chính thức, các bên phải xác lập quan hệ
+bằng loại hợp đồng hoặc thỏa thuận phù hợp.
+
+Hợp đồng nên xác định tối thiểu:
+
+\begin{itemize}
+    \item Danh tính và thông tin của các bên.
+    \item Vị trí, nhiệm vụ và phạm vi công việc.
+    \item Thời hạn và địa điểm làm việc.
+    \item Thời giờ làm việc hoặc nguyên tắc phân công.
+    \item Tiền lương, đơn giá, phụ cấp và phương thức thanh toán.
+    \item Quyền sở hữu trí tuệ.
+    \item Nghĩa vụ bảo mật.
+    \item Điều kiện sửa đổi, tạm hoãn và chấm dứt.
+    \item Trách nhiệm đối với thiết bị, tài khoản và dữ liệu.
+\end{itemize}
+
+Trạng thái hợp đồng trên hệ thống phải phản ánh hồ sơ nghiệp vụ,
+nhưng không tự thay thế văn bản hợp đồng đã ký.
+
+Mọi thay đổi quan trọng về chức danh, mức lương, phạm vi công việc
+hoặc thời hạn phải được ghi nhận bằng hình thức hợp lệ.
+
+% =========================================================
+\section{Phân loại nhân sự}
+
+\subsection{Nhân sự toàn thời gian}
+
+Nhân sự toàn thời gian thực hiện công việc theo thời giờ,
+nhiệm vụ và chế độ được quy định trong hợp đồng.
+
+Quyền lợi có thể bao gồm:
+
+\begin{itemize}
+    \item Tiền lương cơ bản.
+    \item Phụ cấp và thưởng theo chính sách.
+    \item Nghỉ phép và các chế độ nghỉ khác.
+    \item Bảo hiểm và quyền lợi bắt buộc nếu thuộc đối tượng áp dụng.
+    \item Đào tạo và đánh giá định kỳ.
+\end{itemize}
+
+\subsection{Nhân sự bán thời gian}
+
+Nhân sự bán thời gian làm việc theo khung thời gian hoặc khối lượng
+đã thỏa thuận và được hưởng quyền lợi theo hợp đồng cùng pháp luật áp dụng.
+
+Việc làm bán thời gian không phải là căn cứ để đối xử bất lợi trái pháp luật
+so với người làm toàn thời gian trong các quyền lợi có cùng điều kiện áp dụng.
+
+\subsection{Giảng viên và trợ giảng theo buổi}
+
+Giảng viên hoặc trợ giảng có thể được thanh toán dựa trên:
+
+\begin{itemize}
+    \item Số buổi giảng dạy được xác nhận.
+    \item Số giờ giảng thực tế.
+    \item Khối lượng chấm bài hoặc hỗ trợ.
+    \item Mốc hoàn thành nội dung.
+    \item Đơn giá và điều kiện trong hợp đồng.
+\end{itemize}
+
+Việc gọi một cá nhân là cộng tác viên hoặc giảng viên theo buổi
+không tự quyết định bản chất pháp lý của quan hệ giữa các bên.
+
+% =========================================================
+\section{Tạo tài khoản và cấp mã nhân sự}
+
+Sau khi hoàn tất thủ tục cần thiết, hệ thống có thể:
+
+\begin{enumerate}
+    \item Tạo hồ sơ nhân sự.
+    \item Sinh Employee Code duy nhất.
+    \item Liên kết hồ sơ nhân sự với tài khoản người dùng.
+    \item Cấp vai trò và quyền phù hợp.
+    \item Gửi hướng dẫn kích hoạt và bảo mật tài khoản.
+\end{enumerate}
+
+Employee Code phải:
+
+\begin{itemize}
+    \item Không trùng lặp.
+    \item Không tái sử dụng tùy tiện cho người khác.
+    \item Được sử dụng nhất quán trong hồ sơ nội bộ.
+    \item Không chứa dữ liệu cá nhân nhạy cảm nếu không cần thiết.
+\end{itemize}
+
+% =========================================================
+\section{Phân quyền và quản lý tài khoản}
+
+\subsection{Nguyên tắc phân quyền}
+
+Vai trò chỉ được cấp khi:
+
+\begin{itemize}
+    \item Có nhu cầu công việc hợp lệ.
+    \item Đã hoàn tất phê duyệt theo quy trình.
+    \item Hợp đồng hoặc phân công còn hiệu lực.
+    \item Người dùng đã đáp ứng yêu cầu bảo mật.
+\end{itemize}
+
+Một tài khoản có thể có nhiều vai trò, nhưng mỗi quyền phải có căn cứ rõ ràng.
+
+\subsection{Phạm vi vai trò}
+
+\begin{itemize}
+    \item \textbf{TEACHER:} Quản lý khóa học được giao, lớp học,
+    lịch dạy, bài tập và đánh giá học viên.
+
+    \item \textbf{TA:} Hỗ trợ lớp học, chấm bài, điểm danh và thảo luận
+    trong phạm vi được giảng viên hoặc quản trị viên giao.
+
+    \item \textbf{HR:} Quản lý hồ sơ, hợp đồng, chấm công, nghỉ phép
+    và quy trình nhân sự theo thẩm quyền.
+
+    \item \textbf{ADMIN:} Quản trị hệ thống theo phạm vi kỹ thuật
+    hoặc nghiệp vụ được cấp.
+\end{itemize}
+
+Vai trò \texttt{ADMIN} không mặc nhiên cho phép đọc mọi dữ liệu nhân sự.
+Dữ liệu tiền lương, hợp đồng và hồ sơ riêng tư phải có quyền chuyên biệt.
+
+\subsection{Rà soát và thu hồi quyền}
+
+Quyền truy cập phải được rà soát khi:
+
+\begin{itemize}
+    \item Nhân sự thay đổi vị trí.
+    \item Hợp đồng hết hạn hoặc bị tạm hoãn.
+    \item Nhân sự nghỉ việc.
+    \item Phát hiện rủi ro bảo mật.
+    \item Quyền không còn cần thiết.
+\end{itemize}
+
+Khi quan hệ công việc kết thúc, quyền nội bộ phải được thu hồi kịp thời,
+đồng thời bảo toàn dữ liệu và nhật ký cần thiết.
+
+% =========================================================
+\section{Tiêu chuẩn nghề nghiệp của giảng viên}
+
+Giảng viên phải:
+
+\begin{itemize}
+    \item Có chuyên môn phù hợp với nội dung giảng dạy.
+    \item Cung cấp thông tin năng lực trung thực.
+    \item Chuẩn bị nội dung theo mục tiêu khóa học.
+    \item Thực hiện lịch giảng đã xác nhận.
+    \item Đánh giá học viên công bằng và nhất quán.
+    \item Tôn trọng sự khác biệt và quyền riêng tư.
+    \item Không lợi dụng vị trí để trục lợi hoặc quấy rối.
+    \item Không tiết lộ dữ liệu học viên trái phép.
+    \item Cập nhật kiến thức và phương pháp giảng dạy khi cần thiết.
+\end{itemize}
+
+% =========================================================
+\section{Tiêu chuẩn của trợ giảng}
+
+Trợ giảng có trách nhiệm:
+
+\begin{itemize}
+    \item Hỗ trợ giảng viên theo phân công.
+    \item Theo dõi câu hỏi và hoạt động lớp.
+    \item Hỗ trợ điểm danh và xử lý bài nộp.
+    \item Chấm bài theo rubric hoặc hướng dẫn đã được phê duyệt.
+    \item Chuyển vấn đề vượt thẩm quyền cho giảng viên.
+    \item Không tự ý thay đổi điểm hoặc điều kiện khóa học.
+\end{itemize}
+
+Trợ giảng không được thực hiện chức năng quản trị hoặc quyết định chuyên môn
+vượt quá phạm vi được giao.
+
+% =========================================================
+\section{Xây dựng và phê duyệt khóa học}
+
+\subsection{Tạo khóa học}
+
+Giảng viên được phép tạo bản nháp khóa học nếu có quyền phù hợp.
+
+Khóa học cần có:
+
+\begin{itemize}
+    \item Tên và mô tả rõ ràng.
+    \item Mục tiêu học tập.
+    \item Đối tượng và yêu cầu đầu vào.
+    \item Cấu trúc nội dung.
+    \item Tài liệu, bài tập và phương thức đánh giá.
+    \item Thông tin bản quyền và nguồn tham khảo.
+    \item Điều kiện hoàn thành.
+\end{itemize}
+
+\subsection{Quy trình phê duyệt}
+
+Khóa học có thể trải qua các trạng thái:
+
+\begin{enumerate}
+    \item Bản nháp.
+    \item Gửi duyệt.
+    \item Đang xem xét.
+    \item Yêu cầu chỉnh sửa.
+    \item Được phê duyệt.
+    \item Xuất bản.
+    \item Tạm ẩn hoặc lưu trữ.
+\end{enumerate}
+
+Chỉ sử dụng trạng thái \texttt{PENDING\_APPROVAL} nếu enum này
+thực sự tồn tại trong mã nguồn và cơ sở dữ liệu.
+
+Việc phê duyệt cần xem xét:
+
+\begin{itemize}
+    \item Độ chính xác chuyên môn.
+    \item Chất lượng và cấu trúc nội dung.
+    \item Tính phù hợp với đối tượng học viên.
+    \item Bản quyền và quyền sử dụng tài liệu.
+    \item Nội dung không phù hợp hoặc có nguy cơ gây hại.
+    \item Điều kiện kỹ thuật và khả năng vận hành.
+\end{itemize}
+
+Người duyệt phải ghi nhận lý do khi từ chối hoặc yêu cầu chỉnh sửa.
+
+% =========================================================
+\section{Tổ chức lớp học và lịch giảng}
+
+Giảng viên có trách nhiệm:
+
+\begin{itemize}
+    \item Xác nhận lịch trước khi công bố.
+    \item Theo dõi các buổi được phân công.
+    \item Thông báo sớm nếu cần đổi hoặc hủy lịch.
+    \item Ghi nhận nội dung đã giảng và tình trạng buổi học.
+    \item Phối hợp bố trí lịch học bù khi lỗi thuộc phía giảng viên.
+\end{itemize}
+
+Đối với lớp một-một, sau khi trao đổi với học viên,
+giảng viên hoặc trợ giảng có quyền phù hợp có thể tạo lớp và lịch học.
+
+HR chỉ cần can thiệp khi:
+
+\begin{itemize}
+    \item Không tìm được giảng viên phù hợp.
+    \item Có xung đột phân công.
+    \item Giảng viên không thể tiếp tục.
+    \item Có vấn đề về hợp đồng hoặc khiếu nại.
+\end{itemize}
+
+% =========================================================
+\section{Chấm công và ghi nhận thời gian làm việc}
+
+\subsection{Nguồn dữ liệu chấm công}
+
+Hệ thống có thể ghi nhận:
+
+\begin{itemize}
+    \item Giờ vào và giờ ra.
+    \item Lịch làm việc.
+    \item Lịch giảng và trạng thái buổi học.
+    \item Đơn nghỉ phép.
+    \item Xác nhận của người quản lý.
+    \item Điều chỉnh đã được phê duyệt.
+\end{itemize}
+
+\subsection{Trạng thái chấm công}
+
+Các trạng thái có thể bao gồm:
+
+\begin{itemize}
+    \item Có mặt.
+    \item Đi muộn.
+    \item Về sớm.
+    \item Vắng có phép.
+    \item Vắng không phép.
+    \item Nghỉ lễ.
+    \item Nghỉ không hưởng lương.
+    \item Chờ xác nhận.
+\end{itemize}
+
+\subsection{Nguyên tắc xử lý}
+
+Dữ liệu tự động chỉ là nguồn hỗ trợ đối soát.
+
+Hệ thống không được tự động khấu trừ tiền lương hoặc áp dụng kỷ luật
+chỉ dựa trên một bản ghi đi muộn hay vắng mặt chưa được xác minh.
+
+Trước khi khóa bảng công, nhân sự phải có cơ hội:
+
+\begin{itemize}
+    \item Xem dữ liệu liên quan.
+    \item Gửi yêu cầu điều chỉnh.
+    \item Cung cấp lý do hoặc bằng chứng.
+    \item Nhận kết quả xử lý.
+\end{itemize}
+
+% =========================================================
+\section{Tiền lương, thù lao và thanh toán}
+
+\subsection{Nguyên tắc chung}
+
+Tiền lương và thù lao được xác định theo:
+
+\begin{itemize}
+    \item Hợp đồng hoặc phụ lục hợp đồng.
+    \item Loại hình công việc.
+    \item Số giờ hoặc số buổi được xác nhận.
+    \item Teaching Rate có hiệu lực.
+    \item Phụ cấp, thưởng và khoản điều chỉnh hợp lệ.
+    \item Thuế, bảo hiểm và nghĩa vụ bắt buộc nếu áp dụng.
+\end{itemize}
+
+\subsection{Nhân sự toàn thời gian}
+
+Thu nhập có thể gồm:
+
+\begin{itemize}
+    \item Lương cơ bản.
+    \item Phụ cấp theo vị trí hoặc điều kiện làm việc.
+    \item Tiền làm thêm giờ nếu phát sinh hợp lệ.
+    \item Thưởng theo chính sách.
+    \item Khoản bổ sung được thỏa thuận.
+\end{itemize}
+
+\subsection{Giảng viên và trợ giảng theo buổi}
+
+Giá trị thanh toán có thể được tính theo công thức:
+
+\[
+\text{Thù lao giảng dạy}
+=
+\text{Số đơn vị giảng dạy được xác nhận}
+\times
+\text{Teaching Rate}
++
+\text{Khoản bổ sung hợp lệ}
+\]
+
+Teaching Rate áp dụng phải là mức đã được thỏa thuận và có hiệu lực
+tại thời điểm buổi học được thực hiện, trừ khi các bên có thỏa thuận khác.
+
+\subsection{Đối soát}
+
+Trước khi thanh toán, các bên có thể đối soát:
+
+\begin{itemize}
+    \item Danh sách buổi đã dạy.
+    \item Thời lượng thực tế.
+    \item Trạng thái hoàn thành.
+    \item Buổi bị hủy và bên chịu trách nhiệm.
+    \item Công việc chấm bài hoặc hỗ trợ bổ sung.
+\end{itemize}
+
+Giảng viên có quyền phản hồi khi phát hiện sai lệch.
+
+% =========================================================
+\section{Thưởng và ghi nhận thành tích}
+
+Tiền thưởng không phải khoản mặc nhiên phát sinh,
+trừ khi hợp đồng hoặc quy chế có quy định khác.
+
+Tiêu chí thưởng có thể bao gồm:
+
+\begin{itemize}
+    \item Chất lượng chuyên môn.
+    \item Tỷ lệ hoàn thành công việc.
+    \item Mức độ hài lòng hợp lệ của học viên.
+    \item Chất lượng phản hồi và hỗ trợ.
+    \item Đóng góp phát triển nội dung.
+    \item Tuân thủ lịch và quy trình.
+\end{itemize}
+
+Không nên quyết định thưởng chỉ dựa trên điểm rating,
+vì rating có thể bị ảnh hưởng bởi thiên lệch hoặc hành vi thao túng.
+
+% =========================================================
+\section{Nghỉ phép và nghỉ việc riêng}
+
+Nhân sự có thể gửi đơn nghỉ qua hệ thống với các thông tin:
+
+\begin{itemize}
+    \item Loại nghỉ.
+    \item Thời gian bắt đầu và kết thúc.
+    \item Lý do trong phạm vi cần thiết.
+    \item Người bàn giao công việc.
+    \item Tệp minh chứng nếu trường hợp áp dụng yêu cầu.
+\end{itemize}
+
+Quy trình xử lý gồm:
+
+\begin{enumerate}
+    \item Gửi yêu cầu.
+    \item Kiểm tra số ngày và lịch công việc.
+    \item Người có thẩm quyền phê duyệt hoặc từ chối.
+    \item Cập nhật chấm công.
+    \item Thông báo kết quả cho người yêu cầu.
+\end{enumerate}
+
+Nếu vượt quá số ngày nghỉ hưởng lương,
+phần vượt có thể được xem xét là nghỉ không hưởng lương
+sau khi có thỏa thuận hoặc căn cứ hợp lệ.
+
+Hệ thống không nên tự động chuyển thành nghỉ không lương
+nếu chưa hoàn tất bước xác nhận.
+
+% =========================================================
+\section{Bàn giao trong thời gian nghỉ}
+
+Giảng viên nghỉ trong thời gian đang phụ trách lớp phải:
+
+\begin{itemize}
+    \item Thông báo theo thời hạn hợp lý.
+    \item Cập nhật tiến độ giảng dạy.
+    \item Bàn giao tài liệu và thông tin cần thiết.
+    \item Phối hợp bố trí lịch bù hoặc người thay thế.
+    \item Không tự ý hủy lớp mà chưa thông báo.
+\end{itemize}
+
+AILMS phải hạn chế ảnh hưởng đến quyền lợi học viên
+và thông báo phương án thay thế kịp thời.
+
+% =========================================================
+\section{Đánh giá hiệu quả công việc}
+
+\subsection{Nguồn thông tin đánh giá}
+
+Việc đánh giá có thể dựa trên:
+
+\begin{itemize}
+    \item Mức độ hoàn thành nhiệm vụ.
+    \item Chất lượng nội dung và giảng dạy.
+    \item Tiến độ phản hồi và chấm bài.
+    \item Tuân thủ lịch làm việc.
+    \item Phản hồi của học viên.
+    \item Đánh giá của người quản lý.
+    \item Khiếu nại đã được xác minh.
+    \item Đóng góp cho tổ chức.
+\end{itemize}
+
+\subsection{Nguyên tắc đánh giá}
+
+Việc đánh giá phải:
+
+\begin{itemize}
+    \item Dựa trên tiêu chí được thông báo.
+    \item Xem xét đúng thời kỳ và phạm vi công việc.
+    \item Hạn chế ảnh hưởng của đánh giá giả hoặc thiên lệch.
+    \item Cho phép nhân sự xem và phản hồi kết quả.
+    \item Không chỉ dựa trên quyết định tự động của AI.
+\end{itemize}
+
+\subsection{Rating của học viên}
+
+Rating thấp không tự động chứng minh giảng viên vi phạm.
+
+Hệ thống cần xem xét:
+
+\begin{itemize}
+    \item Số lượng đánh giá.
+    \item Nội dung phản hồi.
+    \item Tính xác thực của người đánh giá.
+    \item Mức độ và tần suất của vấn đề.
+    \item Dữ liệu lịch học và khiếu nại liên quan.
+\end{itemize}
+
+% =========================================================
+\section{Đào tạo và phát triển chuyên môn}
+
+AILMS có thể tổ chức:
+
+\begin{itemize}
+    \item Đào tạo sử dụng hệ thống.
+    \item Đào tạo bảo mật và bảo vệ dữ liệu.
+    \item Hướng dẫn xây dựng khóa học.
+    \item Hướng dẫn đánh giá và phản hồi học viên.
+    \item Đào tạo sử dụng AI có trách nhiệm.
+    \item Hoạt động cập nhật chuyên môn.
+\end{itemize}
+
+Một số chương trình có thể là điều kiện trước khi được cấp
+hoặc duy trì quyền giảng dạy.
+
+% =========================================================
+\section{Sở hữu trí tuệ}
+
+\subsection{Nguyên tắc xác định quyền}
+
+Quyền sở hữu trí tuệ phải được xác định dựa trên:
+
+\begin{itemize}
+    \item Chủ thể tạo ra nội dung.
+    \item Nhiệm vụ được giao.
+    \item Nguồn lực được sử dụng.
+    \item Hợp đồng hoặc thỏa thuận.
+    \item Quy định pháp luật áp dụng.
+\end{itemize}
+
+Không nên mặc định rằng mọi nội dung giảng viên tạo ra
+trong thời gian hợp đồng đều thuộc sở hữu độc quyền của AILMS.
+
+\subsection{Các mô hình quyền}
+
+Hợp đồng có thể quy định:
+
+\begin{itemize}
+    \item Giảng viên giữ quyền sở hữu và cấp phép cho AILMS khai thác.
+    \item Các bên đồng sở hữu hoặc chia sẻ quyền khai thác.
+    \item AILMS sở hữu quyền tài sản đối với nội dung được tạo theo nhiệm vụ.
+    \item Quyền được phân chia riêng theo từng loại tài liệu.
+\end{itemize}
+
+\subsection{Cam kết của giảng viên}
+
+Giảng viên cam kết:
+
+\begin{itemize}
+    \item Có quyền sử dụng tài liệu đã tải lên.
+    \item Trích dẫn nguồn khi cần thiết.
+    \item Không sử dụng trái phép nội dung của bên thứ ba.
+    \item Thông báo nếu tài liệu có giới hạn giấy phép.
+    \item Không đưa dữ liệu bí mật của tổ chức khác vào khóa học.
+\end{itemize}
+
+\subsection{Sử dụng sau khi hợp đồng chấm dứt}
+
+Quyền tiếp tục khai thác khóa học sau khi hợp đồng chấm dứt
+phải căn cứ vào hợp đồng, bao gồm:
+
+\begin{itemize}
+    \item Thời hạn tiếp tục khai thác.
+    \item Phạm vi chỉnh sửa và phân phối.
+    \item Cơ chế chia sẻ doanh thu nếu có.
+    \item Quyền sử dụng tên và hình ảnh giảng viên.
+    \item Trách nhiệm cập nhật hoặc gỡ bỏ nội dung.
+\end{itemize}
+
+% =========================================================
+\section{Bảo mật và dữ liệu nội bộ}
+
+Nhân sự không được tiết lộ trái phép:
+
+\begin{itemize}
+    \item Hồ sơ và kết quả học tập của học viên.
+    \item Hợp đồng, tiền lương và thông tin nhân sự.
+    \item Secret key, token và thông tin kết nối.
+    \item Mã nguồn hoặc kiến trúc nội bộ.
+    \item Kế hoạch kinh doanh và dữ liệu tài chính.
+    \item Tài liệu chưa được công bố.
+\end{itemize}
+
+Thông tin chỉ được truy cập và sử dụng trong phạm vi công việc.
+
+Nghĩa vụ bảo mật có thể tiếp tục sau khi hợp đồng chấm dứt
+theo thời hạn và phạm vi đã thỏa thuận.
+
+% =========================================================
+\section{Sử dụng AI trong công việc}
+
+Nhân sự có thể sử dụng AI để hỗ trợ:
+
+\begin{itemize}
+    \item Lập bản nháp nội dung.
+    \item Tạo câu hỏi hoặc rubric tham khảo.
+    \item Tóm tắt tài liệu.
+    \item Phân tích dữ liệu trong phạm vi được phép.
+    \item Hỗ trợ phản hồi học viên.
+\end{itemize}
+
+Nhân sự không được:
+
+\begin{itemize}
+    \item Gửi dữ liệu cá nhân hoặc bí mật vào công cụ AI không được phê duyệt.
+    \item Công bố nội dung AI mà không kiểm tra.
+    \item Dùng AI để tự động quyết định kỷ luật hoặc chấm điểm quan trọng.
+    \item Sử dụng AI để giả mạo năng lực hoặc kết quả công việc.
+    \item Đưa tài liệu nội bộ vào hệ thống bên ngoài khi chưa được phép.
+\end{itemize}
+
+Người sử dụng AI vẫn chịu trách nhiệm đối với kết quả công việc cuối cùng.
+
+% =========================================================
+\section{Xung đột lợi ích}
+
+Nhân sự phải khai báo khi có tình huống có thể ảnh hưởng đến tính khách quan, như:
+
+\begin{itemize}
+    \item Có quan hệ cá nhân hoặc tài chính với học viên, đối tác hay nhà cung cấp.
+    \item Tham gia kinh doanh cạnh tranh trực tiếp.
+    \item Đánh giá hoặc phê duyệt công việc của người có quan hệ lợi ích.
+    \item Nhận quà hoặc lợi ích có khả năng ảnh hưởng đến quyết định.
+\end{itemize}
+
+Việc có xung đột lợi ích không mặc nhiên là vi phạm,
+nhưng việc che giấu hoặc lợi dụng xung đột có thể bị xử lý.
+
+% =========================================================
+\section{Phòng chống quấy rối và phân biệt đối xử}
+
+AILMS không chấp nhận:
+
+\begin{itemize}
+    \item Quấy rối tình dục hoặc quấy rối bằng lời nói, hình ảnh hay hành vi.
+    \item Bắt nạt, đe dọa hoặc xúc phạm.
+    \item Phân biệt đối xử trái pháp luật.
+    \item Trả đũa người phản ánh hoặc người hỗ trợ điều tra.
+    \item Lợi dụng quan hệ giảng viên--học viên để gây áp lực.
+\end{itemize}
+
+Phản ánh phải được tiếp nhận bảo mật trong phạm vi có thể,
+xử lý khách quan và bảo vệ các bên khỏi hành vi trả đũa.
+
+% =========================================================
+\section{Vi phạm và xử lý kỷ luật}
+
+\subsection{Nguyên tắc}
+
+Việc xử lý phải:
+
+\begin{itemize}
+    \item Có căn cứ và bằng chứng.
+    \item Đúng thẩm quyền và trình tự.
+    \item Xem xét tính chất, mức độ và hậu quả.
+    \item Cho phép người bị phản ánh giải trình.
+    \item Không phạt tiền hoặc cắt lương thay cho xử lý kỷ luật trái quy định.
+    \item Không áp dụng đồng thời nhiều hình thức trái pháp luật cho cùng một hành vi.
+\end{itemize}
+
+\subsection{Biện pháp quản lý}
+
+Tùy tính chất vụ việc, AILMS có thể:
+
+\begin{itemize}
+    \item Nhắc nhở hoặc yêu cầu khắc phục.
+    \item Yêu cầu đào tạo lại.
+    \item Cảnh báo bằng văn bản.
+    \item Tạm ngừng phân công lớp.
+    \item Tạm khóa một số quyền để bảo vệ dữ liệu.
+    \item Thay đổi phân công theo thỏa thuận hợp lệ.
+    \item Áp dụng hình thức xử lý theo nội quy và pháp luật.
+\end{itemize}
+
+Khóa tài khoản kỹ thuật khẩn cấp nhằm bảo vệ hệ thống
+không tự động đồng nghĩa với kết luận kỷ luật.
+
+% =========================================================
+\section{Khiếu nại và giải trình}
+
+Nhân sự có quyền phản ánh hoặc khiếu nại về:
+
+\begin{itemize}
+    \item Dữ liệu chấm công.
+    \item Tiền lương hoặc Teaching Session Payment.
+    \item Kết quả đánh giá.
+    \item Phân công công việc.
+    \item Hành vi quấy rối hoặc phân biệt đối xử.
+    \item Quyết định hạn chế quyền hoặc xử lý vi phạm.
+    \item Việc sử dụng dữ liệu cá nhân không phù hợp.
+\end{itemize}
+
+Yêu cầu nên bao gồm:
+
+\begin{itemize}
+    \item Employee Code.
+    \item Nội dung và thời điểm phát sinh.
+    \item Quyết định hoặc dữ liệu liên quan.
+    \item Bằng chứng nếu có.
+    \item Phương án đề nghị xử lý.
+\end{itemize}
+
+Người xử lý khiếu nại không nên là người có xung đột lợi ích trực tiếp với vụ việc.
+
+% =========================================================
+\section{Audit Log và minh bạch nghiệp vụ}
+
+Hệ thống cần ghi Audit Log đối với:
+
+\begin{itemize}
+    \item Tạo và sửa hồ sơ nhân sự.
+    \item Cấp, thay đổi hoặc thu hồi vai trò.
+    \item Thay đổi trạng thái hợp đồng.
+    \item Phê duyệt đơn nghỉ.
+    \item Điều chỉnh bảng công.
+    \item Phê duyệt khoản thanh toán.
+    \item Xử lý khiếu nại và vi phạm.
+    \item Phê duyệt hoặc đình chỉ khóa học.
+\end{itemize}
+
+Audit Log phải ghi nhận hợp lý:
+
+\begin{itemize}
+    \item Người thực hiện.
+    \item Thời điểm.
+    \item Loại hành động.
+    \item Đối tượng bị tác động.
+    \item Giá trị trước và sau nếu phù hợp.
+    \item Lý do hoặc mã yêu cầu liên quan.
+\end{itemize}
+
+Không ghi mật khẩu, token đầy đủ hoặc dữ liệu nhạy cảm không cần thiết vào log.
+
+% =========================================================
+\section{Bảo vệ hồ sơ nhân sự}
+
+Hồ sơ nhân sự, hợp đồng và dữ liệu thu nhập chỉ được truy cập bởi
+người có nhiệm vụ và quyền phù hợp.
+
+AILMS phải áp dụng:
+
+\begin{itemize}
+    \item Kiểm soát truy cập theo vai trò.
+    \item Ghi nhận lịch sử truy cập và thay đổi quan trọng.
+    \item Giới hạn tải xuống và chia sẻ.
+    \item Bảo vệ tệp bằng cơ chế xác thực hoặc URL có thời hạn.
+    \item Sao lưu và phục hồi phù hợp.
+    \item Xóa hoặc lưu trữ theo thời hạn hợp lệ.
+\end{itemize}
+
+Nhân sự có thể yêu cầu xem và chỉnh sửa thông tin không chính xác
+sau khi hoàn thành bước xác minh cần thiết.
+
+% =========================================================
+\section{Chấm dứt hợp đồng và bàn giao}
+
+Khi hợp đồng chấm dứt, nhân sự phải:
+
+\begin{itemize}
+    \item Bàn giao công việc, lớp học và tài liệu.
+    \item Hoàn trả thiết bị hoặc tài sản được cấp.
+    \item Không giữ bản sao dữ liệu nội bộ trái phép.
+    \item Hoàn tất đối soát công việc và khoản thanh toán.
+    \item Tiếp tục thực hiện nghĩa vụ bảo mật nếu còn hiệu lực.
+\end{itemize}
+
+AILMS có trách nhiệm:
+
+\begin{itemize}
+    \item Thu hồi quyền truy cập không còn cần thiết.
+    \item Bảo toàn dữ liệu học viên và tiến độ lớp.
+    \item Bố trí người thay thế khi cần.
+    \item Thực hiện nghĩa vụ thanh toán và xác nhận theo quy định.
+    \item Không xóa hồ sơ bắt buộc phải lưu giữ.
+\end{itemize}
+
+% =========================================================
+\section{Sửa đổi chính sách}
+
+AILMS có thể cập nhật chính sách khi:
+
+\begin{itemize}
+    \item Pháp luật lao động thay đổi.
+    \item Quy trình hoặc cơ cấu tổ chức thay đổi.
+    \item Hệ thống bổ sung chức năng mới.
+    \item Có yêu cầu tăng cường bảo mật hoặc minh bạch.
+\end{itemize}
+
+Thay đổi ảnh hưởng trực tiếp đến quyền lợi và nghĩa vụ
+phải được thông báo bằng hình thức phù hợp.
+
+Việc cập nhật chính sách nội bộ không tự động sửa đổi nội dung hợp đồng
+nếu pháp luật hoặc thỏa thuận yêu cầu sự đồng ý của các bên.
+
+% =========================================================
+\section{Thông tin liên hệ}
+
+Nhân sự có thể gửi yêu cầu tới:
+
+\begin{itemize}
+    \item \textbf{Đơn vị phụ trách:} Phòng Nhân sự AILMS.
+    \item \textbf{Email nhân sự:}
+    \href{mailto:hr@ailms.example}{hr@ailms.example}.
+    \item \textbf{Email bảo mật:}
+    \href{mailto:security@ailms.example}{security@ailms.example}.
+    \item \textbf{Kênh nội bộ:} Chức năng gửi yêu cầu nhân sự trên AILMS.
+\end{itemize}
+
+\textcolor{ailmsred}{
+\textit{Lưu ý: Thay các địa chỉ thư điện tử mẫu và thông tin tổ chức
+bằng dữ liệu chính thức trước khi ban hành.}
+}
+
+% =========================================================
+\section{Hiệu lực thi hành}
+
+Chính sách có hiệu lực kể từ ngày được phê duyệt và công bố.
+
+Toàn bộ nhân sự, giảng viên, trợ giảng và người quản lý liên quan
+có trách nhiệm đọc, hiểu và tuân thủ chính sách.
+
+\vfill
+
+\begin{center}
+    \textbf{ĐẠI DIỆN PHÒNG NHÂN SỰ AILMS}\\[1.5cm]
+    \textit{Ký và ghi rõ họ tên}
+\end{center}
+
+\end{document}

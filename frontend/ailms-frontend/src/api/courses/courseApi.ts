@@ -107,6 +107,7 @@ export interface CourseDetailResponse {
   category?: { id: string; name: string } | null;
   creator?: {
     id: string;
+    code?: string | null;
     fullName?: string | null;
     avatarUrl?: string | null;
     title?: string | null;
@@ -200,7 +201,7 @@ export const courseApi = {
     httpClient.get<ApiResponse<any>>("/v1/courses/latest", { params }),
 
   getActiveCoursesCount: () =>
-    httpClient.get<ApiResponse<number>>("/v1/courses/active-count"),
+    httpClient.get<ApiResponse<number | string>>("/v1/courses/active-count"),
 
   // Category Endpoints
   createCategory: (payload: CreateCategoryRequest) =>

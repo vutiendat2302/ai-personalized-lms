@@ -4,7 +4,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   ArrowLeft,
   BookOpen,
@@ -16,8 +15,6 @@ import {
   Loader2,
   AlertTriangle,
   Eye,
-  ExternalLink,
-  Paperclip,
   UserRoundCheck,
   Users,
 } from "lucide-react";
@@ -50,10 +47,6 @@ export const TeacherCourseDetailPage: React.FC = () => {
   const [curriculum, setCurriculum] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [selectedLesson, setSelectedLesson] = useState<any | null>(null);
-  const [lessonResources, setLessonResources] = useState<any[]>([]);
-  const [lessonLoading, setLessonLoading] = useState(false);
-  const [lessonError, setLessonError] = useState("");
   const [teachers, setTeachers] = useState<any[]>([]);
 
   const navigationState = location.state as { returnTo?: string; returnLabel?: string; catalogView?: unknown } | null;
@@ -66,6 +59,14 @@ export const TeacherCourseDetailPage: React.FC = () => {
     } else {
       navigate(-1);
     }
+  };
+
+  /** Mở đúng bài học trong Learning Space và giữ đường quay lại trang chi tiết khóa học. */
+  const openLessonInLearningSpace = (lessonId: string | number) => {
+    if (!id) return;
+    navigate(`/learn/courses/${id}/lessons/${lessonId}`, {
+      state: { returnTo: `/teacher/courses/${id}` },
+    });
   };
 
   useEffect(() => {
@@ -124,25 +125,6 @@ export const TeacherCourseDetailPage: React.FC = () => {
     };
     void load();
   }, [id]);
-
-  const openLessonDetail = async (lesson: any) => {
-    setSelectedLesson(lesson);
-    setLessonResources([]);
-    setLessonError("");
-    setLessonLoading(true);
-    try {
-      const [detail, resources] = await Promise.all([
-        adminCourseClassApi.getLesson(lesson.id),
-        adminCourseClassApi.getLessonResources(lesson.id),
-      ]);
-      setSelectedLesson(detail);
-      setLessonResources(resources);
-    } catch (err: any) {
-      setLessonError(err?.response?.data?.message || "Không thể tải chi tiết bài học");
-    } finally {
-      setLessonLoading(false);
-    }
-  };
 
   if (loading) return <div className="py-20 flex justify-center gap-2 text-sm text-slate-500"><Loader2 className="h-5 w-5 animate-spin" /> Đang tải khóa học...</div>;
   if (error || !course) return <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-700 flex gap-2"><AlertTriangle className="h-5 w-5" /> {error || "Không tìm thấy khóa học"}</div>;
@@ -303,7 +285,7 @@ export const TeacherCourseDetailPage: React.FC = () => {
                     <button
                       type="button"
                       key={lIdx}
-                      onClick={() => void openLessonDetail(les)}
+                      onClick={() => openLessonInLearningSpace(les.id)}
                       className="w-full flex items-center justify-between p-2.5 rounded-lg bg-slate-50/70 hover:bg-blue-50 hover:text-blue-700 text-xs text-left transition-colors cursor-pointer"
                     >
                       <div className="flex items-center gap-2.5 font-medium text-slate-800">
@@ -329,76 +311,6 @@ export const TeacherCourseDetailPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Lesson Detail Popup Dialog */}
-      {selectedLesson && (
-        <Dialog open={!!selectedLesson} onOpenChange={(open) => !open && setSelectedLesson(null)}>
-          <DialogContent className="sm:max-w-2xl max-h-[88vh] overflow-y-auto rounded-2xl">
-            <DialogHeader>
-              <div className="flex items-start gap-3 pr-7">
-                <div className="h-10 w-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                  <BookOpen className="h-5 w-5" />
-                </div>
-                <div>
-                  <DialogTitle className="text-lg leading-snug">
-                    {selectedLesson.name || selectedLesson.title || "Chi tiết bài học"}
-                  </DialogTitle>
-                  <DialogDescription className="mt-1">Chế độ xem thông tin bài học dành cho giảng viên.</DialogDescription>
-                </div>
-              </div>
-            </DialogHeader>
-
-            {lessonLoading ? (
-              <div className="py-16 flex justify-center gap-2 text-sm text-slate-500"><Loader2 className="h-5 w-5 animate-spin" /> Đang tải bài học...</div>
-            ) : lessonError ? (
-              <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 flex gap-2"><AlertTriangle className="h-5 w-5 shrink-0" /> {lessonError}</div>
-            ) : (
-              <div className="space-y-5 py-2">
-                <div className="flex flex-wrap gap-2">
-                  <Badge className="bg-blue-50 text-blue-700 border-blue-200">{selectedLesson.contentType || selectedLesson.type || "Chưa phân loại"}</Badge>
-                  <Badge variant="outline">{selectedLesson.status || "Chưa có trạng thái"}</Badge>
-                  <Badge variant="outline"><Clock className="h-3 w-3 mr-1" /> {selectedLesson.durationMin ? `${selectedLesson.durationMin} phút` : "Chưa cập nhật thời lượng"}</Badge>
-                </div>
-
-                <section className="space-y-2">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Nội dung/Mô tả bài học</h3>
-                  <div className="rounded-xl border bg-slate-50/60 p-4 text-sm text-slate-700 whitespace-pre-wrap leading-6 min-h-24">
-                    {selectedLesson.description || "Bài học chưa có nội dung mô tả."}
-                  </div>
-                </section>
-
-                <section className="space-y-2">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Nội dung chính</h3>
-                  {selectedLesson.contentUrl ? (
-                    <a href={selectedLesson.contentUrl} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm font-semibold text-blue-700 hover:bg-blue-100">
-                      <span className="truncate pr-3">{selectedLesson.contentUrl}</span><ExternalLink className="h-4 w-4 shrink-0" />
-                    </a>
-                  ) : <div className="rounded-xl border border-dashed p-4 text-center text-xs text-slate-500">Bài học chưa có URL nội dung.</div>}
-                </section>
-
-                <section className="space-y-2">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                    <Paperclip className="h-4 w-4" /> Tài nguyên đính kèm ({lessonResources.length})
-                  </h3>
-                  {lessonResources.length ? lessonResources.map((resource) => (
-                    <a key={resource.id} href={resource.fileUrl} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-xl border p-3 hover:bg-slate-50">
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold truncate">{resource.name || "Tài nguyên bài học"}</p>
-                        <p className="text-[11px] text-slate-500">{resource.fileType || "Không rõ định dạng"}{resource.fileSize ? ` · ${(resource.fileSize / 1024 / 1024).toFixed(2)} MB` : ""}</p>
-                      </div>
-                      <ExternalLink className="h-4 w-4 text-blue-600 shrink-0" />
-                    </a>
-                  )) : <div className="rounded-xl border border-dashed p-4 text-center text-xs text-slate-500">Bài học không có tài nguyên đính kèm.</div>}
-                </section>
-
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div className="rounded-lg bg-slate-50 p-3"><span className="text-slate-500">Ngày tạo</span><p className="font-semibold mt-1">{selectedLesson.createdAt ? new Date(selectedLesson.createdAt).toLocaleString("vi-VN") : "Chưa cập nhật"}</p></div>
-                  <div className="rounded-lg bg-slate-50 p-3"><span className="text-slate-500">Cập nhật lần cuối</span><p className="font-semibold mt-1">{selectedLesson.updatedAt ? new Date(selectedLesson.updatedAt).toLocaleString("vi-VN") : "Chưa cập nhật"}</p></div>
-                </div>
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
-      )}
     </div>
   );
 };

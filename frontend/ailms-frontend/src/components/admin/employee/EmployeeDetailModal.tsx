@@ -66,6 +66,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { departmentApi, type DepartmentResponse } from "@/api/departments/departmentApi";
 import { NewContractWizardModal } from "@/components/admin/contract/NewContractWizardModal";
 import { DetailAuditLogModal } from "@/components/admin/audit/DetailAuditLogModal";
+import { useAuth } from "@/hooks/useAuth";
 
 const formatCurrency = (amount?: number | null): string => {
   if (amount === undefined || amount === null || isNaN(Number(amount))) return "0";
@@ -95,6 +96,11 @@ const EmployeeDetailModalContent: React.FC<EmployeeDetailContentProps> = ({
   onUpdateEmployee,
   onShowBanner,
 }) => {
+  const { auth } = useAuth();
+  const currentRoles = (auth.user?.roles || []).map((role: any) =>
+    (typeof role === "object" ? role?.code || role?.name || "" : String(role)).replace("ROLE_", "").toUpperCase()
+  );
+  const isHrOnly = currentRoles.includes("HR") && !currentRoles.includes("ADMIN");
   const isFullTime = employee.employmentType === "FULL_TIME";
   const isPartTime = employee.employmentType === "PART_TIME";
   const isTeacherOrTA = (employee.roles || []).some(r =>
@@ -332,7 +338,8 @@ const EmployeeDetailModalContent: React.FC<EmployeeDetailContentProps> = ({
       employeeApi.getSalariesByEmployeeId(employee.id).then(setSalaries);
       employeeApi.getLeaveRequestsByEmployeeId(employee.id).then(setLeaveRequests);
       employeeApi.getApprovalRequestsByUserId(employee.userId).then(setApprovals);
-      employeeApi.getEmployeeAuditLogs(employee.id).then(setAuditLogs);
+      if (!isHrOnly) employeeApi.getEmployeeAuditLogs(employee.id).then(setAuditLogs);
+      else setAuditLogs([]);
     }
   }, [employee]);
 
@@ -388,7 +395,7 @@ const EmployeeDetailModalContent: React.FC<EmployeeDetailContentProps> = ({
       });
       setIsEditingInline(false);
       setValidationErrors({});
-      setAuditLogs(await employeeApi.getEmployeeAuditLogs(employee.id));
+      if (!isHrOnly) setAuditLogs(await employeeApi.getEmployeeAuditLogs(employee.id));
       showBanner("Đã lưu thông tin chung thành công!");
     } catch (e: any) {
       showBanner(e.message || "Lỗi lưu thông tin nhân viên", true);
@@ -685,14 +692,14 @@ const EmployeeDetailModalContent: React.FC<EmployeeDetailContentProps> = ({
             Tab 8 — Phê duyệt ({approvals.toApprove.length})
           </button>
 
-          <button
+          {!isHrOnly && <button
             onClick={() => setActiveTab("audit")}
             className={`px-4 py-3 text-xs font-extrabold border-b-2 transition-all shrink-0 ${
               activeTab === "audit" ? "border-primary text-primary bg-background rounded-t-xl shadow-2xs" : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
             Tab 9 — Audit log ({auditLogs.length})
-          </button>
+          </button>}
         </div>
 
         {/* TAB CONTENTS (Scrollable area) */}
@@ -1606,7 +1613,7 @@ const EmployeeDetailModalContent: React.FC<EmployeeDetailContentProps> = ({
           )}
 
           {/* TAB 9: AUDIT LOG */}
-          {activeTab === "audit" && (
+          {!isHrOnly && activeTab === "audit" && (
             <div className="space-y-4 animate-in fade-in duration-200">
               <div className="flex items-center justify-between border-b border-border/30 pb-3">
                 <h4 className="text-sm font-extrabold text-foreground flex items-center gap-2">
@@ -1743,11 +1750,11 @@ const EmployeeDetailModalContent: React.FC<EmployeeDetailContentProps> = ({
         </div>
       )}
       {/* DETAIL AUDIT LOG MODAL */}
-      <DetailAuditLogModal
+      {!isHrOnly && <DetailAuditLogModal
         open={auditDetailModalOpen}
         onClose={() => setAuditDetailModalOpen(false)}
         log={selectedAuditLog}
-      />
+      />}
     </div>
   );
 };

@@ -108,4 +108,16 @@ public class ClassOnlineEntity extends BaseEntity {
     @Column(name = "payable", nullable = false)
     @Builder.Default
     private Boolean payable = true;
+
+    /** Lý do hủy buổi học do người quản lý lớp cung cấp. */
+    @Column(name = "cancellation_reason", columnDefinition = "TEXT")
+    private String cancellationReason;
+
+    /** Thời điểm buổi học bị hủy. */
+    @Column(name = "cancelled_at")
+    private LocalDateTime cancelledAt;
+
+    /** Người thực hiện hủy buổi học. */
+    @Column(name = "cancelled_by_user_id")
+    private Long cancelledByUserId;
 }

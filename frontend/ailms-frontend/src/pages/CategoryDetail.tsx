@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
-import { courseApi } from "@/api/courses/courseApi";
+import { useParams, Link, useNavigate, useLocation } from "react-router-dom";
+import { publicCatalogApi, type PublicCategory, type PublicCourseCard } from "@/api/public/publicCatalogApi";
+import { CourseScrollContainer } from "@/components/courses/CourseScrollContainer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -11,6 +12,12 @@ import {
   ArrowLeft,
 } from "lucide-react";
 
+const formatCourseLevel = (level: string | null) => ({
+  BEGINNER: "Cơ bản",
+  INTERMEDIATE: "Trung cấp",
+  ADVANCED: "Nâng cao",
+}[level ?? ""] ?? level);
+
 /**
  * Màn hình chi tiết danh mục khóa học (CategoryDetail)
  * Hiển thị danh sách khóa học thuộc danh mục, lọc theo cấp độ và khám phá các danh mục khác.
@@ -18,19 +25,22 @@ import {
 export const CategoryDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
 
   // Core Category States
-  const [category, setCategory] = useState<any | null>(null);
-  const [categoriesList, setCategoriesList] = useState<any[]>([]);
+  const [category, setCategory] = useState<PublicCategory | null>(null);
+  const [categoriesList, setCategoriesList] = useState<PublicCategory[]>([]);
   const [loadingCategory, setLoadingCategory] = useState(true);
   const [categoryError, setCategoryError] = useState<string | null>(null);
 
   // Courses list states
-  const [courses, setCourses] = useState<any[]>([]);
+  const [courses, setCourses] = useState<PublicCourseCard[]>([]);
   const [loadingCourses, setLoadingCourses] = useState(true);
   const [courseLevelFilter, setCourseLevelFilter] = useState<string>("ALL"); // ALL, BEGINNER, INTERMEDIATE, ADVANCED
   const [coursePage, setCoursePage] = useState(0);
   const [hasMoreCourses, setHasMoreCourses] = useState(false);
+  const [relatedCourses, setRelatedCourses] = useState<PublicCourseCard[]>([]);
+  const [loadingRelatedCourses, setLoadingRelatedCourses] = useState(false);
 
   /**
    * Tải thông tin chi tiết của danh mục hiện tại và danh sách tất cả các danh mục để gợi ý.
@@ -42,30 +52,34 @@ export const CategoryDetail: React.FC = () => {
       try {
         setLoadingCategory(true);
         setCategoryError(null);
+        setCoursePage(0);
 
         // 1. Fetch category detail
-        const catRes = await courseApi.getCategoryById(id);
-        if (catRes.data.success) {
-          setCategory(catRes.data.data);
+        setLoadingRelatedCourses(true);
+        const [countRes, relatedRes, relatedCoursesRes] = await Promise.all([
+          publicCatalogApi.getCategoryCourseCounts(),
+          publicCatalogApi.getRelatedCategories(id, 6),
+          publicCatalogApi.getCategoryRelatedCourses(id, { page: 0, size: 50 }),
+        ]);
+        const current = countRes.data.data.find((cat) => cat.id === id);
+        if (current) {
+          setCategory(current);
         } else {
           setCategoryError("Không tìm thấy danh mục này.");
         }
-
-        // 2. Fetch other categories for "Explore Categories" section
-        const listRes = await courseApi.getAllCategories();
-        if (listRes.data.success) {
-          setCategoriesList(listRes.data.data.filter((cat: any) => cat.status === "ACTIVE"));
-        }
-      } catch (err: any) {
+        setCategoriesList(relatedRes.data.data);
+        setRelatedCourses(relatedCoursesRes.data.data.content);
+      } catch (err: unknown) {
         console.error("Error fetching category info:", err);
         setCategoryError("Không thể tải thông tin danh mục.");
+        setRelatedCourses([]);
       } finally {
         setLoadingCategory(false);
+        setLoadingRelatedCourses(false);
       }
     };
 
-    fetchCategoryAndList();
-    setCoursePage(0); // Reset page on category change
+    void fetchCategoryAndList();
   }, [id]);
 
   /**
@@ -77,32 +91,25 @@ export const CategoryDetail: React.FC = () => {
     const fetchCategoryCourses = async () => {
       try {
         setLoadingCourses(true);
-        const searchParams: any = {
-          categoryId: id,
+        const coursesRes = await publicCatalogApi.getCategoryCourses(id, {
           page: coursePage,
           size: 8,
-          status: "ACTIVE",
-        };
-
-        if (courseLevelFilter !== "ALL") {
-          searchParams.level = courseLevelFilter;
-        }
-
-        const coursesRes = await courseApi.searchCourses(searchParams);
+          level: courseLevelFilter === "ALL" ? undefined : courseLevelFilter as "BEGINNER" | "INTERMEDIATE" | "ADVANCED",
+        });
         if (coursesRes.data.success) {
           const pageData = coursesRes.data.data;
-          const content = pageData.content || [];
+          const content = pageData.content;
           setCourses(prev => (coursePage === 0 ? content : [...prev, ...content]));
           setHasMoreCourses(!pageData.last);
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("Error fetching courses in category:", err);
       } finally {
         setLoadingCourses(false);
       }
     };
 
-    fetchCategoryCourses();
+    void fetchCategoryCourses();
   }, [id, category, courseLevelFilter, coursePage]);
 
   /**
@@ -120,22 +127,6 @@ export const CategoryDetail: React.FC = () => {
     setCoursePage(prev => prev + 1);
   };
 
-  /**
-   * Lấy ảnh minh họa mặc định cho khóa học theo tên danh mục.
-   */
-  const getCoursePlaceholderImage = (categoryName: string) => {
-    const name = categoryName?.toLowerCase() || "";
-    if (name.includes("lập trình") || name.includes("code") || name.includes("web") || name.includes("phần mềm") || name.includes("python")) {
-      return "https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=500&auto=format&fit=crop&q=60";
-    }
-    if (name.includes("ai") || name.includes("trí tuệ") || name.includes("máy học") || name.includes("data") || name.includes("khoa học máy tính")) {
-      return "https://images.unsplash.com/photo-1527474305487-b87b222841cc?w=500&auto=format&fit=crop&q=60";
-    }
-    if (name.includes("thiết kế") || name.includes("design") || name.includes("ui") || name.includes("ux")) {
-      return "https://images.unsplash.com/photo-1561070791-26c113006238?w=500&auto=format&fit=crop&q=60";
-    }
-    return "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=500&auto=format&fit=crop&q=60";
-  };
 
   if (loadingCategory) {
     return (
@@ -154,9 +145,9 @@ export const CategoryDetail: React.FC = () => {
         </div>
         <h2 className="mt-4 text-2xl font-bold text-foreground">Không tìm thấy danh mục</h2>
         <p className="mt-2 text-muted-foreground max-w-md">
-          {categoryError || "Danh mục không tồn tại hoặc đã bị gỡ bỏ."}
+          {categoryError ?? "Danh mục không tồn tại hoặc đã bị gỡ bỏ."}
         </p>
-        <Button onClick={() => navigate("/")} className="mt-6">
+        <Button onClick={() => { void navigate("/"); }} className="mt-6">
           <ArrowLeft className="mr-2 h-4 w-4" /> Quay lại trang chủ
         </Button>
       </div>
@@ -165,7 +156,7 @@ export const CategoryDetail: React.FC = () => {
 
   // Stats cho UI
   const categoryStats = {
-    coursesCount: category.coursesCount || courses.length || 0,
+    coursesCount: category.publicCourseCount,
   };
 
   return (
@@ -182,9 +173,9 @@ export const CategoryDetail: React.FC = () => {
               size="sm"
               onClick={() => {
                 if (window.history.length > 1) {
-                  navigate(-1);
+                  void navigate(-1);
                 } else {
-                  navigate("/student/dashboard");
+                  void navigate("/student/dashboard");
                 }
               }}
               className="rounded-xl gap-1.5 text-xs font-bold border-border/70 bg-card hover:bg-muted text-foreground cursor-pointer shadow-2xs"
@@ -193,7 +184,7 @@ export const CategoryDetail: React.FC = () => {
               <span>Quay lại</span>
             </Button>
 
-            <nav className="flex items-center space-x-2 text-xs text-muted-foreground font-medium">
+            <nav className="flex items-center space-x-2 text-sm font-semibold text-muted-foreground">
               <Link to="/" className="hover:text-primary transition-colors">Trang chủ</Link>
               <ChevronRight className="h-3 w-3" />
               <span className="text-foreground font-semibold">{category.name}</span>
@@ -206,9 +197,7 @@ export const CategoryDetail: React.FC = () => {
               <h1 className="text-4xl md:text-5xl font-black text-foreground tracking-tight">
                 {category.name}
               </h1>
-              <p className="text-base md:text-lg text-muted-foreground leading-relaxed max-w-4xl">
-                {category.description || `Khám phá các khóa học hàng đầu thuộc danh mục ${category.name} trên AILMS. Giúp bạn phát triển các kỹ năng chuyên môn từ cơ bản đến chuyên sâu, xây dựng nền tảng tư duy vững chắc và thực hành ứng dụng thực tế để nâng cao năng lực nghề nghiệp.`}
-              </p>
+              {category.description && <p className="text-base md:text-lg text-muted-foreground leading-relaxed max-w-4xl">{category.description}</p>}
             </div>
 
             {/* Right Side Stats */}
@@ -238,17 +227,19 @@ export const CategoryDetail: React.FC = () => {
               { id: "INTERMEDIATE", label: "Trung cấp" },
               { id: "ADVANCED", label: "Nâng cao" },
             ].map(lvl => (
-              <button
+              <Button
+                type="button"
+                variant="ghost"
                 key={lvl.id}
-                onClick={() => handleLevelFilterChange(lvl.id)}
-                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                onClick={() => { handleLevelFilterChange(lvl.id); }}
+                className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all hover:bg-foreground hover:text-white ${
                   courseLevelFilter === lvl.id
-                    ? "bg-card text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
+                    ? "bg-foreground text-white shadow-sm"
+                    : "text-muted-foreground hover:text-white"
                 }`}
               >
                 {lvl.label}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
@@ -270,14 +261,14 @@ export const CategoryDetail: React.FC = () => {
                   className="flex flex-col bg-card rounded-2xl border border-border/80 shadow-sm hover:shadow-lg hover:border-primary/40 hover:-translate-y-1 cursor-pointer overflow-hidden group transition-all duration-300"
                 >
                   <div className="relative aspect-video overflow-hidden bg-muted">
-                    <img
-                      src={course.image || getCoursePlaceholderImage(category.name)}
-                      alt={course.name || course.title}
+                    {course.thumbnailUrl ? <img
+                      src={course.thumbnailUrl}
+                      alt={course.name}
                       className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300"
-                    />
+                    /> : <div className="flex h-full w-full items-center justify-center bg-muted text-muted-foreground"><BookOpen className="h-8 w-8" /></div>}
                     {course.level && (
-                      <Badge className="absolute top-3 left-3 bg-card/90 backdrop-blur-sm text-primary font-bold shadow-sm">
-                        {course.level}
+                      <Badge className="absolute top-3 left-3 bg-foreground/90 backdrop-blur-sm text-white font-bold shadow-sm">
+                        {formatCourseLevel(course.level)}
                       </Badge>
                     )}
                   </div>
@@ -285,7 +276,7 @@ export const CategoryDetail: React.FC = () => {
                   <div className="p-5 flex-1 flex flex-col justify-between">
                     <div className="space-y-2">
                       <h3 className="font-bold text-foreground text-sm leading-snug line-clamp-2 group-hover:text-primary transition-colors">
-                        {course.name || course.title}
+                        {course.name}
                       </h3>
                       {course.description && (
                         <p className="text-xs text-muted-foreground line-clamp-2">
@@ -295,20 +286,16 @@ export const CategoryDetail: React.FC = () => {
                     </div>
 
                     <div className="mt-4 pt-4 border-t border-border/80 flex items-center justify-between text-xs text-muted-foreground">
-                      {course.avgRating || course.rating ? (
+                      {course.averageRating ? (
                         <div className="flex items-center gap-1 font-bold text-foreground">
                           <Star className="h-3.5 w-3.5 fill-amber-400 stroke-amber-400" />
-                          <span>{course.avgRating || course.rating}</span>
+                          <span>{course.averageRating.toFixed(1)}</span>
                         </div>
                       ) : (
                         <span className="text-xs text-muted-foreground/70">Chưa có đánh giá</span>
                       )}
                       <span className="font-bold text-primary text-sm">
-                        {course.suggestedPrice != null
-                          ? `${course.suggestedPrice.toLocaleString()}đ`
-                          : course.sellingPrice != null
-                            ? `${course.sellingPrice.toLocaleString()}đ`
-                            : "Miễn phí"}
+                        {course.currentPrice != null ? `${course.currentPrice.toLocaleString()}đ` : "Miễn phí"}
                       </span>
                     </div>
                   </div>
@@ -337,7 +324,56 @@ export const CategoryDetail: React.FC = () => {
         )}
       </div>
 
-      {/* 3. EXPLORE OTHER CATEGORIES */}
+      {/* 3. SEMANTIC RELATED COURSES SECTION */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-16 space-y-5">
+        <div>
+          <h2 className="text-2xl font-bold text-foreground">Khóa học liên quan</h2>
+          <p className="text-sm text-muted-foreground mt-0.5">Các khóa học gần với chủ đề này nhưng thuộc lĩnh vực khác.</p>
+        </div>
+
+        {loadingRelatedCourses ? (
+          <p className="text-sm text-muted-foreground">Đang tải khóa học liên quan...</p>
+        ) : relatedCourses.length > 0 ? (
+          <CourseScrollContainer
+            itemCount={relatedCourses.length}
+            className="flex gap-4 overflow-x-auto pb-3 scrollbar-thin"
+          >
+            {relatedCourses.map((course) => (
+              <Link
+                key={course.id}
+                to={`/courses/${course.id}`}
+                className="group flex w-70 shrink-0 flex-col overflow-hidden rounded-2xl border border-border/80 bg-card shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-primary/40 hover:shadow-lg"
+              >
+                {course.thumbnailUrl ? (
+                  <div className="relative aspect-video w-full overflow-hidden bg-muted">
+                    <img src={course.thumbnailUrl} alt={course.name} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                    {course.level && <Badge className="absolute left-3 top-3 bg-foreground/90 font-bold text-white shadow-sm backdrop-blur-sm">{formatCourseLevel(course.level)}</Badge>}
+                  </div>
+                ) : (
+                  <div className="relative flex aspect-video w-full items-center justify-center bg-muted text-muted-foreground">
+                    <BookOpen className="h-8 w-8" />
+                    {course.level && <Badge className="absolute left-3 top-3 bg-foreground/90 font-bold text-white shadow-sm backdrop-blur-sm">{formatCourseLevel(course.level)}</Badge>}
+                  </div>
+                )}
+                <div className="flex flex-1 flex-col justify-between p-5">
+                  <div>
+                    <h3 className="line-clamp-2 min-h-10 text-sm font-bold leading-snug text-foreground transition-colors group-hover:text-primary">{course.name}</h3>
+                    {course.description && <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-muted-foreground">{course.description}</p>}
+                  </div>
+                  <div className="mt-4 flex items-center justify-between border-t border-border/80 pt-4 text-xs text-muted-foreground">
+                    {course.averageRating != null ? <span className="flex items-center gap-1 font-bold text-foreground"><Star className="h-3.5 w-3.5 fill-amber-400 stroke-amber-400" />{course.averageRating.toFixed(1)}</span> : <span className="text-muted-foreground/70">Chưa có đánh giá</span>}
+                    <span className="text-sm font-bold text-primary">{course.currentPrice != null ? `${course.currentPrice.toLocaleString()}đ` : "Miễn phí"}</span>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </CourseScrollContainer>
+        ) : (
+          <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">Chưa có khóa học liên quan.</p>
+        )}
+      </div>
+
+      {/* 4. EXPLORE RELATED CATEGORIES */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-20 border-t border-border/50 pt-12 space-y-6">
         <div>
           <h2 className="text-xl font-extrabold text-foreground">Khám phá các danh mục khác</h2>
@@ -363,7 +399,20 @@ export const CategoryDetail: React.FC = () => {
               </Link>
             ))}
         </div>
+        <div className="flex justify-center pt-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              void navigate("/explore", { state: { from: `${location.pathname}${location.search}${location.hash}` } });
+            }}
+            className="rounded-xl px-6 py-2 text-sm font-bold border-border/60 hover:bg-foreground hover:text-white transition-all duration-200"
+          >
+            Xem thêm
+          </Button>
+        </div>
       </div>
     </div>
   );
 };
+

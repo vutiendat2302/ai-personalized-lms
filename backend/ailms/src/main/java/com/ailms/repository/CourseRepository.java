@@ -42,10 +42,6 @@ public interface CourseRepository extends BaseRepository<CourseEntity, Long> {
           AND EXISTS (SELECT p.id FROM CoursePackageEntity p
                       WHERE p.courseEntity.id = c.id
                         AND p.status = com.ailms.entity.enums.CoursePackageStatusEnum.ACTIVE)
-          AND EXISTS (SELECT p.id FROM CoursePackageEntity p
-                      WHERE p.courseEntity.id = c.id
-                        AND p.status = com.ailms.entity.enums.CoursePackageStatusEnum.ACTIVE
-                        AND p.deliveryMode = com.ailms.entity.enums.DeliveryModeEnum.SELF_STUDY)
           AND (LOWER(c.name) LIKE LOWER(CONCAT('%', :keyword, '%')) OR LOWER(cat.name) LIKE LOWER(CONCAT('%', :keyword, '%')))
         ORDER BY
           CASE WHEN LOWER(c.name) LIKE LOWER(CONCAT(:keyword, '%')) THEN 0 ELSE 1 END,
@@ -63,10 +59,6 @@ public interface CourseRepository extends BaseRepository<CourseEntity, Long> {
           AND EXISTS (SELECT p.id FROM CoursePackageEntity p
                       WHERE p.courseEntity.id = c.id
                         AND p.status = com.ailms.entity.enums.CoursePackageStatusEnum.ACTIVE)
-          AND EXISTS (SELECT p.id FROM CoursePackageEntity p
-                      WHERE p.courseEntity.id = c.id
-                        AND p.status = com.ailms.entity.enums.CoursePackageStatusEnum.ACTIVE
-                        AND p.deliveryMode = com.ailms.entity.enums.DeliveryModeEnum.SELF_STUDY)
         ORDER BY c.trendingScore DESC, c.reviewCount DESC, c.avgRating DESC
         """)
     List<CourseSuggestion> findTopActiveCourses(Pageable pageable);
@@ -78,10 +70,6 @@ public interface CourseRepository extends BaseRepository<CourseEntity, Long> {
           AND EXISTS (SELECT p.id FROM CoursePackageEntity p
                       WHERE p.courseEntity.id = c.id
                         AND p.status = com.ailms.entity.enums.CoursePackageStatusEnum.ACTIVE)
-          AND EXISTS (SELECT selfStudy.id FROM CoursePackageEntity selfStudy
-                      WHERE selfStudy.courseEntity.id = c.id
-                        AND selfStudy.status = com.ailms.entity.enums.CoursePackageStatusEnum.ACTIVE
-                        AND selfStudy.deliveryMode = com.ailms.entity.enums.DeliveryModeEnum.SELF_STUDY)
           AND (:keyword IS NULL OR LOWER(c.name) LIKE LOWER(CONCAT('%', :keyword, '%'))
                OR LOWER(c.code) LIKE LOWER(CONCAT('%', :keyword, '%'))
                OR LOWER(c.categoryEntity.name) LIKE LOWER(CONCAT('%', :keyword, '%')))
@@ -102,10 +90,6 @@ public interface CourseRepository extends BaseRepository<CourseEntity, Long> {
           AND EXISTS (SELECT p.id FROM CoursePackageEntity p
                       WHERE p.courseEntity.id = c.id
                         AND p.status = com.ailms.entity.enums.CoursePackageStatusEnum.ACTIVE)
-          AND EXISTS (SELECT selfStudy.id FROM CoursePackageEntity selfStudy
-                      WHERE selfStudy.courseEntity.id = c.id
-                        AND selfStudy.status = com.ailms.entity.enums.CoursePackageStatusEnum.ACTIVE
-                        AND selfStudy.deliveryMode = com.ailms.entity.enums.DeliveryModeEnum.SELF_STUDY)
           AND (:keyword IS NULL OR LOWER(c.name) LIKE LOWER(CONCAT('%', :keyword, '%'))
                OR LOWER(c.code) LIKE LOWER(CONCAT('%', :keyword, '%'))
                OR LOWER(c.categoryEntity.name) LIKE LOWER(CONCAT('%', :keyword, '%')))
@@ -125,10 +109,66 @@ public interface CourseRepository extends BaseRepository<CourseEntity, Long> {
           AND EXISTS (SELECT p.id FROM CoursePackageEntity p
                       WHERE p.courseEntity.id = c.id
                         AND p.status = com.ailms.entity.enums.CoursePackageStatusEnum.ACTIVE)
-          AND EXISTS (SELECT p.id FROM CoursePackageEntity p
-                      WHERE p.courseEntity.id = c.id
-                        AND p.status = com.ailms.entity.enums.CoursePackageStatusEnum.ACTIVE
-                        AND p.deliveryMode = com.ailms.entity.enums.DeliveryModeEnum.SELF_STUDY)
         """)
     boolean isPubliclySellable(@Param("courseId") Long courseId);
+
+    /** Lấy khóa học công khai trong danh mục khi có ít nhất một gói đang bán. */
+    @Query("""
+        SELECT c FROM CourseEntity c
+        WHERE c.status = com.ailms.entity.enums.CourseStatusEnum.ACTIVE
+          AND c.categoryEntity.id = :categoryId
+          AND (:level IS NULL OR c.level = :level)
+          AND EXISTS (SELECT p.id FROM CoursePackageEntity p WHERE p.courseEntity.id = c.id
+                      AND p.status = com.ailms.entity.enums.CoursePackageStatusEnum.ACTIVE)
+        ORDER BY c.enrollmentCount DESC, c.avgRating DESC, c.reviewCount DESC, c.createdAt DESC
+        """)
+    Page<CourseEntity> findPublicCoursesByCategory(@Param("categoryId") Long categoryId,
+                                                     @Param("level") CourseLevelEnum level,
+                                                     Pageable pageable);
+
+    /** Lấy khóa học công khai mà giáo viên đang phụ trách. */
+    @Query("""
+        SELECT c FROM CourseEntity c
+        WHERE c.status = com.ailms.entity.enums.CourseStatusEnum.ACTIVE
+          AND (:level IS NULL OR c.level = :level)
+          AND (:categoryId IS NULL OR c.categoryEntity.id = :categoryId)
+          AND EXISTS (SELECT ct.id FROM CourseTeacherEntity ct WHERE ct.courseEntity.id = c.id
+                      AND ct.userEntity.id = :teacherId
+                      AND ct.status = com.ailms.entity.enums.CourseTeacherStatusEnum.ACTIVE)
+          AND EXISTS (SELECT p.id FROM CoursePackageEntity p WHERE p.courseEntity.id = c.id
+                      AND p.status = com.ailms.entity.enums.CoursePackageStatusEnum.ACTIVE)
+        ORDER BY c.enrollmentCount DESC, c.avgRating DESC, c.createdAt DESC
+        """)
+    Page<CourseEntity> findPublicCoursesByTeacher(@Param("teacherId") Long teacherId,
+                                                   @Param("level") CourseLevelEnum level,
+                                                   @Param("categoryId") Long categoryId,
+                                                   Pageable pageable);
+
+    /** Lấy khóa học liên quan dựa trên giáo viên chung với danh mục hiện tại. */
+    @Query("""
+        SELECT c FROM CourseEntity c
+        WHERE c.status = com.ailms.entity.enums.CourseStatusEnum.ACTIVE
+          AND c.categoryEntity.id <> :categoryId
+          AND EXISTS (SELECT ct.id FROM CourseTeacherEntity ct
+                      WHERE ct.courseEntity.id = c.id
+                        AND ct.status = com.ailms.entity.enums.CourseTeacherStatusEnum.ACTIVE
+                        AND EXISTS (SELECT sourceCt.id FROM CourseTeacherEntity sourceCt
+                                    WHERE sourceCt.courseEntity.categoryEntity.id = :categoryId
+                                      AND sourceCt.userEntity.id = ct.userEntity.id
+                                      AND sourceCt.status = com.ailms.entity.enums.CourseTeacherStatusEnum.ACTIVE))
+          AND EXISTS (SELECT p.id FROM CoursePackageEntity p WHERE p.courseEntity.id = c.id
+                      AND p.status = com.ailms.entity.enums.CoursePackageStatusEnum.ACTIVE)
+        ORDER BY c.enrollmentCount DESC, c.avgRating DESC, c.createdAt DESC
+        """)
+    Page<CourseEntity> findRelatedPublicCourses(@Param("categoryId") Long categoryId, Pageable pageable);
+
+    /** Lấy batch khóa học công khai có bất kỳ gói đang bán để lọc semantic search. */
+    @Query("""
+        SELECT c FROM CourseEntity c
+        WHERE c.id IN :ids
+          AND c.status = com.ailms.entity.enums.CourseStatusEnum.ACTIVE
+          AND EXISTS (SELECT p.id FROM CoursePackageEntity p WHERE p.courseEntity.id = c.id
+                      AND p.status = com.ailms.entity.enums.CoursePackageStatusEnum.ACTIVE)
+        """)
+    List<CourseEntity> findPublicCoursesByIds(@Param("ids") List<Long> ids);
 }

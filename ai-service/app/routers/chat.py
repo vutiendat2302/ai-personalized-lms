@@ -6,15 +6,21 @@ from fastapi.responses import StreamingResponse
 
 from app.chat.context_builder import ManagementContextBuilder
 from app.chat.query_rewriter import QueryRewriter
+from app.chat.support_tools import SupportKnowledgeTools
 from app.core.config import settings
 from app.core.security import verify_internal_token
 from app.memory.long_term_memory import LongTermMemoryStore
 from app.providers.gemini_provider import GeminiProvider
 from app.rag.retriever import Retriever
+from app.catalog.local_embedder import LocalCatalogEmbedder
 from app.schemas.chat_schema import (
     ChatStreamRequest,
     ConversationTitleRequest,
     ConversationTitleResponse,
+    SupportQuickAnswerRequest,
+    SupportQuickAnswerResponse,
+    SupportIntentSuggestionRequest,
+    SupportIntentSuggestion,
 )
 
 router = APIRouter(
@@ -26,6 +32,16 @@ query_rewriter = QueryRewriter(gemini_provider)
 retriever = Retriever()
 memory_store = LongTermMemoryStore()
 context_builder = ManagementContextBuilder()
+support_intent_embedder = LocalCatalogEmbedder()
+support_tools = SupportKnowledgeTools(retriever)
+
+SUPPORT_INTENTS = {
+    "COURSE_CONSULTING": "tìm khóa học phù hợp theo lĩnh vực trình độ thời gian và nhu cầu",
+    "LEARNING_PATH": "tư vấn lộ trình học từ cơ bản đến nâng cao theo ngành nghề mục tiêu",
+    "PRICING": "xem học phí giá tiền gói học quyền lợi thời hạn đăng ký",
+    "DELIVERY": "hình thức học online tự học lớp nhóm trực tuyến một kèm một",
+    "POLICY": "chính sách thanh toán hoàn tiền đổi trả điều kiện hoàn học phí",
+}
 
 DEFAULT_SYSTEM_PROMPT = (
     "Bạn là trợ lý AI của AILMS. Trả lời chính xác, ngắn gọn bằng tiếng Việt. "
@@ -123,3 +139,58 @@ async def generate_title(
     )
     title = " ".join(result.strip().strip('"').split())
     return ConversationTitleResponse(title=title[:160])
+
+
+@router.post("/support-answer", response_model=SupportQuickAnswerResponse)
+async def support_answer(
+    request: SupportQuickAnswerRequest,
+) -> SupportQuickAnswerResponse:
+    """Trả lời quick action public chỉ từ context catalog/policy do Backend cung cấp."""
+    tool_context = ""
+    if request.option_id == "POLICY":
+        try:
+            tool_context = await support_tools.search_policy(request.question)
+        except Exception:
+            logger.warning("Không thể chạy tool tìm policy công khai", exc_info=True)
+    prompt = (
+        f"CÂU HỎI ĐÃ KIỂM SOÁT:\n{request.question}\n\n"
+        f"DỮ LIỆU TỪ BACKEND:\n{request.context}\n\n"
+        f"KẾT QUẢ TOOL POLICY:\n{tool_context or 'Không có chunk policy phù hợp.'}"
+    )
+    answer = await gemini_provider.generate_text(
+        prompt,
+        "Bạn là trợ lý tư vấn công khai của AILMS. Chỉ dùng dữ liệu Backend và tool policy cung cấp, "
+        "trả lời tiếng Việt rõ ràng tối đa 350 từ. Không bịa giá, khóa học, gói học, "
+        "chính sách hoặc đường dẫn. Trình bày văn bản thuần dễ đọc, có xuống dòng, không dùng ký hiệu Markdown. "
+        "Nếu dữ liệu chưa đủ, nói rõ và đề nghị kết nối tư vấn viên.",
+    )
+    normalized = "\n".join(line.strip() for line in answer.strip().splitlines() if line.strip())
+    return SupportQuickAnswerResponse(
+        answer=normalized[:4000] or "Hiện chưa có dữ liệu phù hợp để trả lời."
+    )
+
+
+@router.post("/support-intents", response_model=list[SupportIntentSuggestion])
+async def suggest_support_intents(
+    request: SupportIntentSuggestionRequest,
+) -> list[SupportIntentSuggestion]:
+    """Xếp hạng quick intent bằng local embedding, không gọi Gemini và không tạo dữ liệu."""
+    labels = list(SUPPORT_INTENTS)
+    vectors = await support_intent_embedder.embed_documents(
+        [SUPPORT_INTENTS[label] for label in labels]
+    )
+    query = await support_intent_embedder.embed_query(request.question)
+
+    def cosine(vector: list[float]) -> float:
+        """Tính cosine similarity cho hai vector local đã cùng dimension."""
+        dot = sum(left * right for left, right in zip(query, vector, strict=True))
+        query_norm = sum(value * value for value in query) ** 0.5
+        vector_norm = sum(value * value for value in vector) ** 0.5
+        return dot / (query_norm * vector_norm) if query_norm and vector_norm else 0.0
+
+    ranked = sorted(
+        ((label, cosine(vector)) for label, vector in zip(labels, vectors, strict=True)),
+        key=lambda item: item[1],
+        reverse=True,
+    )[:3]
+    return [SupportIntentSuggestion(optionId=label, score=score) for label, score in ranked]

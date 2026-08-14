@@ -48,6 +48,7 @@ public class CourseDetailResponse {
     @Builder
     public static class Creator {
         private Long id;
+        private String code;
         private String fullName;
         private String avatarUrl;
         private String title;

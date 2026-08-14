@@ -68,6 +68,13 @@ public class ClassOnlineResponse {
 
     private Boolean payable;
 
+    private String cancellationReason;
+
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
+    private LocalDateTime cancelledAt;
+
+    private Long cancelledByUserId;
+
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime createdAt;
 

@@ -6,6 +6,7 @@ import type {
   FileManagementSummaryResponse,
   FileSearchFilters,
   BulkFileActionRequest,
+  FileUsageTypeEnum,
 } from "@/types/fileManagement";
 
 export const fileAdminApi = {
@@ -126,22 +127,22 @@ export const fileAdminApi = {
     return res.data;
   },
 
-  // Đổi tên file gốc (tận dụng PATCH /v1/files/rename)
-  renameFile: async (fileKey: string, newOriginalName: string) => {
+  // Chỉnh sửa tên hiển thị và module của metadata file
+  updateFileMetadata: async (id: string, originalName: string, usageType: FileUsageTypeEnum) => {
     const res = await httpClient.patch<ApiResponse<FileMetadataResponse>>(
-      "/v1/files/rename",
-      null,
-      { params: { fileKey, newOriginalName } }
+      `/v1/files/admin/${id}`,
+      { originalName, usageType }
     );
     return res.data.data;
   },
 
   // Upload file mới trực tiếp lên MinIO và lưu metadata
-  uploadFile: async (file: File, fileType?: string, usageType?: string) => {
+  uploadFile: async (file: File, fileType?: string, usageType?: string, originalName?: string) => {
     const formData = new FormData();
     formData.append("file", file);
     if (fileType && fileType !== "AUTO") formData.append("fileType", fileType);
     if (usageType && usageType !== "AUTO") formData.append("usageType", usageType);
+    if (originalName?.trim()) formData.append("originalName", originalName.trim());
 
     const res = await httpClient.post<ApiResponse<FileMetadataResponse>>(
       "/v1/files/upload",

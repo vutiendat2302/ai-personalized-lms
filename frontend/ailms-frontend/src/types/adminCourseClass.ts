@@ -91,6 +91,8 @@ export interface ClassSessionLog {
   meetingUrl?: string;
   amount?: number;
   actualDurationMin?: number;
+  cancellationReason?: string;
+  scheduledAt?: string;
 }
 
 export interface Classroom {

@@ -12,5 +12,6 @@ public enum FileUsageTypeEnum {
     LESSON_RESOURCE,
     LESSON_VIDEO,
     COURSE_LESSON,
+    POLICY,
     OTHER
 }

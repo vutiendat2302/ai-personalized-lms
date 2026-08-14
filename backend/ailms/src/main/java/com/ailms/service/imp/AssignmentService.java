@@ -23,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -46,6 +47,12 @@ public class AssignmentService implements IAssignmentService {
         AssignmentEntity entity = assignmentRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
         return assignmentMapper.toResponse(entity);
+    }
+
+    /** Trả chi tiết bài tập thuộc quyền sở hữu của user hiện tại. */
+    @Override
+    public AssignmentResponse getAuthoredById(Long id, Long userId) {
+        return assignmentMapper.toResponse(requireAuthored(id, userId));
     }
 
     public List<AssignmentResponse> getByLessonId(Long lessonId) {
@@ -78,6 +85,16 @@ public class AssignmentService implements IAssignmentService {
         return assignmentMapper.toResponse(saved);
     }
 
+    /** Tạo bài tập với createdBy lấy từ JWT thay vì nhận từ payload. */
+    @Override
+    @Transactional
+    public AssignmentResponse createForAuthor(AssignmentRequest request, Long userId) {
+        normalizeClassCourse(request);
+        AssignmentEntity entity = assignmentMapper.toEntity(request);
+        entity.setCreatedBy(userId);
+        return assignmentMapper.toResponse(assignmentRepository.save(entity));
+    }
+
     @Transactional
     public AssignmentResponse update(Long id, AssignmentRequest request) {
         log.info("Updating assignment: {}", id);
@@ -89,6 +106,16 @@ public class AssignmentService implements IAssignmentService {
         return assignmentMapper.toResponse(updated);
     }
 
+    /** Chỉ cập nhật bài tập do chính user hiện tại tạo. */
+    @Override
+    @Transactional
+    public AssignmentResponse updateAuthored(Long id, AssignmentRequest request, Long userId) {
+        AssignmentEntity existing = requireAuthored(id, userId);
+        normalizeClassCourse(request);
+        assignmentMapper.updateFromRequest(request, existing);
+        return assignmentMapper.toResponse(assignmentRepository.save(existing));
+    }
+
     @Transactional
     public void delete(Long id) {
         log.info("Deleting assignment: {}", id);
@@ -96,6 +123,13 @@ public class AssignmentService implements IAssignmentService {
             throw ResourceNotFoundException.of(RESOURCE_NAME, id);
         }
         assignmentRepository.deleteById(id);
+    }
+
+    /** Chỉ xóa bài tập do chính user hiện tại tạo. */
+    @Override
+    @Transactional
+    public void deleteAuthored(Long id, Long userId) {
+        assignmentRepository.delete(requireAuthored(id, userId));
     }
 
     /** Đồng bộ courseId từ lớp để bài tập không thể trỏ sang khóa học khác. */
@@ -116,5 +150,21 @@ public class AssignmentService implements IAssignmentService {
         Pageable pageable = request.toPageable();
         Page<AssignmentEntity> page = assignmentRepository.findAll(spec, pageable);
         return PageResponse.from(page.map(assignmentMapper::toResponse));
+    }
+
+    /** Tìm kiếm có phân trang và bắt buộc lọc createdBy theo user trong JWT. */
+    @Override
+    public PageResponse<AssignmentResponse> searchAuthored(AssignmentSearchRequest request, Long userId) {
+        Specification<AssignmentEntity> spec = AssignmentSpecification.filterAndSearch(request)
+                .and((root, query, criteriaBuilder) -> criteriaBuilder.equal(root.get("createdBy"), userId));
+        Page<AssignmentEntity> page = assignmentRepository.findAll(spec, request.toPageable());
+        return PageResponse.from(page.map(assignmentMapper::toResponse));
+    }
+
+    /** Tìm bài tập theo ID và che giấu bản ghi nếu không thuộc người tạo hiện tại. */
+    private AssignmentEntity requireAuthored(Long id, Long userId) {
+        return assignmentRepository.findById(id)
+                .filter(item -> Objects.equals(item.getCreatedBy(), userId))
+                .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
     }
 }

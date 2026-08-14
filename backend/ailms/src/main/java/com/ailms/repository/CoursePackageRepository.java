@@ -14,6 +14,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Pageable;
 
 @Repository
 public interface CoursePackageRepository extends BaseRepository<CoursePackageEntity, Long> {
@@ -37,6 +38,12 @@ public interface CoursePackageRepository extends BaseRepository<CoursePackageEnt
     /** Lấy các gói đang mở bán của khóa học. */
     List<CoursePackageEntity> findByCourseEntity_IdAndStatus(Long courseId, CoursePackageStatusEnum status);
 
+    /** Lấy các gói được gắn trực tiếp với một lớp để xác định quota buổi học. */
+    List<CoursePackageEntity> findByClassEntity_Id(Long classId);
+
+    /** Lấy các gói đang bán của một tập khóa học để dựng card landing theo batch. */
+    List<CoursePackageEntity> findByCourseEntity_IdInAndStatus(List<Long> courseIds, CoursePackageStatusEnum status);
+
     /** Đếm gói tự học đang hoạt động của khóa học. */
     long countByCourseEntity_IdAndDeliveryModeAndStatus(
             Long courseId, DeliveryModeEnum deliveryMode, CoursePackageStatusEnum status);
@@ -45,4 +52,17 @@ public interface CoursePackageRepository extends BaseRepository<CoursePackageEnt
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_READ)
     @Query("SELECT p FROM CoursePackageEntity p WHERE p.id = :id")
     Optional<CoursePackageEntity> findByIdForCheckout(@Param("id") Long id);
+
+    /** Tìm gói đang public theo tên/mã gói, khóa học hoặc danh mục cho Support picker. */
+    @Query("""
+        SELECT p FROM CoursePackageEntity p
+        WHERE p.status = com.ailms.entity.enums.CoursePackageStatusEnum.ACTIVE
+          AND p.courseEntity.status = com.ailms.entity.enums.CourseStatusEnum.ACTIVE
+          AND (:keyword IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', :keyword, '%'))
+               OR LOWER(p.code) LIKE LOWER(CONCAT('%', :keyword, '%'))
+               OR LOWER(p.courseEntity.name) LIKE LOWER(CONCAT('%', :keyword, '%'))
+               OR LOWER(p.courseEntity.categoryEntity.name) LIKE LOWER(CONCAT('%', :keyword, '%')))
+        ORDER BY p.createdAt DESC
+        """)
+    List<CoursePackageEntity> findPublicPackages(@Param("keyword") String keyword, Pageable pageable);
 }

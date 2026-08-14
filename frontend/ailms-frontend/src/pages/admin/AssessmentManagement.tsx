@@ -100,13 +100,19 @@ const getQuizCleanDescription = (quiz: QuizResponseItem | null): string => {
   return quiz.description;
 };
 
-export const AssessmentManagement: React.FC = () => {
+interface AssessmentManagementProps {
+  scope?: "all" | "authored";
+}
+
+/** Giao diện quản lý Quiz/Assignment dùng chung; scope authored bắt buộc gọi API theo người tạo hiện tại. */
+export const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ scope = "all" }) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const authoredOnly = scope === "authored";
 
   // Active Tab: "quizzes" | "assignments" (Chỉ 2 Tab)
   const [activeTab, setActiveTab] = useState<"quizzes" | "assignments">(() => {
-    if (location.pathname.includes("assignments")) return "assignments";
+    if (location.pathname.includes("assignments") || new URLSearchParams(location.search).get("tab") === "assignments") return "assignments";
     return "quizzes";
   });
 
@@ -169,8 +175,10 @@ export const AssessmentManagement: React.FC = () => {
     setSelectedIds([]);
     setSearchKeyword("");
 
-    if (tab === "quizzes") navigate("/admin/quizzes", { replace: true });
-    else if (tab === "assignments") navigate("/admin/assignments", { replace: true });
+    if (authoredOnly) {
+      navigate(`/teacher/assessments?tab=${tab}`, { replace: true });
+    } else if (tab === "quizzes") navigate("/admin/quizzes", { replace: true });
+    else navigate("/admin/assignments", { replace: true });
   };
 
   // Fetch Real Backend Data
@@ -182,7 +190,7 @@ export const AssessmentManagement: React.FC = () => {
     setLoading(true);
     try {
       if (activeTab === "quizzes") {
-        const res = await quizApi.searchQuizzes({
+        const res = await (authoredOnly ? quizApi.searchAuthoredQuizzes : quizApi.searchQuizzes)({
           keyword: searchKeyword.trim() || undefined,
           page,
           size: pageSize,
@@ -192,16 +200,20 @@ export const AssessmentManagement: React.FC = () => {
           setQuizzes(data.content);
           setTotalPages(data.totalPages || 1);
           setTotalElements(data.totalElements || data.content.length);
-        } else {
+        } else if (!authoredOnly) {
           // Fallback to getAllQuizzes if search endpoint is empty
           const allRes = await quizApi.getAllQuizzes();
           const allData = allRes.data?.data || [];
           setQuizzes(Array.isArray(allData) ? allData : []);
           setTotalPages(1);
           setTotalElements(Array.isArray(allData) ? allData.length : 0);
+        } else {
+          setQuizzes([]);
+          setTotalPages(1);
+          setTotalElements(0);
         }
       } else if (activeTab === "assignments") {
-        const res = await assignmentApi.searchAssignments({
+        const res = await (authoredOnly ? assignmentApi.searchAuthoredAssignments : assignmentApi.searchAssignments)({
           keyword: searchKeyword.trim() || undefined,
           page,
           size: pageSize,
@@ -211,13 +223,17 @@ export const AssessmentManagement: React.FC = () => {
           setAssignments(data.content);
           setTotalPages(data.totalPages || 1);
           setTotalElements(data.totalElements || data.content.length);
-        } else {
+        } else if (!authoredOnly) {
           // Fallback to getAllAssignments
           const allRes = await assignmentApi.getAllAssignments();
           const allData = allRes.data?.data || [];
           setAssignments(Array.isArray(allData) ? allData : []);
           setTotalPages(1);
           setTotalElements(Array.isArray(allData) ? allData.length : 0);
+        } else {
+          setAssignments([]);
+          setTotalPages(1);
+          setTotalElements(0);
         }
       }
     } catch (e: any) {
@@ -321,10 +337,10 @@ export const AssessmentManagement: React.FC = () => {
         };
 
         if (editingItem) {
-          await quizApi.updateQuiz(editingItem.id, payload);
+          await (authoredOnly ? quizApi.updateAuthoredQuiz : quizApi.updateQuiz)(editingItem.id, payload);
           showBanner("success", "Đã cập nhật bài Quiz & danh sách câu hỏi vào CSDL!");
         } else {
-          await quizApi.createQuiz(payload);
+          await (authoredOnly ? quizApi.createAuthoredQuiz : quizApi.createQuiz)(payload);
           showBanner("success", "Đã tạo bài Quiz mới với câu hỏi vào CSDL!");
         }
       } else if (activeTab === "assignments") {
@@ -338,10 +354,10 @@ export const AssessmentManagement: React.FC = () => {
         };
 
         if (editingItem) {
-          await assignmentApi.updateAssignment(editingItem.id, payload);
+          await (authoredOnly ? assignmentApi.updateAuthoredAssignment : assignmentApi.updateAssignment)(editingItem.id, payload);
           showBanner("success", "Đã cập nhật bài tập vào CSDL!");
         } else {
-          await assignmentApi.createAssignment(payload);
+          await (authoredOnly ? assignmentApi.createAuthoredAssignment : assignmentApi.createAssignment)(payload);
           showBanner("success", "Đã tạo bài tập mới vào CSDL!");
         }
       }
@@ -362,10 +378,10 @@ export const AssessmentManagement: React.FC = () => {
     if (!itemToDelete) return;
     try {
       if (activeTab === "quizzes") {
-        await quizApi.deleteQuiz(itemToDelete);
+        await (authoredOnly ? quizApi.deleteAuthoredQuiz : quizApi.deleteQuiz)(itemToDelete);
         showBanner("success", "Đã xóa bài kiểm tra thành công!");
       } else {
-        await assignmentApi.deleteAssignment(itemToDelete);
+        await (authoredOnly ? assignmentApi.deleteAuthoredAssignment : assignmentApi.deleteAssignment)(itemToDelete);
         showBanner("success", "Đã xóa bài tập thành công!");
       }
       setConfirmDeleteOpen(false);
@@ -398,7 +414,9 @@ export const AssessmentManagement: React.FC = () => {
             <span>Quản Lý Bài Kiểm Tra (Quiz) & Bài Tập (Assignment)</span>
           </h1>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Quản lý ngân hàng câu hỏi Quiz và bài tập tự luận trong hệ thống.
+            {authoredOnly
+              ? "Quản lý ngân hàng Quiz và bài tập do chính bạn tạo."
+              : "Quản lý ngân hàng câu hỏi Quiz và bài tập tự luận trong hệ thống."}
           </p>
         </div>
 

@@ -4,7 +4,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { courseApi } from "@/api/courses/courseApi";
 import { reviewApi } from "@/api/reviews/reviewApi";
 import { studentApi } from "@/api/students/studentApi";
-import type { CategoryResponse } from "@/types/admin";
 import { useModalStore } from "@/store/useModalStore";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -20,44 +19,73 @@ import {
   BookOpen,
   GraduationCap,
   Award
+  ,CalendarDays
 } from "lucide-react";
 import { CourseScrollContainer } from "@/components/courses/CourseScrollContainer";
-import { INSTRUCTORS_LIST } from "@/pages/TeacherDetail";
+import { publicCatalogApi, type PublicTeacher } from "@/api/public/publicCatalogApi";
+import type { PageResponse } from "@/types/base";
+import { formatCourseLevel } from "@/utils/searchUtils";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
-const getCourseImage = (categoryName: string) => {
-  const name = categoryName?.toLowerCase() || "";
-  if (name.includes("lập trình") || name.includes("code") || name.includes("web") || name.includes("phần mềm") || name.includes("python")) {
-    return "https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3";
-  }
-  if (name.includes("ai") || name.includes("trí tuệ") || name.includes("máy học") || name.includes("data") || name.includes("khoa học máy tính")) {
-    return "https://images.unsplash.com/photo-1527474305487-b87b222841cc?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3";
-  }
-  if (name.includes("thiết kế") || name.includes("design") || name.includes("ui") || name.includes("ux")) {
-    return "https://images.unsplash.com/photo-1561070791-26c113006238?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3";
-  }
-  if (name.includes("toán") || name.includes("math")) {
-    return "https://images.unsplash.com/photo-1635070041078-e363dbe005cb?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3";
-  }
-  if (name.includes("tiếng anh") || name.includes("english") || name.includes("ngoại ngữ")) {
-    return "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3";
-  }
-  return "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=500&auto=format&fit=crop&q=60&ixlib=rb-4.0.3";
-};
+interface LandingCourse {
+  id: string;
+  name: string;
+  image?: string | null;
+  thumbnailUrl?: string | null;
+  categoryName?: string | null;
+  level?: string | null;
+  createdAt?: string | null;
+  avgRating?: number | null;
+  enrollmentCount?: number | null;
+  suggestedPrice?: number | null;
+}
+
+interface LandingReview {
+  id: string;
+  rating?: number | null;
+  courseId?: string | null;
+  courseName?: string | null;
+  userName?: string | null;
+  userFullName?: string | null;
+  fullName?: string | null;
+  username?: string | null;
+  avatarUrl?: string | null;
+  userAvatar?: string | null;
+  schoolName?: string | null;
+  userRole?: string | null;
+  role?: string | null;
+  comment?: string | null;
+  content?: string | null;
+  description?: string | null;
+  createdAt?: string | null;
+  user?: { fullName?: string | null; username?: string | null; avatarUrl?: string | null; avatar?: string | null; role?: string | null } | null;
+}
 
 const formatRoundedCount = (count: number | null | undefined): string => {
   if (count === null || count === undefined || isNaN(count)) return "Không có dữ liệu";
   if (count <= 0) return "0";
-  if (count < 10) return `${count}+`;
+  if (count < 10) return count.toString() + "+";
 
   const magnitude = Math.pow(10, Math.floor(Math.log10(count)));
   const rounded = Math.floor(count / magnitude) * magnitude;
-  return `${rounded.toLocaleString()}+`;
+  return rounded.toLocaleString() + "+";
 };
 
+/** Chuyển giá trị đếm từ API (số hoặc chuỗi số) thành số hợp lệ để hiển thị. */
+const parseCount = (value: number | string | null | undefined): number | null => {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value !== "string" || value.trim() === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
 
-// Mock categories removed, now fetched from BE
+/** Định dạng thời gian review từ dữ liệu backend, bỏ qua giá trị ngày không hợp lệ. */
+const formatReviewDate = (createdAt: string | null | undefined): string => {
+  if (!createdAt) return "Chưa có dữ liệu";
+  const date = new Date(createdAt);
+  return Number.isNaN(date.getTime()) ? "Chưa có dữ liệu" : date.toLocaleString("vi-VN");
+};
 
-// Mock TESTIMONIALS constant removed
 
 export const Landing: React.FC = () => {
   const { auth } = useAuth();
@@ -66,25 +94,71 @@ export const Landing: React.FC = () => {
   const { openRegister } = useModalStore();
   const [openFaq, setOpenFaq] = useState<string | null>(null);
 
-  const [categories, setCategories] = useState<CategoryResponse[]>([]);
+  const [categories, setCategories] = useState<import("@/api/public/publicCatalogApi").PublicCategory[]>([]);
   const [catPage, setCatPage] = useState(0);
   const [hasMoreCats, setHasMoreCats] = useState(false);
-  const [loadingCats, setLoadingCats] = useState(false);
+  const [isExpandedCats, setIsExpandedCats] = useState(false);
 
-  const [outstandingCourses, setOutstandingCourses] = useState<any[]>([]);
-  const [trendingCourses, setTrendingCourses] = useState<any[]>([]);
-  const [latestCourses, setLatestCourses] = useState<any[]>([]);
+  const fetchCategories = async (page: number) => {
+    try {
+      const res = await publicCatalogApi.getHotCategories({ page, size: 8 });
+      if (!res.data.success) return;
+      const pageData = res.data.data;
+      setCategories(prev => (page === 0 ? pageData.content : [...prev, ...pageData.content]));
+      setHasMoreCats(!pageData.last);
+    } catch (error) {
+      console.error("Failed to fetch categories:", error);
+    }
+  };
+
+  /** Chuyển đổi mở rộng / thu gọn các chủ đề học tập nổi bật. */
+  const handleToggleExpandCats = async () => {
+    if (!isExpandedCats && hasMoreCats) {
+      const nextPage = catPage + 1;
+      setCatPage(nextPage);
+      await fetchCategories(nextPage);
+    }
+    setIsExpandedCats((prev) => !prev);
+  };
+
+  const [outstandingCourses, setOutstandingCourses] = useState<LandingCourse[]>([]);
+  const [trendingCourses, setTrendingCourses] = useState<LandingCourse[]>([]);
+  const [latestCourses, setLatestCourses] = useState<LandingCourse[]>([]);
   const [loadingCourses, setLoadingCourses] = useState(false);
+  const [teachers, setTeachers] = useState<PublicTeacher[]>([]);
+  const [teacherPage, setTeacherPage] = useState(0);
+  const [hasMoreTeachers, setHasMoreTeachers] = useState(false);
+  const [loadingTeachers, setLoadingTeachers] = useState(true);
 
   const [popularPage, setPopularPage] = useState(0);
   const [trendingPage, setTrendingPage] = useState(0);
   const [newPage, setNewPage] = useState(0);
 
+  /** Tải danh sách giảng viên đang hoạt động từ Backend, không dùng dữ liệu mẫu. */
+  useEffect(() => {
+    let cancelled = false;
+    publicCatalogApi.getTeachers({ page: 0, size: 6 })
+      .then((response) => {
+        if (!cancelled) {
+          const page = response.data.data;
+          setTeachers(page.content);
+          setHasMoreTeachers(!page.last);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setTeachers([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingTeachers(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
   const [hasMorePopular, setHasMorePopular] = useState(false);
   const [hasMoreTrending, setHasMoreTrending] = useState(false);
   const [hasMoreNew, setHasMoreNew] = useState(false);
 
-  const [reviews, setReviews] = useState<any[]>([]);
+  const [reviews, setReviews] = useState<LandingReview[]>([]);
   const [reviewPage, setReviewPage] = useState(0);
   const [hasMoreReviews, setHasMoreReviews] = useState(false);
   const [loadingReviews, setLoadingReviews] = useState(false);
@@ -102,30 +176,36 @@ export const Landing: React.FC = () => {
   const [reviewSort, setReviewSort] = useState("createdAt:desc");
 
   // Autocomplete states for courses
-  const [coursesList, setCoursesList] = useState<any[]>([]);
+  const [coursesList, setCoursesList] = useState<{ id: string; name: string }[]>([]);
   const [loadingCoursesList, setLoadingCoursesList] = useState(false);
   const [courseSearchQuery, setCourseSearchQuery] = useState("");
-  const [selectedCourse, setSelectedCourse] = useState<any | null>(null);
+  const [selectedCourse, setSelectedCourse] = useState<{ id: string; name: string } | null>(null);
   const [showCourseDropdown, setShowCourseDropdown] = useState(false);
   const courseDropdownRef = useRef<HTMLDivElement>(null);
 
   const isLoadingCoursesRef = useRef(false);
 
-  const fetchCategories = async (page: number) => {
+
+
+  /** Tải thêm 6 giảng viên công khai theo đúng phân trang của Backend. */
+  const handleLoadMoreTeachers = async () => {
+    const nextPage = teacherPage + 1;
     try {
-      setLoadingCats(true);
-      const res = await courseApi.searchCategories({ page, size: 6, status: "ACTIVE" });
-      if (res.data.success) {
-        const pageData = res.data.data;
-        const newCats = pageData.content || [];
-        setCategories(prev => (page === 0 ? newCats : [...prev, ...newCats]));
-        setHasMoreCats(!pageData.last);
-      }
-    } catch (e) {
-      console.error("Failed to fetch categories:", e);
-    } finally {
-      setLoadingCats(false);
+      const response = await publicCatalogApi.getTeachers({ page: nextPage, size: 6 });
+      const page = response.data.data;
+      setTeachers((current) => [...current, ...page.content]);
+      setTeacherPage(nextPage);
+      setHasMoreTeachers(!page.last);
+    } catch {
+      setHasMoreTeachers(false);
     }
+  };
+
+  /** Thu gọn đội ngũ về 6 giảng viên đầu tiên theo thứ tự Backend trả về. */
+  const handleCollapseTeachers = () => {
+    setTeachers((current) => current.slice(0, 6));
+    setTeacherPage(0);
+    setHasMoreTeachers(true);
   };
 
   const fetchFeaturedCourses = async () => {
@@ -138,21 +218,21 @@ export const Landing: React.FC = () => {
       ]);
 
       if (outstandingRes.data.success) {
-        const pageData = outstandingRes.data.data;
+        const pageData = outstandingRes.data.data as PageResponse<LandingCourse>;
         console.log("[fetchFeaturedCourses] popular data:", pageData);
-        setOutstandingCourses(pageData.content || []);
+        setOutstandingCourses(pageData.content);
         setHasMorePopular(!pageData.last);
       }
       if (trendingRes.data.success) {
-        const pageData = trendingRes.data.data;
+        const pageData = trendingRes.data.data as PageResponse<LandingCourse>;
         console.log("[fetchFeaturedCourses] trending data:", pageData);
-        setTrendingCourses(pageData.content || []);
+        setTrendingCourses(pageData.content);
         setHasMoreTrending(!pageData.last);
       }
       if (latestRes.data.success) {
-        const pageData = latestRes.data.data;
+        const pageData = latestRes.data.data as PageResponse<LandingCourse>;
         console.log("[fetchFeaturedCourses] latest data:", pageData);
-        setLatestCourses(pageData.content || []);
+        setLatestCourses(pageData.content);
         setHasMoreNew(!pageData.last);
       }
     } catch (e) {
@@ -166,13 +246,13 @@ export const Landing: React.FC = () => {
     if (isLoadingCoursesRef.current || loadingCourses) return;
     try {
       isLoadingCoursesRef.current = true;
-      console.log(`[loadMoreCourses] tabVal: ${tabVal}, popularPage: ${popularPage}, trendingPage: ${trendingPage}, newPage: ${newPage}`);
+      console.log(`[loadMoreCourses] tabVal: ${tabVal}, popularPage: ${String(popularPage)}, trendingPage: ${String(trendingPage)}, newPage: ${String(newPage)}`);
       if (tabVal === "popular") {
         const nextPage = popularPage + 1;
         const res = await courseApi.getOutstandingCourses({ page: nextPage, size: 6 });
         if (res.data.success) {
-          const pageData = res.data.data;
-          setOutstandingCourses(prev => [...prev, ...(pageData.content || [])]);
+          const pageData = res.data.data as PageResponse<LandingCourse>;
+          setOutstandingCourses(prev => [...prev, ...pageData.content]);
           setPopularPage(nextPage);
           setHasMorePopular(!pageData.last);
         }
@@ -180,17 +260,17 @@ export const Landing: React.FC = () => {
         const nextPage = trendingPage + 1;
         const res = await courseApi.getTrendingCourses({ page: nextPage, size: 6 });
         if (res.data.success) {
-          const pageData = res.data.data;
-          setTrendingCourses(prev => [...prev, ...(pageData.content || [])]);
+          const pageData = res.data.data as PageResponse<LandingCourse>;
+          setTrendingCourses(prev => [...prev, ...pageData.content]);
           setTrendingPage(nextPage);
           setHasMoreTrending(!pageData.last);
         }
-      } else if (tabVal === "new") {
+      } else {
         const nextPage = newPage + 1;
         const res = await courseApi.getLatestCourses({ page: nextPage, size: 6 });
         if (res.data.success) {
-          const pageData = res.data.data;
-          setLatestCourses(prev => [...prev, ...(pageData.content || [])]);
+          const pageData = res.data.data as PageResponse<LandingCourse>;
+          setLatestCourses(prev => [...prev, ...pageData.content]);
           setNewPage(nextPage);
           setHasMoreNew(!pageData.last);
         }
@@ -213,18 +293,24 @@ export const Landing: React.FC = () => {
 
     const isLoading = isLoadingCoursesRef.current || loadingCourses;
 
-    // console.log(`[Scroll] Tab: ${tabVal}, scrollRight: ${scrollRight.toFixed(1)}, hasMore: ${hasMore}, loading: ${isLoading}`);
-
     if (scrollRight < 150 && hasMore && !isLoading) {
       console.log(`[Scroll] Triggering loadMoreCourses for ${tabVal}`);
-      loadMoreCourses(tabVal);
+      void loadMoreCourses(tabVal);
     }
   };
 
   const fetchReviews = async (page: number) => {
     try {
       setLoadingReviews(true);
-      const params: any = {
+      const params: {
+        page: number;
+        size: number;
+        status: string;
+        rating?: number;
+        courseId?: string;
+        keyword?: string;
+        sort?: string[];
+      } = {
         page,
         size: 3,
         status: "ACTIVE"
@@ -248,8 +334,8 @@ export const Landing: React.FC = () => {
 
       const res = await reviewApi.searchReviews(params);
       if (res.data.success) {
-        const pageData = res.data.data;
-        const newReviews = pageData.content || [];
+        const pageData = res.data.data as PageResponse<LandingReview>;
+        const newReviews = pageData.content;
         setReviews(prev => (page === 0 ? newReviews : [...prev, ...newReviews]));
         setHasMoreReviews(!pageData.last);
       }
@@ -265,9 +351,9 @@ export const Landing: React.FC = () => {
       setLoadingAvgRating(true);
       const res = await reviewApi.getAverageRating();
       console.log("[fetchAverageRating] API Response:", res.data);
-      const rawData = res.data?.data;
-      if (rawData !== null && rawData !== undefined && !isNaN(Number(rawData))) {
-        setAverageRating(Number(rawData));
+      const rawData = res.data.data;
+      if (typeof rawData === "number" && !isNaN(rawData)) {
+        setAverageRating(rawData);
       } else {
         setAverageRating(null);
       }
@@ -284,12 +370,7 @@ export const Landing: React.FC = () => {
       setLoadingActiveCoursesCount(true);
       const res = await courseApi.getActiveCoursesCount();
       console.log("[fetchActiveCoursesCount] API Response:", res.data);
-      const rawData = res.data?.data;
-      if (rawData !== null && rawData !== undefined && !isNaN(Number(rawData))) {
-        setActiveCoursesCount(Number(rawData));
-      } else {
-        setActiveCoursesCount(null);
-      }
+      setActiveCoursesCount(parseCount(res.data.data));
     } catch (e) {
       console.error("[fetchActiveCoursesCount] Error:", e);
       setActiveCoursesCount(null);
@@ -303,12 +384,7 @@ export const Landing: React.FC = () => {
       setLoadingStudentCount(true);
       const res = await studentApi.getStudentProfilesCount();
       console.log("[fetchStudentCount] API Response:", res.data);
-      const rawData = res.data?.data;
-      if (rawData !== null && rawData !== undefined && !isNaN(Number(rawData))) {
-        setStudentCount(Number(rawData));
-      } else {
-        setStudentCount(null);
-      }
+      setStudentCount(parseCount(res.data.data));
     } catch (e) {
       console.error("[fetchStudentCount] Error:", e);
       setStudentCount(null);
@@ -320,12 +396,12 @@ export const Landing: React.FC = () => {
   const handleLoadMoreReviews = () => {
     const nextPage = reviewPage + 1;
     setReviewPage(nextPage);
-    fetchReviews(nextPage);
+    void fetchReviews(nextPage);
   };
 
   const handleCollapseReviews = () => {
     setReviewPage(0);
-    fetchReviews(0);
+    void fetchReviews(0);
   };
 
   // Autocomplete fetch for courses
@@ -342,7 +418,8 @@ export const Landing: React.FC = () => {
       });
       console.log(`[fetchCoursesForSelect] response:`, res.data);
       if (res.data.success) {
-        setCoursesList(res.data.data.content || []);
+        const pageData = res.data.data as PageResponse<{ id: string; name: string }>;
+        setCoursesList(pageData.content);
       }
     } catch (e) {
       console.error("Failed to fetch courses for select:", e);
@@ -359,17 +436,17 @@ export const Landing: React.FC = () => {
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    return () => { document.removeEventListener("mousedown", handleClickOutside); };
   }, []);
 
   // Fetch courses query watcher
   useEffect(() => {
     if (showCourseDropdown) {
-      console.log(`[courseSearchQuery watcher] query: "${courseSearchQuery}", show: ${showCourseDropdown}`);
+      console.log(`[courseSearchQuery watcher] query: "${courseSearchQuery}", show: ${String(showCourseDropdown)}`);
       const timer = setTimeout(() => {
-        fetchCoursesForSelect(courseSearchQuery);
+        void fetchCoursesForSelect(courseSearchQuery);
       }, 300);
-      return () => clearTimeout(timer);
+      return () => { clearTimeout(timer); };
     }
   }, [courseSearchQuery, showCourseDropdown]);
 
@@ -377,33 +454,27 @@ export const Landing: React.FC = () => {
   useEffect(() => {
     const timer = setTimeout(() => {
       setReviewPage(0);
-      fetchReviews(0);
+      void fetchReviews(0);
     }, 400);
-    return () => clearTimeout(timer);
+    return () => { clearTimeout(timer); };
   }, [reviewSearchName, reviewFilterRating, selectedCourse, reviewSort]);
 
   useEffect(() => {
-    fetchCategories(0);
-    fetchFeaturedCourses();
-    fetchAverageRating();
-    fetchActiveCoursesCount();
-    fetchStudentCount();
+    const initData = async () => {
+      await fetchCategories(0);
+      await fetchFeaturedCourses();
+      await fetchAverageRating();
+      await fetchActiveCoursesCount();
+      await fetchStudentCount();
+    };
+    void initData();
   }, []);
 
-  const handleLoadMoreCats = () => {
-    const nextPage = catPage + 1;
-    setCatPage(nextPage);
-    fetchCategories(nextPage);
-  };
 
-  const handleCollapseCats = () => {
-    setCatPage(0);
-    fetchCategories(0);
-  };
 
   useEffect(() => {
     if (auth.accessToken && auth.user) {
-      navigate("/dashboard", { replace: true });
+      void navigate("/dashboard", { replace: true });
     }
   }, [auth.accessToken, auth.user, navigate]);
 
@@ -421,7 +492,7 @@ export const Landing: React.FC = () => {
   }, [location.hash]);
 
   const toggleFaq = (id: string) => {
-    setOpenFaq(openFaq === id ? null : id);
+    setOpenFaq(prev => (prev === id ? null : id));
   };
 
   return (
@@ -466,7 +537,7 @@ export const Landing: React.FC = () => {
                   Bắt đầu học miễn phí
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
-                <Button onClick={() => navigate("/explore")} variant="outline" size="lg" className="rounded-full px-8 py-6 text-base font-bold">
+                <Button onClick={() => { void navigate("/explore", { state: { from: `${location.pathname}${location.search}${location.hash}` } }); }} variant="outline" size="lg" className="rounded-full px-8 py-6 text-base font-bold hover:bg-primary hover:text-white">
                   Khám phá lộ trình
                 </Button>
               </>
@@ -476,21 +547,13 @@ export const Landing: React.FC = () => {
           {/* Stats Bar */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 max-w-4xl mx-auto mt-20 p-6 bg-card rounded-2xl border border-border/70 shadow-md">
             <div>
-              <p className={`${
-                loadingStudentCount !== null && loadingStudentCount !== undefined
-                ? "text-3xl font-extrabold text-accent"
-                : "text-base font-medium text-accent"
-              }`}>
+              <p className="text-3xl font-extrabold text-accent">
                 {loadingStudentCount ? "..." : formatRoundedCount(studentCount)}
               </p>
               <p className="text-sm text-muted-foreground font-semibold mt-1">Học viên hoạt động</p>
             </div>
             <div>
-              <p className={`${
-                loadingActiveCoursesCount !== null && loadingActiveCoursesCount !== undefined
-                ? "text-3xl font-extrabold text-accent"
-                : "text-base font-medium text-accent"
-              }`}>
+              <p className="text-3xl font-extrabold text-accent">
                 {loadingActiveCoursesCount ? "..." : formatRoundedCount(activeCoursesCount)}
               </p>
               <p className="text-sm text-muted-foreground font-semibold mt-1">Khóa học chuyên sâu</p>
@@ -502,15 +565,11 @@ export const Landing: React.FC = () => {
               <p className="text-sm text-muted-foreground font-semibold mt-1">Tỷ lệ hoàn thành mục tiêu</p>
             </div>
             <div>
-              <p className={`${
-                averageRating !== null && averageRating !== undefined
-                ? "text-3xl font-extrabold text-accent"
-                : "text-base font-medium text-accent"
-              }`}>
+              <p className="text-3xl font-extrabold text-accent">
                 {loadingAvgRating
                   ? "..."
-                  : averageRating !== null && averageRating !== undefined
-                  ? `${averageRating}★`
+                  : averageRating !== null
+                  ? `${averageRating.toFixed(1)}★`
                   : "Không có dữ liệu"}
               </p>
               <p className="text-sm text-muted-foreground font-semibold mt-1">Đánh giá trung bình</p>
@@ -564,43 +623,34 @@ export const Landing: React.FC = () => {
             CATEGORY TAGS (REAL DATA)
             ========================================== */}
         <section className="py-10 text-center border-t border-border/40 space-y-6">
-          <h3 className="text-3xl font-extrabold uppercase tracking-wider text-muted-foreground mb-6 mt-6">Chủ đề học tập nổi bật</h3>
-          
-          <div className="flex flex-wrap justify-center gap-3 max-w-4xl mx-auto">
-            {categories.map((cat) => (
+          <h3 className="text-3xl font-extrabold uppercase tracking-wider text-muted-foreground mb-6 mt-6 text-center">
+            Chủ đề học tập nổi bật
+          </h3>
+
+          <div className="flex flex-wrap justify-center gap-2 sm:gap-3 max-w-5xl mx-auto px-4">
+            {(isExpandedCats ? categories : categories.slice(0, 4)).map((cat) => (
               <Link
                 key={cat.id}
                 to={`/categories/${cat.id}`}
-                className="px-4 py-2 cursor-pointer hover:scale-105 rounded-full border border-border/70 bg-card text-sm font-bold text-foreground hover:border-primary hover:text-primary transition-all shadow-sm animate-in fade-in duration-200 focus:outline-none focus:ring-2 focus:ring-primary/50"
+                className="inline-flex items-center justify-center px-3 py-2 sm:px-3 sm:py- cursor-pointer hover:scale-105 rounded-full border border-border/70 bg-card text-sm font-bold text-foreground hover:border-primary hover:text-primary transition-all shadow-xs animate-in fade-in duration-200 focus:outline-none focus:ring-2 focus:ring-primary/50"
               >
                 {cat.name}
               </Link>
             ))}
           </div>
 
-          <div className="flex justify-center gap-3 pt-2">
-            {hasMoreCats && (
-              <Button 
-                onClick={handleLoadMoreCats} 
-                disabled={loadingCats}
-                variant="outline" 
-                size="sm" 
-                className="rounded-full px-6 py-2 text-sm font-bold border-border/60 hover:bg-neutral-soft-gray/50 hover:text-primary transition-all duration-200"
+          {(categories.length > 4 || hasMoreCats) && (
+            <div className="flex justify-center pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => { void handleToggleExpandCats(); }}
+                className="m-2 rounded-full px-6 py-2 text-sm font-bold border-border/60 hover:bg-foreground hover:text-white transition-all duration-200"
               >
-                {loadingCats ? "Đang tải..." : "Xem thêm chủ đề"}
+                {isExpandedCats ? "Thu Gọn" : "Xem Thêm"}
               </Button>
-            )}
-            {categories.length > 6 && !loadingCats && (
-              <Button 
-                onClick={handleCollapseCats} 
-                variant="outline" 
-                size="sm" 
-                className="rounded-full px-6 py-2 text-sm font-bold border-border/60 hover:bg-neutral-soft-gray/50 hover:text-primary transition-all duration-200"
-              >
-                Thu gọn
-              </Button>
-            )}
-          </div>
+            </div>
+          )}
         </section>
 
         {/* ==========================================
@@ -611,13 +661,12 @@ export const Landing: React.FC = () => {
             <h2 className="text-3xl uppercase font-extrabold text-foreground tracking-tight">Khóa học nổi bật</h2>
             <p className="text-base text-muted-foreground mt-2">Lựa chọn các khóa học hàng đầu được phát triển bởi các chuyên gia trong ngành.</p>
           </div>
-
           <Tabs defaultValue="popular" className="w-full">
             <div className="flex justify-center mb-8">
               <TabsList className="bg-muted p-1 rounded-xl">
-                <TabsTrigger value="popular" className="px-5 py-2 m-1 text-sm hover:bg-foreground hover:text-white focus:bg-foreground focus:text-white font-semibold rounded-lg">Nổi bật</TabsTrigger>
-                <TabsTrigger value="trending" className="px-5 py-2 m-1 text-sm hover:bg-foreground hover:text-white focus:bg-foreground focus:text-white font-semibold rounded-lg">Thịnh hành</TabsTrigger>
-                <TabsTrigger value="new" className="px-5 py-2 m-1 text-sm hover:bg-foreground hover:text-white focus:bg-foreground focus:text-white font-semibold rounded-lg">Mới nhất</TabsTrigger>
+                <TabsTrigger value="popular" className="px-5  py-2 m-1 border-border/20 text-sm hover:bg-foreground hover:text-white focus:bg-foreground focus:text-white font-semibold rounded-full">Nổi bật</TabsTrigger>
+                <TabsTrigger value="trending" className="px-5 py-2 m-1 border-border/20  text-sm hover:bg-foreground hover:text-white focus:bg-foreground focus:text-white font-semibold rounded-full">Thịnh hành</TabsTrigger>
+                <TabsTrigger value="new" className="px-5 py-2 m-1 border-border/20 text-sm hover:bg-foreground hover:text-white focus:bg-foreground focus:text-white font-semibold rounded-full">Mới nhất</TabsTrigger>
               </TabsList>
             </div>
 
@@ -636,7 +685,7 @@ export const Landing: React.FC = () => {
                   ) : currentCourses.length > 0 ? (
                     <CourseScrollContainer
                       itemCount={currentCourses.length}
-                      onScroll={(e) => handleScroll(e, tabVal as "popular" | "trending" | "new")}
+                      onScroll={(e) => { handleScroll(e, tabVal as "popular" | "trending" | "new"); }}
                       /* 
                        * Cấu hình căn lề responsive:
                        * - Khi có ít hơn 3 thẻ khóa học: mobile dùng justify-start để người dùng cuộn mượt từ góc trái qua,
@@ -653,21 +702,19 @@ export const Landing: React.FC = () => {
                           className="flex-none w-65 sm:w-72.5 snap-start flex flex-col bg-card rounded-2xl border border-border/70 shadow-sm hover:shadow-lg hover:border-primary/40 hover:-translate-y-1.5 cursor-pointer overflow-hidden group transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-primary/50"
                         >
                           <div className="relative aspect-video overflow-hidden bg-muted">
-                            {course.image ? (
+                            {course.image || course.thumbnailUrl ? (
                               <img
-                                src={course.image}
+                                src={course.image ?? course.thumbnailUrl ?? undefined}
                                 alt={course.name}
                                 className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300"
                               />
                             ) : (
-                              <img
-                                src={getCourseImage(course.categoryName)}
-                                alt={course.name}
-                                className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300"
-                              />
+                              <div className="flex h-full w-full items-center justify-center bg-muted text-muted-foreground">
+                                <BookOpen className="h-10 w-10" aria-label="Khóa học chưa có ảnh" />
+                              </div>
                             )}
-                            <div className="absolute top-3 left-3 bg-card/90 backdrop-blur-sm px-2.5 py-1 rounded-lg text-sm font-bold text-primary shadow">
-                              {course.level}
+                            <div className="absolute top-3 left-3 bg-foreground/90 backdrop-blur-sm px-2.5 py-1 rounded-lg text-sm font-bold text-white shadow">
+                              {formatCourseLevel(course.level)}
                             </div>
                           </div>
                           
@@ -681,14 +728,15 @@ export const Landing: React.FC = () => {
                               <h3 className="font-bold text-foreground text-sm leading-snug line-clamp-2 group-hover:text-primary transition-colors">
                                 {course.name}
                               </h3>
+                              {course.createdAt && <span className="mt-2 flex items-center gap-1 text-xs text-muted-foreground"><CalendarDays className="h-3.5 w-3.5" />Tạo ngày {new Date(course.createdAt).toLocaleDateString("vi-VN")}</span>}
                             </div>
 
                             <div className="mt-4 pt-4 border-t border-border/80 flex items-center justify-between text-sm text-muted-foreground">
                               {course.avgRating ? (
                                 <div className="flex items-center gap-1.5">
                                   <Star className="h-4 w-4 fill-amber-400 stroke-amber-400" />
-                                  <span className="font-bold text-foreground">{course.avgRating}</span>
-                                  <span>({course.enrollmentCount || 0} học viên)</span>
+                                  <span className="font-bold text-foreground">{course.avgRating.toFixed(1)}</span>
+                                  <span>({course.enrollmentCount ?? 0} học viên)</span>
                                 </div>
                               ) : (
                                 <span className="text-xs text-muted-foreground/70">Chưa có đánh giá</span>
@@ -722,7 +770,7 @@ export const Landing: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-7xl mx-auto px-4">
-            {INSTRUCTORS_LIST.map((ins) => (
+            {loadingTeachers ? <div className="md:col-span-3 py-12 text-center text-muted-foreground">Đang tải đội ngũ giảng viên...</div> : teachers.length === 0 ? <div className="md:col-span-3 py-12 text-center text-muted-foreground">Chưa có dữ liệu giảng viên.</div> : teachers.map((ins) => (
               <Link 
                 key={ins.id} 
                 to={`/teachers/${ins.id}`}
@@ -732,25 +780,21 @@ export const Landing: React.FC = () => {
                   {/* Header: Photo, Name & Title */}
                   <div className="flex gap-4 items-center">
                     <div className="h-16 w-16 rounded-full border border-primary/20 bg-primary/5 overflow-hidden shrink-0">
-                      <img
-                        src={ins.avatar}
-                        alt={ins.name}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
+                      {ins.avatarUrl ? <img src={ins.avatarUrl} alt={ins.fullName ?? "Giảng viên"} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" /> : <span className="flex h-full w-full items-center justify-center text-xl font-bold text-primary">{(ins.fullName ?? "?").charAt(0).toUpperCase()}</span>}
                     </div>
                     <div className="space-y-1">
-                      <h3 className="font-bold text-foreground text-base leading-tight group-hover:text-primary transition-colors">{ins.name}</h3>
-                      <p className="text-sm font-bold text-primary">{ins.role}</p>
+                      <h3 className="font-bold text-foreground text-base leading-tight group-hover:text-primary transition-colors">{ins.fullName ?? "Chưa cập nhật"}</h3>
+                      <p className="text-sm font-bold text-primary">{ins.title ?? (ins.categories.length > 0 ? ins.categories[0].name : null) ?? "Giảng viên"}</p>
                       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                         <GraduationCap className="h-3.5 w-3.5 text-primary" />
-                        <span>{ins.school}</span>
+                        <span>{ins.categories.length > 0 ? ins.categories.map((category) => category.name).join(", ") : "Chuyên môn đang cập nhật"}</span>
                       </div>
                     </div>
                   </div>
 
                   {/* Bio Description */}
                   <p className="text-sm leading-relaxed text-muted-foreground italic line-clamp-3">
-                    &ldquo;{ins.bio}&rdquo;
+                    &ldquo;{ins.bio ?? "Chưa có dữ liệu giới thiệu."}&rdquo;
                   </p>
                 </div>
 
@@ -758,15 +802,21 @@ export const Landing: React.FC = () => {
                 <div className="pt-4 border-t border-border/60 flex justify-between items-center text-xs text-muted-foreground font-medium">
                   <div className="flex items-center gap-1">
                     <Award className="h-4 w-4 text-amber-500" />
-                    <span>Đánh giá: <strong className="text-foreground">{ins.rating} ★</strong></span>
+                    <span>Đánh giá: <strong className="text-foreground">{ins.averageRating ? `${ins.averageRating.toFixed(1)} ★` : "Chưa có dữ liệu"}</strong></span>
                   </div>
                   <div>
-                    <span>Giảng dạy: <strong className="text-foreground">{ins.coursesCount} khóa học</strong></span>
+                    <span>Phát triển: <strong className="text-foreground">{String(ins.courseCount)} khóa học</strong></span>
                   </div>
                 </div>
               </Link>
             ))}
           </div>
+          {(hasMoreTeachers || teachers.length > 6) && (
+            <div className="flex justify-center pt-6">
+              {hasMoreTeachers && <Button type="button" variant="outline" className="m-2 rounded-full px-6 py-2 text-sm font-bold border-border/60 hover:bg-foreground hover:text-white transition-all duration-200" onClick={() => { void handleLoadMoreTeachers(); }}>Xem thêm giảng viên</Button>}
+              {teachers.length > 6 && <Button type="button" variant="outline" className="m-2 rounded-full px-6 py-2 text-sm font-bold border-border/60 hover:bg-foreground hover:text-white transition-all duration-200" onClick={handleCollapseTeachers}>Thu gọn</Button>}
+            </div>
+          )}
         </section>
 
         {/* ==========================================
@@ -790,7 +840,7 @@ export const Landing: React.FC = () => {
                   type="text"
                   placeholder="Nhập từ khóa bình luận..."
                   value={reviewSearchName}
-                  onChange={(e) => setReviewSearchName(e.target.value)}
+                  onChange={(e) => { setReviewSearchName(e.target.value); }}
                   className="w-full bg-muted/50 border border-border/60 rounded-xl py-2 px-3 pl-9 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition"
                 />
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground/60" />
@@ -805,7 +855,7 @@ export const Landing: React.FC = () => {
               <div className="relative">
                 <button
                   type="button"
-                  onClick={() => setShowCourseDropdown(!showCourseDropdown)}
+                  onClick={() => { setShowCourseDropdown(!showCourseDropdown); }}
                   className="w-full bg-muted/50 border border-border/60 rounded-xl py-2 px-3 pl-9 pr-16 text-sm text-foreground text-left focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition truncate relative min-h-9.5"
                 >
                   <BookOpen className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground/60" />
@@ -837,7 +887,7 @@ export const Landing: React.FC = () => {
                     type="text"
                     placeholder="Tìm kiếm khóa học..."
                     value={courseSearchQuery}
-                    onChange={(e) => setCourseSearchQuery(e.target.value)}
+                    onChange={(e) => { setCourseSearchQuery(e.target.value); }}
                     className="w-full bg-muted/30 border border-border/60 rounded-lg py-1.5 px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary transition"
                     autoFocus
                   />
@@ -883,7 +933,7 @@ export const Landing: React.FC = () => {
               </label>
               <select
                 value={reviewFilterRating}
-                onChange={(e) => setReviewFilterRating(e.target.value)}
+                onChange={(e) => { setReviewFilterRating(e.target.value); }}
                 className="w-full bg-muted/50 border border-border/60 rounded-xl py-2 px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition"
               >
                 <option value="5">⭐⭐⭐⭐⭐</option>
@@ -902,7 +952,7 @@ export const Landing: React.FC = () => {
               </label>
               <select
                 value={reviewSort}
-                onChange={(e) => setReviewSort(e.target.value)}
+                onChange={(e) => { setReviewSort(e.target.value); }}
                 className="w-full bg-muted/50 border border-border/60 rounded-xl py-2 px-3 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition"
               >
                 <option value="createdAt:desc">Mới nhất</option>
@@ -919,11 +969,11 @@ export const Landing: React.FC = () => {
             <div className="space-y-8 animate-in fade-in duration-300">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                 {reviews.map((rev) => {
-                  const ratingVal = Math.round(rev.rating || 5);
-                  const name = rev.userName || rev.userFullName || rev.fullName || rev.username || rev.user?.fullName || rev.user?.username || "Học viên ẩn danh";
-                  const comment = rev.comment || rev.content || rev.description || "";
-                  const avatar = rev.avatarUrl || rev.userAvatar || rev.user?.avatarUrl || rev.user?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${rev.id || name}`;
-                  const role = rev.schoolName || rev.userRole || rev.role || rev.user?.role || "Học viên";
+                  const ratingVal = typeof rev.rating === "number" ? Math.round(rev.rating) : 0;
+                  const name = rev.userName ?? rev.userFullName ?? rev.fullName ?? rev.username ?? rev.user?.fullName ?? rev.user?.username ?? "Chưa xác định";
+                  const comment = rev.comment ?? rev.content ?? rev.description ?? "";
+                  const avatar = rev.avatarUrl ?? rev.userAvatar ?? rev.user?.avatarUrl ?? rev.user?.avatar;
+                  const role = rev.schoolName ?? rev.userRole ?? rev.role ?? rev.user?.role ?? "Học viên";
 
                   return (
                     <div key={rev.id} className="p-6 bg-card rounded-2xl border border-border/60 shadow-sm relative flex flex-col justify-between hover:shadow-md transition-shadow">
@@ -933,25 +983,29 @@ export const Landing: React.FC = () => {
                             {rev.courseName}
                           </div>
                         )}
-                        <div className="flex gap-0.5 text-amber-400 mb-4">
-                          {[...Array(ratingVal)].map((_, i) => (
-                            <Star key={i} className="h-4.5 w-4.5 fill-current" />
-                          ))}
-                        </div>
+                        {ratingVal > 0 ? (
+                          <div className="flex gap-0.5 text-amber-400 mb-4">
+                            {Array.from({ length: ratingVal }).map((_, i) => (
+                              <Star key={`star-${String(i)}`} className="h-4.5 w-4.5 fill-current" />
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="mb-4 text-xs text-muted-foreground">Chưa có đánh giá</p>
+                        )}
                         <p className="text-sm text-muted-foreground italic leading-relaxed mb-6">
                           &ldquo;{comment}&rdquo;
                         </p>
                       </div>
 
                       <div className="flex items-center gap-3">
-                        <img
-                          src={avatar}
-                          alt={name}
-                          className="h-10 w-10 rounded-full border border-primary/20 bg-primary/5 object-cover"
-                        />
+                        <Avatar className="h-10 w-10 border border-primary/20 bg-primary/5">
+                          <AvatarImage src={avatar ?? undefined} alt={name} />
+                          <AvatarFallback>{name.slice(0, 2).toUpperCase()}</AvatarFallback>
+                        </Avatar>
                         <div>
                           <h4 className="text-sm font-bold text-foreground">{name}</h4>
                           <p className="text-sm text-muted-foreground">{role}</p>
+                          <p className="text-xs text-muted-foreground">{formatReviewDate(rev.createdAt)}</p>
                         </div>
                       </div>
                     </div>
@@ -967,7 +1021,7 @@ export const Landing: React.FC = () => {
                     disabled={loadingReviews}
                     variant="outline" 
                     size="sm" 
-                    className="rounded-full px-6 py-2 text-sm font-bold border-border/60 hover:bg-neutral-soft-gray/50 hover:text-primary transition-all duration-200"
+                    className="rounded-full px-6 py-2 text-sm font-bold border-border/60 hover:bg-foreground hover:text-white transition-all duration-200"
                   >
                     {loadingReviews ? "Đang tải..." : "Xem thêm ý kiến"}
                   </Button>
@@ -977,7 +1031,7 @@ export const Landing: React.FC = () => {
                     onClick={handleCollapseReviews} 
                     variant="outline" 
                     size="sm" 
-                    className="rounded-full px-6 py-2 text-sm font-bold border-border/60 hover:bg-neutral-soft-gray/50 hover:text-primary transition-all duration-200"
+                    className="rounded-full px-6 py-2 text-sm font-bold border-border/60  hover:bg-foreground hover:text-white transition-all duration-200"
                   >
                     Thu gọn
                   </Button>
@@ -1027,7 +1081,7 @@ export const Landing: React.FC = () => {
               return (
                 <div key={faq.id} className="border border-border rounded-xl bg-card px-4">
                   <button
-                    onClick={() => toggleFaq(faq.id)}
+                    onClick={() => { toggleFaq(faq.id); }}
                     className="flex w-full items-center justify-between py-4 text-sm font-bold text-left outline-none hover:text-primary transition-colors"
                   >
                     <span className="text-base">{faq.question}</span>

@@ -17,4 +17,7 @@ public interface QuizAttemptRepository extends BaseRepository<QuizAttemptEntity,
     List<QuizAttemptEntity> findByQuizIdAndUserId(Long quizId, Long userId);
 
     List<QuizAttemptEntity> findByStatus(Byte status);
+
+    /** Lấy lượt làm của các quiz được phép quản lý theo trạng thái. */
+    List<QuizAttemptEntity> findByQuizIdInAndStatus(List<Long> quizIds, Byte status);
 }

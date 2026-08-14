@@ -5,12 +5,17 @@ import com.ailms.entity.RoleEntity;
 import com.ailms.entity.RolePermissionEntity;
 import com.ailms.entity.UserEntity;
 import com.ailms.entity.UserRoleEntity;
+import com.ailms.entity.EmployeeEntity;
+import com.ailms.entity.enums.EmployeeStatusEnum;
+import com.ailms.entity.enums.EmploymentTypeEnum;
 import com.ailms.entity.enums.UserStatusEnum;
+import com.ailms.common.util.CodeGenerator;
 import com.ailms.repository.PermissionRepository;
 import com.ailms.repository.RolePermissionRepository;
 import com.ailms.repository.RoleRepository;
 import com.ailms.repository.UserRepository;
 import com.ailms.repository.UserRoleRepository;
+import com.ailms.repository.EmployeeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
@@ -44,6 +49,7 @@ public class DataSeeder {
     private final UserRoleRepository userRoleRepository;
     private final PermissionRepository permissionRepository;
     private final RolePermissionRepository rolePermissionRepository;
+    private final EmployeeRepository employeeRepository;
     private final PasswordEncoder passwordEncoder;
 
     private static final String DEFAULT_PASSWORD = "Password@123";
@@ -59,6 +65,12 @@ public class DataSeeder {
     private static final String HR_ROLE_CODE = "HR";
     private static final String HR_USERNAME = "hrmanagement123";
     private static final String HR_EMAIL = "hr@ailms.com";
+
+    //==== SUPPORT ====
+    private static final String SUPPORT_ROLE_NAME = "Support Consultant";
+    private static final String SUPPORT_ROLE_CODE = "SUPPORT";
+    private static final String SUPPORT_USERNAME = "support123";
+    private static final String SUPPORT_EMAIL = "support@ailms.com";
 
     // ===== TEACHER =====
     private static final String TEACHER_ROLE_NAME = "Teacher";
@@ -97,15 +109,21 @@ public class DataSeeder {
         RoleEntity hrRole = seedRole(HR_ROLE_NAME, HR_ROLE_CODE, "HR Management Role", false);
         seedUser(HR_USERNAME, HR_EMAIL, "Default HR", hrRole);
 
-        // 3. Seed TEACHER
+        // 3. Support tư vấn landing page
+        RoleEntity supportRole = seedRole(SUPPORT_ROLE_NAME, SUPPORT_ROLE_CODE, "Landing page support consultant", false);
+        UserEntity supportUser = seedUser(
+                SUPPORT_USERNAME, SUPPORT_EMAIL, "Default Support Consultant", supportRole);
+        seedSupportEmployee(supportUser);
+
+        // 4. Seed TEACHER
         RoleEntity teacherRole = seedRole(TEACHER_ROLE_NAME, TEACHER_ROLE_CODE, "Teacher Role", false);
         seedUser(TEACHER_USERNAME, TEACHER_EMAIL, "Default Teacher", teacherRole);
 
-        // 4. Seed TA
+        // 5. Seed TA
         RoleEntity taRole = seedRole(TA_ROLE_NAME, TA_ROLE_CODE, "Teaching Assistant Role", false);
         seedUser(TA_USERNAME, TA_EMAIL, "Default TA", taRole);
 
-        // 5. Seed STUDENT
+        // 6. Seed STUDENT
         RoleEntity studentRole = seedRole(STUDENT_ROLE_NAME, STUDENT_ROLE_CODE, "Student Role", false);
         seedUser(STUDENT_USERNAME, STUDENT_EMAIL, "Default Student", studentRole);
 
@@ -139,10 +157,11 @@ public class DataSeeder {
     }
 
     /** Hàm dùng chung để tạo User và gán Role. */
-    private void seedUser(String username, String email, String fullName, RoleEntity role) {
+    private UserEntity seedUser(String username, String email, String fullName, RoleEntity role) {
         if (userRepository.existsByEmail(email)) {
             log.info("User {} already exists, skip", email);
-            return;
+            return userRepository.findByEmail(email)
+                    .orElseThrow(() -> new IllegalStateException("Seed user lookup failed: " + email));
         }
 
         UserEntity user = new UserEntity();
@@ -161,6 +180,17 @@ public class DataSeeder {
         userRoleRepository.save(userRole);
 
         log.info("Created default user {}", email);
+        return user;
+    }
+
+    /** Bảo đảm tài khoản SUPPORT mặc định luôn có hồ sơ EmployeeEntity như HR. */
+    private void seedSupportEmployee(UserEntity supportUser) {
+        if (supportUser == null || employeeRepository.existsById(supportUser.getId())) return;
+        employeeRepository.save(EmployeeEntity.builder().userEntity(supportUser)
+                .employeeCode(CodeGenerator.generate("EP", employeeRepository::existsByEmployeeCode))
+                .position("Nhân viên hỗ trợ").employmentTypeEnum(EmploymentTypeEnum.FULL_TIME)
+                .startDate(java.time.LocalDateTime.now()).status(EmployeeStatusEnum.ACTIVE).build());
+        log.info("Created EmployeeEntity for default SUPPORT user {}", supportUser.getEmail());
     }
 
     /**

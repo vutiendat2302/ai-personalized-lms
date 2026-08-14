@@ -75,6 +75,20 @@ ai-service:
   base-url: ${AI_SERVICE_BASE_URL:http://localhost:8000}
   internal-token: ${AI_SERVICE_INTERNAL_TOKEN:dev_internal_secret_123}
 
+public-catalog:
+  # Bật true một lần để backfill catalog bằng local embedding theo batch, không gọi Gemini.
+  vector-startup-sync: ${PUBLIC_CATALOG_VECTOR_STARTUP_SYNC:false}
+
+meilisearch:
+  enabled: ${MEILISEARCH_ENABLED:true}
+  url: ${MEILISEARCH_URL:http://localhost:7700}
+  api-key: ${MEILISEARCH_API_KEY:}
+  course-index: ${MEILISEARCH_COURSE_INDEX:courses}
+  category-index: ${MEILISEARCH_CATEGORY_INDEX:categories}
+  class-index: ${MEILISEARCH_CLASS_INDEX:classes}
+  user-index: ${MEILISEARCH_USER_INDEX:users}
+  file-index: ${MEILISEARCH_FILE_INDEX:files}
+
 paypal:
   client-id: ${PAYPAL_CLIENT_ID:}
   client-secret: ${PAYPAL_CLIENT_SECRET:}

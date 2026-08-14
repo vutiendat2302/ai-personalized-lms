@@ -66,7 +66,7 @@ const packageTypeLabel = (type: CourseDetailPackage["deliveryMode"]) => ({
 })[type];
 
 /** Đổi chỉ số ngày backend thành nhãn lịch học tiếng Việt. */
-const dayLabel = (day: number) => day === 7 ? "Chủ nhật" : `Thứ ${day + 1}`;
+const dayLabel = (day: number) => day === 7 ? "Chủ nhật" : `Thứ ${String(day + 1)}`;
 
 /** Xác định package có phần lớp nhóm và phải hiển thị lịch trước khi mua. */
 const requiresGroupClass = (item: CourseDetailPackage) => item.deliveryMode === "GROUP_CLASS"
@@ -105,9 +105,11 @@ export function CoursePackageModal({
   useEffect(() => {
     if (!isOpen) return;
     const firstPurchasable = packages.find((item) => item.purchasable);
-    setSelectedId(firstPurchasable?.id || "");
-    setClassDetailOpen(firstPurchasable ? requiresGroupClass(firstPurchasable) : false);
-    reset(EMPTY_NEEDS);
+    requestAnimationFrame(() => {
+      setSelectedId(firstPurchasable?.id ?? "");
+      setClassDetailOpen(firstPurchasable ? requiresGroupClass(firstPurchasable) : false);
+      reset(EMPTY_NEEDS);
+    });
   }, [isOpen, packages, reset]);
 
   /** Chọn package mới, reset nhu cầu cũ và tự mở lịch nếu package có lớp nhóm. */
@@ -129,7 +131,7 @@ export function CoursePackageModal({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent className="max-h-[92vh] max-w-4xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Chọn gói học</DialogTitle>
@@ -152,8 +154,8 @@ export function CoursePackageModal({
                 role="button"
                 tabIndex={item.purchasable ? 0 : -1}
                 aria-disabled={!item.purchasable}
-                onClick={() => item.purchasable && selectPackage(item.id)}
-                onKeyDown={(event) => event.key === "Enter" && item.purchasable && selectPackage(item.id)}
+                onClick={() => { if (item.purchasable) selectPackage(item.id); }}
+                onKeyDown={(event) => { if (event.key === "Enter" && item.purchasable) selectPackage(item.id); }}
                 className={`rounded-xl border p-4 text-left transition ${
                   selectedId === item.id ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border"
                 } ${item.purchasable ? "cursor-pointer hover:border-primary/60" : "cursor-not-allowed opacity-60"}`}
@@ -173,7 +175,7 @@ export function CoursePackageModal({
                 </div>
                 {item.description && <p className="mt-2 whitespace-pre-line text-sm text-muted-foreground">{item.description}</p>}
                 <div className="mt-3 space-y-1 text-xs text-muted-foreground">
-                  <p><Clock className="mr-1 inline h-3.5 w-3.5" />{item.durationDays != null ? `${item.durationDays} ngày sử dụng` : "Không giới hạn thời hạn"}</p>
+                  <p><Clock className="mr-1 inline h-3.5 w-3.5" />{item.durationDays != null ? `${String(item.durationDays)} ngày sử dụng` : "Không giới hạn thời hạn"}</p>
                   <p><GraduationCap className="mr-1 inline h-3.5 w-3.5" />{item.includedTutorSessions ?? 0} buổi gia sư chính thức</p>
                   {item.maxGroupSize != null && <p><Users className="mr-1 inline h-3.5 w-3.5" />Tối đa {item.maxGroupSize} học viên</p>}
                   <p>Trạng thái mua: {item.purchasable ? "Có thể mua" : "Không thể mua"}</p>
@@ -195,7 +197,7 @@ export function CoursePackageModal({
                 )}
                 {!item.purchasable && (
                   <p className="mt-3 text-xs font-medium text-destructive">
-                    {item.unavailableReason || (item.owned ? "Bạn đang sở hữu gói này." : "Gói hiện không thể mua.")}
+                    {item.unavailableReason ?? (item.owned ? "Bạn đang sở hữu gói này." : "Gói hiện không thể mua.")}
                   </p>
                 )}
               </div>
@@ -214,9 +216,9 @@ export function CoursePackageModal({
                   <p className="text-sm text-muted-foreground">Khóa học: {selectedPackage.classDetail.courseName}</p>
                 </div>
                 <div className="grid gap-2 text-sm md:grid-cols-2">
-                  <p>Giáo viên: {selectedPackage.classDetail.teacher?.fullName || "Chưa phân công"}</p>
-                  <p>Trợ giảng: {selectedPackage.classDetail.teachingAssistants.map((item) => item.fullName).join(", ") || "Chưa phân công"}</p>
-                  <p><CalendarDays className="mr-1 inline h-4 w-4" />{selectedPackage.classDetail.startDate || "Chưa có ngày bắt đầu"} – {selectedPackage.classDetail.endDate || "Chưa có ngày kết thúc"}</p>
+                  <p>Giáo viên: {selectedPackage.classDetail.teacher?.fullName ?? "Chưa phân công"}</p>
+                  <p>Trợ giảng: {selectedPackage.classDetail.teachingAssistants.length > 0 ? selectedPackage.classDetail.teachingAssistants.map((item) => item.fullName).join(", ") : "Chưa phân công"}</p>
+                  <p><CalendarDays className="mr-1 inline h-4 w-4" />{selectedPackage.classDetail.startDate ?? "Chưa có ngày bắt đầu"} – {selectedPackage.classDetail.endDate ?? "Chưa có ngày kết thúc"}</p>
                   <p>Múi giờ: {selectedPackage.classDetail.timeZone}</p>
                   <p>Hình thức: {selectedPackage.deliveryMode === "COMBO" ? "Gói kết hợp có lớp nhóm" : packageTypeLabel(selectedPackage.classDetail.deliveryMode)}</p>
                   <p><Users className="mr-1 inline h-4 w-4" />{selectedPackage.classDetail.currentStudents}/{selectedPackage.classDetail.maxMembers}, còn {selectedPackage.classDetail.remainingSlots} chỗ</p>
@@ -230,7 +232,7 @@ export function CoursePackageModal({
                     <p key={schedule.id}>{dayLabel(schedule.dayOfWeek)}: {schedule.startTime} – {schedule.endTime}</p>
                   ))}
                 </div>
-                {!selectedPackage.classDetail.purchasable && <p className="text-sm font-medium text-destructive">{selectedPackage.classDetail.unavailableReason || "Lớp hiện không thể đăng ký."}</p>}
+                {!selectedPackage.classDetail.purchasable && <p className="text-sm font-medium text-destructive">{selectedPackage.classDetail.unavailableReason ?? "Lớp hiện không thể đăng ký."}</p>}
               </div>
             )}
           </section>
@@ -238,7 +240,7 @@ export function CoursePackageModal({
 
         {selectedPackage && requiresTutorNeeds(selectedPackage) && (
           <Form {...form}>
-            <form className="grid gap-4 rounded-xl border bg-muted/30 p-4 md:grid-cols-2" onSubmit={(event) => event.preventDefault()} noValidate>
+            <form className="grid gap-4 rounded-xl border bg-muted/30 p-4 md:grid-cols-2" onSubmit={(event) => { event.preventDefault(); }} noValidate>
               <div className="md:col-span-2 rounded-lg bg-primary/5 p-3 text-sm font-medium">
                 Gói gồm {selectedPackage.includedTutorSessions ?? 0} buổi gia sư chính thức.
               </div>
@@ -274,3 +276,4 @@ export function CoursePackageModal({
     </Dialog>
   );
 }
+

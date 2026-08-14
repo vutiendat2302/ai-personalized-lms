@@ -42,4 +42,9 @@ public interface ReviewRepository extends JpaRepository<ReviewEntity, Long>, Jpa
 
     @Query("SELECT AVG(r.rating) FROM ReviewEntity r WHERE r.status = 'ACTIVE'")
     Double getAverageRatingOfActiveReviews();
+
+    /** Tính rating trung bình cho toàn bộ khóa học người dạy đang phụ trách. */
+    @Query("SELECT AVG(r.rating) FROM ReviewEntity r WHERE r.courseId IN :courseIds AND r.status = :status")
+    Double getAverageRatingByCourseIdsAndStatus(@Param("courseIds") List<Long> courseIds,
+                                                 @Param("status") ReviewStatusEnum status);
 }

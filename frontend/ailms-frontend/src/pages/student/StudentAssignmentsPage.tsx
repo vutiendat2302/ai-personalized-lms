@@ -19,13 +19,32 @@ export const StudentAssignmentsPage: React.FC = () => {
 
   /** Tải song song bài tập và quiz thuộc enrollment/lớp của học viên. */
   useEffect(() => {
-    Promise.all([studentApi.getAssignments(), studentApi.getQuizzes()])
-      .then(([assignmentData, quizData]) => {
-        setAssignments(assignmentData);
-        setQuizzes(quizData);
-      })
-      .catch(() => setError("Không thể tải bài tập và quiz cần hoàn thành."))
-      .finally(() => setLoading(false));
+    let ignore = false;
+    const loadAssignmentsAndQuizzes = async () => {
+      try {
+        const [assignmentData, quizData] = await Promise.all([
+          studentApi.getAssignments(),
+          studentApi.getQuizzes(),
+        ]);
+        if (!ignore) {
+          setAssignments(assignmentData);
+          setQuizzes(quizData);
+        }
+      } catch {
+        if (!ignore) {
+          setError("Không thể tải bài tập và quiz cần hoàn thành.");
+        }
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void loadAssignmentsAndQuizzes();
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   const count = useMemo(() => filter === "ASSIGNMENT" ? assignments.length
@@ -50,7 +69,7 @@ export const StudentAssignmentsPage: React.FC = () => {
 
       <div className="flex gap-2">
         {(["ALL", "ASSIGNMENT", "QUIZ"] as Filter[]).map((value) => (
-          <Button key={value} size="sm" variant={filter === value ? "default" : "outline"} onClick={() => setFilter(value)}>
+          <Button key={value} size="sm" variant={filter === value ? "default" : "outline"} onClick={() => { setFilter(value); }}>
             {value === "ALL" ? "Tất cả" : value === "ASSIGNMENT" ? "Bài tập" : "Quiz"}
           </Button>
         ))}
@@ -68,7 +87,7 @@ export const StudentAssignmentsPage: React.FC = () => {
               <p className="text-xs text-muted-foreground">{item.courseName} · Hạn nộp: {deadline(item.dueDate)}</p>
             </div>
             <div className="text-xs text-muted-foreground">Điểm: {item.score ?? "—"}/{item.maxScore ?? "—"}</div>
-            <Button size="sm" onClick={() => navigate(`/learn/courses/${item.courseId}`)}>Mở không gian học</Button>
+            <Button size="sm" onClick={() => { void navigate(`/learn/courses/${item.courseId}`); }}>Mở không gian học</Button>
           </Card>
         ))}
 
@@ -80,9 +99,9 @@ export const StudentAssignmentsPage: React.FC = () => {
               <h2 className="font-bold text-foreground">{item.title}</h2>
               <p className="text-xs text-muted-foreground">{item.courseName} · Hạn làm: {deadline(item.dueAt)}</p>
             </div>
-            <div className="text-xs text-muted-foreground">Lượt làm: {item.attemptsUsed}/{item.maxAttempts || "∞"}</div>
+            <div className="text-xs text-muted-foreground">Lượt làm: {item.attemptsUsed}/{item.maxAttempts ?? "∞"}</div>
             <Button size="sm" disabled={item.status === "EXPIRED" || item.status === "PASSED"}
-              onClick={() => navigate(`/learn/courses/${item.courseId}`)}>Mở không gian học</Button>
+              onClick={() => { void navigate(`/learn/courses/${item.courseId}`); }}>Mở không gian học</Button>
           </Card>
         ))}
       </div>}

@@ -1,0 +1,612 @@
+\documentclass[12pt,a4paper]{article}
+
+% ==================== GÓI CƠ BẢN ====================
+\usepackage[utf8]{inputenc}
+\usepackage[T5]{fontenc}
+\usepackage[vietnamese]{babel}
+\usepackage{geometry}
+\usepackage{parskip}
+\usepackage{enumitem}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{fancyhdr}
+\usepackage{lastpage}
+
+% ==================== ĐỊNH DẠNG TRANG ====================
+\geometry{
+    top=2cm,
+    bottom=2cm,
+    left=2.5cm,
+    right=2cm
+}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.7em}
+\setlist[itemize]{leftmargin=1.8em, itemsep=0.35em}
+\setlist[enumerate]{leftmargin=1.8em, itemsep=0.35em}
+
+\definecolor{ailmsblue}{RGB}{25, 84, 166}
+\definecolor{ailmsgray}{RGB}{90, 90, 90}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=ailmsblue,
+    urlcolor=ailmsblue,
+    citecolor=ailmsblue,
+    pdftitle={Chính sách AI, Dữ liệu và Bảo mật AILMS},
+    pdfauthor={Phòng Công nghệ và Dữ liệu AILMS}
+}
+
+% ==================== HEADER / FOOTER ====================
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\textcolor{ailmsgray}{AILMS}}
+\fancyhead[R]{\textcolor{ailmsgray}{Chính sách AI, Dữ liệu \& Bảo mật}}
+\fancyfoot[C]{Trang \thepage/\pageref{LastPage}}
+\renewcommand{\headrulewidth}{0.4pt}
+\renewcommand{\footrulewidth}{0.4pt}
+
+% ==================== THÔNG TIN TÀI LIỆU ====================
+\title{
+    \textbf{\LARGE CHÍNH SÁCH SỬ DỤNG TRÍ TUỆ NHÂN TẠO,\\
+    QUẢN TRỊ DỮ LIỆU VÀ BẢO MẬT THÔNG TIN AILMS}
+}
+\author{Phòng Công nghệ và Dữ liệu AILMS}
+\date{Phiên bản 1.0 -- Ngày hiệu lực: \today}
+
+\begin{document}
+
+\maketitle
+
+\begin{center}
+    \textit{Tài liệu này quy định các nguyên tắc sử dụng trí tuệ nhân tạo, xử lý dữ liệu,
+    bảo vệ thông tin và kiểm soát truy cập trên hệ thống AI Personalized Learning
+    Management System (AILMS).}
+\end{center}
+
+\vspace{1cm}
+
+\begin{longtable}{|>{\bfseries}p{4cm}|p{9.5cm}|}
+    \hline
+    Tên tài liệu &
+    Chính sách sử dụng Trí tuệ nhân tạo, Quản trị dữ liệu và Bảo mật thông tin AILMS \\
+    \hline
+    Phiên bản & 1.0 \\
+    \hline
+    Đơn vị quản lý & Phòng Công nghệ và Dữ liệu AILMS \\
+    \hline
+    Đối tượng áp dụng &
+    Học viên, giảng viên, trợ giảng, nhân sự, quản trị viên,
+    đối tác và các bên được cấp quyền truy cập hệ thống \\
+    \hline
+    Chu kỳ rà soát & Tối thiểu 12 tháng một lần hoặc khi có thay đổi quan trọng \\
+    \hline
+\end{longtable}
+
+\tableofcontents
+\newpage
+
+% =========================================================
+\section{Mục đích}
+
+Chính sách này được ban hành nhằm thiết lập khuôn khổ thống nhất cho việc phát triển,
+triển khai và sử dụng các chức năng trí tuệ nhân tạo, dữ liệu học tập và các thành phần
+bảo mật trong hệ thống AILMS.
+
+Chính sách hướng đến các mục tiêu sau:
+
+\begin{itemize}
+    \item Bảo đảm AI được sử dụng đúng mục đích, có trách nhiệm và minh bạch.
+    \item Bảo vệ dữ liệu cá nhân, dữ liệu học tập và dữ liệu nội bộ của tổ chức.
+    \item Ngăn chặn truy cập trái phép, rò rỉ dữ liệu và lạm dụng chức năng AI.
+    \item Xác định rõ trách nhiệm của người dùng và đơn vị vận hành hệ thống.
+    \item Duy trì khả năng kiểm tra, truy vết và xử lý sự cố.
+    \item Tuân thủ các quy định pháp luật hiện hành về bảo vệ dữ liệu và an toàn thông tin.
+\end{itemize}
+
+% =========================================================
+\section{Phạm vi áp dụng}
+
+Chính sách này áp dụng đối với:
+
+\begin{itemize}
+    \item Website, ứng dụng và API thuộc hệ thống AILMS.
+    \item Dịch vụ Backend, AI Service, cơ sở dữ liệu, bộ nhớ đệm và kho lưu trữ tệp.
+    \item Các chức năng AI Tutor, chatbot tư vấn, gợi ý khóa học, tạo nội dung và RAG.
+    \item Dữ liệu do học viên, giảng viên, nhân sự hoặc quản trị viên cung cấp.
+    \item Các bên thứ ba được phép tích hợp hoặc xử lý dữ liệu thay mặt AILMS.
+\end{itemize}
+
+Việc truy cập hoặc sử dụng hệ thống đồng nghĩa với việc người dùng đồng ý tuân thủ
+các quy định được nêu trong chính sách này và các điều khoản liên quan khác của AILMS.
+
+% =========================================================
+\section{Giải thích thuật ngữ}
+
+Trong phạm vi tài liệu này, các thuật ngữ dưới đây được hiểu như sau:
+
+\begin{itemize}
+    \item \textbf{AILMS:} Hệ thống quản lý học tập có tích hợp trí tuệ nhân tạo và
+    cá nhân hóa quá trình học tập.
+
+    \item \textbf{AI Tutor:} Trợ lý học tập sử dụng AI để giải thích kiến thức,
+    gợi ý nội dung, hỗ trợ ôn tập và định hướng lộ trình học.
+
+    \item \textbf{AI tạo sinh:} Mô hình có khả năng tạo văn bản, câu hỏi, bài tập,
+    bản tóm tắt hoặc nội dung mới dựa trên dữ liệu đầu vào.
+
+    \item \textbf{RAG:} Cơ chế truy xuất dữ liệu liên quan từ kho tri thức trước khi
+    mô hình AI tạo câu trả lời.
+
+    \item \textbf{Dữ liệu cá nhân:} Thông tin gắn với hoặc có khả năng xác định một
+    cá nhân cụ thể.
+
+    \item \textbf{Dữ liệu học tập:} Thông tin về khóa học, tiến độ, kết quả,
+    bài nộp, thời gian học và hành vi tương tác của học viên.
+
+    \item \textbf{RBAC:} Mô hình kiểm soát truy cập dựa trên vai trò của người dùng.
+
+    \item \textbf{Audit Log:} Nhật ký ghi nhận các thao tác quan trọng phục vụ
+    kiểm tra, truy vết và điều tra sự cố.
+\end{itemize}
+
+% =========================================================
+\section{Nguyên tắc sử dụng trí tuệ nhân tạo}
+
+AILMS triển khai AI theo nhiều cấp độ phù hợp với từng trường hợp sử dụng:
+
+\begin{enumerate}
+    \item \textbf{Cấp độ 1 -- Rule-based:}
+    xử lý câu hỏi hoặc yêu cầu theo các quy tắc và kịch bản được xác định trước.
+
+    \item \textbf{Cấp độ 2 -- Tìm kiếm và xếp hạng:}
+    hỗ trợ tìm kiếm khóa học, nội dung và tài nguyên dựa trên từ khóa,
+    mức độ liên quan và bộ lọc.
+
+    \item \textbf{Cấp độ 3 -- Machine Learning Recommendation:}
+    gợi ý khóa học, lộ trình hoặc nội dung dựa trên hồ sơ và hoạt động học tập.
+
+    \item \textbf{Cấp độ 4 -- AI tạo sinh kết hợp RAG:}
+    tạo câu trả lời hoặc nội dung dựa trên mô hình ngôn ngữ và dữ liệu được phép truy xuất.
+\end{enumerate}
+
+Việc sử dụng AI phải tuân theo các nguyên tắc:
+
+\begin{itemize}
+    \item Có mục đích rõ ràng và phục vụ trực tiếp hoạt động học tập hoặc vận hành.
+    \item Không sử dụng AI để đưa ra quyết định có ảnh hưởng nghiêm trọng tới người dùng
+    mà không có cơ chế kiểm tra hoặc xác nhận của con người.
+    \item Không tự động coi nội dung do AI tạo ra là nguồn thông tin tuyệt đối chính xác.
+    \item Không cho phép AI vượt qua cơ chế phân quyền hoặc truy cập dữ liệu trái phép.
+    \item Hạn chế tối đa việc đưa dữ liệu cá nhân không cần thiết vào câu lệnh gửi tới AI.
+\end{itemize}
+
+% =========================================================
+\section{Vai trò và giới hạn của trợ lý AI}
+
+AI Tutor đóng vai trò hỗ trợ, không thay thế hoàn toàn giảng viên, cố vấn,
+nhân sự hoặc cán bộ có thẩm quyền.
+
+AI có thể được sử dụng để:
+
+\begin{itemize}
+    \item Giải thích khái niệm và nội dung bài học.
+    \item Tóm tắt tài liệu hoặc gợi ý tài nguyên học tập.
+    \item Gợi ý khóa học và lộ trình dựa trên nhu cầu của học viên.
+    \item Tạo bản nháp câu hỏi, bài tập hoặc nội dung giảng dạy.
+    \item Hỗ trợ tìm kiếm và truy xuất thông tin trong phạm vi được cấp quyền.
+\end{itemize}
+
+AI không được sử dụng làm căn cứ duy nhất để:
+
+\begin{itemize}
+    \item Đưa ra quyết định kỷ luật, đình chỉ hoặc khóa tài khoản.
+    \item Chấm điểm cuối cùng đối với bài làm có tính chủ quan cao.
+    \item Xác định gian lận học thuật mà không có bước kiểm tra của con người.
+    \item Đưa ra cam kết pháp lý, tài chính hoặc tuyển dụng thay mặt tổ chức.
+    \item Cung cấp lời khuyên chuyên môn trong lĩnh vực y tế, pháp lý hoặc tài chính.
+\end{itemize}
+
+% =========================================================
+\section{Minh bạch đối với nội dung do AI tạo ra}
+
+AILMS thực hiện các biện pháp minh bạch sau:
+
+\begin{itemize}
+    \item Thông báo rõ khi người dùng đang tương tác với AI.
+    \item Gắn nhãn phù hợp đối với nội dung được tạo hoặc đề xuất bởi AI.
+    \item Cảnh báo rằng câu trả lời của AI có thể chưa chính xác hoặc chưa đầy đủ.
+    \item Cho phép người dùng phản hồi, báo cáo hoặc yêu cầu kiểm tra nội dung AI.
+    \item Lưu lại thông tin kỹ thuật cần thiết để truy vết quá trình tạo câu trả lời,
+    trong phạm vi phù hợp với chính sách bảo mật.
+\end{itemize}
+
+Người dùng có trách nhiệm kiểm tra lại các thông tin quan trọng trước khi sử dụng
+cho hoạt động học tập, đánh giá hoặc ra quyết định.
+
+% =========================================================
+\section{Giới hạn sử dụng và chống lạm dụng AI}
+
+Để bảo đảm hiệu năng, chi phí và an toàn hệ thống, AILMS có thể áp dụng:
+
+\begin{itemize}
+    \item Giới hạn số lượng yêu cầu trong một khoảng thời gian.
+    \item Giới hạn độ dài câu hỏi, tệp tải lên và lịch sử hội thoại.
+    \item Giới hạn số lượt tạo lại câu trả lời.
+    \item Giới hạn theo tài khoản, vai trò, địa chỉ IP hoặc gói dịch vụ.
+    \item Tạm dừng chức năng AI khi phát hiện hành vi tự động hóa hoặc lạm dụng.
+\end{itemize}
+
+Người dùng không được:
+
+\begin{itemize}
+    \item Cố gắng vượt qua giới hạn sử dụng hoặc cơ chế phân quyền.
+    \item Thực hiện prompt injection nhằm lấy chỉ dẫn hệ thống hoặc dữ liệu nội bộ.
+    \item Yêu cầu AI tiết lộ thông tin của người dùng khác.
+    \item Dùng hệ thống để tạo mã độc, nội dung lừa đảo hoặc nội dung vi phạm pháp luật.
+    \item Gửi hàng loạt yêu cầu tự động gây ảnh hưởng đến tính ổn định của hệ thống.
+\end{itemize}
+
+% =========================================================
+\section{Thu thập và xử lý dữ liệu}
+
+AILMS có thể thu thập các nhóm dữ liệu sau:
+
+\subsection{Dữ liệu tài khoản}
+
+Bao gồm họ tên, tên đăng nhập, địa chỉ thư điện tử, số điện thoại,
+vai trò, trạng thái tài khoản và thông tin xác thực cần thiết.
+
+\subsection{Dữ liệu học tập}
+
+Bao gồm:
+
+\begin{itemize}
+    \item Khóa học và gói đào tạo đã đăng ký.
+    \item Tiến độ hoàn thành bài học.
+    \item Điểm số, bài nộp, bài kiểm tra và phản hồi của giảng viên.
+    \item Thời gian truy cập, thời lượng học và lịch sử tương tác.
+    \item Lớp học, phiên tư vấn và hoạt động thảo luận.
+\end{itemize}
+
+\subsection{Dữ liệu hội thoại AI}
+
+Bao gồm câu hỏi, câu trả lời, phản hồi đánh giá, tệp đính kèm,
+thông tin ngữ cảnh và mã định danh cuộc hội thoại.
+
+\subsection{Dữ liệu kỹ thuật}
+
+Bao gồm địa chỉ IP, loại thiết bị, trình duyệt, thời điểm truy cập,
+nhật ký hệ thống và thông tin lỗi cần thiết cho việc vận hành và bảo mật.
+
+% =========================================================
+\section{Mục đích xử lý dữ liệu}
+
+Dữ liệu được xử lý cho các mục đích:
+
+\begin{itemize}
+    \item Cung cấp và duy trì chức năng của hệ thống.
+    \item Xác thực tài khoản và kiểm soát truy cập.
+    \item Theo dõi tiến độ và quản lý hoạt động học tập.
+    \item Cá nhân hóa nội dung, khóa học và lộ trình.
+    \item Cải thiện chất lượng tìm kiếm và trợ lý AI.
+    \item Phát hiện gian lận, lạm dụng hoặc nguy cơ bảo mật.
+    \item Phân tích hiệu năng và khắc phục lỗi kỹ thuật.
+    \item Thực hiện nghĩa vụ theo quy định pháp luật hoặc yêu cầu hợp lệ của cơ quan có thẩm quyền.
+\end{itemize}
+
+AILMS không sử dụng dữ liệu cá nhân cho mục đích không liên quan nếu chưa có
+căn cứ phù hợp hoặc sự đồng ý cần thiết của người dùng.
+
+% =========================================================
+\section{Cá nhân hóa hoạt động học tập}
+
+AILMS có thể sử dụng dữ liệu học tập để:
+
+\begin{itemize}
+    \item Đề xuất khóa học hoặc bài học tiếp theo.
+    \item Phát hiện nội dung người học chưa nắm vững.
+    \item Điều chỉnh mức độ khó của tài liệu hoặc bài tập.
+    \item Xây dựng báo cáo tiến độ và cảnh báo nguy cơ bỏ học.
+\end{itemize}
+
+Khi hệ thống cung cấp tùy chọn tắt cá nhân hóa, người dùng có thể sử dụng tùy chọn này
+trong phần cài đặt tài khoản. Khi cá nhân hóa bị tắt, hệ thống vẫn có thể xử lý dữ liệu
+tối thiểu cần thiết để cung cấp khóa học, lưu tiến độ và bảo đảm an toàn.
+
+% =========================================================
+\section{Quản trị dữ liệu RAG và cơ sở dữ liệu véc-tơ}
+
+Tài liệu được đưa vào hệ thống RAG phải có nguồn gốc và phạm vi sử dụng rõ ràng.
+
+Mỗi nguồn dữ liệu cần được gắn các thông tin quản trị phù hợp, chẳng hạn:
+
+\begin{itemize}
+    \item Mã định danh nguồn dữ liệu.
+    \item Loại tài liệu và đơn vị sở hữu.
+    \item Domain hoặc phân hệ nghiệp vụ.
+    \item Vai trò được phép truy cập.
+    \item Khóa học, lớp học hoặc tổ chức liên quan.
+    \item Phiên bản, thời điểm cập nhật và trạng thái hiệu lực.
+\end{itemize}
+
+Trước khi truy xuất dữ liệu RAG, hệ thống phải kiểm tra:
+
+\begin{itemize}
+    \item Danh tính và trạng thái tài khoản của người yêu cầu.
+    \item Vai trò và quyền hạn hiện tại.
+    \item Quyền sở hữu hoặc quyền truy cập khóa học.
+    \item Phạm vi domain và các điều kiện bổ sung của nguồn dữ liệu.
+\end{itemize}
+
+Dữ liệu véc-tơ chỉ là bản biểu diễn phục vụ truy xuất và không thay thế nguồn dữ liệu gốc.
+Khi nguồn gốc bị sửa, thu hồi hoặc hết hiệu lực, dữ liệu liên quan trong Vector DB
+phải được cập nhật hoặc xóa theo quy trình đồng bộ.
+
+% =========================================================
+\section{Bảo mật và kiểm soát truy cập}
+
+\subsection{Phân quyền RBAC}
+
+Mỗi người dùng chỉ được truy cập các chức năng và dữ liệu cần thiết cho vai trò của mình.
+
+Các vai trò có thể bao gồm:
+
+\begin{itemize}
+    \item Học viên.
+    \item Giảng viên.
+    \item Trợ giảng.
+    \item Nhân sự hoặc tư vấn viên.
+    \item Quản trị viên.
+    \item Quản trị hệ thống.
+\end{itemize}
+
+Ngoài việc kiểm tra tại giao diện, mọi API phải kiểm tra quyền ở phía Backend.
+Việc ẩn nút hoặc chức năng trên Frontend không được xem là một biện pháp phân quyền đầy đủ.
+
+\subsection{Bảo vệ thông tin xác thực}
+
+\begin{itemize}
+    \item Mật khẩu phải được băm bằng thuật toán an toàn như BCrypt.
+    \item Mật khẩu không được lưu hoặc ghi log dưới dạng văn bản thuần.
+    \item Access Token phải có thời hạn phù hợp.
+    \item Refresh Token phải được kiểm soát, thu hồi hoặc vô hiệu hóa khi cần thiết.
+    \item Secret key và thông tin kết nối không được ghi trực tiếp trong mã nguồn.
+    \item Thông tin nhạy cảm phải được quản lý qua biến môi trường hoặc hệ thống quản lý bí mật.
+\end{itemize}
+
+\subsection{Bảo mật dịch vụ nội bộ}
+
+Kết nối giữa Frontend, Backend, AI Service, cơ sở dữ liệu,
+Redis, Vector DB và kho tệp phải được giới hạn theo mạng, quyền và môi trường triển khai.
+
+API nội bộ không được công khai nếu không cần thiết. Những API buộc phải công khai
+phải có cơ chế xác thực, giới hạn lưu lượng và ghi nhận nhật ký truy cập.
+
+\subsection{Bảo vệ tệp và tài liệu}
+
+\begin{itemize}
+    \item Tệp tải lên phải được kiểm tra loại, kích thước và định dạng.
+    \item Tên tệp do người dùng cung cấp không được sử dụng trực tiếp làm đường dẫn lưu trữ.
+    \item URL truy cập tệp riêng tư phải có thời hạn hoặc yêu cầu xác thực.
+    \item Tài liệu khóa học trả phí chỉ được cấp cho người có quyền sở hữu hợp lệ.
+\end{itemize}
+
+% =========================================================
+\section{Kiểm duyệt nội dung và an toàn AI}
+
+Đầu vào và đầu ra của AI có thể được kiểm tra nhằm phát hiện:
+
+\begin{itemize}
+    \item Nội dung kích động bạo lực hoặc tự gây hại.
+    \item Nội dung thù ghét, quấy rối hoặc phân biệt đối xử.
+    \item Nội dung tình dục không phù hợp.
+    \item Nội dung hướng dẫn hành vi nguy hiểm hoặc vi phạm pháp luật.
+    \item Dữ liệu cá nhân hoặc thông tin bí mật có nguy cơ bị tiết lộ.
+    \item Prompt injection hoặc yêu cầu vượt qua chính sách hệ thống.
+\end{itemize}
+
+Tùy theo mức độ rủi ro, hệ thống có thể từ chối yêu cầu, giới hạn câu trả lời,
+đưa ra cảnh báo, chuyển yêu cầu cho người phụ trách hoặc khóa tạm thời chức năng liên quan.
+
+% =========================================================
+\section{Chất lượng, sai lệch và độ chính xác của AI}
+
+Nội dung do AI tạo ra có thể chứa lỗi, thiếu ngữ cảnh hoặc phản ánh sai lệch của dữ liệu nguồn.
+
+AILMS áp dụng các biện pháp giảm thiểu:
+
+\begin{itemize}
+    \item Ưu tiên truy xuất từ nguồn tài liệu được kiểm duyệt.
+    \item Hiển thị nguồn tham khảo khi chức năng hỗ trợ.
+    \item Giới hạn AI trả lời trong phạm vi dữ liệu và vai trò được cấp quyền.
+    \item Cho phép người dùng đánh giá câu trả lời.
+    \item Định kỳ đánh giá chất lượng, độ chính xác và mức độ an toàn của hệ thống.
+    \item Yêu cầu giảng viên kiểm tra nội dung AI trước khi sử dụng làm tài liệu chính thức.
+\end{itemize}
+
+% =========================================================
+\section{Audit Log và giám sát hệ thống}
+
+AILMS ghi nhận Audit Log đối với các hoạt động có mức độ ảnh hưởng cao, bao gồm:
+
+\begin{itemize}
+    \item Đăng nhập, đăng xuất và thay đổi trạng thái tài khoản.
+    \item Thay đổi vai trò hoặc quyền hạn.
+    \item Tạo, sửa, xóa khóa học và nội dung quan trọng.
+    \item Thay đổi điểm, kết quả hoặc trạng thái học tập.
+    \item Truy cập, đồng bộ hoặc xóa nguồn dữ liệu RAG.
+    \item Thực hiện hành động quản trị thông qua AI.
+    \item Thay đổi cấu hình bảo mật hoặc tích hợp hệ thống.
+\end{itemize}
+
+Audit Log phải được bảo vệ khỏi việc sửa đổi trái phép và chỉ được truy cập bởi
+người có nhiệm vụ phù hợp. Không ghi mật khẩu, secret key, access token đầy đủ
+hoặc dữ liệu nhạy cảm không cần thiết vào nhật ký.
+
+% =========================================================
+\section{Thời hạn lưu trữ và xóa dữ liệu}
+
+Dữ liệu chỉ được lưu trong thời gian cần thiết để thực hiện mục đích đã công bố,
+đáp ứng yêu cầu vận hành hoặc tuân thủ nghĩa vụ pháp lý.
+
+Thời hạn cụ thể có thể khác nhau tùy nhóm dữ liệu:
+
+\begin{itemize}
+    \item Dữ liệu tài khoản được lưu trong thời gian tài khoản hoạt động và thời gian cần thiết sau khi đóng tài khoản.
+    \item Dữ liệu học tập được lưu theo yêu cầu đào tạo và xác nhận kết quả.
+    \item Lịch sử hội thoại AI được lưu theo cấu hình và mục đích hỗ trợ người dùng.
+    \item Nhật ký bảo mật được lưu trong khoảng thời gian cần thiết để điều tra và kiểm toán.
+    \item Tệp tạm và dữ liệu đệm phải được tự động xóa khi hết thời hạn sử dụng.
+\end{itemize}
+
+Khi hết thời hạn lưu trữ, dữ liệu phải được xóa, ẩn danh hoặc tổng hợp
+theo quy trình kỹ thuật phù hợp.
+
+% =========================================================
+\section{Quyền của người dùng đối với dữ liệu}
+
+Tùy theo quy định áp dụng và phạm vi hệ thống hỗ trợ, người dùng có thể yêu cầu:
+
+\begin{itemize}
+    \item Được thông báo về dữ liệu đang được thu thập và xử lý.
+    \item Truy cập thông tin cá nhân và dữ liệu học tập của mình.
+    \item Điều chỉnh thông tin không chính xác.
+    \item Yêu cầu xóa dữ liệu khi không còn căn cứ lưu trữ hợp lệ.
+    \item Tắt hoặc hạn chế một số tính năng cá nhân hóa.
+    \item Phản đối hoặc yêu cầu xem xét quyết định có sự hỗ trợ của AI.
+    \item Báo cáo câu trả lời AI không chính xác hoặc không phù hợp.
+\end{itemize}
+
+Một số yêu cầu có thể bị giới hạn nếu dữ liệu cần được lưu để bảo vệ quyền lợi hợp pháp,
+ngăn chặn gian lận, xác nhận kết quả học tập hoặc tuân thủ nghĩa vụ pháp lý.
+
+% =========================================================
+\section{Chia sẻ dữ liệu và dịch vụ bên thứ ba}
+
+AILMS chỉ chia sẻ dữ liệu với bên thứ ba trong các trường hợp cần thiết và có căn cứ phù hợp,
+chẳng hạn như:
+
+\begin{itemize}
+    \item Nhà cung cấp hạ tầng lưu trữ hoặc điện toán.
+    \item Nhà cung cấp dịch vụ AI hoặc mô hình ngôn ngữ.
+    \item Đơn vị thanh toán hoặc gửi thông báo.
+    \item Cơ quan nhà nước có thẩm quyền theo quy định pháp luật.
+\end{itemize}
+
+Dữ liệu được chia sẻ phải giới hạn ở mức cần thiết. Các bên xử lý dữ liệu phải đáp ứng
+yêu cầu phù hợp về bảo mật, mục đích sử dụng, thời hạn lưu trữ và xử lý sự cố.
+
+Không được gửi mật khẩu, token truy cập hoặc dữ liệu bí mật không cần thiết
+tới nhà cung cấp AI bên thứ ba.
+
+% =========================================================
+\section{Ứng phó sự cố an toàn thông tin}
+
+Khi phát hiện hoặc nghi ngờ có sự cố, AILMS có thể thực hiện:
+
+\begin{enumerate}
+    \item Ghi nhận, phân loại và đánh giá mức độ ảnh hưởng.
+    \item Cô lập dịch vụ, tài khoản hoặc thành phần bị ảnh hưởng.
+    \item Thu hồi Access Token, Refresh Token và các phiên đăng nhập liên quan.
+    \item Tạm ngừng chức năng AI, RAG hoặc tích hợp có nguy cơ.
+    \item Bảo toàn Audit Log và bằng chứng kỹ thuật.
+    \item Khắc phục lỗ hổng, phục hồi dữ liệu và kiểm tra tính toàn vẹn.
+    \item Thông báo cho các bên bị ảnh hưởng hoặc cơ quan có thẩm quyền khi cần thiết.
+    \item Phân tích nguyên nhân và triển khai biện pháp phòng ngừa tái diễn.
+\end{enumerate}
+
+Việc đóng băng tài khoản hoặc thu hồi token phải dựa trên mức độ rủi ro và
+không được thực hiện tùy tiện nếu chưa có căn cứ kỹ thuật hoặc nghiệp vụ phù hợp.
+
+% =========================================================
+\section{Trách nhiệm của người dùng}
+
+Người dùng có trách nhiệm:
+
+\begin{itemize}
+    \item Bảo vệ thông tin đăng nhập và không chia sẻ tài khoản.
+    \item Cung cấp thông tin chính xác trong phạm vi cần thiết.
+    \item Không tải lên tài liệu mà mình không có quyền sử dụng.
+    \item Không sử dụng AI để gian lận học tập hoặc xâm phạm quyền của người khác.
+    \item Kiểm tra nội dung do AI tạo ra trước khi sử dụng.
+    \item Thông báo kịp thời khi phát hiện truy cập trái phép hoặc sự cố.
+\end{itemize}
+
+Người dùng có thể bị giới hạn hoặc đình chỉ quyền truy cập nếu vi phạm chính sách,
+gây nguy hiểm cho hệ thống hoặc ảnh hưởng đến quyền lợi của người dùng khác.
+
+% =========================================================
+\section{Trách nhiệm của giảng viên và quản trị viên}
+
+Giảng viên và quản trị viên phải:
+
+\begin{itemize}
+    \item Chỉ truy cập dữ liệu phục vụ công việc được giao.
+    \item Không sao chép hoặc chia sẻ dữ liệu học viên trái phép.
+    \item Kiểm tra nội dung do AI tạo ra trước khi công bố.
+    \item Không dùng dữ liệu nội bộ để huấn luyện hoặc thử nghiệm mô hình bên ngoài khi chưa được phép.
+    \item Bảo đảm tài liệu đưa vào RAG có nguồn gốc, quyền sử dụng và phạm vi truy cập rõ ràng.
+    \item Báo cáo sự cố hoặc hành vi bất thường cho đơn vị phụ trách.
+\end{itemize}
+
+% =========================================================
+\section{Quản lý thay đổi và đánh giá định kỳ}
+
+Các mô hình AI, prompt hệ thống, công cụ quản trị và nguồn dữ liệu RAG phải được
+đánh giá trước khi triển khai vào môi trường chính thức.
+
+Việc đánh giá có thể bao gồm:
+
+\begin{itemize}
+    \item Kiểm tra độ chính xác và chất lượng câu trả lời.
+    \item Kiểm tra phân quyền và khả năng rò rỉ dữ liệu.
+    \item Kiểm tra prompt injection và hành vi vượt giới hạn.
+    \item Kiểm tra hiệu năng, chi phí và giới hạn lưu lượng.
+    \item Kiểm tra khả năng truy vết và khôi phục khi có lỗi.
+\end{itemize}
+
+Mọi thay đổi quan trọng phải được ghi nhận, kiểm thử và có phương án quay lui phù hợp.
+
+% =========================================================
+\section{Sửa đổi chính sách}
+
+AILMS có thể cập nhật chính sách này để phản ánh thay đổi về chức năng,
+công nghệ, mô hình AI, quy trình vận hành hoặc quy định pháp luật.
+
+Phiên bản mới phải ghi rõ ngày hiệu lực. Đối với thay đổi ảnh hưởng đáng kể
+đến quyền lợi hoặc cách xử lý dữ liệu, AILMS sẽ thực hiện biện pháp thông báo phù hợp.
+
+% =========================================================
+\section{Thông tin liên hệ}
+
+Người dùng có thể gửi yêu cầu, phản ánh hoặc báo cáo sự cố thông qua:
+
+\begin{itemize}
+    \item \textbf{Đơn vị phụ trách:} Phòng Công nghệ và Dữ liệu AILMS.
+    \item \textbf{Email hỗ trợ:} \href{mailto:support@ailms.example}{support@ailms.example}.
+    \item \textbf{Kênh hỗ trợ:} Chức năng hỗ trợ hoặc gửi yêu cầu trên hệ thống AILMS.
+\end{itemize}
+
+\textit{Lưu ý: địa chỉ thư điện tử trên cần được thay thế bằng địa chỉ chính thức
+trước khi ban hành tài liệu.}
+
+% =========================================================
+\section{Hiệu lực thi hành}
+
+Chính sách này có hiệu lực kể từ ngày được công bố và áp dụng cho toàn bộ
+người dùng, nhân sự và hệ thống thuộc phạm vi quản lý của AILMS.
+
+Các đơn vị liên quan có trách nhiệm phổ biến, triển khai và định kỳ rà soát
+việc tuân thủ chính sách.
+
+\vfill
+
+\begin{center}
+    \textbf{ĐẠI DIỆN PHÒNG CÔNG NGHỆ VÀ DỮ LIỆU AILMS}\\[1.5cm]
+    \textit{Ký và ghi rõ họ tên}
+\end{center}
+
+\end{document}

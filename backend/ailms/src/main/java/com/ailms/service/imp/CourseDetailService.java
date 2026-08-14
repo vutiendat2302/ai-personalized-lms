@@ -161,8 +161,10 @@ public class CourseDetailService implements ICourseDetailService {
         UserEntity creator = userRepository.findById(creatorId).orElse(null);
         if (creator == null) return null;
         EmployeeEntity employee = employeeRepository.findById(creatorId).orElse(null);
+        String code = employee != null && employee.getEmployeeCode() != null ? employee.getEmployeeCode() : creator.getUsername();
         return CourseDetailResponse.Creator.builder()
                 .id(creator.getId())
+                .code(code)
                 .fullName(creator.getFullName())
                 .avatarUrl(creator.getAvatarUrl())
                 .title(employee != null ? employee.getPosition() : null)

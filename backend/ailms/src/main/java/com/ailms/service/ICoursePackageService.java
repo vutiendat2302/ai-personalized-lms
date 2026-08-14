@@ -3,6 +3,7 @@ package com.ailms.service;
 import com.ailms.request.CreateCoursePackageRequest;
 import com.ailms.request.CoursePackageSearchRequest;
 import com.ailms.request.UpdateCoursePackageRequest;
+import com.ailms.request.CoursePackageStatusRequest;
 import com.ailms.response.CoursePackageResponse;
 import com.ailms.response.CoursePackageStatsResponse;
 import com.ailms.response.PageResponse;
@@ -67,6 +68,9 @@ public interface ICoursePackageService {
      * @return đối tượng chứa thông tin chi tiết kết quả
      */
     CoursePackageResponse update(Long id, UpdateCoursePackageRequest request);
+
+    /** Cập nhật riêng trạng thái hiển thị của gói bán. */
+    CoursePackageResponse updateStatus(Long id, CoursePackageStatusRequest request);
 
     /**
      * Xóa bản ghi khỏi hệ thống theo ID.

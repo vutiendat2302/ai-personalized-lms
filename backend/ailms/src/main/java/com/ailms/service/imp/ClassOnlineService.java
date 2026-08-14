@@ -350,7 +350,8 @@ public class ClassOnlineService implements IClassOnlineService {
 
     private String resolveLifecycleStatus(ClassOnlineEntity entity) {
         BaseStatusEnum status = entity.getStatus();
-        if (status == BaseStatusEnum.INACTIVE || status == BaseStatusEnum.DELETE || status == BaseStatusEnum.DELETED) {
+        if (status == BaseStatusEnum.CANCELLED || status == BaseStatusEnum.INACTIVE
+                || status == BaseStatusEnum.DELETE || status == BaseStatusEnum.DELETED) {
             return "CANCELLED";
         }
 

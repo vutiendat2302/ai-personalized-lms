@@ -112,12 +112,14 @@ public class EmployeeController {
     }
 
     @GetMapping("/stats/expiring-probation-contracts")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<ApiResponse<Long>> getExpiringProbationCount() {
         long count = employeeService.getExpiringProbationCount();
         return ResponseEntity.ok(ApiResponse.of("Get expiring probation count successfully", count));
     }
 
     @PostMapping("/stats/notify-expiring-probation")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<ApiResponse<Void>> notifyExpiringProbation() {
         employeeService.notifyExpiringProbation();
         return ResponseEntity.ok(ApiResponse.message("Sent HR notification for expiring probation contracts successfully"));

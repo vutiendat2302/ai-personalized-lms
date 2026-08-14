@@ -71,10 +71,10 @@ class QdrantVectorStore(BaseVectorStore):
     def _filter(filters: dict[str, Any]) -> models.Filter:
         """Chuyển dictionary thành exact hoặc MatchAny filter của Qdrant."""
         return models.Filter(
-            must=[
-                QdrantVectorStore._condition(key, value)
-                for key, value in filters.items()
-            ]
+            must=[QdrantVectorStore._condition(key, value) for key, value in filters.items()
+                  if not key.startswith("!")],
+            must_not=[QdrantVectorStore._condition(key[1:], value) for key, value in filters.items()
+                      if key.startswith("!")],
         )
 
     @staticmethod

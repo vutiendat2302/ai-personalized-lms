@@ -17,7 +17,10 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
 import java.time.Duration;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
@@ -209,6 +212,33 @@ public class MinioFileStorageService implements IFileStorageService {
             return true;
         } catch (Exception e) {
             return false;
+        }
+    }
+
+    /** Đối chiếu batch file key bằng danh sách object theo từng thư mục MinIO. */
+    @Override
+    public Set<String> findExistingKeys(Collection<String> fileKeys) {
+        if (fileKeys == null || fileKeys.isEmpty()) return Set.of();
+
+        Set<String> requestedKeys = new HashSet<>(fileKeys);
+        requestedKeys.removeIf(key -> key == null || key.isBlank());
+        Set<String> existingKeys = new HashSet<>();
+        Set<String> prefixes = requestedKeys.stream()
+                .map(key -> key.substring(0, key.indexOf('/') + 1))
+                .collect(java.util.stream.Collectors.toSet());
+
+        try {
+            for (String prefix : prefixes) {
+                for (Result<io.minio.messages.Item> result : minioClient.listObjects(
+                        ListObjectsArgs.builder().bucket(bucketName).prefix(prefix).recursive(true).build())) {
+                    String objectName = result.get().objectName();
+                    if (requestedKeys.contains(objectName)) existingKeys.add(objectName);
+                }
+            }
+            return Set.copyOf(existingKeys);
+        } catch (Exception exception) {
+            log.error("Failed to verify physical objects in MinIO", exception);
+            throw new FileStorageException("Failed to verify files in storage");
         }
     }
 }

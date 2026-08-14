@@ -23,10 +23,16 @@ PDF scan và ảnh được OCR bằng Gemini Vision. Video extractor thuộc ph
 - `POST /test/generate`: kiểm tra sinh text với Gemini.
 - `POST /chat/stream`: chat SSE toàn hệ thống có query rewriting, RAG và role filter.
 - `POST /chat/title`: tạo tiêu đề một dòng cho hội thoại mới.
+- `POST /chat/support-answer`: trả lời đồng bộ quick action public từ câu hỏi allowlist và context catalog/policy do Backend cấp; giới hạn answer 4.000 ký tự.
 - `POST /rag/ingest`: ingest `text`, `pdf`, `docx`, `image`; bắt buộc có `domain` và `allowedRoles`.
 - `POST /rag/search`: semantic search với `roles` bắt buộc và Qdrant `MatchAny`.
 - `PUT /memory/{ownerId}/{memoryId}`: ghi long-term memory theo owner và scope.
 - `POST /memory/recall`: semantic recall theo owner và scope.
+
+Catalog recommendation dùng local embedding model `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` (cấu hình qua
+`CATALOG_EMBEDDING_MODEL`) và collection Qdrant
+`public_catalog_local_category`/`public_catalog_local_course`, tách biệt với Gemini RAG. Endpoint
+`POST /catalog/index-batch` nhận tối đa 500 bản ghi để backfill catalog mà không tiêu tốn quota Gemini.
 - `DELETE /memory/{ownerId}?scope=...&memory_id=...`: xóa memory trong một scope.
 
 `/rag/ingest` nhận các ID dưới dạng string. `sourceId` là định danh ổn định của tài liệu; ingest lại cùng ID sẽ thay vector cũ, tránh dữ liệu trùng. `allowedRoles` không có giá trị mặc định để ingestion luôn fail-closed khi backend quên khai báo quyền.

@@ -82,6 +82,7 @@ export interface CourseCurriculumResponse {
   totalLessons?: number;
   totalDurationMin?: number;
   enrollmentId?: string;
+  staffPreviewAccess?: boolean;
 }
 
 export interface SubmissionResponseDTO {
