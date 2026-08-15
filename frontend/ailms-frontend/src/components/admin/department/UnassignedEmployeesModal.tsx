@@ -72,6 +72,9 @@ export const UnassignedEmployeesModal: React.FC<UnassignedEmployeesModalProps> =
   const [singleTargetDeptId, setSingleTargetDeptId] = useState<Record<string, string>>({});
   const [submittingSingle, setSubmittingSingle] = useState<string | null>(null);
 
+  /**
+   * Lấy danh sách nhân viên chưa gán phòng ban
+   */
   const fetchUnassignedEmployees = async () => {
     if (!open) return;
     setLoading(true);
@@ -119,8 +122,14 @@ export const UnassignedEmployeesModal: React.FC<UnassignedEmployeesModalProps> =
     return () => clearTimeout(timer);
   }, [keyword]);
 
+  /**
+   * Lấy ID nhân viên dưới dạng string
+   */
   const getEmpId = (emp: any) => String(emp.id || emp.userId);
 
+  /**
+   * Chọn hoặc bỏ chọn tất cả nhân viên
+   */
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
       setSelectedIds(employees.map((e) => getEmpId(e)));
@@ -129,6 +138,9 @@ export const UnassignedEmployeesModal: React.FC<UnassignedEmployeesModalProps> =
     }
   };
 
+  /**
+   * Bật/tắt trạng thái chọn của một nhân viên
+   */
   const handleToggleSelect = (id: string) => {
     if (selectedIds.includes(id)) {
       setSelectedIds(selectedIds.filter((i) => i !== id));
@@ -137,6 +149,9 @@ export const UnassignedEmployeesModal: React.FC<UnassignedEmployeesModalProps> =
     }
   };
 
+  /**
+   * Gán phòng ban hàng loạt cho các nhân viên đã chọn
+   */
   const handleBulkAssign = async () => {
     if (!bulkTargetDeptId) {
       if (onShowBanner) onShowBanner("Vui lòng chọn phòng ban đích!", true);
@@ -163,6 +178,9 @@ export const UnassignedEmployeesModal: React.FC<UnassignedEmployeesModalProps> =
     }
   };
 
+  /**
+   * Gán phòng ban cho một nhân viên cụ thể
+   */
   const handleSingleAssign = async (empId: string) => {
     const targetDeptId = singleTargetDeptId[empId];
     if (!targetDeptId) {
@@ -194,16 +212,16 @@ export const UnassignedEmployeesModal: React.FC<UnassignedEmployeesModalProps> =
         className="max-w-5xl w-[94vw] max-h-[92vh] flex flex-col p-0 overflow-hidden rounded-2xl bg-card border border-border/40 shadow-2xl backdrop-blur-xs"
       >
         {/* HEADER */}
-        <DialogHeader className="p-6 bg-linear-to-r from-purple-500/10 via-card to-card border-b border-border/40 shrink-0">
+        <DialogHeader className="p-6 bg-linear-to-r from-primary/10 via-card to-card border-b border-border/40 shrink-0">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3.5">
-              <div className="h-12 w-12 rounded-2xl bg-purple-500/20 text-purple-600 font-black flex items-center justify-center border border-purple-500/30 shrink-0">
+              <div className="h-12 w-12 rounded-2xl bg-primary/20 text-primary font-black flex items-center justify-center border border-primary/30 shrink-0">
                 <Users className="h-6 w-6" />
               </div>
               <div>
                 <DialogTitle className="text-xl font-extrabold text-foreground flex items-center gap-2">
                   <span>Danh sách Nhân viên Chưa Gán Phòng Ban</span>
-                  <Badge className="bg-purple-500/10 text-purple-600 font-bold border-purple-500/20">
+                  <Badge className="bg-primary/10 text-primary font-bold border-primary/20">
                     {totalElements} Nhân sự
                   </Badge>
                 </DialogTitle>
@@ -226,13 +244,13 @@ export const UnassignedEmployeesModal: React.FC<UnassignedEmployeesModalProps> =
         {/* BODY */}
         <div className="flex-1 overflow-y-auto p-6 space-y-5">
           {/* BULK ASSIGN TOOLBAR */}
-          <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/20 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="p-4 rounded-xl bg-primary/10 border border-primary/20 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <UserPlus className="h-5 w-5 text-purple-600 shrink-0" />
+              <UserPlus className="h-5 w-5 text-primary shrink-0" />
               <div>
-                <div className="text-xs font-extrabold text-purple-700 uppercase">Gán phòng ban hàng loạt</div>
+                <div className="text-xs font-extrabold text-primary uppercase">Gán phòng ban hàng loạt</div>
                 <div className="text-xs text-muted-foreground mt-0.5">
-                  Đã chọn <strong className="text-purple-600 font-bold">{selectedIds.length}</strong> / {employees.length} nhân sự ở trang này
+                  Đã chọn <strong className="text-primary font-bold">{selectedIds.length}</strong> / {employees.length} nhân sự ở trang này
                 </div>
               </div>
             </div>
@@ -253,7 +271,7 @@ export const UnassignedEmployeesModal: React.FC<UnassignedEmployeesModalProps> =
                 onClick={handleBulkAssign}
                 disabled={selectedIds.length === 0 || !bulkTargetDeptId || submittingBulk}
                 size="sm"
-                className="font-bold text-xs gap-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl cursor-pointer"
+                className="font-bold text-xs gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl cursor-pointer"
               >
                 {submittingBulk ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRightLeft className="h-4 w-4" />}
                 {submittingBulk ? "Đang gán..." : `Gán phòng ban (${selectedIds.length})`}
@@ -288,8 +306,8 @@ export const UnassignedEmployeesModal: React.FC<UnassignedEmployeesModalProps> =
                   <th className="p-3">Mã NV</th>
                   <th className="p-3">Họ và tên</th>
                   <th className="p-3">Email / SĐT</th>
-                  <th className="p-3">Chức vụ (Position)</th>
-                  <th className="p-3 text-center">Hình thức HĐ</th>
+                  <th className="p-3">Chức vụ</th>
+                  <th className="p-3 text-center">Hình thức hợp đồng</th>
                   <th className="p-3 text-center">Trạng thái</th>
                   <th className="p-3 text-right">Thao tác</th>
                 </tr>
@@ -299,7 +317,7 @@ export const UnassignedEmployeesModal: React.FC<UnassignedEmployeesModalProps> =
                   <tr>
                     <td colSpan={8} className="p-8 text-center">
                       <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                        <Loader2 className="h-6 w-6 animate-spin text-purple-600" />
+                        <Loader2 className="h-6 w-6 animate-spin text-primary" />
                         <span className="text-xs">Đang tải danh sách nhân viên chưa gán...</span>
                       </div>
                     </td>
@@ -307,7 +325,7 @@ export const UnassignedEmployeesModal: React.FC<UnassignedEmployeesModalProps> =
                 ) : error ? (
                   <tr>
                     <td colSpan={8} className="p-8 text-center">
-                      <div className="flex flex-col items-center gap-2 text-red-500">
+                      <div className="flex flex-col items-center gap-2 text-destructive">
                         <AlertCircle className="h-7 w-7 opacity-70" />
                         <p className="font-semibold text-sm">Lỗi tải dữ liệu</p>
                         <p className="text-xs text-muted-foreground">{error}</p>
@@ -339,7 +357,7 @@ export const UnassignedEmployeesModal: React.FC<UnassignedEmployeesModalProps> =
                             onCheckedChange={() => handleToggleSelect(empIdStr)}
                           />
                         </td>
-                        <td className="p-3 font-mono font-extrabold text-purple-600">{empCode}</td>
+                        <td className="p-3 font-mono font-extrabold text-primary">{empCode}</td>
                         <td className="p-3">
                           <div className="font-bold text-foreground">{fullName}</div>
                         </td>
@@ -357,8 +375,8 @@ export const UnassignedEmployeesModal: React.FC<UnassignedEmployeesModalProps> =
                           <span
                             className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
                               (emp.status || "ACTIVE") === "ACTIVE"
-                                ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
-                                : "bg-red-500/10 text-red-600 border-red-500/20"
+                                ? "bg-success-forest/10 text-success-forest border-success-forest/20"
+                                : "bg-destructive/10 text-destructive border-destructive/20"
                             }`}
                           >
                             {emp.status || "ACTIVE"}
@@ -371,7 +389,7 @@ export const UnassignedEmployeesModal: React.FC<UnassignedEmployeesModalProps> =
                                 <Button
                                     size="sm"
                                     variant="outline"
-                                    className="h-7 text-xs font-bold gap-1 border-purple-500/30 text-purple-600 hover:bg-purple-500/10 rounded-lg cursor-pointer"
+                                    className="h-7 text-xs font-bold gap-1 border-primary/30 text-primary hover:bg-primary/10 rounded-lg cursor-pointer"
                                   >
                                   <Building2 className="h-3.5 w-3.5" /> Gán phòng ban
                                 </Button>
@@ -400,7 +418,7 @@ export const UnassignedEmployeesModal: React.FC<UnassignedEmployeesModalProps> =
                                 size="sm"
                                 disabled={!singleTargetDeptId[empIdStr] || submittingSingle === empIdStr}
                                 onClick={() => handleSingleAssign(empIdStr)}
-                                className="w-full text-xs font-bold h-8 bg-purple-600 text-white rounded-lg cursor-pointer"
+                                className="w-full text-xs font-bold h-8 bg-primary text-primary-foreground rounded-lg cursor-pointer"
                               >
                                 {submittingSingle === empIdStr ? (
                                   <Loader2 className="h-3.5 w-3.5 animate-spin" />

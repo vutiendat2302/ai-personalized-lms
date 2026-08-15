@@ -33,17 +33,6 @@ export const getDeliveryModeInfo = (mode: string) => {
     };
   }
 
-  if (m.includes("COMBO")) {
-    return {
-      label: "Gói Combo",
-      code: "COMBO",
-      color: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30",
-      title: "Hình thức: Gói Combo Đa Năng",
-      description:
-        "Kết hợp linh hoạt giữa Tự học (SELF_STUDY) và Học kèm 1-1 (ONE_ON_ONE) hoặc Học nhóm (GROUP_CLASS) giúp tối ưu hiệu quả & chi phí.",
-    };
-  }
-
   // Mặc định: SELF_STUDY hoặc SELF_PACED
   return {
     label: "Tự học",

@@ -100,6 +100,20 @@ const getQuizCleanDescription = (quiz: QuizResponseItem | null): string => {
   return quiz.description;
 };
 
+/** Đọc hướng dẫn assignment từ JSON block-editor hoặc trả văn bản thuần. */
+const getAssignmentInstructions = (assignment: AssignmentResponseItem | null): string => {
+  if (!assignment?.description) return "Chưa có hướng dẫn làm bài.";
+  if (!assignment.description.trim().startsWith("{")) return assignment.description;
+  try {
+    const parsed = JSON.parse(assignment.description);
+    return typeof parsed?.instructions === "string" && parsed.instructions.trim()
+      ? parsed.instructions
+      : "Chưa có hướng dẫn làm bài.";
+  } catch {
+    return assignment.description;
+  }
+};
+
 interface AssessmentManagementProps {
   scope?: "all" | "authored";
 }
@@ -144,7 +158,7 @@ export const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ scop
     description: "",
     code: "",
     timeLimitMin: 15,
-    passScore: 5.0,
+    passScore: 70,
     maxScore: 10.0,
     dueDate: "",
   });
@@ -253,14 +267,30 @@ export const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ scop
     fetchData();
   };
 
-  // Open Detail / Student Studio Preview Modal
-  const handleViewDetail = (item: any) => {
+  /** Tải bản chi tiết trước khi mở preview để luôn có câu hỏi và phương án thật. */
+  const handleViewDetail = async (item: QuizResponseItem | AssignmentResponseItem) => {
     if (activeTab === "quizzes") {
-      setSelectedQuizDetail(item);
-      setSelectedAssignmentDetail(null);
+      try {
+        const response = await (authoredOnly
+          ? quizApi.getAuthoredQuizById(item.id)
+          : quizApi.getQuizById(item.id));
+        setSelectedQuizDetail(response.data.data);
+        setSelectedAssignmentDetail(null);
+      } catch {
+        showBanner("error", "Không thể tải chi tiết câu hỏi của quiz.");
+        return;
+      }
     } else {
-      setSelectedAssignmentDetail(item);
-      setSelectedQuizDetail(null);
+      try {
+        const response = await (authoredOnly
+          ? assignmentApi.getAuthoredAssignmentById(item.id)
+          : assignmentApi.getAssignmentById(item.id));
+        setSelectedAssignmentDetail(response.data.data);
+        setSelectedQuizDetail(null);
+      } catch {
+        showBanner("error", "Không thể tải chi tiết bài tập.");
+        return;
+      }
     }
     setDetailModalOpen(true);
   };
@@ -271,9 +301,9 @@ export const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ scop
     setFormData({
       title: "",
       description: "",
-      code: `QZ-${Date.now().toString().slice(-4)}`,
+      code: "",
       timeLimitMin: 15,
-      passScore: 8.0,
+      passScore: 70,
       maxScore: 10.0,
       dueDate: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10),
     });
@@ -284,27 +314,41 @@ export const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ scop
     setCreateModalOpen(true);
   };
 
-  const handleOpenEditModal = (item: any) => {
-    setEditingItem(item);
+  /** Tải chi tiết assessment trước khi sửa để không ghi đè mất câu hỏi đang có. */
+  const handleOpenEditModal = async (item: QuizResponseItem | AssignmentResponseItem) => {
+    let detail: QuizResponseItem | AssignmentResponseItem = item;
+    try {
+      const response = activeTab === "quizzes"
+        ? await (authoredOnly ? quizApi.getAuthoredQuizById(item.id) : quizApi.getQuizById(item.id))
+        : await (authoredOnly
+          ? assignmentApi.getAuthoredAssignmentById(item.id)
+          : assignmentApi.getAssignmentById(item.id));
+      detail = response.data.data;
+    } catch {
+      showBanner("error", "Không thể tải dữ liệu chi tiết để chỉnh sửa.");
+      return;
+    }
+    const editable = detail as any;
+    setEditingItem(editable);
     setFormData({
-      title: item.title || "",
-      description: item.description || "",
-      code: item.code || "",
-      timeLimitMin: item.timeLimitMin || 15,
-      passScore: item.passScore || 8.0,
-      maxScore: item.maxScore || 10.0,
-      dueDate: item.dueDate ? item.dueDate.slice(0, 10) : "",
+      title: editable.title || "",
+      description: activeTab === "assignments" ? getAssignmentInstructions(editable) : editable.description || "",
+      code: editable.code || "",
+      timeLimitMin: editable.timeLimitMin || 15,
+      passScore: editable.passScore || 70,
+      maxScore: editable.maxScore || 10.0,
+      dueDate: editable.dueDate ? editable.dueDate.slice(0, 10) : "",
     });
-    setMaxAttempts(item.maxAttempts || 3);
-    setShuffleQuestions(item.shuffleQuestions !== false);
-    setAllowLate(item.allowLate || false);
+    setMaxAttempts(editable.maxAttempts || 3);
+    setShuffleQuestions(editable.shuffleQuestions !== false);
+    setAllowLate(editable.allowLate || false);
 
     // Extract questions if existing
-    if (item.questions && Array.isArray(item.questions)) {
-      setQuizQuestions(item.questions);
-    } else if (item.description && item.description.trim().startsWith("[")) {
+    if (editable.questions && Array.isArray(editable.questions)) {
+      setQuizQuestions(editable.questions);
+    } else if (editable.description && editable.description.trim().startsWith("[")) {
       try {
-        const parsed = JSON.parse(item.description);
+        const parsed = JSON.parse(editable.description);
         if (Array.isArray(parsed)) setQuizQuestions(parsed);
         else setQuizQuestions([]);
       } catch {
@@ -326,12 +370,11 @@ export const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ scop
       if (activeTab === "quizzes") {
         const payload = {
           title: formData.title,
-          description: quizQuestions.length > 0 ? JSON.stringify(quizQuestions) : formData.description,
+          description: formData.description,
           timeLimitMin: Number(formData.timeLimitMin),
           passScore: Number(formData.passScore),
           maxAttempts,
           shuffleQuestions,
-          code: formData.code,
           questions: quizQuestions,
           status: "ACTIVE",
         };
@@ -598,7 +641,7 @@ export const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ scop
                       </TableCell>
 
                       <TableCell className="font-mono text-xs font-bold text-primary">
-                        {quiz.code || `#QZ-${quiz.id}`}
+                        {quiz.code || `QZ-${quiz.id}`}
                       </TableCell>
 
                       <TableCell>
@@ -633,7 +676,7 @@ export const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ scop
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => handleViewDetail(quiz)}
+                            onClick={() => void handleViewDetail(quiz)}
                             className="h-8 text-xs font-bold gap-1 text-primary hover:bg-primary/10 rounded-xl"
                             title="Xem chi tiết & Preview giao diện học sinh"
                           >
@@ -643,7 +686,7 @@ export const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ scop
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => handleOpenEditModal(quiz)}
+                            onClick={() => void handleOpenEditModal(quiz)}
                             className="h-8 text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl"
                             title="Sửa bài Quiz"
                           >
@@ -676,12 +719,12 @@ export const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ scop
                       </TableCell>
 
                       <TableCell className="font-mono text-xs font-bold text-primary">
-                        {`#ASN-${asn.id}`}
+                        {asn.code || `ASN-${asn.id}`}
                       </TableCell>
 
                       <TableCell>
                         <div className="font-extrabold text-xs text-foreground">{asn.title}</div>
-                        <div className="text-[11px] text-muted-foreground truncate max-w-md">{asn.description || "Chưa có hướng dẫn làm bài."}</div>
+                        <div className="text-[11px] text-muted-foreground truncate max-w-md">{getAssignmentInstructions(asn)}</div>
                       </TableCell>
 
                       <TableCell className="text-center font-mono text-xs font-bold text-emerald-600">
@@ -701,8 +744,8 @@ export const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ scop
                       </TableCell>
 
                       <TableCell className="text-center">
-                        <Badge className="bg-blue-600 text-white font-bold text-[10px]">
-                          {asn.status || "ACTIVE"}
+                        <Badge className={asn.status === "ACTIVE" ? "bg-emerald-600 text-white font-bold text-[10px]" : "bg-amber-600 text-white font-bold text-[10px]"}>
+                          {asn.status === "ACTIVE" ? "Đang hoạt động" : "Bài nháp"}
                         </Badge>
                       </TableCell>
 
@@ -711,7 +754,7 @@ export const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ scop
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => handleViewDetail(asn)}
+                            onClick={() => void handleViewDetail(asn)}
                             className="h-8 text-xs font-bold gap-1 text-primary hover:bg-primary/10 rounded-xl"
                             title="Xem chi tiết & Preview giao diện học sinh"
                           >
@@ -721,7 +764,7 @@ export const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ scop
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => handleOpenEditModal(asn)}
+                            onClick={() => void handleOpenEditModal(asn)}
                             className="h-8 text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl"
                             title="Sửa bài tập"
                           >
@@ -878,10 +921,10 @@ export const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ scop
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/50 pb-3">
                   <div>
                     <Badge variant="outline" className="text-[10px] font-bold text-primary border-primary/40 mb-1">
-                      Mã: `#ASN-${selectedAssignmentDetail.id}`
+                      Mã: {selectedAssignmentDetail.code || `ASN-${selectedAssignmentDetail.id}`}
                     </Badge>
                     <h3 className="font-extrabold text-base text-foreground">{selectedAssignmentDetail.title}</h3>
-                    <p className="text-xs text-muted-foreground mt-0.5">{selectedAssignmentDetail.description || "Không có hướng dẫn bài tập."}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5 whitespace-pre-wrap">{getAssignmentInstructions(selectedAssignmentDetail)}</p>
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
@@ -904,7 +947,7 @@ export const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ scop
                     <textarea
                       rows={4}
                       readOnly
-                      value={selectedAssignmentDetail.instructions || selectedAssignmentDetail.description || "Hãy viết bài luận trình bày giải pháp kiến trúc hệ thống backend microservices..."}
+                      value={getAssignmentInstructions(selectedAssignmentDetail)}
                       className="w-full text-xs p-3 rounded-lg border border-input bg-background outline-none resize-none"
                     />
 
@@ -916,8 +959,8 @@ export const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ scop
                   </div>
 
                   <div className="flex justify-end pt-2">
-                    <Button size="sm" className="font-bold text-xs gap-1.5 bg-primary text-primary-foreground">
-                      <Upload className="h-3.5 w-3.5" /> Nộp Bài Tập (Preview Submit)
+                    <Button size="sm" disabled className="font-bold text-xs gap-1.5">
+                      <Upload className="h-3.5 w-3.5" /> Preview không ghi bài nộp
                     </Button>
                   </div>
                 </div>
@@ -1052,9 +1095,9 @@ export const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ scop
                   <Input
                     type="text"
                     value={formData.code}
-                    onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+                    readOnly
                     className="h-9 text-sm font-mono"
-                    placeholder="VD: QZ-2026-001"
+                    placeholder="Backend tự sinh sau khi lưu"
                   />
                 </div>
               </div>
@@ -1086,13 +1129,13 @@ export const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ scop
 
                 <div className="space-y-1">
                   <Label className="text-xs font-bold flex items-center gap-1">
-                    <Award className="w-3.5 h-3.5 text-muted-foreground" /> Điểm đạt tối thiểu (Thang 10)
+                    <Award className="w-3.5 h-3.5 text-muted-foreground" /> Điểm đạt tối thiểu (Thang 100)
                   </Label>
                   <Input
                     type="number"
                     step="0.5"
                     min={0}
-                    max={10}
+                    max={100}
                     value={formData.passScore}
                     onChange={(e) => setFormData({ ...formData, passScore: parseFloat(e.target.value) || 0 })}
                     className="h-9 text-sm font-mono"

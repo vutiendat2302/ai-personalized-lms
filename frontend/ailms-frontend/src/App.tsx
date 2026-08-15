@@ -46,8 +46,6 @@ import { SalesOrderListPage } from "./pages/admin/sales/SalesOrderListPage";
 import { SalesOrderDetailPage } from "./pages/admin/sales/SalesOrderDetailPage";
 import { SalesPaymentListPage } from "./pages/admin/sales/SalesPaymentListPage";
 import { SalesPaymentDetailPage } from "./pages/admin/sales/SalesPaymentDetailPage";
-import { SalesCouponListPage } from "./pages/admin/sales/SalesCouponListPage";
-import { SalesCouponFormPage } from "./pages/admin/sales/SalesCouponFormPage";
 import { SalesCoursePackageListPage } from "./pages/admin/sales/SalesCoursePackageListPage";
 import { SalesCoursePackageFormPage } from "./pages/admin/sales/SalesCoursePackageFormPage";
 import { SalesEnrollmentListPage } from "./pages/admin/sales/SalesEnrollmentListPage";
@@ -62,10 +60,8 @@ import { TeacherCourseDetailPage } from "./pages/teacher/courses/TeacherCourseDe
 import { TeacherSuggestedClassesPage } from "./pages/teacher/TeacherSuggestedClassesPage";
 import { TeacherGradingPage } from "./pages/teacher/TeacherGradingPage";
 import { TeacherAssessmentsPage } from "./pages/teacher/TeacherAssessmentsPage";
-import { TeacherAttendancePage } from "./pages/teacher/TeacherAttendancePage";
 import { TeacherInsightsPage } from "./pages/teacher/TeacherInsightsPage";
 import { TeacherEarningsPage } from "./pages/teacher/TeacherEarningsPage";
-import { TeacherLeaveRequestsPage } from "./pages/teacher/TeacherLeaveRequestsPage";
 import { CourseBuilderShell } from "./pages/teacher/courses/CourseBuilderShell";
 import { CourseGradingPage } from "./pages/teacher/courses/CourseGradingPage";
 import { StudentLearningPage } from "./pages/student/StudentLearningPage";
@@ -84,7 +80,6 @@ import { StudentOrdersPage } from "./pages/student/StudentOrdersPage";
 import { StudentVouchersPage } from "./pages/student/StudentVouchersPage";
 import { StudentClassesPage } from "./pages/student/StudentClassesPage";
 
-import { LearningAnalytics } from "./pages/LearningAnalytics";
 import { CertificateVerifyPage } from "./pages/CertificateVerifyPage";
 import { ActivityLog } from "./pages/ActivityLog";
 import { Terms } from "./pages/Terms";
@@ -100,6 +95,19 @@ import { MainLayout } from "./layouts/MainLayout";
 import { AdminLayout } from "./layouts/AdminLayout";
 import { TeacherLayout } from "./layouts/TeacherLayout";
 import { StudentLayout } from "./layouts/StudentLayout";
+
+/** Chọn đúng sidebar cho trang nhật ký cá nhân theo portal đang sử dụng. */
+const ActivityLogPortalPage: React.FC = () => {
+  const { auth } = useAuth();
+  const roles = auth.user?.roles ?? [];
+  if (roles.includes(UserRole.TEACHER) || roles.includes(UserRole.TA)) {
+    return <TeacherLayout><ActivityLog /></TeacherLayout>;
+  }
+  if (roles.includes(UserRole.STUDENT)) {
+    return <StudentLayout><ActivityLog /></StudentLayout>;
+  }
+  return <ActivityLog />;
+};
 import { SupportPage } from "./pages/support/SupportPage";
 
 import { UserRole } from "./config/roles";
@@ -281,16 +289,15 @@ function App() {
                   <Route path="/admin/files" element={<FileManagement />} />
                   <Route path="/admin/reviews/moderation" element={<ReviewModerationPage />} />
                   <Route path="/admin/courses/approvals" element={<CourseApprovalPage />} />
-                  <Route path="/analytics" element={<LearningAnalytics />} />
                   <Route path="/sales" element={<Navigate to="/sales/dashboard" replace />} />
                   <Route path="/sales/dashboard" element={<SalesDashboardPage />} />
                   <Route path="/sales/orders" element={<SalesOrderListPage />} />
                   <Route path="/sales/orders/:id" element={<SalesOrderDetailPage />} />
-                  <Route path="/sales/payments" element={<SalesPaymentListPage />} />
-                  <Route path="/sales/payments/:id" element={<SalesPaymentDetailPage />} />
-                  <Route path="/sales/coupons" element={<SalesCouponListPage />} />
-                  <Route path="/sales/coupons/new" element={<SalesCouponFormPage />} />
-                  <Route path="/sales/coupons/:id" element={<SalesCouponFormPage />} />
+                  <Route path="/sales/payments" element={<Navigate to="/sales/orders" replace />} />
+                  <Route path="/sales/payments/:id" element={<Navigate to="/sales/orders" replace />} />
+                  <Route path="/sales/coupons" element={<Navigate to="/admin/coupons" replace />} />
+                  <Route path="/sales/coupons/new" element={<Navigate to="/admin/coupons" replace />} />
+                  <Route path="/sales/coupons/:id" element={<Navigate to="/admin/coupons" replace />} />
                   <Route path="/sales/course-packages" element={<SalesCoursePackageListPage />} />
                   <Route path="/sales/course-packages/new" element={<SalesCoursePackageFormPage />} />
                   <Route path="/sales/course-packages/:id" element={<SalesCoursePackageFormPage />} />
@@ -307,7 +314,8 @@ function App() {
                 <Route path="/teacher" element={<Navigate to="/teacher/dashboard" replace />} />
                 <Route path="/teacher/dashboard" element={<TeacherDashboardPage />} />
                 <Route path="/teacher/classes" element={<TeacherClassesPage />} />
-                <Route path="/teacher/classes/:id" element={<TeacherClassesPage />} />
+                {/* Dùng chung trang quản lý lớp đầy đủ cho Teacher, không tạo màn chi tiết rút gọn riêng. */}
+                <Route path="/teacher/classes/:id" element={<ClassDetailPage />} />
                 <Route path="/teacher/schedule" element={<TeacherSchedulePage />} />
                 <Route path="/teacher/courses" element={<TeacherCoursesPage />} />
                 <Route path="/teacher/courses/:id" element={<TeacherCourseDetailPage />} />
@@ -318,10 +326,8 @@ function App() {
                 <Route path="/teacher/grading" element={<TeacherGradingPage />} />
                 <Route path="/teacher/grading/assignments" element={<Navigate to="/teacher/grading" replace />} />
                 <Route path="/teacher/grading/quizzes" element={<Navigate to="/teacher/grading" replace />} />
-                <Route path="/teacher/attendance" element={<TeacherAttendancePage />} />
                 <Route path="/teacher/insights" element={<TeacherInsightsPage />} />
                 <Route path="/teacher/earnings" element={<TeacherEarningsPage />} />
-                <Route path="/teacher/leave-requests" element={<TeacherLeaveRequestsPage />} />
                 <Route path="/teacher/courses/:id/builder" element={<CourseBuilderShell />} />
                 <Route path="/teacher/courses/:id/submissions" element={<CourseGradingPage />} />
               </Route>
@@ -335,6 +341,11 @@ function App() {
             {/* Student Learning Experience: cho phép khách mở các bài được đánh dấu FREE/preview. */}
             <Route path="/learn/courses/:courseId" element={<StudentLearningPage />} />
             <Route path="/learn/courses/:courseId/lessons/:lessonId" element={<StudentLearningPage />} />
+
+            {/* Nhật ký cá nhân dùng chung cho Student, Teacher và TA. */}
+            <Route element={<ProtectedRoute allowedRoles={[UserRole.ADMIN, UserRole.STUDENT, UserRole.TEACHER, UserRole.TA]} />}>
+              <Route path="/activity-log" element={<ActivityLogPortalPage />} />
+            </Route>
 
             {/* 3. STUDENT PORTAL (STUDENT & ADMIN) */}
             <Route element={<ProtectedRoute requiredPortal="STUDENT" allowedRoles={[UserRole.ADMIN, UserRole.STUDENT]} />}>
@@ -356,12 +367,11 @@ function App() {
                 <Route path="/student/cart" element={<StudentCartPage />} />
                 <Route path="/student/vouchers" element={<StudentVouchersPage />} />
                 <Route path="/student/orders" element={<StudentOrdersPage />} />
-                <Route path="/activity-log" element={<ActivityLog />} />
               </Route>
             </Route>
 
-            {/* 4. SUPPORT PORTAL: chỉ role SUPPORT quản lý chat landing page. */}
-            <Route element={<ProtectedRoute requiredPortal="SUPPORT" allowedRoles={[UserRole.SUPPORT]} />}>
+            {/* 4. SUPPORT PORTAL: ADMIN và SUPPORT quản lý chat landing page. */}
+            <Route element={<ProtectedRoute requiredPortal="SUPPORT" allowedRoles={[UserRole.ADMIN, UserRole.SUPPORT]} />}>
               <Route path="/support" element={<SupportPage />} />
             </Route>
 

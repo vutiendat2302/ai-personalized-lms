@@ -14,6 +14,8 @@ public interface ReviewMapper {
     @Mapping(target = "userName", source = "userEntity.fullName")
     @Mapping(target = "avatarUrl", source = "userEntity.avatarUrl")
     @Mapping(target = "schoolName", ignore = true)
+    @Mapping(target = "teacherName", ignore = true)
+    @Mapping(target = "teacherAvatarUrl", ignore = true)
     ReviewResponse toResponse(ReviewEntity entity);
 
     List<ReviewResponse> toResponseList(List<ReviewEntity> list);

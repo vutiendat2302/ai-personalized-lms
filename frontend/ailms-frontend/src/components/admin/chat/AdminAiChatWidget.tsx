@@ -41,6 +41,7 @@ export const AiChatWidget: React.FC = () => {
     isHistoryLoading,
     historyError,
     sendMessage,
+    sendImageMessage,
     stopGenerating,
     startNewConversation,
     openConversation,
@@ -139,6 +140,7 @@ export const AiChatWidget: React.FC = () => {
               userName={userName}
               userRole={userRole}
               isStreaming={isStreaming}
+              onSelectPrompt={(prompt) => sendMessage(prompt)}
             />
           )}
 
@@ -148,6 +150,7 @@ export const AiChatWidget: React.FC = () => {
               input={input}
               setInput={setInput}
               onSend={sendMessage}
+              onSendImage={sendImageMessage}
               onStop={stopGenerating}
               isStreaming={isStreaming}
             />

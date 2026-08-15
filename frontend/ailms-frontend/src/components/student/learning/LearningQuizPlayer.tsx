@@ -126,8 +126,9 @@ export const LearningQuizPlayer = ({ quiz, onComplete, persistAttempt = false }:
       }
       return sum;
     }, 0);
-    setScore(total > 0 ? Number(((earned / total) * 100).toFixed(2)) : 0);
-    setPassed(quiz.passScore != null ? earned >= quiz.passScore : false);
+    const normalizedScore = total > 0 ? Number(((earned / total) * 100).toFixed(2)) : 0;
+    setScore(normalizedScore);
+    setPassed(quiz.passScore != null ? normalizedScore >= quiz.passScore : false);
     setSubmitted(true);
   };
 
@@ -189,7 +190,11 @@ export const LearningQuizPlayer = ({ quiz, onComplete, persistAttempt = false }:
         <div className="rounded-2xl border border-dashed p-12 text-center text-muted-foreground"><AlertCircle className="mx-auto mb-3 h-10 w-10" />Quiz chưa có câu hỏi.</div>
       ) : !started ? (
         <div className="space-y-5 py-10 text-center">
-          <p className="text-sm text-muted-foreground">Lượt làm chỉ được tính sau khi backend tạo attempt thành công.</p>
+          <p className="text-sm text-muted-foreground">
+            {persistAttempt
+              ? "Lượt làm chỉ được tính sau khi backend tạo attempt thành công."
+              : "Chế độ preview: kết quả chỉ hiển thị tại trình duyệt và không ghi tiến độ."}
+          </p>
           <Button onClick={() => void handleStart()} disabled={starting} className="gap-2">
             {starting && <Loader2 className="h-4 w-4 animate-spin" />}{starting ? "Đang bắt đầu..." : "Bắt đầu làm quiz"}
           </Button>
@@ -199,7 +204,7 @@ export const LearningQuizPlayer = ({ quiz, onComplete, persistAttempt = false }:
           <div className={`rounded-2xl border p-8 text-center ${passed ? "border-emerald-200 bg-emerald-50 text-emerald-950" : "border-rose-200 bg-rose-50 text-rose-950"}`}>
             {passed ? <CheckCircle className="mx-auto mb-3 h-12 w-12 text-emerald-600" /> : <AlertCircle className="mx-auto mb-3 h-12 w-12 text-rose-600" />}
             <h3 className="text-xl font-bold">{passed ? "Bạn đã đạt quiz" : "Quiz chưa đạt yêu cầu"}</h3>
-            {score != null && <p className="mt-2 text-2xl font-black">Điểm backend: {score}</p>}
+            {score != null && <p className="mt-2 text-2xl font-black">{persistAttempt ? "Điểm backend" : "Điểm preview"}: {score}</p>}
           </div>
           <div className="flex flex-wrap justify-between gap-3">
             <Button variant="outline" onClick={resetAttempt} className="gap-2"><RefreshCw className="h-4 w-4" />Làm lượt mới</Button>

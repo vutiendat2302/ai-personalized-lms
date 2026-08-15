@@ -41,8 +41,12 @@ export const SalesCartListPage: React.FC = () => {
   };
 
   const handleSendReminder = async (userId: string) => {
-    await salesApi.sendCartReminder(userId);
-    success("Đã gửi email & thông báo nhắc nhở thanh toán giỏ hàng cho học viên!");
+    try {
+      await salesApi.sendCartReminder(userId);
+      success("Đã gửi email nhắc thanh toán cho học viên!");
+    } catch {
+      error("Không thể gửi email nhắc thanh toán. Vui lòng thử lại.");
+    }
   };
 
   return (
@@ -132,10 +136,10 @@ export const SalesCartListPage: React.FC = () => {
                     <Send className="h-3.5 w-3.5 text-indigo-600" />
                     Nhắc thanh toán
                   </Button>
-                  <Link to="/sales/coupons/new">
+                  <Link to="/admin/coupons">
                     <Button
                       size="sm"
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg gap-1.5 cursor-pointer shadow-sm"
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg gap-1.5 cursor-pointer shadow-xs"
                     >
                       <Tag className="h-3.5 w-3.5" />
                       Tạo Coupon riêng

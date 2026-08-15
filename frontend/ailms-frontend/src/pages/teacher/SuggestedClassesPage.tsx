@@ -1,33 +1,66 @@
 import React, { useEffect, useState } from "react";
 import { courseApi } from "@/api/courses/courseApi";
+import { teacherApi, type SuggestedClassMatchingItem } from "@/api/teacher/teacherApi";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Sparkles, Loader2, CheckCircle2, AlertTriangle, Users } from "lucide-react";
 
+interface GroupSuggestedClassItem {
+  id: string;
+  source: "GROUP";
+  name?: string;
+  courseName?: string;
+  categoryName?: string;
+  course?: { categoryName?: string };
+  scheduleNote?: string;
+  timeSlot?: string;
+  currentMemberCount?: number;
+  assignedTeachersCount?: number;
+  maxMembers?: number;
+  requiredTeachersCount?: number;
+}
+
+type SuggestedClassItem = GroupSuggestedClassItem | (SuggestedClassMatchingItem & { source: "ONE_ON_ONE" });
+
+/** Hiển thị chung đề xuất lớp nhóm và yêu cầu ghép 1-1 của giáo viên. */
 export function SuggestedClassesPage() {
   const { auth } = useAuth();
   const userId = auth.user?.id;
 
-  const [classes, setClasses] = useState<any[]>([]);
+  const [classes, setClasses] = useState<SuggestedClassItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [claimingId, setClaimingId] = useState<string | number | null>(null);
+  const [claimingId, setClaimingId] = useState<string | null>(null);
 
   // Toast Banner
   const [bannerMsg, setBannerMsg] = useState<{ text: string; isError?: boolean } | null>(null);
 
+  /** Hiển thị thông báo ngắn cho kết quả nhận lớp. */
   const showBanner = (text: string, isError = false) => {
     setBannerMsg({ text, isError });
-    setTimeout(() => setBannerMsg(null), 4000);
+    setTimeout(() => { setBannerMsg(null); }, 4000);
   };
 
+  /** Tải song song đề xuất lớp nhóm cũ và yêu cầu matching 1-1 mới. */
   const fetchSuggestedClasses = async () => {
     if (!userId) return;
     setLoading(true);
     try {
-      const res = await courseApi.getSuggestedClasses(userId);
-      setClasses(res.data?.data || []);
-    } catch (err: any) {
+      const [groupResult, oneOnOneResult] = await Promise.allSettled([
+        courseApi.getSuggestedClasses(userId),
+        teacherApi.getSuggestedClasses(),
+      ]);
+      const groupClasses = groupResult.status === "fulfilled"
+        ? groupResult.value.data.data.map((item: Omit<GroupSuggestedClassItem, "source">) => ({ ...item, source: "GROUP" as const }))
+        : [];
+      const oneOnOneClasses = oneOnOneResult.status === "fulfilled"
+        ? oneOnOneResult.value.map((item) => ({ ...item, source: "ONE_ON_ONE" as const }))
+        : [];
+      setClasses([...oneOnOneClasses, ...groupClasses]);
+      if (groupResult.status === "rejected" && oneOnOneResult.status === "rejected") {
+        showBanner("Lỗi khi tải danh sách lớp gợi ý", true);
+      }
+    } catch {
       showBanner("Lỗi khi tải danh sách lớp gợi ý", true);
     } finally {
       setLoading(false);
@@ -35,22 +68,27 @@ export function SuggestedClassesPage() {
   };
 
   useEffect(() => {
-    fetchSuggestedClasses();
+    void fetchSuggestedClasses();
   }, [userId]);
 
-  const handleClaimClass = async (cls: any) => {
+  /** Nhận đề xuất bằng đúng API theo loại lớp. */
+  const handleClaimClass = async (cls: SuggestedClassItem) => {
     if (!userId) return;
-    setClaimingId(cls.id);
+    setClaimingId(`${cls.source}-${cls.id}`);
     try {
-      await courseApi.claimClass(cls.id, userId);
+      if (cls.source === "ONE_ON_ONE") await teacherApi.acceptSuggestedClass(cls.id);
+      else await courseApi.claimClass(cls.id, userId);
       showBanner("Đã nhận lớp thành công!");
       // Optimistic UI: Card automatically fades out and removes from list
-      setClasses((prev) => prev.filter((item) => item.id !== cls.id));
-    } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.message || "Lớp này vừa được nhận bởi giáo viên khác";
+      setClasses((prev) => prev.filter((item) => item.id !== cls.id || item.source !== cls.source));
+    } catch (err: unknown) {
+      const responseMessage = typeof err === "object" && err !== null && "response" in err
+        ? (err as { response?: { data?: { message?: string } } }).response?.data?.message
+        : undefined;
+      const msg = responseMessage ?? (err instanceof Error ? err.message : "Lớp này vừa được nhận bởi giáo viên khác");
       showBanner(msg, true);
       // Auto-hide card to keep UI in sync
-      setClasses((prev) => prev.filter((item) => item.id !== cls.id));
+      setClasses((prev) => prev.filter((item) => item.id !== cls.id || item.source !== cls.source));
     } finally {
       setClaimingId(null);
     }
@@ -91,29 +129,34 @@ export function SuggestedClassesPage() {
       ) : classes.length > 0 ? (
         <div className="space-y-4">
           {classes.map((cls) => {
-            const isOneOnOne = String(cls.type || "").includes("ONE") || String(cls.classType || "").includes("ONE");
-            const currentMembers = cls.currentMemberCount || cls.assignedTeachersCount || 0;
-            const maxMembers = cls.maxMembers || cls.requiredTeachersCount || (isOneOnOne ? 1 : 2);
+            const isOneOnOne = cls.source === "ONE_ON_ONE";
+            const currentMembers = isOneOnOne ? 0 : cls.currentMemberCount ?? cls.assignedTeachersCount ?? 0;
+            const maxMembers = isOneOnOne ? 1 : cls.maxMembers ?? cls.requiredTeachersCount ?? 2;
             const progressPercent = Math.min(100, Math.round((currentMembers / maxMembers) * 100));
-            const isBusy = claimingId === cls.id;
+            const claimKey = `${cls.source}-${cls.id}`;
+            const isBusy = claimingId === claimKey;
 
             return (
               <article
-                key={cls.id}
+                key={claimKey}
                 className="bg-card border border-border/60 p-5 rounded-2xl shadow-2xs hover:border-primary/40 transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 animate-in fade-out duration-300"
               >
                 {/* Left: Course Name & Category */}
                 <div className="space-y-2 max-w-lg">
                   <div className="flex items-center gap-2">
                     <span className="px-2.5 py-0.5 rounded-md border border-border/60 text-[10px] font-bold text-muted-foreground bg-muted/30">
-                      {cls.categoryName || cls.course?.categoryName || "Chuyên môn"}
+                      {cls.categoryName ?? (cls.source === "GROUP" ? cls.course?.categoryName : undefined) ?? "Chuyên môn"}
                     </span>
                   </div>
 
-                  <h3 className="font-bold text-base tracking-tight">{cls.name || cls.courseName || "Lớp học mới"}</h3>
+                  <h3 className="font-bold text-base tracking-tight">
+                    {cls.source === "ONE_ON_ONE" ? cls.courseName : cls.name ?? cls.courseName ?? "Lớp học mới"}
+                  </h3>
 
                   <p className="text-xs text-muted-foreground line-clamp-1">
-                    {cls.scheduleNote || cls.timeSlot || "Lịch học linh hoạt theo thỏa thuận."}
+                    {isOneOnOne
+                      ? `${cls.availableDays} · ${cls.preferredTimes}`
+                      : cls.scheduleNote ?? cls.timeSlot ?? "Lịch học linh hoạt theo thỏa thuận."}
                   </p>
                 </div>
 
@@ -142,7 +185,7 @@ export function SuggestedClassesPage() {
                       <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
                         <div
                           className="h-full bg-blue-600 rounded-full transition-all duration-300"
-                          style={{ width: `${progressPercent}%` }}
+                          style={{ width: `${String(progressPercent)}%` }}
                         />
                       </div>
                     </div>
@@ -153,7 +196,7 @@ export function SuggestedClassesPage() {
                 <div className="shrink-0">
                   <Button
                     disabled={isBusy}
-                    onClick={() => handleClaimClass(cls)}
+                    onClick={() => { void handleClaimClass(cls); }}
                     className="h-10 px-6 rounded-xl font-bold text-xs bg-primary hover:bg-primary/90 text-primary-foreground shadow-xs gap-1.5"
                   >
                     {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}

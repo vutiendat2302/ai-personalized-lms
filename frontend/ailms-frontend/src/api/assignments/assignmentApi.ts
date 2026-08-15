@@ -14,6 +14,7 @@ export interface AssignmentSearchRequest {
 
 export interface AssignmentResponseItem {
   id: string | number;
+  code?: string;
   lessonId?: string | number;
   courseId?: string | number;
   sectionId?: string | number;
@@ -53,6 +54,10 @@ export const assignmentApi = {
   /** Tìm kiếm bài tập do chính Teacher/TA đang đăng nhập tạo. */
   searchAuthoredAssignments: (params?: AssignmentSearchRequest) =>
     httpClient.get<ApiResponse<PageResponse<AssignmentResponseItem>>>("/v1/teacher/assessment-library/assignments/search", { params }),
+
+  /** Lấy chi tiết bài tập nếu thuộc người tạo hiện tại. */
+  getAuthoredAssignmentById: (id: string | number) =>
+    httpClient.get<ApiResponse<AssignmentResponseItem>>(`/v1/teacher/assessment-library/assignments/${id}`),
 
   /** Tạo bài tập trong thư viện cá nhân của Teacher/TA. */
   createAuthoredAssignment: (data: any) =>

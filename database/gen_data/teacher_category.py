@@ -133,7 +133,7 @@ def seed(cursor):
         # Bốc ngẫu nhiên actual_count danh mục KHÔNG TRÙNG LẶP cho giảng viên này
         selected_categories = random.sample(categories, actual_count)
 
-        for item in selected_categories:
+        for category_index, item in enumerate(selected_categories):
             cat_id = item["id"]
             cat_name = item.get("name", f"ID:{cat_id}")
 
@@ -142,7 +142,8 @@ def seed(cursor):
                 total_skipped += 1
                 continue
 
-            status = random.choice(STATUS_POOL)
+            # Mỗi Teacher/TA luôn có ít nhất một chuyên môn ACTIVE để tạo khóa học.
+            status = "ACTIVE" if category_index == 0 else random.choice(STATUS_POOL)
             
             # Xử lý thời gian
             days_ago = random.randint(30, 365)

@@ -11,6 +11,7 @@ import java.util.List;
 public interface CourseProgressRepository extends BaseRepository<CourseProgressEntity, Long> {
     List<CourseProgressEntity> findByUserId(Long userId);
     List<CourseProgressEntity> findByCourseId(Long courseId);
+    java.util.Optional<CourseProgressEntity> findByUserIdAndCourseId(Long userId, Long courseId);
     List<CourseProgressEntity> findByEnrollmentId(Long enrollmentId);
 
     /** Lấy tiến độ của nhiều học viên trong các khóa học người dạy phụ trách. */

@@ -36,5 +36,5 @@ public class CreateAssignmentRequest {
     private Boolean allowLate = false;
 
     @Builder.Default
-    private BaseStatusEnum status = BaseStatusEnum.ACTIVE; // 1 = PUBLISHED, 0 = DRAFT
+    private BaseStatusEnum status = BaseStatusEnum.DRAFT;
 }

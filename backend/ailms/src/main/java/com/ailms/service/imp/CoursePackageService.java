@@ -11,6 +11,7 @@ import com.ailms.event.AuditLogEvent;
 import com.ailms.exception.BusinessException;
 import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.mapper.CoursePackageMapper;
+import com.ailms.repository.UserRepository;
 import com.ailms.repository.CoursePackageRepository;
 import com.ailms.repository.CourseRepository;
 import com.ailms.repository.ClassRepository;
@@ -45,6 +46,7 @@ public class CoursePackageService implements ICoursePackageService {
     private final CoursePackageRepository coursePackageRepository;
     private final CourseRepository courseRepository;
     private final ClassRepository classRepository;
+    private final UserRepository userRepository;
     private final CoursePackageMapper coursePackageMapper;
     private final ApplicationEventPublisher applicationEventPublisher;
     private final MeilisearchCourseService meilisearchCourseService;
@@ -53,6 +55,19 @@ public class CoursePackageService implements ICoursePackageService {
     private static final String AUDIT_ENTITY_TYPE = "COURSE_PACKAGE";
     private static final String CODE_PREFIX = "CP";
 
+    private CoursePackageResponse enrichUserNames(CoursePackageResponse response) {
+        if (response == null) return null;
+        if (response.getCreatedBy() != null && (response.getCreatedByName() == null || response.getCreatedByName().isBlank())) {
+            userRepository.findById(response.getCreatedBy())
+                    .ifPresent(u -> response.setCreatedByName(u.getFullName() != null && !u.getFullName().isBlank() ? u.getFullName() : u.getUsername()));
+        }
+        if (response.getUpdatedBy() != null && (response.getUpdatedByName() == null || response.getUpdatedByName().isBlank())) {
+            userRepository.findById(response.getUpdatedBy())
+                    .ifPresent(u -> response.setUpdatedByName(u.getFullName() != null && !u.getFullName().isBlank() ? u.getFullName() : u.getUsername()));
+        }
+        return response;
+    }
+
     /** Tìm kiếm gói theo mã, tên và các bộ lọc có phân trang. */
     @Override
     public PageResponse<CoursePackageResponse> search(CoursePackageSearchRequest request) {
@@ -60,7 +75,7 @@ public class CoursePackageService implements ICoursePackageService {
         Specification<CoursePackageEntity> spec = CoursePackageSpecification.filterAndSearch(request);
         Pageable pageable = request.toPageable();
         Page<CoursePackageEntity> page = coursePackageRepository.findAll(spec, pageable);
-        return PageResponse.from(page.map(coursePackageMapper::toResponse));
+        return PageResponse.from(page.map(entity -> enrichUserNames(coursePackageMapper.toResponse(entity))));
     }
 
     /** Tổng hợp số gói bán theo trạng thái; hết chỗ chỉ tính gói lớp nhóm. */
@@ -79,7 +94,9 @@ public class CoursePackageService implements ICoursePackageService {
     @Override
     public List<CoursePackageResponse> getAll() {
         log.info("Getting all course packages");
-        return coursePackageMapper.toResponseList(coursePackageRepository.findAll());
+        return coursePackageRepository.findAll().stream()
+                .map(entity -> enrichUserNames(coursePackageMapper.toResponse(entity)))
+                .toList();
     }
 
     /** Lấy chi tiết gói theo ID. */
@@ -88,14 +105,16 @@ public class CoursePackageService implements ICoursePackageService {
         log.info("Getting course package by id: {}", id);
         CoursePackageEntity entity = coursePackageRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
-        return coursePackageMapper.toResponse(entity);
+        return enrichUserNames(coursePackageMapper.toResponse(entity));
     }
 
     /** Lấy danh sách gói của một khóa học. */
     @Override
     public List<CoursePackageResponse> getByCourseId(Long courseId) {
         log.info("Getting course packages by course id: {}", courseId);
-        return coursePackageMapper.toResponseList(coursePackageRepository.findByCourseEntity_Id(courseId));
+        return coursePackageRepository.findByCourseEntity_Id(courseId).stream()
+                .map(entity -> enrichUserNames(coursePackageMapper.toResponse(entity)))
+                .toList();
     }
 
     /** Tạo gói với mã tự sinh và ghi audit. */
@@ -110,16 +129,17 @@ public class CoursePackageService implements ICoursePackageService {
         }
 
         validatePricing(request.getPrice(), request.getOriginalPrice());
+        validateTutorSessions(request.getDeliveryMode(), request.getIncludedTutorSessions());
 
         CoursePackageEntity entity = coursePackageMapper.toEntity(request);
         entity.setCode(CodeGenerator.generate(CODE_PREFIX, coursePackageRepository::existsByCode));
         entity.setCourseEntity(course);
         entity.setClassEntity(resolveClass(
-                request.getDeliveryMode(), request.getClassId(), request.getMaxGroupSize(), course));
+                request.getDeliveryMode(), request.getClassId(), course));
 
         CoursePackageEntity saved = coursePackageRepository.saveAndFlush(entity);
         refreshCourseSearchIndex(course);
-        CoursePackageResponse response = coursePackageMapper.toResponse(saved);
+        CoursePackageResponse response = enrichUserNames(coursePackageMapper.toResponse(saved));
         publishAudit("CREATE", saved.getId(), null, response);
         return response;
     }
@@ -131,18 +151,19 @@ public class CoursePackageService implements ICoursePackageService {
         log.info("Updating course package: {}", id);
         CoursePackageEntity existing = coursePackageRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
-        CoursePackageResponse oldValue = coursePackageMapper.toResponse(existing);
+        CoursePackageResponse oldValue = enrichUserNames(coursePackageMapper.toResponse(existing));
         CourseEntity course = existing.getCourseEntity();
 
         validateStatusForDeliveryMode(request.getStatus(), existing.getDeliveryMode());
         validatePricing(request.getPrice(), request.getOriginalPrice());
+        validateTutorSessions(existing.getDeliveryMode(), request.getIncludedTutorSessions());
         coursePackageMapper.updateFromRequest(request, existing);
         existing.setClassEntity(resolveClass(
-                existing.getDeliveryMode(), request.getClassId(), request.getMaxGroupSize(), course));
+                existing.getDeliveryMode(), request.getClassId(), course));
 
         CoursePackageEntity updated = coursePackageRepository.saveAndFlush(existing);
         refreshCourseSearchIndex(course);
-        CoursePackageResponse response = coursePackageMapper.toResponse(updated);
+        CoursePackageResponse response = enrichUserNames(coursePackageMapper.toResponse(updated));
         publishAudit("UPDATE", id, oldValue, response);
         return response;
     }
@@ -155,11 +176,14 @@ public class CoursePackageService implements ICoursePackageService {
         CoursePackageEntity existing = coursePackageRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
         validateStatusForDeliveryMode(request.getStatus(), existing.getDeliveryMode());
-        CoursePackageResponse oldValue = coursePackageMapper.toResponse(existing);
+        if (request.getStatus() == CoursePackageStatusEnum.ACTIVE) {
+            validateTutorSessions(existing.getDeliveryMode(), existing.getIncludedTutorSessions());
+        }
+        CoursePackageResponse oldValue = enrichUserNames(coursePackageMapper.toResponse(existing));
         existing.setStatus(request.getStatus());
         CoursePackageEntity updated = coursePackageRepository.saveAndFlush(existing);
         refreshCourseSearchIndex(existing.getCourseEntity());
-        CoursePackageResponse response = coursePackageMapper.toResponse(updated);
+        CoursePackageResponse response = enrichUserNames(coursePackageMapper.toResponse(updated));
         publishAudit("UPDATE_STATUS", id, oldValue, response);
         return response;
     }
@@ -178,12 +202,10 @@ public class CoursePackageService implements ICoursePackageService {
         publishAudit("DELETE", id, oldValue, null);
     }
 
-    /** Kiểm tra và lấy lớp cho GROUP_CLASS hoặc COMBO có thành phần lớp nhóm. */
+    /** Kiểm tra và lấy lớp bắt buộc cho gói GROUP_CLASS. */
     private ClassEntity resolveClass(
-            DeliveryModeEnum deliveryMode, Long classId, Integer maxGroupSize,
-            CourseEntity course) {
-        boolean requiresClass = deliveryMode == DeliveryModeEnum.GROUP_CLASS
-                || (deliveryMode == DeliveryModeEnum.COMBO && maxGroupSize != null && maxGroupSize > 1);
+            DeliveryModeEnum deliveryMode, Long classId, CourseEntity course) {
+        boolean requiresClass = deliveryMode == DeliveryModeEnum.GROUP_CLASS;
         if (!requiresClass) {
             if (classId != null) {
                 throw new BusinessException("Chỉ gói có thành phần lớp nhóm mới được gắn classId");
@@ -206,6 +228,14 @@ public class CoursePackageService implements ICoursePackageService {
     private void validatePricing(BigDecimal price, BigDecimal originalPrice) {
         if (price.compareTo(originalPrice) > 0) {
             throw new BusinessException("Price must not be greater than original price");
+        }
+    }
+
+    /** Bắt buộc gói 1-1 có ít nhất một buổi kèm trước khi được mở bán. */
+    private void validateTutorSessions(DeliveryModeEnum deliveryMode, Integer includedTutorSessions) {
+        if (deliveryMode == DeliveryModeEnum.ONE_ON_ONE
+                && (includedTutorSessions == null || includedTutorSessions <= 0)) {
+            throw new BusinessException("Gói ONE_ON_ONE phải có ít nhất một buổi kèm riêng.");
         }
     }
 

@@ -10,5 +10,8 @@ import java.util.List;
 public interface QuestionOptionRepository extends BaseRepository<QuestionOptionEntity, Long> {
     List<QuestionOptionEntity> findByQuestionId(Long questionId);
 
+    /** Lấy phương án theo đúng thứ tự hiển thị của câu hỏi. */
+    List<QuestionOptionEntity> findByQuestionIdOrderByOrderIndexAsc(Long questionId);
+
     void deleteByQuestionId(Long questionId);
 }

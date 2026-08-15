@@ -80,6 +80,7 @@ public class OrderService implements IOrderService {
             validateCheckout(userId, pkg, line.needs(), Boolean.TRUE.equals(request.getAcceptScheduleConflict()));
             packages.add(pkg);
         }
+        validateIncludedSelfStudyBenefit(packages);
 
         BigDecimal totalAmount = packages.stream().map(CoursePackageEntity::getPrice)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -183,6 +184,10 @@ public class OrderService implements IOrderService {
         order.setPaidAt(now);
         paymentTransactionRepository.save(transaction);
         orderRepository.save(order);
+        notificationService.createSystemNotification(order.getUserEntity(), NotificationTypeEnum.GENERAL,
+                "Thanh toán thành công",
+                "Đơn hàng " + order.getId() + " đã được thanh toán và quyền học đã được kích hoạt.",
+                order.getId(), "/student/orders");
         removePurchasedPackagesFromCart(order);
         eventPublisher.publishEvent(new AuditLogEvent(
                 this, "PAYPAL_CAPTURE_ORDER_PAID", "ORDER", order.getId(), null, order));
@@ -456,6 +461,12 @@ public class OrderService implements IOrderService {
         if (enrollmentPackageRepository.existsActiveOwnedPackage(userId, pkg.getId(), LocalDateTime.now())) {
             throw new BusinessException("Bạn đang sở hữu gói học này và không thể mua lại khi còn hiệu lực.");
         }
+        if (pkg.getDeliveryMode() == DeliveryModeEnum.SELF_STUDY
+                && enrollmentPackageRepository.existsActiveCourseAccess(
+                userId, course.getId(), LocalDateTime.now())) {
+            throw new BusinessException(
+                    "Bạn đã có quyền tự học của khóa học này từ gói đang sở hữu, không cần mua thêm gói tự học.");
+        }
         if (orderItemRepository.existsActivePendingCheckout(userId, pkg.getId(), LocalDateTime.now())) {
             throw new BusinessException("Bạn đã có một giao dịch đang chờ thanh toán cho gói học này.");
         }
@@ -478,6 +489,22 @@ public class OrderService implements IOrderService {
             validateAndLockGroupClass(pkg);
             validateStudentScheduleConflict(userId, pkg.getClassEntity(), acceptScheduleConflict);
         }
+    }
+
+    /** Chặn chọn SELF_STUDY cùng gói group/1-1 vì các gói nâng cao đã bao gồm quyền tự học. */
+    private void validateIncludedSelfStudyBenefit(List<CoursePackageEntity> packages) {
+        Map<Long, List<CoursePackageEntity>> byCourse = packages.stream()
+                .collect(Collectors.groupingBy(pkg -> pkg.getCourseEntity().getId()));
+        byCourse.values().forEach(coursePackages -> {
+            boolean hasSelfStudy = coursePackages.stream()
+                    .anyMatch(pkg -> pkg.getDeliveryMode() == DeliveryModeEnum.SELF_STUDY);
+            boolean hasEnhancedPackage = coursePackages.stream()
+                    .anyMatch(pkg -> pkg.getDeliveryMode() != DeliveryModeEnum.SELF_STUDY);
+            if (hasSelfStudy && hasEnhancedPackage) {
+                throw new BusinessException(
+                        "Gói group/1-1 đã bao gồm quyền tự học. Vui lòng bỏ gói tự học khỏi đơn hàng.");
+            }
+        });
     }
 
     /** Báo trùng lịch định kỳ với các lớp học viên đang tham gia trước khi tạo payment. */
@@ -652,19 +679,14 @@ public class OrderService implements IOrderService {
         }
     }
 
-    /** Xác định package có thành phần lớp nhóm cần khóa chỗ và kiểm tra trùng lịch. */
+    /** Xác định package lớp nhóm cần khóa chỗ và kiểm tra trùng lịch. */
     private boolean requiresGroupClass(CoursePackageEntity pkg) {
-        return pkg.getDeliveryMode() == DeliveryModeEnum.GROUP_CLASS
-                || (pkg.getDeliveryMode() == DeliveryModeEnum.COMBO
-                && ((pkg.getMaxGroupSize() != null && pkg.getMaxGroupSize() > 1)
-                || pkg.getClassEntity() != null));
+        return pkg.getDeliveryMode() == DeliveryModeEnum.GROUP_CLASS;
     }
 
     /** Xác định package cần lưu nhu cầu và tạo yêu cầu tìm gia sư sau thanh toán. */
     private boolean requiresTutorNeeds(CoursePackageEntity pkg) {
-        return pkg.getDeliveryMode() == DeliveryModeEnum.ONE_ON_ONE
-                || (pkg.getDeliveryMode() == DeliveryModeEnum.COMBO
-                && pkg.getIncludedTutorSessions() != null && pkg.getIncludedTutorSessions() > 0);
+        return pkg.getDeliveryMode() == DeliveryModeEnum.ONE_ON_ONE;
     }
 
     /** Khóa và giữ voucher thuộc học viên cho order sắp tạo. */

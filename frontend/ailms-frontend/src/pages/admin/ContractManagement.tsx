@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   hrApi,
   type EmployeeContractResponse,
@@ -34,6 +34,7 @@ import { NewContractWizardModal } from "@/components/admin/contract/NewContractW
 import type { EmployeeExtended } from "@/types/employee";
 import { DatePickerInput, formatDateDisplay } from "@/components/ui/DatePickerInput";
 import { cn } from "@/lib/utils";
+import { resolveAvatarUrl } from "@/utils/avatarUrl";
 import {
   FileText,
   AlertTriangle,
@@ -185,6 +186,9 @@ export const ContractManagement: React.FC = () => {
   const [creatorNames, setCreatorNames] = useState<Record<string, string>>({});
   const [highlightedContractId, setHighlightedContractId] = useState<string | null>(null);
 
+  /**
+   * Hiển thị thông báo banner tạm thời trên màn hình
+   */
   const showBanner = (text: string, isError = false) => {
     setActionMessage({ text, isError });
     setTimeout(() => setActionMessage(null), 4000);
@@ -192,6 +196,9 @@ export const ContractManagement: React.FC = () => {
 
   const [beStats, setBeStats] = useState<import("@/api/hr/hrApi").ContractDashboardStatsResponse | null>(null);
 
+  /**
+   * Lấy số liệu thống kê tổng quan hợp đồng từ backend
+   */
   const fetchDashboardStats = async () => {
     try {
       const res = await hrApi.getDashboardStats();
@@ -203,6 +210,9 @@ export const ContractManagement: React.FC = () => {
     }
   };
 
+  /**
+   * Lấy danh sách hợp đồng lao động từ backend
+   */
   const fetchContracts = async (preferredContract?: EmployeeContractResponse) => {
     setLoading(true);
     try {
@@ -223,6 +233,9 @@ export const ContractManagement: React.FC = () => {
     }
   };
 
+  /**
+   * Lấy danh sách tất cả nhân viên trong hệ thống
+   */
   const fetchAllEmployees = async () => {
     setLoadingAllEmployees(true);
     try {
@@ -260,6 +273,16 @@ export const ContractManagement: React.FC = () => {
       }
     })).then(entries => setCreatorNames(previous => ({ ...previous, ...Object.fromEntries(entries) })));
   }, [contracts]);
+
+  const getContractAvatarUrl = useCallback((ct: EmployeeContractResponse) => {
+    if (ct.avatarUrl) return ct.avatarUrl;
+    const match = allEmployees.find((emp) =>
+      String(emp.id) === String(ct.employeeId) ||
+      String(emp.userId) === String(ct.employeeId) ||
+      (emp.employeeCode && emp.employeeCode === ct.employeeCode)
+    );
+    return match?.avatarUrl || null;
+  }, [allEmployees]);
 
   // Compute Employees without Contract (Tab 3)
   const employeesWithoutContract = allEmployees.filter((emp) => {
@@ -303,6 +326,9 @@ export const ContractManagement: React.FC = () => {
     setNoContractJumpPage(String(noContractTotalPages === 0 ? 0 : noContractPage + 1));
   }, [noContractPage, noContractTotalPages]);
 
+  /**
+   * Thực hiện chấm dứt một hợp đồng
+   */
   const confirmTerminateContractAction = async () => {
     if (!terminateConfirmContract) return;
     setTerminatingContract(true);
@@ -319,6 +345,9 @@ export const ContractManagement: React.FC = () => {
     }
   };
 
+  /**
+   * Thực hiện xóa vĩnh viễn toàn bộ hợp đồng của nhân viên
+   */
   const confirmDeleteEmployeeContracts = async () => {
     if (!deleteEmployeeContracts) return;
     setDeletingContracts(true);
@@ -336,7 +365,9 @@ export const ContractManagement: React.FC = () => {
     }
   };
 
-  // Handlers for Quick E-Signature
+  /**
+   * Xử lý ký đại diện công ty nhanh
+   */
   const handleSignCompanyQuick = async (contractId: string) => {
     setSigningActionId(contractId);
     try {
@@ -354,6 +385,9 @@ export const ContractManagement: React.FC = () => {
     }
   };
 
+  /**
+   * Sinh lại và gửi link ký mới cho nhân viên
+   */
   const handleResendSigningLinkQuick = async (contractId: string) => {
     setSigningActionId(contractId);
     try {
@@ -371,6 +405,9 @@ export const ContractManagement: React.FC = () => {
     }
   };
 
+  /**
+   * Mở lịch sử nhật ký ký điện tử của hợp đồng
+   */
   const handleOpenSigningHistoryQuick = async (contractId: string) => {
     setSigningHistoryOpen(true);
     setLoadingSigningHistory(true);
@@ -391,6 +428,9 @@ export const ContractManagement: React.FC = () => {
     }
   };
 
+  /**
+   * Tải hoặc xem tệp PDF hợp đồng
+   */
   const openContractFile = async (contractId: string, download = false) => {
     const action = download ? "download" : "view";
     setDocumentLoading({ id: String(contractId), action });
@@ -418,6 +458,9 @@ export const ContractManagement: React.FC = () => {
     }
   };
 
+  /**
+   * Sao chép liên kết ký điện tử công khai
+   */
   const handleCopySigningLink = (token?: string) => {
     if (!token) {
       showBanner("Hợp đồng này chưa sinh link ký.", true);
@@ -430,7 +473,9 @@ export const ContractManagement: React.FC = () => {
     setTimeout(() => setCopiedToken(null), 3000);
   };
 
-  // Handler for Fetching Employees to Create Contract
+  /**
+   * Mở modal chọn nhân viên để tạo hợp đồng mới
+   */
   const handleOpenSelectEmployeeModal = () => {
     setEmployeePickerPage(0);
     setEmployeeSearchTerm("");
@@ -468,7 +513,9 @@ export const ContractManagement: React.FC = () => {
     setCtJumpPageInput(String(ctPage + 1));
   }, [ctPage]);
 
-  // Sorting Helper Functions
+  /**
+   * Xử lý sắp xếp cột dữ liệu
+   */
   const handleSort = (field: string) => {
     setSortRules((prev) => {
       const existingIdx = prev.findIndex((rule) => rule.field === field);
@@ -484,12 +531,18 @@ export const ContractManagement: React.FC = () => {
     setCtPage(0);
   };
 
+  /**
+   * Lấy thông tin quy tắc sắp xếp hiện tại
+   */
   const getSortRuleInfo = (field: string) => {
     const idx = sortRules.findIndex((rule) => rule.field === field);
     if (idx === -1) return null;
     return { dir: sortRules[idx].dir, order: idx + 1 };
   };
 
+  /**
+   * Render biểu tượng hướng sắp xếp
+   */
   const renderSortIcon = (field: string) => {
     const info = getSortRuleInfo(field);
     if (!info) {
@@ -519,6 +572,9 @@ export const ContractManagement: React.FC = () => {
       && sortRules[1].field === "createdAt" && sortRules[1].dir === "DESC")
   );
 
+  /**
+   * Đặt lại toàn bộ bộ lọc và quy tắc sắp xếp về mặc định
+   */
   const handleResetFiltersAndSort = () => {
     setCtSearchTerm("");
     setCtStatusFilter("NON_TERMINATED");
@@ -537,7 +593,9 @@ export const ContractManagement: React.FC = () => {
     setCtPage(0);
   };
 
-  // Export CSV
+  /**
+   * Xuất báo cáo CSV cho các hợp đồng đã chọn
+   */
   const handleExportSelectedContractsCSV = () => {
     const targetContracts = selectedContractIds.length > 0
       ? contracts.filter(c => selectedContractIds.includes(c.id))
@@ -574,7 +632,9 @@ export const ContractManagement: React.FC = () => {
     showBanner(`Đã xuất file CSV cho ${targetContracts.length} hợp đồng thành công!`);
   };
 
-  // Bulk Reminders
+  /**
+   * Mở modal gửi lời nhắc xử lý hợp đồng
+   */
   const handleOpenReminderModal = async () => {
     if (selectedContractIds.length === 0) return;
     setReminderModalOpen(true);
@@ -596,6 +656,9 @@ export const ContractManagement: React.FC = () => {
     }
   };
 
+  /**
+   * Gửi email nhắc nhở xử lý hợp đồng hàng loạt
+   */
   const handleBulkSendReminders = async () => {
     if (selectedHrIds.length === 0) return showBanner("Vui lòng chọn ít nhất một nhân sự HR.", true);
     if (!reminderContent.trim()) return showBanner("Vui lòng nhập nội dung nhắc nhở.", true);
@@ -616,6 +679,9 @@ export const ContractManagement: React.FC = () => {
     }
   };
 
+  /**
+   * Tải file nén ZIP các hợp đồng đã chọn
+   */
   const handleBulkDownloadZip = async () => {
     setBulkDownloading(true);
     try {
@@ -636,7 +702,9 @@ export const ContractManagement: React.FC = () => {
     }
   };
 
-  // Bulk Terminate Confirm
+  /**
+   * Xác nhận chấm dứt hợp đồng hàng loạt
+   */
   const handleConfirmBulkTerminate = async () => {
     if (selectedContractIds.length === 0) return;
     if (!bulkTerminateReason.trim()) {
@@ -878,6 +946,9 @@ export const ContractManagement: React.FC = () => {
 
   const isAllPaginatedSelected = paginated.length > 0 && paginated.every(c => selectedContractIds.includes(c.id));
 
+  /**
+   * Chọn hoặc bỏ chọn tất cả hợp đồng trên trang hiện tại
+   */
   const toggleSelectAllPaginated = () => {
     if (isAllPaginatedSelected) {
       setSelectedContractIds(prev => prev.filter(id => !paginated.some(c => c.id === id)));
@@ -890,6 +961,9 @@ export const ContractManagement: React.FC = () => {
     }
   };
 
+  /**
+   * Bật/tắt việc chọn một hợp đồng đơn lẻ
+   */
   const toggleSelectContract = (id: string) => {
     if (selectedContractIds.includes(id)) {
       setSelectedContractIds(prev => prev.filter(i => i !== id));
@@ -904,11 +978,11 @@ export const ContractManagement: React.FC = () => {
 
   const departmentList = Array.from(new Set(enrichedContracts.map(c => c.departmentName).filter((d): d is string => Boolean(d)))).sort((a, b) => a.localeCompare(b, "vi"));
   const contractTypeOptions = [
-    { value: "PROBATION", label: "Thử việc", color: "bg-amber-500" },
-    { value: "OFFICIAL", label: "Chính thức", color: "bg-blue-500" },
-    { value: "FIXED_TERM", label: "Xác định thời hạn", color: "bg-indigo-500" },
-    { value: "INDEFINITE", label: "Vô thời hạn", color: "bg-emerald-500" },
-    { value: "SEASONAL", label: "Thời vụ / ngắn hạn", color: "bg-purple-500" },
+    { value: "PROBATION", label: "Thử việc", color: "bg-chart-1" },
+    { value: "OFFICIAL", label: "Chính thức", color: "bg-brand-cobalt" },
+    { value: "FIXED_TERM", label: "Xác định thời hạn", color: "bg-primary" },
+    { value: "INDEFINITE", label: "Vô thời hạn", color: "bg-success-forest" },
+    { value: "SEASONAL", label: "Thời vụ / ngắn hạn", color: "bg-chart-5" },
   ];
   const expiryTimeline = Array.from({ length: 6 }, (_, monthOffset) => {
     const date = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1);
@@ -943,10 +1017,10 @@ export const ContractManagement: React.FC = () => {
           <Button
             size="sm"
             onClick={handleOpenSelectEmployeeModal}
-            className="h-9 text-xs font-extrabold gap-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs cursor-pointer"
+            className="h-9 text-xs font-extrabold gap-1 rounded-xl bg-success-forest hover:bg-success-forest/90 text-white shadow-xs cursor-pointer"
           >
             <Plus className="h-4 w-4" />
-            <span>+ Tạo Hợp Đồng Mới</span>
+            <span>Tạo hợp đồng mới</span>
           </Button>
           <Button
             size="sm"
@@ -968,7 +1042,7 @@ export const ContractManagement: React.FC = () => {
         </div>
       </div>
 
-      {/* 2 MAIN TABS: TAB 1 (TẤT CẢ HỢP ĐỒNG) | TAB 2 (HỢP ĐỒNG CHƯA KÝ & CẦN KÝ ĐIỆN TỬ) */}
+      {/* MAIN TABS */}
       <div className="flex border-b border-border/40 bg-muted/20 px-2 rounded-xl overflow-x-auto">
         <button
           onClick={() => setMainTab("all")}
@@ -979,41 +1053,31 @@ export const ContractManagement: React.FC = () => {
           }`}
         >
           <FileText className="h-4 w-4" />
-          <span>Tab 1 — Tất cả Hợp đồng ({contracts.length})</span>
+          <span>Tất cả hợp đồng</span>
         </button>
 
         <button
           onClick={() => setMainTab("pending_sign")}
           className={`px-5 py-3 text-xs font-extrabold border-b-2 transition-all flex items-center gap-2 cursor-pointer shrink-0 ${
             mainTab === "pending_sign"
-              ? "border-amber-600 text-amber-600 bg-background rounded-t-xl shadow-xs"
+              ? "border-chart-1 text-chart-1 bg-background rounded-t-xl shadow-xs"
               : "border-transparent text-muted-foreground hover:text-foreground"
           }`}
         >
-          <PenTool className="h-4 w-4 text-amber-600" />
-          <span>Tab 2 — Hợp đồng Chưa Ký &amp; Cần Ký ({unsignedContracts.length})</span>
-          {unsignedContracts.length > 0 && (
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-white animate-pulse">
-              {unsignedContracts.length} Cần ký
-            </span>
-          )}
+          <PenTool className="h-4 w-4 text-chart-1" />
+          <span>Hợp đồng chưa ký</span>
         </button>
 
         <button
           onClick={() => setMainTab("no_contract")}
           className={`px-5 py-3 text-xs font-extrabold border-b-2 transition-all flex items-center gap-2 cursor-pointer shrink-0 ${
             mainTab === "no_contract"
-              ? "border-rose-600 text-rose-600 bg-background rounded-t-xl shadow-xs"
+              ? "border-destructive text-destructive bg-background rounded-t-xl shadow-xs"
               : "border-transparent text-muted-foreground hover:text-foreground"
           }`}
         >
-          <UserX className="h-4 w-4 text-rose-600" />
-          <span>Tab 3 — NV Chưa Có Hợp Đồng ({employeesWithoutContract.length})</span>
-          {employeesWithoutContract.length > 0 && (
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-600 text-white">
-              {employeesWithoutContract.length} NV
-            </span>
-          )}
+          <UserX className="h-4 w-4 text-destructive" />
+          <span>Nhân sự chưa có hợp đồng</span>
         </button>
       </div>
 
@@ -1025,56 +1089,53 @@ export const ContractManagement: React.FC = () => {
         {/* Card 1: Active */}
         <Card
           onClick={() => applyCardFilter("ALL", { status: "ACTIVE" })}
-          className="border border-emerald-500/30 bg-emerald-500/5 dark:bg-emerald-500/10 shadow-xs hover:shadow-md hover:ring-2 hover:ring-emerald-500/50 cursor-pointer transition-all"
+          className="border border-success-forest/30 bg-success-forest/5 shadow-xs hover:shadow-md cursor-pointer transition-all"
         >
           <CardContent className="p-4 flex flex-col justify-between h-full">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wider">Tổng Active</span>
-              <div className="h-8 w-8 rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+              <span className="text-xs font-extrabold text-success-forest uppercase tracking-wider">Đang hiệu lực</span>
+              <div className="h-8 w-8 rounded-xl bg-success-forest/20 text-success-forest flex items-center justify-center">
                 <FileCheck className="h-4 w-4" />
               </div>
             </div>
             <div className="mt-3">
               <span className="text-2xl font-black text-foreground">{activeContracts.length}</span>
-              <span className="text-[10px] text-emerald-600 font-bold ml-2">Đang hiệu lực ↗</span>
             </div>
           </CardContent>
         </Card>
 
-        {/* Card 2: Sắp hết hạn (<= 30 ngày) */}
+        {/* Card 2: Sắp hết hạn */}
         <Card
           onClick={() => applyCardFilter("EXPIRING_30")}
-          className="border border-amber-500/40 bg-amber-500/5 dark:bg-amber-500/10 shadow-xs hover:shadow-md hover:ring-2 hover:ring-amber-500/50 cursor-pointer transition-all"
+          className="border border-border bg-card shadow-xs hover:shadow-md cursor-pointer transition-all"
         >
           <CardContent className="p-4 flex flex-col justify-between h-full">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-amber-700 dark:text-amber-300 uppercase tracking-wider">Sắp hết hạn (≤30đ)</span>
-              <div className="h-8 w-8 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center animate-pulse">
+              <span className="text-xs font-extrabold text-muted-foreground uppercase tracking-wider">Sắp hết hạn</span>
+              <div className="h-8 w-8 rounded-xl bg-muted text-muted-foreground flex items-center justify-center">
                 <AlertTriangle className="h-4 w-4" />
               </div>
             </div>
             <div className="mt-3">
-              <span className="text-2xl font-black text-amber-700 dark:text-amber-400">{expiringSoonContracts.length}</span>
-              <span className="text-[10px] text-amber-600 font-bold ml-2">Cần xử lý gấp ↗</span>
+              <span className="text-2xl font-black text-foreground">{expiringSoonContracts.length}</span>
             </div>
           </CardContent>
         </Card>
 
-        {/* Card 3: Thử việc sắp hết hạn */}
+        {/* Card 3: Thử việc tới hạn */}
         <Card
           onClick={() => applyCardFilter("PROBATION_EXPIRING_30")}
-          className="border border-indigo-500/30 bg-indigo-500/5 dark:bg-indigo-500/10 shadow-xs hover:shadow-md hover:ring-2 hover:ring-indigo-500/50 cursor-pointer transition-all"
+          className="border border-border bg-card shadow-xs hover:shadow-md cursor-pointer transition-all"
         >
           <CardContent className="p-4 flex flex-col justify-between h-full">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300 uppercase tracking-wider">Thử việc tới hạn</span>
-              <div className="h-8 w-8 rounded-xl bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+              <span className="text-xs font-extrabold text-muted-foreground uppercase tracking-wider">Thử việc tới hạn</span>
+              <div className="h-8 w-8 rounded-xl bg-muted text-muted-foreground flex items-center justify-center">
                 <UserCheck className="h-4 w-4" />
               </div>
             </div>
             <div className="mt-3">
               <span className="text-2xl font-black text-foreground">{probationExpiringContracts.length}</span>
-              <span className="text-[10px] text-indigo-600 font-bold ml-2">Đánh giá Probation ↗</span>
             </div>
           </CardContent>
         </Card>
@@ -1082,56 +1143,53 @@ export const ContractManagement: React.FC = () => {
         {/* Card 4: Mới ký tháng này */}
         <Card
           onClick={() => applyCardFilter("SIGNED_THIS_MONTH")}
-          className="border border-blue-500/30 bg-blue-500/5 dark:bg-blue-500/10 shadow-xs hover:shadow-md hover:ring-2 hover:ring-blue-500/50 cursor-pointer transition-all"
+          className="border border-border bg-card shadow-xs hover:shadow-md cursor-pointer transition-all"
         >
           <CardContent className="p-4 flex flex-col justify-between h-full">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-blue-700 dark:text-blue-300 uppercase tracking-wider">Mới ký tháng này</span>
-              <div className="h-8 w-8 rounded-xl bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+              <span className="text-xs font-extrabold text-muted-foreground uppercase tracking-wider">Mới ký tháng này</span>
+              <div className="h-8 w-8 rounded-xl bg-muted text-muted-foreground flex items-center justify-center">
                 <FilePlus className="h-4 w-4" />
               </div>
             </div>
             <div className="mt-3">
               <span className="text-2xl font-black text-foreground">{signedThisMonthContracts.length}</span>
-              <span className="text-[10px] text-blue-600 font-bold ml-2">Tuyển dụng/Tái ký ↗</span>
             </div>
           </CardContent>
         </Card>
 
-        {/* Card 5: Chấm dứt tháng này */}
+        {/* Card 5: Chấm dứt */}
         <Card
           onClick={() => applyCardFilter("TERMINATED_THIS_MONTH")}
-          className="border border-rose-500/30 bg-rose-500/5 dark:bg-rose-500/10 shadow-xs hover:shadow-md hover:ring-2 hover:ring-rose-500/50 cursor-pointer transition-all"
+          className="border border-destructive/30 bg-destructive/5 shadow-xs hover:shadow-md cursor-pointer transition-all"
         >
           <CardContent className="p-4 flex flex-col justify-between h-full">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-rose-700 dark:text-rose-300 uppercase tracking-wider">Đã chấm dứt</span>
-              <div className="h-8 w-8 rounded-xl bg-rose-500/20 text-rose-600 dark:text-rose-400 flex items-center justify-center">
+              <span className="text-xs font-extrabold text-destructive uppercase tracking-wider">Đã chấm dứt</span>
+              <div className="h-8 w-8 rounded-xl bg-destructive/20 text-destructive flex items-center justify-center">
                 <FileX className="h-4 w-4" />
               </div>
             </div>
             <div className="mt-3">
               <span className="text-2xl font-black text-foreground">{terminatedThisMonthContracts.length}</span>
-              <span className="text-[10px] text-rose-600 font-bold ml-2">Turnover ↗</span>
             </div>
           </CardContent>
         </Card>
 
-        {/* Card 6: Thiếu file đính kèm */}
+        {/* Card 6: Thiếu tệp đính kèm */}
         <Card
           onClick={() => applyCardFilter("ALL", { status: "ACTIVE", file: "MISSING_FILE" })}
-          className="border border-purple-500/40 bg-purple-500/5 dark:bg-purple-500/10 shadow-xs hover:shadow-md hover:ring-2 hover:ring-purple-500/50 cursor-pointer transition-all"
+          className="border border-border bg-card shadow-xs hover:shadow-md cursor-pointer transition-all"
         >
           <CardContent className="p-4 flex flex-col justify-between h-full">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-purple-700 dark:text-purple-300 uppercase tracking-wider">Thiếu file đính kèm</span>
-              <div className="h-8 w-8 rounded-xl bg-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+              <span className="text-xs font-extrabold text-muted-foreground uppercase tracking-wider">Thiếu tệp đính kèm</span>
+              <div className="h-8 w-8 rounded-xl bg-muted text-muted-foreground flex items-center justify-center">
                 <ShieldAlert className="h-4 w-4" />
               </div>
             </div>
             <div className="mt-3">
-              <span className="text-2xl font-black text-purple-700 dark:text-purple-300">{missingFileContracts.length}</span>
-              <span className="text-[10px] text-purple-600 font-bold ml-2">Rủi ro pháp lý ↗</span>
+              <span className="text-2xl font-black text-foreground">{missingFileContracts.length}</span>
             </div>
           </CardContent>
         </Card>
@@ -1177,7 +1235,7 @@ export const ContractManagement: React.FC = () => {
           <CardContent className="p-4 space-y-3">
             <div className="flex items-center justify-between border-b border-border/30 pb-2">
               <span className="text-xs font-extrabold text-foreground flex items-center gap-1.5">
-                <BarChart3 className="h-4 w-4 text-amber-500" /> Hết hạn 6 tháng tới
+                <BarChart3 className="h-4 w-4 text-chart-1" /> Hết hạn 6 tháng tới
               </span>
             </div>
             <div className="flex items-end justify-between gap-2 h-28 pt-2 px-1">
@@ -1185,9 +1243,9 @@ export const ContractManagement: React.FC = () => {
                 const heightPct = count === 0 ? 0 : Math.max(8, (count / maxExpiryCount) * 100);
                 return (
                   <div key={key} className="flex-1 flex flex-col items-center gap-1 h-full justify-end group">
-                    <span className="text-[10px] font-black text-amber-600 dark:text-amber-400 group-hover:scale-110 transition-transform">{count}</span>
-                    <div className="w-full bg-amber-500/20 rounded-t-lg overflow-hidden flex items-end h-20">
-                      <div className="w-full bg-amber-500 rounded-t-lg transition-all duration-500 group-hover:bg-amber-600" style={{ height: `${heightPct}%` }} />
+                    <span className="text-[10px] font-black text-chart-1 group-hover:scale-110 transition-transform">{count}</span>
+                    <div className="w-full bg-chart-1/20 rounded-t-lg overflow-hidden flex items-end h-20">
+                      <div className="w-full bg-chart-1 rounded-t-lg transition-all duration-500 group-hover:bg-chart-1/90" style={{ height: `${heightPct}%` }} />
                     </div>
                     <span className="text-[10px] font-bold text-muted-foreground">{monthLabel}</span>
                   </div>
@@ -1202,7 +1260,7 @@ export const ContractManagement: React.FC = () => {
           <CardContent className="p-4 space-y-3">
             <div className="flex items-center justify-between border-b border-border/30 pb-2">
               <span className="text-xs font-extrabold text-foreground flex items-center gap-1.5">
-                <Building2 className="h-4 w-4 text-blue-500" /> Hợp đồng theo Phòng ban
+                <Building2 className="h-4 w-4 text-brand-cobalt" /> Hợp đồng theo Phòng ban
               </span>
             </div>
             <div className="space-y-2 pt-1 text-xs max-h-32 overflow-y-auto pr-1">
@@ -1218,7 +1276,7 @@ export const ContractManagement: React.FC = () => {
                       <span className="font-extrabold text-primary">{count} HĐ</span>
                     </div>
                     <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
-                      <div className="h-full bg-blue-500 transition-all duration-500" style={{ width: `${pct}%` }} />
+                      <div className="h-full bg-brand-cobalt transition-all duration-500" style={{ width: `${pct}%` }} />
                     </div>
                   </div>
                 );
@@ -1232,7 +1290,7 @@ export const ContractManagement: React.FC = () => {
           <CardContent className="p-4 space-y-3">
             <div className="flex items-center justify-between border-b border-border/30 pb-2">
               <span className="text-xs font-extrabold text-foreground flex items-center gap-1.5">
-                <DollarSign className="h-4 w-4 text-emerald-500" /> Hình thức trả lương
+                <DollarSign className="h-4 w-4 text-success-forest" /> Hình thức trả lương
               </span>
             </div>
             <div className="grid grid-cols-3 gap-2 pt-2 text-center">
@@ -1271,7 +1329,7 @@ export const ContractManagement: React.FC = () => {
               onClick={handleExportSelectedContractsCSV}
               className="h-8 text-xs font-bold gap-1 rounded-xl border-border hover:bg-muted cursor-pointer"
             >
-              <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600" />
+              <FileSpreadsheet className="h-3.5 w-3.5 text-success-forest" />
               <span>Xuất CSV</span>
             </Button>
           </div>
@@ -1314,12 +1372,12 @@ export const ContractManagement: React.FC = () => {
                 <SelectValue placeholder="Tất cả" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="NON_TERMINATED">Mặc định — Chưa chấm dứt</SelectItem>
-                <SelectItem value="ALL">Tất cả Trạng thái</SelectItem>
-                <SelectItem value="ACTIVE">ACTIVE — Đang dùng</SelectItem>
-                <SelectItem value="EXPIRED">EXPIRED — Hết hạn</SelectItem>
-                <SelectItem value="TERMINATED">TERMINATED — Đã hủy</SelectItem>
-                <SelectItem value="INACTIVE">INACTIVE — Ngừng dùng</SelectItem>
+                <SelectItem value="NON_TERMINATED">Chưa chấm dứt</SelectItem>
+                <SelectItem value="ALL">Tất cả trạng thái</SelectItem>
+                <SelectItem value="ACTIVE">Hoạt động</SelectItem>
+                <SelectItem value="EXPIRED">Hết hạn</SelectItem>
+                <SelectItem value="TERMINATED">Đã chấm dứt</SelectItem>
+                <SelectItem value="INACTIVE">Ngừng hoạt động</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -1332,10 +1390,10 @@ export const ContractManagement: React.FC = () => {
                 <SelectValue placeholder="Tất cả" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="ALL">Tất cả Trạng thái Ký</SelectItem>
+                <SelectItem value="ALL">Tất cả trạng thái ký</SelectItem>
                 <SelectItem value="PENDING_COMPANY_SIGN">Công ty chưa ký</SelectItem>
-                <SelectItem value="PENDING_EMPLOYEE_SIGN">Chờ NV ký OTP</SelectItem>
-                <SelectItem value="FULLY_SIGNED">Đã ký 2 bên</SelectItem>
+                <SelectItem value="PENDING_EMPLOYEE_SIGN">Chờ nhân viên ký</SelectItem>
+                <SelectItem value="FULLY_SIGNED">Đã ký đủ hai bên</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -1348,12 +1406,12 @@ export const ContractManagement: React.FC = () => {
                 <SelectValue placeholder="Tất cả" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="ALL">Tất cả Loại HĐ</SelectItem>
-                <SelectItem value="PROBATION">Thử việc (Probation)</SelectItem>
+                <SelectItem value="ALL">Tất cả loại hợp đồng</SelectItem>
+                <SelectItem value="PROBATION">Thử việc</SelectItem>
                 <SelectItem value="OFFICIAL">Chính thức</SelectItem>
                 <SelectItem value="FIXED_TERM">Xác định thời hạn</SelectItem>
                 <SelectItem value="INDEFINITE">Vô thời hạn</SelectItem>
-                <SelectItem value="SEASONAL">Thời vụ / ngắn hạn</SelectItem>
+                <SelectItem value="SEASONAL">Thời vụ, ngắn hạn</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -1366,7 +1424,7 @@ export const ContractManagement: React.FC = () => {
                 <SelectValue placeholder="Tất cả phòng ban" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="ALL">Tất cả Phòng ban</SelectItem>
+                <SelectItem value="ALL">Tất cả phòng ban</SelectItem>
                 {departmentList.map(dept => (
                   <SelectItem key={dept} value={dept}>{dept}</SelectItem>
                 ))}
@@ -1382,7 +1440,7 @@ export const ContractManagement: React.FC = () => {
                 <SelectValue placeholder="Tất cả" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="ALL">Tất cả Thời hạn</SelectItem>
+                <SelectItem value="ALL">Tất cả thời hạn</SelectItem>
                 <SelectItem value="7_DAYS">Hết hạn trong 7 ngày</SelectItem>
                 <SelectItem value="30_DAYS">Hết hạn trong 30 ngày</SelectItem>
                 <SelectItem value="60_DAYS">Hết hạn trong 60 ngày</SelectItem>
@@ -1400,7 +1458,7 @@ export const ContractManagement: React.FC = () => {
                 <SelectValue placeholder="Tất cả" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="ALL">Tất cả File</SelectItem>
+                <SelectItem value="ALL">Tất cả tệp tin</SelectItem>
                 <SelectItem value="WITH_FILE">Đã có file PDF</SelectItem>
                 <SelectItem value="MISSING_FILE">Thiếu file PDF</SelectItem>
               </SelectContent>
@@ -1707,10 +1765,10 @@ export const ContractManagement: React.FC = () => {
                     <TableRow
                       key={ct.id || index}
                       data-contract-id={String(ct.id)}
-                      className={`hover:bg-foreground/10 transition-colors border-border/30 ${String(ct.id) === highlightedContractId ? "bg-emerald-500/20 ring-2 ring-inset ring-emerald-500 animate-pulse" : ""} ${
+                      className={`hover:bg-foreground/10 transition-colors border-border/30 ${String(ct.id) === highlightedContractId ? "bg-success-forest/20 ring-2 ring-inset ring-success-forest animate-pulse" : ""} ${
                         isSelected ? "bg-primary/5 hover:bg-primary/10" :
-                        isExpiringSoon ? "bg-amber-500/5 hover:bg-amber-500/10" :
-                        isExpired ? "bg-rose-500/5 hover:bg-rose-500/10" : ""
+                        isExpiringSoon ? "bg-chart-1/5 hover:bg-chart-1/10" :
+                        isExpired ? "bg-destructive/5 hover:bg-destructive/10" : ""
                       }`}
                     >
                       {/* Checkbox cell */}
@@ -1726,11 +1784,15 @@ export const ContractManagement: React.FC = () => {
                       <TableCell>
                         <div className="flex items-center gap-2.5">
                           <div className="h-8 w-8 rounded-full bg-primary/10 text-primary font-semibold flex items-center justify-center text-xs shrink-0 border border-primary/20 overflow-hidden">
-                            {ct.fullName ? ct.fullName.charAt(0).toUpperCase() : "E"}
+                            {resolveAvatarUrl(getContractAvatarUrl(ct)) ? (
+                              <img src={resolveAvatarUrl(getContractAvatarUrl(ct))} alt={ct.fullName || "Nhân viên"} className="h-full w-full object-cover rounded-full" />
+                            ) : (
+                              ct.fullName ? ct.fullName.charAt(0).toUpperCase() : "E"
+                            )}
                           </div>
                           <div className="text-left">
                             <p
-                              onClick={() => { setSelectedContractForDetail(ct); setDetailModalOpen(true); }}
+                              onClick={() => { setSelectedContractForDetail({ ...ct, avatarUrl: getContractAvatarUrl(ct) || undefined }); setDetailModalOpen(true); }}
                               className="font-semibold text-foreground hover:text-primary cursor-pointer transition-colors text-sm"
                             >
                               {ct.fullName || ct.employeeId}
@@ -1776,7 +1838,7 @@ export const ContractManagement: React.FC = () => {
                           <span>{endDateStr ? formatDateDisplay(endDateStr) : "Vô thời hạn"}</span>
                         </div>
                         {isExpiringSoon && (
-                          <span className="inline-flex items-center gap-0.5 text-xs font-bold text-amber-700 dark:text-amber-400 bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 rounded-full mt-1">
+                          <span className="inline-flex items-center gap-0.5 text-xs font-bold text-chart-1 bg-chart-1/15 border border-chart-1/30 px-2 py-0.5 rounded-full mt-1">
                             <AlertTriangle className="h-3 w-3" /> Sắp hết hạn
                           </span>
                         )}
@@ -1789,12 +1851,12 @@ export const ContractManagement: React.FC = () => {
                             <Button type="button" variant="ghost" size="sm" disabled={documentLoading?.id === String(ct.id)} onClick={() => openContractFile(ct.id)} className="h-7 px-2 text-xs font-bold text-primary" title="Xem file hợp đồng">
                               {documentLoading?.id === String(ct.id) && documentLoading.action === "view" ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Eye className="h-3.5 w-3.5 mr-1" />} Xem
                             </Button>
-                            <Button type="button" variant="ghost" size="sm" disabled={documentLoading?.id === String(ct.id)} onClick={() => openContractFile(ct.id, true)} className="h-7 px-2 text-xs font-bold text-emerald-600" title="Tải file hợp đồng">
+                            <Button type="button" variant="ghost" size="sm" disabled={documentLoading?.id === String(ct.id)} onClick={() => openContractFile(ct.id, true)} className="h-7 px-2 text-xs font-bold text-success-forest" title="Tải file hợp đồng">
                               {documentLoading?.id === String(ct.id) && documentLoading.action === "download" ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <DownloadCloud className="h-3.5 w-3.5 mr-1" />} Tải
                             </Button>
                           </div>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 rounded-full">
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-chart-1 bg-chart-1/10 border border-chart-1/20 px-2.5 py-0.5 rounded-full">
                             <AlertCircle className="h-3 w-3" /> Chưa có file
                           </span>
                         )}
@@ -1805,23 +1867,23 @@ export const ContractManagement: React.FC = () => {
                         <span
                           className={`px-2.5 py-0.5 rounded-full font-semibold text-sm inline-flex items-center gap-1 ${
                             ct.status === "ACTIVE"
-                              ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20"
+                              ? "bg-success-forest/10 text-success-forest border border-success-forest/20"
                               : ct.status === "EXPIRED"
                               ? "bg-muted text-muted-foreground border border-border/40"
                               : ct.status === "TERMINATED"
                               ? "bg-destructive/10 text-destructive border border-destructive/20"
-                              : "bg-amber-500/10 text-amber-600 border border-amber-500/20"
+                              : "bg-chart-1/10 text-chart-1 border border-chart-1/20"
                           }`}
                         >
                           <span
                             className={`h-1.5 w-1.5 rounded-full ${
                               ct.status === "ACTIVE"
-                                ? "bg-emerald-500"
+                                ? "bg-success-forest"
                                 : ct.status === "EXPIRED"
                                 ? "bg-muted-foreground"
                                 : ct.status === "TERMINATED"
                                 ? "bg-destructive"
-                                : "bg-amber-500"
+                                : "bg-chart-1"
                             }`}
                           />
                           {ct.status || "ACTIVE"}
@@ -1831,15 +1893,15 @@ export const ContractManagement: React.FC = () => {
                       {/* Trạng Thái Ký Điện Tử */}
                       <TableCell className="text-center">
                         {ct.signingStatus === "FULLY_SIGNED" ? (
-                          <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-emerald-600 text-white inline-flex items-center gap-1">
+                          <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-success-forest text-white inline-flex items-center gap-1">
                             <ShieldCheck className="h-3 w-3" /> Đã ký 2 bên
                           </span>
                         ) : ct.signingStatus === "PENDING_EMPLOYEE_SIGN" ? (
-                          <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-blue-500/15 text-blue-700 border border-blue-500/30 inline-flex items-center gap-1">
+                          <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-brand-cobalt/15 text-brand-cobalt border border-brand-cobalt/30 inline-flex items-center gap-1">
                             <Clock className="h-3 w-3" /> Chờ NV ký OTP
                           </span>
                         ) : (
-                          <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-amber-500/15 text-amber-700 border border-amber-500/30 inline-flex items-center gap-1">
+                          <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-chart-1/15 text-chart-1 border border-chart-1/30 inline-flex items-center gap-1">
                             <AlertCircle className="h-3 w-3" /> Công ty chưa ký
                           </span>
                         )}
@@ -1855,7 +1917,7 @@ export const ContractManagement: React.FC = () => {
                               size="icon"
                               disabled={signingActionId === ct.id}
                               onClick={() => handleSignCompanyQuick(ct.id)}
-                              className="h-7 w-7 text-emerald-600 hover:bg-emerald-500/10 cursor-pointer"
+                              className="h-7 w-7 text-success-forest hover:bg-success-forest/10 cursor-pointer"
                               title="Ký xác nhận phía Công ty"
                             >
                               {signingActionId === ct.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <PenTool className="h-3.5 w-3.5" />}
@@ -1869,23 +1931,12 @@ export const ContractManagement: React.FC = () => {
                               size="icon"
                               disabled={signingActionId === ct.id}
                               onClick={() => handleResendSigningLinkQuick(ct.id)}
-                              className="h-7 w-7 text-blue-600 hover:bg-blue-500/10 cursor-pointer"
+                              className="h-7 w-7 text-brand-cobalt hover:bg-brand-cobalt/10 cursor-pointer"
                               title="Sinh lại & Gửi link ký mới cho Nhân viên"
                             >
                               {signingActionId === ct.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                             </Button>
                           )}
-
-                          {/* Signing Audit History Quick Action */}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleOpenSigningHistoryQuick(ct.id)}
-                            className="h-7 w-7 text-purple-600 hover:bg-purple-500/10 cursor-pointer"
-                            title="Lịch sử nhật ký ký điện tử"
-                          >
-                            <History className="h-3.5 w-3.5" />
-                          </Button>
 
                           <Button
                             variant="ghost"
@@ -1894,8 +1945,8 @@ export const ContractManagement: React.FC = () => {
                               setSelectedContractForDetail(ct);
                               setDetailModalOpen(true);
                             }}
-                            className="h-7 w-7 text-sky-600 hover:bg-sky-500/10 cursor-pointer"
-                            title="Xem chi tiết Hợp Đồng & Nhân viên"
+                            className="h-7 w-7 text-brand-cobalt hover:bg-brand-cobalt/10 cursor-pointer"
+                            title="Xem chi tiết hợp đồng"
                           >
                             <Eye className="h-3.5 w-3.5" />
                           </Button>
@@ -1905,7 +1956,7 @@ export const ContractManagement: React.FC = () => {
                               variant="ghost"
                               size="icon"
                               onClick={() => { setTerminateReason(""); setTerminateConfirmContract({ id: ct.id, name: ct.fullName || ct.employeeCode || "Nhân viên" }); }}
-                              className="h-7 w-7 text-rose-600 hover:bg-rose-500/10 cursor-pointer"
+                              className="h-7 w-7 text-destructive hover:bg-destructive/10 cursor-pointer"
                               title="Chấm dứt hợp đồng này"
                             >
                               <FileX className="h-3.5 w-3.5" />
@@ -2021,40 +2072,37 @@ export const ContractManagement: React.FC = () => {
         <div className="space-y-6 animate-in fade-in duration-200">
           {/* TAB 2 METRIC SUMMARY */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Card className="border border-amber-500/30 bg-amber-500/5 shadow-xs">
+            <Card className="border border-border bg-card shadow-xs">
               <CardContent className="p-4 flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-bold text-amber-700 uppercase">Chờ Công ty Ký</p>
-                  <p className="text-2xl font-black text-amber-900 mt-1">{pendingCompanySignCount}</p>
-                  <p className="text-[11px] text-amber-600 mt-0.5">Cần HR/Admin ấn ký xác nhận</p>
+                  <p className="text-xs font-bold text-muted-foreground uppercase">Chờ Công ty Ký</p>
+                  <p className="text-2xl font-black text-foreground mt-1">{pendingCompanySignCount}</p>
                 </div>
-                <div className="h-10 w-10 rounded-xl bg-amber-500/20 text-amber-600 flex items-center justify-center font-bold">
+                <div className="h-10 w-10 rounded-xl bg-muted text-muted-foreground flex items-center justify-center font-bold">
                   <PenTool className="h-5 w-5" />
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="border border-blue-500/30 bg-blue-500/5 shadow-xs">
+            <Card className="border border-border bg-card shadow-xs">
               <CardContent className="p-4 flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-bold text-blue-700 uppercase">Chờ Nhân viên Ký OTP</p>
-                  <p className="text-2xl font-black text-blue-900 mt-1">{pendingEmployeeSignCount}</p>
-                  <p className="text-[11px] text-blue-600 mt-0.5">Đã gửi link &amp; OTP qua Email</p>
+                  <p className="text-xs font-bold text-muted-foreground uppercase">Chờ Nhân viên Ký OTP</p>
+                  <p className="text-2xl font-black text-foreground mt-1">{pendingEmployeeSignCount}</p>
                 </div>
-                <div className="h-10 w-10 rounded-xl bg-blue-500/20 text-blue-600 flex items-center justify-center font-bold">
+                <div className="h-10 w-10 rounded-xl bg-muted text-muted-foreground flex items-center justify-center font-bold">
                   <Clock className="h-5 w-5" />
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="border border-emerald-500/30 bg-emerald-500/5 shadow-xs">
+            <Card className="border border-success-forest/30 bg-success-forest/5 shadow-xs">
               <CardContent className="p-4 flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-bold text-emerald-700 uppercase">Đã Ký Điện Tử 2 Bên</p>
-                  <p className="text-2xl font-black text-emerald-900 mt-1">{fullySignedCount}</p>
-                  <p className="text-[11px] text-emerald-600 mt-0.5">Đã niêm phong PDF an toàn</p>
+                  <p className="text-xs font-bold text-success-forest uppercase">Đã Ký Điện Tử 2 Bên</p>
+                  <p className="text-2xl font-black text-foreground mt-1">{fullySignedCount}</p>
                 </div>
-                <div className="h-10 w-10 rounded-xl bg-emerald-500/20 text-emerald-600 flex items-center justify-center font-bold">
+                <div className="h-10 w-10 rounded-xl bg-success-forest/20 text-success-forest flex items-center justify-center font-bold">
                   <ShieldCheck className="h-5 w-5" />
                 </div>
               </CardContent>
@@ -2066,7 +2114,7 @@ export const ContractManagement: React.FC = () => {
             <CardHeader className="p-4 border-b border-border/40 bg-muted/20 space-y-4">
               <div>
                 <CardTitle className="text-sm font-extrabold uppercase text-foreground flex items-center gap-2">
-                  <PenTool className="h-4 w-4 text-amber-600" /> Danh sách Hợp đồng Cần Ký Điện Tử
+                  <PenTool className="h-4 w-4 text-chart-1" /> Danh sách Hợp đồng Cần Ký Điện Tử
                 </CardTitle>
                 <CardDescription className="text-xs text-muted-foreground">
                   Thực hiện ký xác nhận phía Công ty, sao chép link ký hoặc gửi lại OTP cho nhân viên
@@ -2141,15 +2189,15 @@ export const ContractManagement: React.FC = () => {
                           {/* Signing Status Badge */}
                           <TableCell className="text-center">
                             {isFullySigned ? (
-                              <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-emerald-500/15 text-emerald-700 border border-emerald-500/30 inline-flex items-center gap-1">
+                              <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-success-forest/15 text-success-forest border border-success-forest/30 inline-flex items-center gap-1">
                                 <ShieldCheck className="h-3 w-3" /> Đã ký đủ hai bên
                               </span>
                             ) : isPendingEmployee ? (
-                              <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-blue-500/15 text-blue-700 border border-blue-500/30 inline-flex items-center gap-1">
+                              <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-brand-cobalt/15 text-brand-cobalt border border-brand-cobalt/30 inline-flex items-center gap-1">
                                 <Clock className="h-3 w-3" /> Chờ NV ký OTP
                               </span>
                             ) : (
-                              <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-amber-500/15 text-amber-700 border border-amber-500/30 inline-flex items-center gap-1">
+                              <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-chart-1/15 text-chart-1 border border-chart-1/30 inline-flex items-center gap-1">
                                 <AlertCircle className="h-3 w-3" /> Công ty chưa ký
                               </span>
                             )}
@@ -2164,7 +2212,7 @@ export const ContractManagement: React.FC = () => {
                                   size="sm"
                                   disabled={signingActionId === ct.id}
                                   onClick={() => handleSignCompanyQuick(ct.id)}
-                                  className="h-7 text-xs font-bold gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs cursor-pointer"
+                                  className="h-7 text-xs font-bold gap-1 rounded-lg bg-success-forest hover:bg-success-forest/90 text-white shadow-xs cursor-pointer"
                                 >
                                   {signingActionId === ct.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <PenTool className="h-3 w-3" />}
                                   Ký đại diện Công ty
@@ -2177,10 +2225,10 @@ export const ContractManagement: React.FC = () => {
                                   size="sm"
                                   variant="outline"
                                   onClick={() => handleCopySigningLink(ct.signingToken)}
-                                  className="h-7 text-xs font-bold gap-1 rounded-lg border-blue-200 text-blue-700 hover:bg-blue-50 cursor-pointer"
+                                  className="h-7 text-xs font-bold gap-1 rounded-lg border-brand-cobalt/30 text-brand-cobalt hover:bg-brand-cobalt/10 cursor-pointer"
                                   title="Sao chép link ký công khai cho nhân viên"
                                 >
-                                  {copiedToken === ct.signingToken ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                                  {copiedToken === ct.signingToken ? <Check className="h-3 w-3 text-success-forest" /> : <Copy className="h-3 w-3" />}
                                   {copiedToken === ct.signingToken ? "Đã chép link!" : "Sao chép link ký"}
                                 </Button>
                               )}
@@ -2206,7 +2254,7 @@ export const ContractManagement: React.FC = () => {
                                   variant="ghost"
                                   disabled={documentLoading?.id === String(ct.id)}
                                   onClick={() => openContractFile(ct.id)}
-                                  className="h-7 text-xs font-bold gap-1 rounded-lg text-slate-600 hover:bg-slate-100 cursor-pointer"
+                                  className="h-7 text-xs font-bold gap-1 rounded-lg text-muted-foreground hover:bg-muted cursor-pointer"
                                   title="Xem trước file PDF Hợp đồng"
                                 >
                                   {documentLoading?.id === String(ct.id) ? <Loader2 className="h-3 w-3 animate-spin" /> : <Eye className="h-3 w-3" />} Xem PDF
@@ -2218,7 +2266,7 @@ export const ContractManagement: React.FC = () => {
                                 size="sm"
                                 variant="ghost"
                                 onClick={() => handleOpenSigningHistoryQuick(ct.id)}
-                                className="h-7 text-xs font-bold gap-1 rounded-lg text-purple-600 hover:bg-purple-50 cursor-pointer"
+                                className="h-7 text-xs font-bold gap-1 rounded-lg text-primary hover:bg-primary/10 cursor-pointer"
                                 title="Xem nhật ký lịch sử ký"
                               >
                                 <History className="h-3 w-3" /> Lịch sử
@@ -2292,51 +2340,48 @@ export const ContractManagement: React.FC = () => {
         <div className="space-y-6 animate-in fade-in duration-200">
           {/* METRIC CARDS FOR TAB 3 */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Card className="border border-rose-500/30 bg-rose-500/5 dark:bg-rose-500/10 shadow-xs">
+            <Card className="border border-destructive/30 bg-destructive/5 dark:bg-destructive/10 shadow-xs">
               <CardContent className="p-4 flex flex-col justify-between h-full">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-rose-700 dark:text-rose-300 uppercase tracking-wider">Chưa Có Hợp Đồng</span>
-                  <div className="h-8 w-8 rounded-xl bg-rose-500/20 text-rose-600 dark:text-rose-400 flex items-center justify-center">
+                  <span className="text-xs font-bold text-destructive uppercase tracking-wider">Chưa Có Hợp Đồng</span>
+                  <div className="h-8 w-8 rounded-xl bg-destructive/20 text-destructive flex items-center justify-center">
                     <UserX className="h-4 w-4" />
                   </div>
                 </div>
                 <div className="mt-3">
-                  <span className="text-2xl font-black text-rose-700 dark:text-rose-400">{employeesWithoutContract.length}</span>
-                  <span className="text-[10px] text-rose-600 font-bold ml-2">Cần tạo hợp đồng ngay</span>
+                  <span className="text-2xl font-black text-destructive">{employeesWithoutContract.length}</span>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="border border-slate-500/30 bg-slate-500/5 dark:bg-slate-500/10 shadow-xs">
+            <Card className="border border-muted/50 bg-muted/20 shadow-xs">
               <CardContent className="p-4 flex flex-col justify-between h-full">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Tổng Số Nhân Viên</span>
-                  <div className="h-8 w-8 rounded-xl bg-slate-500/20 text-slate-600 dark:text-slate-400 flex items-center justify-center">
+                  <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Tổng Số Nhân Viên</span>
+                  <div className="h-8 w-8 rounded-xl bg-muted text-muted-foreground flex items-center justify-center">
                     <Users className="h-4 w-4" />
                   </div>
                 </div>
                 <div className="mt-3">
                   <span className="text-2xl font-black text-foreground">{allEmployees.length}</span>
-                  <span className="text-[10px] text-slate-600 font-bold ml-2">Nhân sự hệ thống</span>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="border border-emerald-500/30 bg-emerald-500/5 dark:bg-emerald-500/10 shadow-xs">
+            <Card className="border border-success-forest/30 bg-success-forest/5 dark:bg-success-forest/10 shadow-xs">
               <CardContent className="p-4 flex flex-col justify-between h-full">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wider">Tỷ Lệ Phủ Hợp Đồng</span>
-                  <div className="h-8 w-8 rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                  <span className="text-xs font-bold text-success-forest uppercase tracking-wider">Tỷ Lệ Phủ Hợp Đồng</span>
+                  <div className="h-8 w-8 rounded-xl bg-success-forest/20 text-success-forest flex items-center justify-center">
                     <ShieldCheck className="h-4 w-4" />
                   </div>
                 </div>
                 <div className="mt-3">
-                  <span className="text-2xl font-black text-emerald-700 dark:text-emerald-400">
+                  <span className="text-2xl font-black text-success-forest">
                     {allEmployees.length > 0
                       ? Math.round(((allEmployees.length - employeesWithoutContract.length) / allEmployees.length) * 100)
                       : 0}%
                   </span>
-                  <span className="text-[10px] text-emerald-600 font-bold ml-2">Đã có hợp đồng</span>
                 </div>
               </CardContent>
             </Card>
@@ -2413,7 +2458,7 @@ export const ContractManagement: React.FC = () => {
                   <TableRow>
                     <TableCell colSpan={7} className="h-32 text-center">
                       <div className="flex flex-col items-center justify-center gap-1.5 text-muted-foreground">
-                        <CheckCircle2 className="h-8 w-8 text-emerald-500" />
+                        <CheckCircle2 className="h-8 w-8 text-success-forest" />
                         <span className="text-sm font-bold text-foreground">Tất cả nhân viên đã có hợp đồng!</span>
                         <span className="text-xs">Không tìm thấy nhân viên nào chưa lập hợp đồng.</span>
                       </div>
@@ -2426,12 +2471,16 @@ export const ContractManagement: React.FC = () => {
                       <TableCell className="font-mono text-xs font-bold text-primary">{emp.employeeCode || emp.id}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2.5">
-                          <div className="h-8 w-8 rounded-full bg-rose-500/10 text-rose-600 font-bold flex items-center justify-center text-xs shrink-0 border border-rose-500/20">
-                            {emp.fullName ? emp.fullName.charAt(0).toUpperCase() : "N"}
+                          <div className="h-8 w-8 rounded-full bg-destructive/10 text-destructive font-bold flex items-center justify-center text-xs shrink-0 border border-destructive/20">
+                            {resolveAvatarUrl(emp.avatarUrl) ? (
+                              <img src={resolveAvatarUrl(emp.avatarUrl)} alt={emp.fullName || "Nhân viên"} className="h-full w-full object-cover" />
+                            ) : (
+                              emp.fullName ? emp.fullName.charAt(0).toUpperCase() : "N"
+                            )}
                           </div>
                           <div>
                             <p className="font-bold text-foreground text-xs">{emp.fullName}</p>
-                            <p className="text-[11px] text-rose-600 font-medium">Chưa có hợp đồng</p>
+                            <p className="text-[11px] text-destructive font-medium">Chưa có hợp đồng</p>
                           </div>
                         </div>
                       </TableCell>
@@ -2448,7 +2497,7 @@ export const ContractManagement: React.FC = () => {
                             setSelectedEmployeeForWizard(emp);
                             setNewContractWizardOpen(true);
                           }}
-                          className="h-8 text-xs font-bold gap-1 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs cursor-pointer"
+                          className="h-8 text-xs font-bold gap-1 rounded-xl bg-success-forest hover:bg-success-forest/90 text-white shadow-2xs cursor-pointer"
                         >
                           <Plus className="h-3.5 w-3.5" />
                           <span>+ Tạo Hợp Đồng</span>
@@ -2519,7 +2568,7 @@ export const ContractManagement: React.FC = () => {
               onClick={handleExportSelectedContractsCSV}
               className="h-8 text-xs font-bold gap-1.5 rounded-xl border-border hover:bg-muted cursor-pointer"
             >
-              <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600" />
+              <FileSpreadsheet className="h-3.5 w-3.5 text-success-forest" />
               <span>Xuất CSV</span>
             </Button>
 
@@ -2529,7 +2578,7 @@ export const ContractManagement: React.FC = () => {
               onClick={handleOpenReminderModal}
               className="h-8 text-xs font-bold gap-1.5 rounded-xl border-border hover:bg-muted cursor-pointer"
             >
-              <Send className="h-3.5 w-3.5 text-blue-600" />
+              <Send className="h-3.5 w-3.5 text-brand-cobalt" />
               <span>Gửi nhắc nhở</span>
             </Button>
 
@@ -2540,7 +2589,7 @@ export const ContractManagement: React.FC = () => {
               disabled={bulkDownloading}
               className="h-8 text-xs font-bold gap-1.5 rounded-xl border-border hover:bg-muted cursor-pointer"
             >
-              {bulkDownloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <DownloadCloud className="h-3.5 w-3.5 text-purple-600" />}
+              {bulkDownloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <DownloadCloud className="h-3.5 w-3.5 text-primary" />}
               <span>{bulkDownloading ? "Đang tạo ZIP..." : "Tải ZIP/PDF"}</span>
             </Button>
 
@@ -2625,19 +2674,19 @@ export const ContractManagement: React.FC = () => {
       {/* ── MODAL CHẤM DỨT HÀNG LOẠT ── */}
       {bulkTerminateModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div onClick={(e) => e.stopPropagation()} className="bg-card border border-rose-500/40 rounded-2xl p-6 max-w-lg w-full shadow-2xl space-y-5 animate-in zoom-in-95 duration-200">
+          <div onClick={(e) => e.stopPropagation()} className="bg-card border border-destructive/40 rounded-2xl p-6 max-w-lg w-full shadow-2xl space-y-5 animate-in zoom-in-95 duration-200">
             <div className="flex items-center gap-3 border-b border-border/40 pb-4">
-              <div className="h-10 w-10 rounded-2xl bg-rose-500/15 text-rose-600 flex items-center justify-center shrink-0">
+              <div className="h-10 w-10 rounded-2xl bg-destructive/15 text-destructive flex items-center justify-center shrink-0">
                 <AlertOctagon className="h-6 w-6" />
               </div>
               <div>
                 <h3 className="text-base font-extrabold text-foreground">Xác nhận Chấm Dứt Hàng Loạt Hợp Đồng</h3>
-                <p className="text-xs text-rose-600 font-bold">Hành động này có nguy cơ cao và sẽ ghi nhận vết Audit Trail!</p>
+                <p className="text-xs text-destructive font-bold">Hành động này có nguy cơ cao và sẽ ghi nhận vết Audit Trail!</p>
               </div>
             </div>
 
             <div className="space-y-3 text-xs text-muted-foreground">
-              <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-700 dark:text-rose-300 space-y-1">
+              <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-xl text-destructive dark:text-destructive space-y-1">
                 <p className="font-bold flex items-center gap-1">
                   <AlertTriangle className="h-4 w-4 shrink-0" /> Bạn đang chuẩn bị CHẤM DỨT {selectedContractIds.length} hợp đồng!
                 </p>
@@ -2692,7 +2741,7 @@ export const ContractManagement: React.FC = () => {
         <div
           className={cn(
             "fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300",
-            actionMessage.isError ? "bg-destructive" : "bg-emerald-600"
+            actionMessage.isError ? "bg-destructive" : "bg-success-forest"
           )}
         >
           {actionMessage.isError ? <AlertCircle className="h-5 w-5 shrink-0" /> : <CheckCircle2 className="h-5 w-5 shrink-0" />}
@@ -2740,7 +2789,7 @@ export const ContractManagement: React.FC = () => {
           <div onClick={(e) => e.stopPropagation()} className="bg-card border border-border/50 rounded-2xl p-5 max-w-md w-full shadow-2xl space-y-4 animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between border-b border-border/40 pb-3">
               <h3 className="text-sm font-extrabold text-foreground flex items-center gap-2">
-                <UserCheck className="h-4 w-4 text-emerald-600" /> Chọn Nhân viên để Tạo Hợp Đồng Mới
+                <UserCheck className="h-4 w-4 text-success-forest" /> Chọn Nhân viên để Tạo Hợp Đồng Mới
               </h3>
               <Button size="icon" variant="ghost" onClick={() => setSelectEmployeeModalOpen(false)} className="h-7 w-7 rounded-lg">
                 <X className="h-4 w-4" />
@@ -2779,7 +2828,11 @@ export const ContractManagement: React.FC = () => {
                       >
                         <div className="flex items-center gap-2.5">
                           <div className="h-8 w-8 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center text-xs shrink-0">
-                            {emp.fullName ? emp.fullName.charAt(0).toUpperCase() : "E"}
+                            {resolveAvatarUrl(emp.avatarUrl) ? (
+                              <img src={resolveAvatarUrl(emp.avatarUrl)} alt={emp.fullName || "Nhân viên"} className="h-full w-full object-cover" />
+                            ) : (
+                              emp.fullName ? emp.fullName.charAt(0).toUpperCase() : "E"
+                            )}
                           </div>
                           <div>
                             <p className="font-bold text-foreground text-xs group-hover:text-primary transition-colors">{emp.fullName}</p>
@@ -2872,7 +2925,7 @@ export const ContractManagement: React.FC = () => {
           <div onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()} className="bg-background border border-border/50 rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between border-b border-border/40 pb-3">
               <h3 className="text-sm font-extrabold text-foreground flex items-center gap-2">
-                <ShieldCheck className="h-4 w-4 text-emerald-600" /> Lịch sử ký và thay đổi hợp đồng
+                <ShieldCheck className="h-4 w-4 text-success-forest" /> Lịch sử ký và thay đổi hợp đồng
               </h3>
               <Button size="icon" variant="ghost" onClick={() => setSigningHistoryOpen(false)} className="h-7 w-7 rounded-lg">
                 <X className="h-4 w-4" />

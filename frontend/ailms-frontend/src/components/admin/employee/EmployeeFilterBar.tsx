@@ -95,10 +95,10 @@ export const EmployeeFilterBar: React.FC<FilterBarProps> = ({
       employeeApi.getFulltimeMonthlyAttendanceStats()
         .then(res => {
           setFulltimeAttendanceStats([
-            { name: "Có mặt (PRESENT)", value: res.PRESENT || 0 },
-            { name: "Đi muộn (LATE)", value: res.LATE || 0 },
-            { name: "Vắng (ABSENT)", value: res.ABSENT || 0 },
-            { name: "Nghỉ phép (ON_LEAVE)", value: res.ON_LEAVE || 0 }
+            { name: "Có mặt", value: res.PRESENT || 0 },
+            { name: "Đi muộn", value: res.LATE || 0 },
+            { name: "Vắng mặt", value: res.ABSENT || 0 },
+            { name: "Nghỉ phép", value: res.ON_LEAVE || 0 }
           ]);
         })
         .finally(() => setMiniChartLoading(false));
@@ -107,10 +107,10 @@ export const EmployeeFilterBar: React.FC<FilterBarProps> = ({
       employeeApi.getParttimeTeachingSessionStats()
         .then(res => {
           setParttimeSessionStats([
-            { name: "Nháp (Draft)", value: res.Draft || 0 },
-            { name: "Chờ duyệt (Pending)", value: res.Pending || 0 },
-            { name: "Xác nhận (CONFIRMED)", value: res.CONFIRMED || 0 },
-            { name: "Đã chi trả (PAID)", value: res.PAID || 0 }
+            { name: "Bản nháp", value: res.Draft || 0 },
+            { name: "Chờ duyệt", value: res.Pending || 0 },
+            { name: "Đã xác nhận", value: res.CONFIRMED || 0 },
+            { name: "Đã chi trả", value: res.PAID || 0 }
           ]);
         })
         .finally(() => setMiniChartLoading(false));
@@ -133,14 +133,14 @@ export const EmployeeFilterBar: React.FC<FilterBarProps> = ({
           <div className="flex items-center gap-2">
             <Filter className="h-4 w-4 text-primary" />
             <h3 className="text-sm font-extrabold text-foreground">
-              5.11.2 Bộ lọc & Tìm kiếm (Filter Bar)
+              Bộ lọc &amp; Tìm kiếm nhân sự
             </h3>
           </div>
           <Button
             variant="ghost"
             size="sm"
             onClick={onResetFilters}
-            className="h-8 text-xs font-bold text-muted-foreground hover:text-foreground gap-1.5"
+            className="h-8 text-xs font-bold text-muted-foreground hover:text-foreground gap-1.5 cursor-pointer"
           >
             <RotateCcw className="h-3.5 w-3.5" />
             <span>Đặt lại bộ lọc</span>
@@ -149,7 +149,7 @@ export const EmployeeFilterBar: React.FC<FilterBarProps> = ({
 
         <CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-4">
           
-          {/* Keyword Search (4 cols) */}
+          {/* Keyword Search */}
           <div className="lg:col-span-4 space-y-1.5">
             <Label className="text-xs font-bold text-muted-foreground">
               Từ khóa tìm kiếm
@@ -158,15 +158,15 @@ export const EmployeeFilterBar: React.FC<FilterBarProps> = ({
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
               <Input
                 type="text"
-                placeholder="Tìm mã (EP-...), Họ tên, Email, SĐT..."
+                placeholder="Tìm mã, họ tên, email, SĐT..."
                 value={searchKeyword}
                 onChange={(e) => setSearchKeyword(e.target.value)}
-                className="pl-8 h-9 text-xs bg-background border-border rounded-xl"
+                className="pl-8 h-9 text-xs bg-background border-border rounded-xl font-semibold"
               />
             </div>
           </div>
 
-          {/* Department Multi-select (2 cols) */}
+          {/* Department Select */}
           <div className="lg:col-span-2 space-y-1.5">
             <Label className="text-xs font-bold text-muted-foreground">
               Phòng ban
@@ -175,7 +175,7 @@ export const EmployeeFilterBar: React.FC<FilterBarProps> = ({
               value={selectedDepartments[0] || "ALL"}
               onValueChange={(val) => setSelectedDepartments(val === "ALL" ? [] : [val])}
             >
-              <SelectTrigger className="h-9 text-xs bg-background border-border rounded-xl">
+              <SelectTrigger className="h-9 text-xs bg-background border-border rounded-xl font-semibold">
                 <SelectValue placeholder="Tất cả phòng ban" />
               </SelectTrigger>
               <SelectContent>
@@ -187,16 +187,16 @@ export const EmployeeFilterBar: React.FC<FilterBarProps> = ({
             </Select>
           </div>
 
-          {/* Role Multi-select (2 cols) */}
+          {/* Role Select */}
           <div className="lg:col-span-2 space-y-1.5">
             <Label className="text-xs font-bold text-muted-foreground">
-              Vai trò (Staff Role)
+              Vai trò
             </Label>
             <Select
               value={selectedRoles[0] || "ALL"}
               onValueChange={(val) => setSelectedRoles(val === "ALL" ? [] : [val])}
             >
-              <SelectTrigger className="h-9 text-xs bg-background border-border rounded-xl">
+              <SelectTrigger className="h-9 text-xs bg-background border-border rounded-xl font-semibold">
                 <SelectValue placeholder="Tất cả vai trò" />
               </SelectTrigger>
               <SelectContent>
@@ -208,10 +208,10 @@ export const EmployeeFilterBar: React.FC<FilterBarProps> = ({
             </Select>
           </div>
 
-          {/* Employment Type Single-select (2 cols) */}
+          {/* Employment Type Select */}
           <div className="lg:col-span-2 space-y-1.5">
             <Label className="text-xs font-bold text-muted-foreground">
-              Loại hình làm việc
+              Loại hợp đồng
             </Label>
             <Select
               value={employmentType || "ALL"}
@@ -222,40 +222,40 @@ export const EmployeeFilterBar: React.FC<FilterBarProps> = ({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">Tất cả loại hình</SelectItem>
-                <SelectItem value="FULL_TIME">Chính thức (FULL_TIME)</SelectItem>
-                <SelectItem value="PART_TIME">Bán thời gian (PART_TIME)</SelectItem>
+                <SelectItem value="FULL_TIME">Chính thức</SelectItem>
+                <SelectItem value="PART_TIME">Thời vụ</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          {/* Contract Status Single-select (2 cols) */}
+          {/* Contract Status Select */}
           <div className="lg:col-span-2 space-y-1.5">
             <Label className="text-xs font-bold text-muted-foreground">
-              Trạng thái hợp đồng
+              Trạng thái HĐ
             </Label>
             <Select
               value={contractStatus || "ALL"}
               onValueChange={(val) => setContractStatus(val === "ALL" ? "" : val)}
             >
-              <SelectTrigger className="h-9 text-xs bg-background border-border rounded-xl">
+              <SelectTrigger className="h-9 text-xs bg-background border-border rounded-xl font-semibold">
                 <SelectValue placeholder="Tất cả trạng thái" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">Tất cả trạng thái</SelectItem>
-                <SelectItem value="ACTIVE">Đang hiệu lực (ACTIVE)</SelectItem>
-                <SelectItem value="PROBATION">Thử việc (PROBATION)</SelectItem>
-                <SelectItem value="EXPIRED">Hết hạn (EXPIRED)</SelectItem>
-                <SelectItem value="TERMINATED">Đã chấm dứt (TERMINATED)</SelectItem>
+                <SelectItem value="ACTIVE">Đang hiệu lực</SelectItem>
+                <SelectItem value="PROBATION">Thử việc</SelectItem>
+                <SelectItem value="EXPIRED">Hết hạn</SelectItem>
+                <SelectItem value="TERMINATED">Đã chấm dứt</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
-          {/* Conditional Teaching Category Multi-select (Only visible when role is Teacher/TA) */}
+          {/* Teaching Category Multi-select */}
           {isTeacherOrTARoleSelected && (
             <div className="lg:col-span-12 p-3 rounded-xl bg-primary/5 border border-primary/20 space-y-1.5 animate-in fade-in duration-300">
               <div className="flex items-center gap-1.5 text-xs font-bold text-primary">
                 <BookOpen className="h-4 w-4" />
-                <span>Lĩnh vực giảng dạy (Dành cho Teacher / TA)</span>
+                <span>Lĩnh vực giảng dạy (Giảng viên / Trợ giảng)</span>
               </div>
               <div className="flex flex-wrap gap-2 pt-1">
                 {teacherCategoryOptions.map(cat => {
@@ -265,7 +265,7 @@ export const EmployeeFilterBar: React.FC<FilterBarProps> = ({
                       key={cat}
                       type="button"
                       onClick={() => toggleMultiSelect(selectedTeacherCategories, cat, setSelectedTeacherCategories)}
-                      className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all ${
+                      className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                         isChecked
                           ? "bg-primary text-primary-foreground shadow-xs"
                           : "bg-background border border-border text-muted-foreground hover:text-foreground"
@@ -278,23 +278,21 @@ export const EmployeeFilterBar: React.FC<FilterBarProps> = ({
               </div>
             </div>
           )}
-
         </CardContent>
       </Card>
 
-      {/* DYNAMIC MINI CHART SECTION (Position: Right below filter bar, above list table) */}
       {employmentType && (
         <div className="animate-in slide-in-from-top-3 duration-300">
           {employmentType === "FULL_TIME" && (
-            <Card className="border-2 border-blue-500/30 bg-gradient-to-r from-blue-500/5 via-card to-card shadow-xs overflow-hidden">
+            <Card className="border-2 border-primary/30 bg-linear-to-r from-primary/5 via-card to-card shadow-xs overflow-hidden">
               <CardContent className="p-4 flex flex-col md:flex-row items-center justify-between gap-6">
                 <div className="space-y-1 md:w-1/3">
-                  <div className="flex items-center gap-2 text-blue-600 font-extrabold text-sm">
+                  <div className="flex items-center gap-2 text-primary font-extrabold text-sm">
                     <Clock className="h-4 w-4" />
-                    <span>Mini Chart Chấm Công (FULL_TIME)</span>
+                    <span>Thống kê chấm công nhân sự chính thức</span>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Tỷ lệ trạng thái PRESENT / LATE / ABSENT / ON_LEAVE trong tháng hiện tại (nguồn: attendance).
+                    Tỷ lệ các trạng thái điểm danh trong tháng hiện tại.
                   </p>
                 </div>
 
@@ -314,10 +312,7 @@ export const EmployeeFilterBar: React.FC<FilterBarProps> = ({
                           <Cell key={`att-${index}`} fill={ATTENDANCE_COLORS[index % ATTENDANCE_COLORS.length]} />
                         ))}
                       </Pie>
-                      <Tooltip
-                        formatter={(val: any) => [`${val} lượt`, "Số lượng"]}
-                        contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)" }}
-                      />
+                      <Tooltip formatter={(val: any) => [val, "Số lượng"]} />
                       <Legend iconType="circle" wrapperStyle={{ fontSize: "11px" }} />
                     </PieChart>
                   </ResponsiveContainer>
@@ -327,15 +322,15 @@ export const EmployeeFilterBar: React.FC<FilterBarProps> = ({
           )}
 
           {employmentType === "PART_TIME" && (
-            <Card className="border-2 border-amber-500/30 bg-gradient-to-r from-amber-500/5 via-card to-card shadow-xs overflow-hidden">
+            <Card className="border-2 border-blue-600/30 bg-linear-to-r from-blue-600/5 via-card to-card shadow-xs overflow-hidden">
               <CardContent className="p-4 flex flex-col md:flex-row items-center justify-between gap-6">
                 <div className="space-y-1 md:w-1/3">
-                  <div className="flex items-center gap-2 text-amber-600 font-extrabold text-sm">
+                  <div className="flex items-center gap-2 text-blue-600 font-extrabold text-sm">
                     <BarChart3 className="h-4 w-4" />
-                    <span>Mini Chart Buổi Dạy (PART_TIME)</span>
+                    <span>Thống kê buổi dạy nhân sự thời vụ</span>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Số buổi dạy theo trạng thái Draft / Pending / CONFIRMED / PAID trong kỳ lương (nguồn: teaching_session_payment).
+                    Số lượng buổi dạy theo trạng thái thanh toán trong kỳ lương.
                   </p>
                 </div>
 

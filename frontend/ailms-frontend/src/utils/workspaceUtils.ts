@@ -63,7 +63,7 @@ export const PORTAL_CONFIGS: Record<PortalType, PortalConfig> = {
 
 /**
  * Xác định danh sách Portals khả dụng dựa vào danh sách Roles của người dùng.
- * ĐẶC BIỆT: Tài khoản ADMIN có toàn quyền truy cập cả 3 Portal.
+ * ĐẶC BIỆT: Tài khoản ADMIN có toàn quyền truy cập cả 4 Portal.
  */
 export function getAvailablePortals(roles?: RoleCode[] | null): PortalType[] {
   if (!roles || roles.length === 0) return [];
@@ -88,8 +88,8 @@ export function getAvailablePortals(roles?: RoleCode[] | null): PortalType[] {
     portals.push("STUDENT");
   }
 
-  // Support Portal: chỉ tài khoản SUPPORT, không dùng chung với HR.
-  if (normalizedRoles.includes("SUPPORT")) {
+  // Support Portal: ADMIN hoặc SUPPORT có thể tiếp nhận và xử lý hội thoại.
+  if (isAdmin || normalizedRoles.includes("SUPPORT")) {
     portals.push("SUPPORT");
   }
 

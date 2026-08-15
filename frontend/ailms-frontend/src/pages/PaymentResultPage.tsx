@@ -31,21 +31,22 @@ export const PaymentResultPage = () => {
     let timer: ReturnType<typeof setTimeout> | undefined;
 
     /** Capture chỉ khi PayPal redirect về; backend dùng PayPal order đã lưu, không tin token query. */
-    const captureIfApproved = async () => {
+    const captureIfApproved = async (): Promise<OrderStatusResponse | null | false> => {
       if (searchParams.get("cancelled") === "1") {
         setErrorMessage("Bạn đã hủy thanh toán PayPal.");
         return false;
       }
-      if (!searchParams.get("token")) return true;
-      await orderApi.capturePaypalPayment(orderId);
-      return true;
+      if (!searchParams.get("token")) return null;
+      return orderApi.capturePaypalPayment(orderId);
     };
 
     /** Hỏi backend về kết quả capture PayPal, không sử dụng query redirect để cấp quyền học. */
     const pollStatus = async () => {
       try {
-        if (attempts === 0 && !(await captureIfApproved())) return;
-        const result = await orderApi.getOrderStatus(orderId);
+        const captured = attempts === 0 ? await captureIfApproved() : null;
+        if (captured === false) return;
+        // Capture response đã chứa trạng thái authoritative nên không gọi GET dư ngay sau redirect.
+        const result = captured || await orderApi.getOrderStatus(orderId);
         if (cancelled) return;
         setStatus(result);
         const completed = result.orderStatus === "PAID"

@@ -12,7 +12,6 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Search, UserCheck, Loader2, Check, ChevronLeft, ChevronRight } from "lucide-react";
 import { adminCourseClassApi } from "@/api/courses/adminCourseClassApi";
-import httpClient from "@/api/httpClient";
 
 interface ChangeTeacherModalProps {
   open: boolean;
@@ -48,24 +47,14 @@ export const ChangeTeacherModal: React.FC<ChangeTeacherModalProps> = ({
   const pageSize = 5;
 
   const [conflictWarning, setConflictWarning] = useState("");
-  const [allClasses, setAllClasses] = useState<any[]>([]);
 
   useEffect(() => {
     if (open) {
       fetchTeachers();
-      fetchClasses();
     }
   }, [open]);
 
-  const fetchClasses = async () => {
-    try {
-      const classRows = await adminCourseClassApi.getClasses();
-      setAllClasses(classRows || []);
-    } catch (err) {
-      console.warn("Could not fetch classes for schedule check", err);
-    }
-  };
-
+  /** Tải danh sách nhân sự có vai trò người dạy từ backend. */
   const fetchTeachers = async () => {
     setLoading(true);
     setError("");
@@ -83,69 +72,10 @@ export const ChangeTeacherModal: React.FC<ChangeTeacherModalProps> = ({
     }
   };
 
-  const handleSelectTeacher = async (teacherId: string) => {
+  /** Chọn ứng viên; backend sẽ kiểm tra lịch atomically khi xác nhận đổi. */
+  const handleSelectTeacher = (teacherId: string) => {
     setSelectedTeacherId(teacherId);
     setConflictWarning("");
-
-    // Schedule conflict check: Check if selected teacher already has active classes with overlapping schedules
-    const selectedTeacherObj = teachers.find((t) => getTeacherUserId(t) === teacherId);
-    const teacherName = selectedTeacherObj?.fullName || "Giảng viên";
-
-    const activeClassesForTeacher = allClasses.filter((c: any) => {
-      if (String(c.id) === classId) return false;
-      return (
-        (c.status === "ACTIVE" || c.status === "OPEN" || c.status === "READY") &&
-        (String(c.teacherId) === teacherId ||
-          (c.teacherName && c.teacherName === teacherName))
-      );
-    });
-
-    if (activeClassesForTeacher.length > 0) {
-      const conflictingClass = activeClassesForTeacher[0];
-      const classCode = conflictingClass.code || conflictingClass.classCode || String(conflictingClass.id || "");
-
-      let scheduleDetailText = "";
-      try {
-        const schedules = await adminCourseClassApi.getClassSchedules(conflictingClass.id);
-        if (schedules && schedules.length > 0) {
-          const dayNameMap: Record<number | string, string> = {
-            1: "Thứ 2", 2: "Thứ 3", 3: "Thứ 4", 4: "Thứ 5", 5: "Thứ 6", 6: "Thứ 7", 7: "Chủ Nhật",
-            MON: "Thứ 2", TUE: "Thứ 3", WED: "Thứ 4", THU: "Thứ 5", FRI: "Thứ 6", SAT: "Thứ 7", SUN: "Chủ Nhật"
-          };
-          const slotsText = schedules.map((s: any) => {
-            const dayStr = dayNameMap[s.dayOfWeek] || `Thứ ${s.dayOfWeek}`;
-            const timeRange = s.startTime && s.endTime ? ` (${s.startTime.substring(0,5)} - ${s.endTime.substring(0,5)})` : "";
-            return `${dayStr}${timeRange}`;
-          }).join(", ");
-          scheduleDetailText = ` vào khung giờ [${slotsText}]`;
-        }
-      } catch (err) {
-        console.warn("Could not load detailed schedules for conflicting class", err);
-      }
-
-      const startDateText = conflictingClass.startDate ? new Date(conflictingClass.startDate).toLocaleDateString("vi-VN") : "";
-      const endDateText = conflictingClass.endDate ? new Date(conflictingClass.endDate).toLocaleDateString("vi-VN") : "";
-      const timeframeText = startDateText && endDateText ? ` (Khung lịch: ${startDateText} - ${endDateText})` : "";
-
-      setConflictWarning(
-        `⚠️ Xung đột trùng lịch: Giảng viên ${teacherName} đang có lịch dạy lớp "${conflictingClass.name}" (Mã: ${classCode})${scheduleDetailText}${timeframeText}. Không thể phân công!`
-      );
-    }
-  };
-
-  const checkTeacherHasConflict = (t: any) => {
-    const teacherId = getTeacherUserId(t);
-    const teacherName = t.fullName || "";
-
-    const activeClasses = allClasses.filter((c: any) => {
-      if (String(c.id) === classId) return false;
-      return (
-        (c.status === "ACTIVE" || c.status === "OPEN" || c.status === "READY") &&
-        (String(c.teacherId) === teacherId || (c.teacherName && c.teacherName === teacherName))
-      );
-    });
-
-    return activeClasses.length > 0;
   };
 
   const filteredTeachers = teachers
@@ -155,12 +85,6 @@ export const ChangeTeacherModal: React.FC<ChangeTeacherModalProps> = ({
       const nameMatch = t.fullName ? t.fullName.toLowerCase().includes(kw) : false;
       const emailMatch = t.email ? t.email.toLowerCase().includes(kw) : false;
       return nameMatch || emailMatch;
-    })
-    .sort((a, b) => {
-      const conflictA = checkTeacherHasConflict(a);
-      const conflictB = checkTeacherHasConflict(b);
-      if (conflictA === conflictB) return 0;
-      return conflictA ? 1 : -1; // Non-conflicting teachers first
     });
 
   const totalPages = Math.max(1, Math.ceil(filteredTeachers.length / pageSize));
@@ -179,48 +103,18 @@ export const ChangeTeacherModal: React.FC<ChangeTeacherModalProps> = ({
     setSubmitting(true);
     setError("");
     try {
-      const members = await adminCourseClassApi.getClassMembers(classId);
-      const activeTeacherMembers = members.filter(
-        (member: any) =>
-          member.status === "ACTIVE" &&
-          member.roleInClass === "TEACHER" &&
-          String(member.userId ?? member.userEntity?.id ?? "") !== selectedTeacherId
+      await adminCourseClassApi.replaceClassTeacher(
+        classId,
+        selectedTeacherId,
+        "Thay đổi giáo viên bởi HR/Admin",
       );
-
-      await Promise.all(
-        activeTeacherMembers.map((member: any) => {
-          const oldTeacherUserId = String(member.userId ?? member.userEntity?.id ?? "");
-          return oldTeacherUserId
-            ? httpClient.post(`/v1/classes/${classId}/members/${oldTeacherUserId}/leave`, null, {
-                params: { reason: "Teacher changed by administrator" },
-              })
-            : Promise.resolve(null);
-        })
-      );
-
-      // Assign new teacher to class as TEACHER role
-      await httpClient.post(`/v1/classes/${classId}/members/${selectedTeacherId}/join`, null, {
-        params: { role: "TEACHER" },
-      });
-
-      // Dispatch auto system notification to the assigned teacher
-      const selectedTeacherObj = teachers.find((t) => getTeacherUserId(t) === selectedTeacherId);
-      try {
-        const targetUserId = parseInt(selectedTeacherId, 10);
-        await httpClient.post("/v1/notifications", {
-          type: "GENERAL",
-          title: `[Phân công lớp mới] Lớp ${className}`,
-          content: `Xin chào ${selectedTeacherObj?.fullName || "Thầy/Cô"}, bạn vừa được phân công làm Giảng viên phụ trách cho lớp học "${className}". Vui lòng kiểm tra lịch dạy!`,
-          userIds: !isNaN(targetUserId) ? [targetUserId] : [],
-        }).catch(() => null);
-      } catch (notifErr) {
-        console.warn("Notification dispatch notice:", notifErr);
-      }
 
       onSuccess();
       onClose();
     } catch (err: any) {
-      setError(err?.response?.data?.message || err.message || "Không thể phân công giảng viên mới");
+      const message = err?.response?.data?.message || err.message || "Không thể phân công giảng viên mới";
+      if (String(message).toLowerCase().includes("trùng lịch")) setConflictWarning(String(message));
+      setError(String(message));
     } finally {
       setSubmitting(false);
     }
@@ -280,20 +174,18 @@ export const ChangeTeacherModal: React.FC<ChangeTeacherModalProps> = ({
             paginatedTeachers.map((t, idx) => {
               const teacherIdStr = getTeacherUserId(t);
               const isSelected = teacherIdStr === selectedTeacherId;
-              const hasConflict = checkTeacherHasConflict(t);
 
               return (
-                <button
+                <Button
                   key={teacherIdStr || `teacher-${idx}`}
                   type="button"
+                  variant="outline"
                   onClick={() => handleSelectTeacher(teacherIdStr)}
-                  className={`w-full p-3 rounded-2xl border text-left transition-all flex items-center justify-between gap-3 cursor-pointer ${
+                  className={`h-auto w-full p-3 rounded-2xl text-left transition-all flex items-center justify-between gap-3 cursor-pointer ${
                     isSelected
                       ? conflictWarning
                         ? "border-red-500 bg-red-50 text-red-700 font-bold shadow-xs"
                         : "border-primary bg-primary/10 text-primary font-bold shadow-xs"
-                      : hasConflict
-                      ? "border-amber-200/80 bg-amber-50/30 hover:bg-amber-50/60"
                       : "border-border/60 hover:bg-muted/50"
                   }`}
                 >
@@ -308,22 +200,16 @@ export const ChangeTeacherModal: React.FC<ChangeTeacherModalProps> = ({
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="font-bold text-xs truncate text-foreground">{t.fullName}</p>
-                        {hasConflict ? (
-                          <Badge className="bg-amber-500/10 text-amber-700 border-amber-500/20 text-[10px] px-1.5 py-0 font-bold shrink-0">
-                            ⚠️ Trùng lịch
-                          </Badge>
-                        ) : (
-                          <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px] px-1.5 py-0 font-bold shrink-0">
-                            ● Khả dụng
-                          </Badge>
-                        )}
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-bold shrink-0">
+                          Kiểm tra khi xác nhận
+                        </Badge>
                       </div>
                       <p className="text-[11px] text-muted-foreground truncate">{t.email || t.position || "Giảng viên"}</p>
                     </div>
                   </div>
 
                   {isSelected && <Check className="h-4 w-4 text-primary shrink-0" />}
-                </button>
+                </Button>
               );
             })
           ) : (

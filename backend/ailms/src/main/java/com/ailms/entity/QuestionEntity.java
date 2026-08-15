@@ -35,7 +35,7 @@ public class QuestionEntity extends BaseEntity {
     @Column(name = "content", columnDefinition = "TEXT")
     private String content;
 
-    /** Phân loại dạng câu hỏi (1 = Single Choice, 2 = Multiple Choice, 3 = True/False, 4 = Essay). */
+    /** Phân loại dạng câu hỏi (1 = Single Choice, 2 = True/False, 3 = Multiple Choice, 4 = tự luận). */
     @Column(name = "question_type")
     private Byte questionType;
 

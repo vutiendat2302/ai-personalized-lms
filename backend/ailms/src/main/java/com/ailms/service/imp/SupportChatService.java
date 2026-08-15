@@ -792,8 +792,7 @@ public class SupportChatService implements com.ailms.service.ISupportChatService
         return "AILMS có đúng 3 hình thức chính:\n"
                 + "SELF_STUDY: tự học theo tiến độ cá nhân.\n"
                 + "GROUP_CLASS: học lớp nhóm có lịch và tương tác.\n"
-                + "ONE_ON_ONE: gia sư 1-1 cá nhân hóa.\n"
-                + "COMBO là sự kết hợp các hình thức trên, không phải hình thức thứ tư.";
+                + "ONE_ON_ONE: gia sư 1-1 cá nhân hóa.";
     }
 
     /** Chọn card dữ liệu thật đi kèm template, không để AI tạo ID, giá hoặc đường dẫn. */

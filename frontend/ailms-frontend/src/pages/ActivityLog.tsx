@@ -61,6 +61,7 @@ import {
   DialogFooter
 } from "@/components/ui/dialog";
 
+/** Hàm tính toán danh sách trang hiển thị trong thanh phân trang */
 const getPageNumbers = (currentPage: number, total: number) => {
   const pages: (number | string)[] = [];
   if (total <= 7) {
@@ -83,6 +84,8 @@ export const ActivityLog: React.FC = () => {
   const location = useLocation();
 
   const isAdmin = auth.user?.roles.includes(UserRole.ADMIN);
+  const isStudent = Boolean(auth.user?.roles.includes(UserRole.STUDENT) && !isAdmin);
+  const isStaffActivity = Boolean(!isAdmin && !isStudent);
   const currentUserId = auth.user ? auth.user.id : null;
 
   // Auto-redirect Admin to /admin/activity-log to ensure Sidebar renders
@@ -170,10 +173,12 @@ export const ActivityLog: React.FC = () => {
   useEffect(() => {
     if (isAdmin) {
       fetchAdminLogs();
+    } else if (isStaffActivity) {
+      fetchStaffLogs();
     } else {
       fetchStudentLogs();
     }
-  }, [isAdmin, studentTab, page, pageSize, sortRule, debouncedKeyword, debouncedUserQuery]);
+  }, [isAdmin, isStaffActivity, studentTab, page, pageSize, sortRule, debouncedKeyword, debouncedUserQuery]);
 
   // Auto-refresh interval for Admin Live monitoring
   useEffect(() => {
@@ -184,6 +189,7 @@ export const ActivityLog: React.FC = () => {
     return () => clearInterval(interval);
   }, [isLive, isAdmin, page, pageSize, debouncedKeyword, filterEntityType, selectedActions, debouncedUserQuery, filterIpAddress, filterStart, filterEnd, sortRule]);
 
+  /** Hiển thị thông báo banner toast thành công hoặc lỗi */
   const showBanner = (msg: string, isError = false) => {
     if (isError) {
       setErrorBanner(msg);
@@ -194,7 +200,7 @@ export const ActivityLog: React.FC = () => {
     }
   };
 
-  // Fetch Admin audit logs
+  /** Lấy danh sách nhật ký kiểm toán dành cho Quản trị viên */
   const fetchAdminLogs = async (isSilent = false) => {
     if (!isSilent) setLoading(true);
     try {
@@ -226,7 +232,7 @@ export const ActivityLog: React.FC = () => {
     }
   };
 
-  // Fetch Student Activity logs (Learning & System History)
+  /** Lấy danh sách nhật ký hoạt động và học tập của Học viên */
   const fetchStudentLogs = async () => {
     setLoading(true);
     try {
@@ -248,14 +254,42 @@ export const ActivityLog: React.FC = () => {
     }
   };
 
-  // Handle student tab switch
+  /** Lấy audit log cá nhân cho Teacher/TA, không gọi nhầm API chỉ dành cho Student. */
+  const fetchStaffLogs = async () => {
+    if (!currentUserId) return;
+    setLoading(true);
+    try {
+      const response = await auditLogApi.getAuditLogsByUserId(currentUserId, {
+        page, size: pageSize, sort: "occurredAt:desc",
+      });
+      const pageData = response.data.data;
+      setStudentLogs((pageData.content || []).map((item: AuditLogResponse): StudentActivityHistoryItem => ({
+        id: item.id, historyType: "SYSTEM", action: item.action, entityType: item.entityType,
+        entityId: item.entityId, metadata: item.newValue, ipAddress: item.ipAddress,
+        userAgent: item.userAgent, occurredAt: item.occurredAt,
+      })));
+      setTotalPages(pageData.totalPages || 0);
+      setTotalElements(pageData.totalElements || 0);
+    } catch (err: any) {
+      showBanner(err.response?.data?.message || err.message || "Không thể tải lịch sử hoạt động cá nhân", true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /** Chuyển đổi giữa tab lịch sử học tập và lịch sử hệ thống của Học viên */
   const handleStudentTabSwitch = (tab: "LEARNING" | "SYSTEM") => {
     setStudentTab(tab);
     setPage(0);
   };
 
-  // Open detail for student activity log
+  /** Mở modal chi tiết nhật ký hoạt động cá nhân của Học viên */
   const handleOpenStudentDetail = async (item: StudentActivityHistoryItem) => {
+    if (isStaffActivity) {
+      setSelectedStudentLog(item);
+      setStudentDetailModalOpen(true);
+      return;
+    }
     try {
       let detail: StudentActivityHistoryItem;
       if (studentTab === "LEARNING") {
@@ -271,7 +305,7 @@ export const ActivityLog: React.FC = () => {
     }
   };
 
-  // Delete student activity log (Learning or System)
+  /** Xóa bản ghi nhật ký hoạt động của Học viên */
   const handleDeleteStudentLog = async (id: string, type: "LEARNING" | "SYSTEM") => {
     try {
       if (type === "LEARNING") {
@@ -286,7 +320,7 @@ export const ActivityLog: React.FC = () => {
     }
   };
 
-  // Admin delete handlers
+  /** Xóa 1 bản ghi nhật ký kiểm toán phía Admin */
   const handleDeleteAdminLog = async (logId: string) => {
     try {
       const res = await auditLogApi.deleteAuditLog(logId);
@@ -301,6 +335,7 @@ export const ActivityLog: React.FC = () => {
     }
   };
 
+  /** Xóa hàng loạt bản ghi nhật ký kiểm toán được chọn phía Admin */
   const handleBulkDeleteAdminLogs = async () => {
     if (selectedLogIds.length === 0) return;
     try {
@@ -317,6 +352,7 @@ export const ActivityLog: React.FC = () => {
     }
   };
 
+  /** Xử lý lọc dữ liệu nhật ký */
   const handleApplyFilters = (e: React.FormEvent) => {
     e.preventDefault();
     setPage(0);
@@ -327,6 +363,7 @@ export const ActivityLog: React.FC = () => {
     }
   };
 
+  /** Xuất báo cáo nhật ký kiểm toán ra file CSV */
   const handleExportCSV = async () => {
     setLoading(true);
     try {
@@ -354,26 +391,28 @@ export const ActivityLog: React.FC = () => {
     }
   };
 
+  /** Trả về class màu badge cho từng loại hành động theo token màu index.css */
   const getActionColor = (action: string) => {
     const act = (action || "").toLowerCase();
     if (act.includes("complete") || act.includes("create") || act.includes("add") || act.includes("insert")) {
-      return "bg-emerald-500/10 text-emerald-600 border-emerald-500/20";
+      return "bg-success-forest/10 text-success-forest border-success-forest/20";
     }
     if (act.includes("view") || act.includes("update") || act.includes("edit") || act.includes("transfer")) {
-      return "bg-blue-500/10 text-blue-600 border-blue-500/20";
+      return "bg-brand-cobalt/10 text-brand-cobalt border-brand-cobalt/20";
     }
     if (act.includes("delete") || act.includes("remove") || act.includes("destroy") || act.includes("clear")) {
-      return "bg-red-500/10 text-red-600 border-red-500/20";
+      return "bg-destructive/10 text-destructive border-destructive/20";
     }
     if (act.includes("submit") || act.includes("quiz") || act.includes("assignment")) {
-      return "bg-purple-500/10 text-purple-600 border-purple-500/20";
+      return "bg-primary/10 text-primary border-primary/20";
     }
     if (act.includes("login") || act.includes("auth")) {
-      return "bg-cyan-500/10 text-cyan-600 border-cyan-500/20";
+      return "bg-chart-1/10 text-chart-1 border-chart-1/20";
     }
-    return "bg-slate-500/10 text-slate-600 border-slate-500/20";
+    return "bg-muted text-muted-foreground border-border";
   };
 
+  /** Định dạng hiển thị thời gian chuẩn Tiếng Việt */
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return "—";
     try {
@@ -391,6 +430,7 @@ export const ActivityLog: React.FC = () => {
     }
   };
 
+  /** Chuyển đổi chuỗi Metadata JSON sang định dạng hiển thị */
   const parseMetadataJson = (metaStr?: string | null) => {
     if (!metaStr) return null;
     try {
@@ -408,17 +448,17 @@ export const ActivityLog: React.FC = () => {
         <div className="fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-xl bg-destructive text-white px-4 py-3 shadow-xl animate-in slide-in-from-bottom-5 duration-300">
           <AlertCircle className="h-5 w-5 shrink-0" />
           <span className="text-sm font-semibold">{errorBanner}</span>
-          <button onClick={() => setErrorBanner("")} className="ml-2 hover:opacity-80">
+          <button onClick={() => setErrorBanner("")} className="ml-2 hover:opacity-80 cursor-pointer">
             <X className="h-4 w-4" />
           </button>
         </div>
       )}
 
       {successBanner && (
-        <div className="fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-xl bg-emerald-600 text-white px-4 py-3 shadow-xl animate-in slide-in-from-bottom-5 duration-300">
+        <div className="fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-xl bg-success-forest text-white px-4 py-3 shadow-xl animate-in slide-in-from-bottom-5 duration-300">
           <Info className="h-5 w-5 shrink-0" />
           <span className="text-sm font-semibold">{successBanner}</span>
-          <button onClick={() => setSuccessBanner("")} className="ml-2 hover:opacity-80">
+          <button onClick={() => setSuccessBanner("")} className="ml-2 hover:opacity-80 cursor-pointer">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -427,15 +467,9 @@ export const ActivityLog: React.FC = () => {
       {/* Header Section */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 text-xs font-bold text-primary mb-1">
-            <Link to="/dashboard" className="flex items-center gap-1 hover:underline">
-              <ArrowLeft className="h-3 w-3" />
-              <span>Quay lại Dashboard</span>
-            </Link>
-          </div>
           <h1 className="text-2xl font-extrabold tracking-tight text-foreground flex items-center gap-2">
             <Activity className="h-6 w-6 text-primary" />
-            <span>{isAdmin ? "Nhật ký hoạt động hệ thống (Audit Logs)" : "Lịch sử hoạt động cá nhân"}</span>
+            <span>{isAdmin ? "Nhật ký hoạt động hệ thống" : "Lịch sử hoạt động cá nhân"}</span>
           </h1>
           <p className="text-xs text-muted-foreground mt-0.5">
             {isAdmin
@@ -455,7 +489,7 @@ export const ActivityLog: React.FC = () => {
             <CardHeader className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 pb-4 border-b border-border/30 bg-card">
               <div>
                 <CardTitle className="text-xl font-semibold tracking-tight font-heading flex items-center gap-2">
-                  <span>Danh sách Nhật ký kiểm toán Admin</span>
+                  <span>Danh sách Nhật ký kiểm toán Quản trị viên</span>
                 </CardTitle>
                 <CardDescription className="text-sm text-muted-foreground mt-0.5">
                   Tra cứu chi tiết các thao tác chỉnh sửa dữ liệu, đăng nhập, xoá dữ liệu trên hệ thống.
@@ -465,11 +499,11 @@ export const ActivityLog: React.FC = () => {
               <div className="flex flex-wrap items-center gap-3">
                 <div className="flex items-center gap-2 bg-muted/40 p-1.5 px-3 rounded-lg border border-border/50">
                   <span className="relative flex h-2 w-2 shrink-0">
-                    <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isLive ? "bg-emerald-500" : "bg-muted-foreground"}`}></span>
-                    <span className={`relative inline-flex rounded-full h-2 w-2 ${isLive ? "bg-emerald-500" : "bg-muted-foreground"}`}></span>
+                    <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isLive ? "bg-success-forest" : "bg-muted-foreground"}`}></span>
+                    <span className={`relative inline-flex rounded-full h-2 w-2 ${isLive ? "bg-success-forest" : "bg-muted-foreground"}`}></span>
                   </span>
                   <span className="text-xs font-bold select-none cursor-pointer" onClick={() => setIsLive(!isLive)}>
-                    {isLive ? "LIVE Monitoring" : "Chế độ LIVE tắt"}
+                    {isLive ? "Giám sát trực tiếp (LIVE)" : "Chế độ LIVE tắt"}
                   </span>
                   <Checkbox
                     checked={isLive}
@@ -486,12 +520,12 @@ export const ActivityLog: React.FC = () => {
 
             <CardContent className="p-0 overflow-x-auto">
               <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/20 border-border/40">
+                <TableHeader className="sticky top-0 z-10 bg-card">
+                  <TableRow className="bg-card border-border/40">
                     <TableHead className="py-3 px-4 text-sm font-semibold uppercase tracking-wider text-muted-foreground">Thời gian</TableHead>
                     <TableHead className="py-3 px-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">Tài khoản</TableHead>
                     <TableHead className="py-3 px-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">Hành động</TableHead>
-                    <TableHead className="py-3 px-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">Thực thể</TableHead>
+                    <TableHead className="py-3 px-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">Thành phần</TableHead>
                     <TableHead className="py-3 px-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">IP</TableHead>
                     <TableHead className="py-3 px-4 text-sm font-semibold uppercase tracking-wider text-muted-foreground text-center">Thao tác</TableHead>
                   </TableRow>
@@ -503,7 +537,7 @@ export const ActivityLog: React.FC = () => {
                         {formatDate(log.occurredAt)}
                       </TableCell>
                       <TableCell className="py-3 px-3 text-xs font-bold text-foreground">
-                        {log.userFullName || log.userEmail || `User #${log.userId}`}
+                        {log.userFullName || log.userEmail || (log.userId ? `ID: ${log.userId}` : "Hệ thống")}
                       </TableCell>
                       <TableCell className="py-3 px-3">
                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold border uppercase ${getActionColor(log.action)}`}>
@@ -511,7 +545,7 @@ export const ActivityLog: React.FC = () => {
                         </span>
                       </TableCell>
                       <TableCell className="py-3 px-3 text-xs font-mono">
-                        {log.entityType} #{log.entityId}
+                        {log.entityType} {log.entityId ? log.entityId : ""}
                       </TableCell>
                       <TableCell className="py-3 px-3 text-xs font-mono text-muted-foreground">
                         {log.ipAddress || "—"}
@@ -523,6 +557,7 @@ export const ActivityLog: React.FC = () => {
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 text-primary hover:bg-primary/10 cursor-pointer"
+                            title="Xem chi tiết"
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
@@ -531,6 +566,7 @@ export const ActivityLog: React.FC = () => {
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 text-destructive hover:bg-destructive/10 cursor-pointer"
+                            title="Xóa nhật ký"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -541,6 +577,39 @@ export const ActivityLog: React.FC = () => {
                 </TableBody>
               </Table>
             </CardContent>
+
+            {/* Phân trang nhật ký hệ thống theo dữ liệu phân trang từ backend. */}
+            {totalPages > 1 && (
+              <div className="px-5 py-3.5 border-t border-border/40 bg-card flex flex-col sm:flex-row items-center justify-between gap-3 text-xs font-medium">
+                <span className="text-muted-foreground">
+                  Hiển thị trang <strong className="text-foreground">{page + 1}</strong> trên <strong className="text-foreground">{totalPages}</strong> (Tổng {totalElements} bản ghi)
+                </span>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    disabled={page === 0 || loading}
+                    onClick={() => setPage((current) => current - 1)}
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs font-semibold cursor-pointer"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5 mr-1" /> Trước
+                  </Button>
+                  <span className="px-3 py-1 bg-muted rounded-lg font-bold">
+                    {page + 1} / {totalPages}
+                  </span>
+                  <Button
+                    disabled={page >= totalPages - 1 || loading}
+                    onClick={() => setPage((current) => current + 1)}
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs font-semibold cursor-pointer"
+                  >
+                    Sau <ChevronRight className="h-3.5 w-3.5 ml-1" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </Card>
         </div>
       ) : (
@@ -559,7 +628,7 @@ export const ActivityLog: React.FC = () => {
               }`}
             >
               <BookOpen className="h-4 w-4" />
-              <span>Lịch sử học tập (Learning)</span>
+              <span>Lịch sử học tập</span>
             </button>
 
             <button
@@ -571,7 +640,7 @@ export const ActivityLog: React.FC = () => {
               }`}
             >
               <Shield className="h-4 w-4" />
-              <span>Lịch sử hệ thống (System)</span>
+              <span>Lịch sử hệ thống</span>
             </button>
           </div>
 
@@ -625,7 +694,7 @@ export const ActivityLog: React.FC = () => {
                     <TableRow className="bg-muted/20 border-border/40 text-xs">
                       <TableHead className="py-3 px-4 font-bold uppercase text-muted-foreground">Thời gian</TableHead>
                       <TableHead className="py-3 px-3 font-bold uppercase text-muted-foreground">Hành động</TableHead>
-                      <TableHead className="py-3 px-3 font-bold uppercase text-muted-foreground">Thực thể liên quan</TableHead>
+                      <TableHead className="py-3 px-3 font-bold uppercase text-muted-foreground">Thành phần liên quan</TableHead>
                       <TableHead className="py-3 px-3 font-bold uppercase text-muted-foreground">Thiết bị truy cập</TableHead>
                       <TableHead className="py-3 px-4 font-bold uppercase text-muted-foreground text-center">Thao tác</TableHead>
                     </TableRow>
@@ -648,7 +717,7 @@ export const ActivityLog: React.FC = () => {
                           <div className="flex flex-col">
                             <span className="font-bold text-foreground font-mono">{item.entityType || "N/A"}</span>
                             {item.entityId && (
-                              <span className="text-[10px] text-muted-foreground font-mono">ID: #{item.entityId}</span>
+                              <span className="text-[10px] text-muted-foreground font-mono">ID: {item.entityId}</span>
                             )}
                           </div>
                         </TableCell>
@@ -673,7 +742,7 @@ export const ActivityLog: React.FC = () => {
                               <span>Chi tiết</span>
                             </Button>
 
-                            <Button
+                            {!isStaffActivity && <Button
                               onClick={() => setStudentLogToDelete({ id: item.id, type: studentTab })}
                               variant="ghost"
                               size="sm"
@@ -682,7 +751,7 @@ export const ActivityLog: React.FC = () => {
                             >
                               <Trash2 className="h-3.5 w-3.5" />
                               <span>Xóa</span>
-                            </Button>
+                            </Button>}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -733,7 +802,7 @@ export const ActivityLog: React.FC = () => {
       {/* STUDENT LOG DETAIL MODAL */}
       {selectedStudentLog && (
         <Dialog open={studentDetailModalOpen} onOpenChange={setStudentDetailModalOpen}>
-          <DialogContent className="max-w-lg w-full rounded-2xl bg-card p-6 space-y-4 shadow-xl">
+          <DialogContent className="max-w-lg w-full rounded-2xl bg-card p-6 space-y-4 shadow-xl border border-border/40">
             <DialogHeader>
               <div className="flex items-center gap-2 text-primary mb-1">
                 <FileJson className="h-5 w-5" />
@@ -742,7 +811,7 @@ export const ActivityLog: React.FC = () => {
                 </DialogTitle>
               </div>
               <DialogDescription className="text-xs text-muted-foreground">
-                Thông tin đầy đủ của bản ghi nhật ký #{selectedStudentLog.id}
+                Thông tin chi tiết của bản ghi nhật ký {selectedStudentLog.id}
               </DialogDescription>
             </DialogHeader>
 
@@ -763,9 +832,9 @@ export const ActivityLog: React.FC = () => {
                 </div>
 
                 <div>
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase block">Thực thể liên quan</span>
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase block">Thành phần liên quan</span>
                   <span className="font-mono font-bold text-foreground block mt-0.5">
-                    {selectedStudentLog.entityType || "N/A"} #{selectedStudentLog.entityId || ""}
+                    {selectedStudentLog.entityType || "N/A"} {selectedStudentLog.entityId || ""}
                   </span>
                 </div>
 
@@ -780,7 +849,7 @@ export const ActivityLog: React.FC = () => {
               {selectedStudentLog.metadata && (
                 <div className="space-y-1">
                   <span className="text-[10px] font-bold text-muted-foreground uppercase block">Dữ liệu bổ sung (Metadata JSON)</span>
-                  <pre className="p-3 bg-slate-950 text-slate-100 rounded-xl font-mono text-[11px] overflow-x-auto border border-border/40">
+                  <pre className="p-3 bg-muted text-foreground rounded-xl font-mono text-[11px] overflow-x-auto border border-border/40">
                     {(() => {
                       const parsed = parseMetadataJson(selectedStudentLog.metadata);
                       return typeof parsed === "object" ? JSON.stringify(parsed, null, 2) : String(parsed);
@@ -828,14 +897,14 @@ export const ActivityLog: React.FC = () => {
       {/* STUDENT CONFIRM DELETE DIALOG */}
       {studentLogToDelete && (
         <Dialog open={!!studentLogToDelete} onOpenChange={() => setStudentLogToDelete(null)}>
-          <DialogContent className="max-w-md w-full rounded-2xl bg-card p-6 space-y-3">
+          <DialogContent className="max-w-md w-full rounded-2xl bg-card p-6 space-y-3 border border-border/40">
             <DialogHeader>
               <div className="flex items-center gap-2 text-destructive mb-1">
                 <Trash2 className="h-6 w-6" />
                 <DialogTitle className="text-base font-bold">Xác nhận xóa bản ghi nhật ký</DialogTitle>
               </div>
               <DialogDescription className="text-xs text-muted-foreground">
-                Bạn có chắc chắn muốn xóa bản ghi nhật ký #{studentLogToDelete.id} khỏi hệ thống?
+                Bạn có chắc chắn muốn xóa bản ghi nhật ký ID {studentLogToDelete.id} khỏi hệ thống?
                 <br />
                 <span className="text-destructive font-semibold mt-1 block">Hành động này không thể hoàn tác.</span>
               </DialogDescription>
@@ -876,23 +945,23 @@ export const ActivityLog: React.FC = () => {
 
       {/* ADMIN CONFIRM DELETE DIALOG */}
       <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-        <DialogContent className="max-w-md w-full rounded-2xl bg-card p-6">
+        <DialogContent className="max-w-md w-full rounded-2xl bg-card p-6 border border-border/40">
           <DialogHeader>
-            <div className="flex items-center gap-3 text-red-600 mb-1">
+            <div className="flex items-center gap-3 text-destructive mb-1">
               <Trash2 className="h-7 w-7 shrink-0" />
               <DialogTitle className="text-lg font-black">Xác nhận xóa Nhật ký Kiểm toán</DialogTitle>
             </div>
             <DialogDescription className="text-xs text-muted-foreground leading-relaxed mt-1">
               {isBulkDeleting
                 ? `Bạn có chắc chắn muốn xóa vĩnh viễn ${selectedLogIds.length} bản ghi nhật ký đã chọn khỏi hệ thống?`
-                : `Bạn có chắc chắn muốn xóa vĩnh viễn bản ghi nhật ký #${adminLogToDelete?.id} khỏi hệ thống?`}
+                : `Bạn có chắc chắn muốn xóa vĩnh viễn bản ghi nhật ký ID ${adminLogToDelete?.id} khỏi hệ thống?`}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 pt-2">
             <Button
               variant="outline"
               onClick={() => setDeleteConfirmOpen(false)}
-              className="font-bold text-xs"
+              className="font-bold text-xs cursor-pointer"
             >
               Hủy bỏ
             </Button>
@@ -906,7 +975,7 @@ export const ActivityLog: React.FC = () => {
                 setDeleteConfirmOpen(false);
               }}
               variant="destructive"
-              className="font-bold text-xs"
+              className="font-bold text-xs cursor-pointer"
             >
               Đồng ý xóa
             </Button>

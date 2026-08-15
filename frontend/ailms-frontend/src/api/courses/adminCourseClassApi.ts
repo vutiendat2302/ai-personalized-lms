@@ -78,6 +78,12 @@ export const adminCourseClassApi = {
   cancelClassSession: async (classId: string, sessionId: string, reason: string) =>
     (await httpClient.post<ApiResponse<any>>(`/v1/classes/${classId}/sessions/${sessionId}/cancel`, { reason })).data.data,
   getClassMembers: async (classId: string) => (await httpClient.get<ApiResponse<any[]>>(`/v1/classes/${classId}/members`)).data.data || [],
+  /** Đổi giáo viên lớp atomically; backend kiểm tra trùng lịch và phát thông báo. */
+  replaceClassTeacher: async (classId: string, newTeacherUserId: string, reason: string) =>
+    (await httpClient.post<ApiResponse<any>>(`/v1/classes/${classId}/teacher/replace`, {
+      newTeacherUserId,
+      reason,
+    })).data.data,
   getClassSchedules: async (classId: string) => (await httpClient.get<ApiResponse<any[]>>(`/v1/classes/${classId}/schedules`)).data.data || [],
   updateClassSchedules: async (classId: string, schedules: any[]) => (await httpClient.put<ApiResponse<any[]>>(`/v1/classes/${classId}/schedules`, schedules)).data.data || [],
   getCourseTeachers: async (courseId: string) => (await httpClient.get<ApiResponse<any[]>>(`/v1/course-teachers/course/${courseId}`)).data.data || [],

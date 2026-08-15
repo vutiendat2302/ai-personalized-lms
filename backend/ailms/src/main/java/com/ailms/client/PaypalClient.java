@@ -15,6 +15,7 @@ import org.springframework.web.client.RestClientResponseException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -27,6 +28,8 @@ public class PaypalClient {
 
     private final PaypalProperties properties;
     private final RestClient.Builder restClientBuilder;
+    private volatile String cachedAccessToken;
+    private volatile Instant cachedAccessTokenExpiresAt = Instant.EPOCH;
 
     /** Tạo PayPal order và trả approval URL cùng số tiền gateway đã quy đổi. */
     public CreateOrderResult createOrder(
@@ -46,14 +49,19 @@ public class PaypalClient {
                         "return_url", appendApplicationOrderId(properties.getReturnUrl(), applicationOrderId),
                         "cancel_url", appendApplicationOrderId(properties.getCancelUrl(), applicationOrderId),
                         "user_action", "PAY_NOW"))));
-        PaypalOrderResponse response = restClientBuilder.build().post()
-                .uri(properties.getApiBaseUrl() + "/v2/checkout/orders")
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
-                .header("PayPal-Request-Id", requestId)
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(payload)
-                .retrieve()
-                .body(PaypalOrderResponse.class);
+        PaypalOrderResponse response;
+        try {
+            response = restClientBuilder.build().post()
+                    .uri(properties.getApiBaseUrl() + "/v2/checkout/orders")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
+                    .header("PayPal-Request-Id", requestId)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(payload)
+                    .retrieve()
+                    .body(PaypalOrderResponse.class);
+        } catch (RestClientResponseException exception) {
+            throw new BusinessException("PayPal từ chối tạo giao dịch. Vui lòng kiểm tra lại giá trị đơn hàng.");
+        }
         if (response == null || isBlank(response.getId())) {
             throw new BusinessException("Không nhận được PayPal order từ Sandbox.");
         }
@@ -143,8 +151,20 @@ public class PaypalClient {
         }
     }
 
-    /** Lấy OAuth access token bằng client credentials, không ghi log token hoặc secret. */
+    /** Tái sử dụng OAuth token còn hạn để mỗi thao tác thanh toán không phải gọi thêm một request xác thực. */
     private String getAccessToken() {
+        Instant now = Instant.now();
+        if (!isBlank(cachedAccessToken) && now.isBefore(cachedAccessTokenExpiresAt)) {
+            return cachedAccessToken;
+        }
+        return refreshAccessToken(now);
+    }
+
+    /** Làm mới token đồng bộ một lần và chừa biên an toàn 60 giây trước thời điểm hết hạn. */
+    private synchronized String refreshAccessToken(Instant requestedAt) {
+        if (!isBlank(cachedAccessToken) && requestedAt.isBefore(cachedAccessTokenExpiresAt)) {
+            return cachedAccessToken;
+        }
         String basic = Base64.getEncoder().encodeToString((properties.getClientId() + ":" + properties.getClientSecret())
                 .getBytes(StandardCharsets.UTF_8));
         PaypalAccessTokenResponse response = restClientBuilder.build().post()
@@ -157,16 +177,26 @@ public class PaypalClient {
         if (response == null || isBlank(response.getAccessToken())) {
             throw new BusinessException("Không thể xác thực PayPal Sandbox.");
         }
-        return response.getAccessToken();
+        long expiresIn = response.getExpiresIn() == null ? 300L : Math.max(1L, response.getExpiresIn());
+        cachedAccessToken = response.getAccessToken();
+        cachedAccessTokenExpiresAt = requestedAt.plusSeconds(Math.max(1L, expiresIn - 60L));
+        return cachedAccessToken;
     }
 
     /** Quy đổi giá VND thành currency PayPal theo tỷ giá Sandbox cấu hình rõ ràng. */
-    private BigDecimal toGatewayAmount(BigDecimal vndAmount) {
+    BigDecimal toGatewayAmount(BigDecimal vndAmount) {
         if (vndAmount == null || vndAmount.signum() <= 0) {
             throw new BusinessException("Số tiền thanh toán không hợp lệ.");
         }
         if ("USD".equalsIgnoreCase(properties.getCurrency())) {
-            return vndAmount.divide(properties.getVndPerUnit(), 2, RoundingMode.HALF_UP);
+            BigDecimal gatewayAmount = vndAmount.divide(properties.getVndPerUnit(), 2, RoundingMode.HALF_UP);
+            if (gatewayAmount.compareTo(new BigDecimal("0.01")) < 0) {
+                BigDecimal minimumVnd = properties.getVndPerUnit().movePointLeft(2).setScale(0, RoundingMode.CEILING);
+                throw new BusinessException(
+                        "Giá trị đơn hàng quá thấp để thanh toán PayPal. Tối thiểu "
+                                + minimumVnd.toPlainString() + " VND.");
+            }
+            return gatewayAmount;
         }
         throw new BusinessException("PAYPAL_CURRENCY hiện chỉ hỗ trợ USD cho giá khóa học VND.");
     }
@@ -212,6 +242,9 @@ public class PaypalClient {
     public static class PaypalAccessTokenResponse {
         @JsonProperty("access_token")
         private String accessToken;
+
+        @JsonProperty("expires_in")
+        private Long expiresIn;
     }
 
     /** DTO nội bộ tối thiểu cho PayPal Refund response. */

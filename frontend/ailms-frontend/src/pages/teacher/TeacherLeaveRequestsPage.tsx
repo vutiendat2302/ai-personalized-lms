@@ -1,7 +1,17 @@
 import React, { useState, useEffect } from "react";
-import { teacherApi, type LeaveRequestRecord } from "@/api/teacher/teacherApi";
+import {
+  teacherApi,
+  type LeaveRequestRecord,
+  type TeacherClassCard,
+  type TeacherWorkRequest,
+} from "@/api/teacher/teacherApi";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/useToast";
 import { CalendarOff, Plus } from "lucide-react";
 
@@ -10,16 +20,26 @@ export const TeacherLeaveRequestsPage: React.FC = () => {
   const [requests, setRequests] = useState<LeaveRequestRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [cancelTarget, setCancelTarget] = useState<LeaveRequestRecord | null>(null);
+  const [classes, setClasses] = useState<TeacherClassCard[]>([]);
+  const [workRequests, setWorkRequests] = useState<TeacherWorkRequest[]>([]);
+  const [withdrawalClassId, setWithdrawalClassId] = useState("");
+  const [withdrawalReason, setWithdrawalReason] = useState("");
+  const [submittingWithdrawal, setSubmittingWithdrawal] = useState(false);
 
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [reason, setReason] = useState("");
 
   useEffect(() => {
-    teacherApi.getLeaveRequests().then((res) => {
-      setRequests(res);
-      setLoading(false);
-    });
+    Promise.all([teacherApi.getLeaveRequests(), teacherApi.getClasses(), teacherApi.getWorkRequests()])
+      .then(([leaveRows, classRows, workRows]) => {
+        setRequests(leaveRows);
+        setClasses(classRows);
+        setWorkRequests(workRows.filter((item) => item.type === "CLASS_TEACHER_LEAVE_REQUEST"));
+      })
+      .catch((cause: any) => error(cause?.response?.data?.message || "Không tải được dữ liệu yêu cầu."))
+      .finally(() => setLoading(false));
   }, []);
 
   const handleSubmitForm = async (e: React.FormEvent) => {
@@ -38,12 +58,41 @@ export const TeacherLeaveRequestsPage: React.FC = () => {
     setReason("");
   };
 
-  const handleCancelRequest = (req: LeaveRequestRecord) => {
-    if (req.status === "PENDING") {
-      alert("Đơn của bạn đã được gửi cho HR. Để hủy đơn PENDING này, hệ thống cần Admin/HR xác nhận.");
-    } else {
-      success("Đã hủy đơn xin nghỉ!");
-      setRequests((prev) => prev.filter((r) => r.id !== req.id));
+  /** Hủy đơn nghỉ qua API và giữ bản ghi trạng thái CANCELLED trong lịch sử. */
+  const handleCancelRequest = async () => {
+    if (!cancelTarget) return;
+    try {
+      await teacherApi.cancelLeaveRequest(cancelTarget.id);
+      setRequests((prev) => prev.map((item) => item.id === cancelTarget.id
+        ? { ...item, status: item.status === "APPROVED" ? "PENDING" : "CANCELLED" }
+        : item));
+      success(cancelTarget.status === "APPROVED"
+        ? "Đã gửi yêu cầu hủy đơn đã duyệt tới HR."
+        : "Đã hủy đơn nghỉ.");
+      setCancelTarget(null);
+    } catch (cause: any) {
+      error(cause?.response?.data?.message || "Không thể hủy đơn nghỉ.");
+    }
+  };
+
+  /** Gửi yêu cầu rời lớp và để backend kiểm tra tỷ lệ buổi đã dạy. */
+  const handleClassWithdrawal = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!withdrawalClassId || !withdrawalReason.trim()) {
+      error("Vui lòng chọn lớp và nhập lý do xin nghỉ lớp.");
+      return;
+    }
+    setSubmittingWithdrawal(true);
+    try {
+      const created = await teacherApi.createClassWithdrawalRequest(withdrawalClassId, withdrawalReason.trim());
+      setWorkRequests((prev) => [created, ...prev]);
+      setWithdrawalClassId("");
+      setWithdrawalReason("");
+      success("Đã gửi yêu cầu xin nghỉ lớp tới HR/Admin.");
+    } catch (cause: any) {
+      error(cause?.response?.data?.message || "Không thể gửi yêu cầu xin nghỉ lớp.");
+    } finally {
+      setSubmittingWithdrawal(false);
     }
   };
 
@@ -87,8 +136,8 @@ export const TeacherLeaveRequestsPage: React.FC = () => {
           <form onSubmit={handleSubmitForm} className="space-y-4 text-xs">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="text-foreground font-semibold block mb-1">Từ ngày:</label>
-                <input
+                <Label className="text-foreground font-semibold block mb-1">Từ ngày:</Label>
+                <Input
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
@@ -97,8 +146,8 @@ export const TeacherLeaveRequestsPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="text-foreground font-semibold block mb-1">Đến ngày:</label>
-                <input
+                <Label className="text-foreground font-semibold block mb-1">Đến ngày:</Label>
+                <Input
                   type="date"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
@@ -109,8 +158,8 @@ export const TeacherLeaveRequestsPage: React.FC = () => {
             </div>
 
             <div>
-              <label className="text-foreground font-semibold block mb-1">Lý do nghỉ / báo bận:</label>
-              <textarea
+              <Label className="text-foreground font-semibold block mb-1">Lý do nghỉ / báo bận:</Label>
+              <Textarea
                 rows={3}
                 placeholder="Nhập lý do chi tiết..."
                 value={reason}
@@ -136,6 +185,45 @@ export const TeacherLeaveRequestsPage: React.FC = () => {
           </form>
         </Card>
       )}
+
+      <Card className="bg-card border-border/40 p-5 space-y-4 shadow-xs">
+        <div>
+          <h3 className="text-sm font-bold text-foreground">Xin nghỉ phụ trách lớp</h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Chỉ được gửi khi số buổi đã hoàn thành dưới 30%. Lớp và lịch vẫn giữ nguyên cho tới khi HR/Admin duyệt.
+          </p>
+        </div>
+        <form onSubmit={handleClassWithdrawal} className="grid gap-3 md:grid-cols-[minmax(220px,1fr)_2fr_auto] md:items-end">
+          <div className="space-y-1.5">
+            <Label>Lớp đang phụ trách</Label>
+            <Select value={withdrawalClassId} onValueChange={setWithdrawalClassId}>
+              <SelectTrigger><SelectValue placeholder="Chọn lớp" /></SelectTrigger>
+              <SelectContent>
+                {classes.map((item) => <SelectItem key={item.id} value={item.id}>{item.className}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Lý do</Label>
+            <Textarea value={withdrawalReason} onChange={(event) => setWithdrawalReason(event.target.value)}
+              placeholder="Nêu rõ lý do để HR/Admin xử lý" rows={2} />
+          </div>
+          <Button type="submit" disabled={submittingWithdrawal || classes.length === 0}>
+            {submittingWithdrawal ? "Đang gửi..." : "Gửi yêu cầu"}
+          </Button>
+        </form>
+        {classes.length === 0 && <p className="text-xs text-muted-foreground">Bạn chưa có lớp đang phụ trách.</p>}
+        {workRequests.length > 0 && (
+          <div className="space-y-2 border-t pt-3">
+            {workRequests.map((item) => (
+              <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3 text-xs">
+                <span>Lớp #{item.targetId}: {item.reason}</span>
+                <span className="font-semibold">{item.status}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
 
       {/* History Table */}
       <Card className="bg-card border-border/40 p-5 space-y-4 shadow-xs">
@@ -175,7 +263,8 @@ export const TeacherLeaveRequestsPage: React.FC = () => {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => handleCancelRequest(r)}
+                      onClick={() => setCancelTarget(r)}
+                      disabled={r.status === "CANCELLED" || r.status === "REJECTED"}
                       className="text-[11px] border-border text-muted-foreground hover:text-foreground h-7 px-2.5 cursor-pointer"
                     >
                       Hủy đơn
@@ -187,6 +276,17 @@ export const TeacherLeaveRequestsPage: React.FC = () => {
           </table>
         </div>
       </Card>
+      <ConfirmDialog
+        open={Boolean(cancelTarget)}
+        onOpenChange={(open) => !open && setCancelTarget(null)}
+        title="Hủy đơn nghỉ?"
+        description={cancelTarget?.status === "APPROVED"
+          ? "Đơn đã được duyệt nên thao tác này sẽ gửi lại yêu cầu hủy cho HR."
+          : "Đơn chờ duyệt sẽ được chuyển sang trạng thái đã hủy."}
+        confirmText="Xác nhận hủy"
+        variant="warning"
+        onConfirm={handleCancelRequest}
+      />
     </div>
   );
 };

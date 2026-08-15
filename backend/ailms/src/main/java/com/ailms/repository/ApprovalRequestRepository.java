@@ -16,4 +16,8 @@ public interface ApprovalRequestRepository extends BaseRepository<ApprovalReques
 
     /** Lấy các yêu cầu do người dùng hiện tại tạo theo thời gian mới nhất. */
     List<ApprovalRequestEntity> findByCreatedByOrderByCreatedAtDesc(Long createdBy);
+
+    /** Kiểm tra một người đã có yêu cầu cùng loại và cùng đối tượng đang chờ hay chưa. */
+    boolean existsByTargetTypeAndTargetIdAndCreatedByAndStatus(
+            String targetType, Long targetId, Long createdBy, ApprovalStatusEnum status);
 }

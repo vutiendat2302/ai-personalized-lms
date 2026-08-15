@@ -274,6 +274,16 @@ public class TeacherController {
                 teacherWorkspaceService.createClassTransfer(requireUserId(currentUser), request)));
     }
 
+    /** Gửi yêu cầu xin rời lớp, membership chỉ thay đổi sau khi HR/Admin duyệt. */
+    @PostMapping("/requests/class-withdrawal")
+    public ResponseEntity<ApiResponse<TeacherWorkspaceResponse.WorkRequest>> createClassWithdrawal(
+            @AuthenticationPrincipal CustomUserDetails currentUser,
+            @Valid @RequestBody TeacherWorkspaceRequest.ClassWithdrawalCreate request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of(
+                "Class withdrawal request created successfully",
+                teacherWorkspaceService.createClassWithdrawal(requireUserId(currentUser), request)));
+    }
+
     /** Lấy đơn nghỉ của chính Teacher/TA. */
     @GetMapping("/leave-requests")
     public ResponseEntity<ApiResponse<List<TeacherWorkspaceResponse.LeaveRequestItem>>> getLeaveRequests(
@@ -289,6 +299,14 @@ public class TeacherController {
             @Valid @RequestBody TeacherWorkspaceRequest.LeaveCreate request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of("Leave request created successfully",
                 teacherWorkspaceService.createLeave(requireUserId(currentUser), request)));
+    }
+
+    /** Hủy đơn nghỉ của chính Teacher/TA hiện tại. */
+    @PostMapping("/leave-requests/{id}/cancel")
+    public ResponseEntity<ApiResponse<Void>> cancelLeaveRequest(
+            @AuthenticationPrincipal CustomUserDetails currentUser, @PathVariable Long id) {
+        teacherWorkspaceService.cancelLeave(requireUserId(currentUser), id);
+        return ResponseEntity.ok(ApiResponse.message("Leave request cancelled successfully"));
     }
 
     /** Lấy các lớp đang phụ trách. */

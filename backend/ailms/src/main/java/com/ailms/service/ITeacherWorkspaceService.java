@@ -48,11 +48,18 @@ public interface ITeacherWorkspaceService {
     /** Tạo yêu cầu chuyển lớp/phân công sau khi kiểm tra hai lớp. */
     TeacherWorkspaceResponse.WorkRequest createClassTransfer(Long userId, TeacherWorkspaceRequest.ClassTransferCreate request);
 
+    /** Tạo yêu cầu rời lớp nếu số buổi đã hoàn thành còn dưới ngưỡng 30%. */
+    TeacherWorkspaceResponse.WorkRequest createClassWithdrawal(
+            Long userId, TeacherWorkspaceRequest.ClassWithdrawalCreate request);
+
     /** Tạo đơn nghỉ phép bằng employee lấy từ JWT. */
     TeacherWorkspaceResponse.LeaveRequestItem createLeave(Long userId, TeacherWorkspaceRequest.LeaveCreate request);
 
     /** Lấy đơn nghỉ phép của chính người dạy. */
     List<TeacherWorkspaceResponse.LeaveRequestItem> getLeaves(Long userId);
+
+    /** Hủy đơn nghỉ thuộc chính người dạy hiện tại. */
+    void cancelLeave(Long userId, Long leaveRequestId);
 
     /** Kiểm tra người dạy đã được gán chuyên môn. */
     boolean hasAssignedCategory(Long userId);

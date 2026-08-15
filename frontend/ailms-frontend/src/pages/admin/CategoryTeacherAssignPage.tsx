@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { courseApi } from "@/api/courses/courseApi";
 import { teacherCategoryApi } from "@/api/courses/teacherCategoryApi";
+import { resolveAvatarUrl } from "@/utils/avatarUrl";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -513,8 +514,12 @@ export const CategoryTeacherAssignPage: React.FC = () => {
 
                           <div className="space-y-3">
                             <div className="flex items-center gap-3 pr-8">
-                              <div className={`h-11 w-11 rounded-full font-bold flex items-center justify-center text-sm shrink-0 border ${isTA ? "bg-purple-500/10 text-purple-600 border-purple-500/20" : "bg-blue-500/10 text-blue-600 border-blue-500/20"}`}>
-                                {(teacher.employeeName || "GV").substring(0, 2).toUpperCase()}
+                              <div className={`h-11 w-11 rounded-full font-bold flex items-center justify-center text-sm shrink-0 border overflow-hidden ${isTA ? "bg-purple-500/10 text-purple-600 border-purple-500/20" : "bg-blue-500/10 text-blue-600 border-blue-500/20"}`}>
+                                {resolveAvatarUrl(teacher.avatarUrl || getEmployeeForTeacher(teacher)?.avatarUrl) ? (
+                                  <img src={resolveAvatarUrl(teacher.avatarUrl || getEmployeeForTeacher(teacher)?.avatarUrl)} alt={teacher.employeeName || "Giảng viên"} className="h-full w-full object-cover" />
+                                ) : (
+                                  (teacher.employeeName || "GV").substring(0, 2).toUpperCase()
+                                )}
                               </div>
                               <div className="min-w-0">
                                 <h4 className="font-bold text-sm truncate">{teacher.employeeName}</h4>
@@ -632,6 +637,11 @@ export const CategoryTeacherAssignPage: React.FC = () => {
                   >
                     <div className="flex items-center gap-3">
                       <Checkbox checked={isChecked} onCheckedChange={() => toggleTeacherSelection(empId)} />
+                      {resolveAvatarUrl(emp.avatarUrl || emp.user?.avatarUrl) ? (
+                        <img src={resolveAvatarUrl(emp.avatarUrl || emp.user?.avatarUrl)} alt={emp.fullName || "Giảng viên"} className="h-8 w-8 rounded-full object-cover" />
+                      ) : (
+                        <div className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">{(emp.fullName || "GV").substring(0, 2).toUpperCase()}</div>
+                      )}
                       <div>
                         <span className="font-bold text-xs block">{emp.fullName || emp.user?.fullName || emp.employeeCode}</span>
                         <span className="text-[11px] text-muted-foreground">{emp.employeeCode} • {emp.position || "Giảng viên"}</span>
@@ -727,8 +737,12 @@ export const CategoryTeacherAssignPage: React.FC = () => {
                   <div className="bg-primary/5 border-b p-6">
                     <DialogHeader>
                       <div className="flex items-center gap-4">
-                        <div className="h-14 w-14 rounded-full bg-primary text-primary-foreground font-bold flex items-center justify-center text-lg">
-                          {(detailTarget.employeeName || "GV").substring(0, 2).toUpperCase()}
+                        <div className="h-14 w-14 rounded-full bg-primary text-primary-foreground font-bold flex items-center justify-center text-lg overflow-hidden">
+                          {resolveAvatarUrl(detailTarget.avatarUrl || employee.avatarUrl || employee.user?.avatarUrl) ? (
+                            <img src={resolveAvatarUrl(detailTarget.avatarUrl || employee.avatarUrl || employee.user?.avatarUrl)} alt={detailTarget.employeeName || "Giảng viên"} className="h-full w-full object-cover" />
+                          ) : (
+                            (detailTarget.employeeName || "GV").substring(0, 2).toUpperCase()
+                          )}
                         </div>
                         <div>
                           <DialogTitle className="text-lg">{detailTarget.employeeName}</DialogTitle>

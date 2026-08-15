@@ -28,6 +28,9 @@ public class OneOnOneRequestResponse {
     private String assignedInstructorName;
     private Long trialClassId;
     private Long trialSessionId;
+    private LocalDateTime trialStartAt;
+    private LocalDateTime trialEndAt;
+    private String trialMeetingUrl;
     private String availablePeriod;
     private String availableDays;
     private String preferredTimes;

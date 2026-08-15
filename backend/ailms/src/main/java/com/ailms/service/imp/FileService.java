@@ -72,6 +72,7 @@ public class FileService implements IFileService {
             extension = uploadedFilename.substring(dotIndex);
         }
         String displayName = resolveOriginalName(originalName, uploadedFilename, extension);
+        String contentType = MinioFileStorageService.resolveContentType(file.getContentType());
 
         try {
             if (fileType == null) {
@@ -91,7 +92,7 @@ public class FileService implements IFileService {
                     .fileKey(fileKey)
                     .originalName(displayName)
                     .fileSize(file.getSize())
-                    .contentType(file.getContentType())
+                    .contentType(contentType)
                     .fileType(fileType)
                     .usageType(usageType != null ? usageType : FileUsageTypeEnum.OTHER)
                     .referenceEntityId(referenceEntityId)

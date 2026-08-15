@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
+import { resolveAvatarUrl } from "@/utils/avatarUrl";
 import {
   Users,
   Plus,
@@ -114,16 +115,17 @@ interface EmployeeUser extends UserResponse {
   employmentType: string;
 }
 
-const ROLE_COLORS = ["#7b2525", "#ba6a4c", "#ff97d0", "#fe7f2d", "#2b5748", "#4e220f"];
-const GENDER_COLORS = ["#7b2525", "#ba6a4c", "#ff97d0", "#fe7f2d"];
-const STATUS_COLORS = ["#2b5748", "#f59e0b", "#be1a1a", "#4e220f"];
-const AGE_COLORS = ["#7b2525", "#be1a1a", "#ff97d0", "#eee0cc"];
+const THEME_PALETTE = ["#2563eb", "#10b981", "#0284c7", "#f59e0b", "#8b5cf6"];
+const ROLE_COLORS = THEME_PALETTE;
+const GENDER_COLORS = ["#2563eb", "#10b981", "#0284c7"];
+const STATUS_COLORS = ["#10b981", "#0284c7", "#f59e0b", "#ef4444"]; // ACTIVE (Green #10b981), PROBATION (Blue), EXPIRED (Amber), TERMINATED (Red)
+const AGE_COLORS = THEME_PALETTE;
 
-const EMPLOYMENT_COLORS = ["#2563eb", "#f59e0b"];
-const DEPT_COLORS = ["#2b5748", "#7b2525", "#ba6a4c", "#ff97d0", "#fe7f2d", "#4e220f"];
-const CONTRACT_COLORS = ["#10b981", "#f59e0b", "#ef4444", "#6b7280"];
-const ATTENDANCE_COLORS = ["#10b981", "#f59e0b", "#ef4444", "#3b82f6"];
-const SESSION_COLORS = ["#94a3b8", "#f59e0b", "#3b82f6", "#10b981"];
+const EMPLOYMENT_COLORS = ["#2563eb", "#0284c7"];
+const DEPT_COLORS = THEME_PALETTE;
+const CONTRACT_COLORS = ["#10b981", "#0284c7", "#f59e0b", "#ef4444"]; // ACTIVE (Green #10b981), PROBATION (Blue), EXPIRED (Amber), TERMINATED (Red)
+const ATTENDANCE_COLORS = ["#10b981", "#f59e0b", "#ef4444", "#0284c7"];
+const SESSION_COLORS = ["#94a3b8", "#f59e0b", "#0284c7", "#10b981"];
 
 const getPageNumbers = (currentPage: number, total: number) => {
   const pages: (number | string)[] = [];
@@ -1326,12 +1328,6 @@ export const EmployeeManagement: React.FC = () => {
       {/* Page Title Header (Exact UserManagement typography) */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-border/30 pb-4">
         <div>
-          <div className="flex items-center gap-2 text-sm font-bold text-primary mb-1">
-            <Link to="/dashboard" className="flex items-center gap-1 hover:underline">
-              <ArrowLeft className="h-3.5 w-3.5" />
-              <span>Quay lại Tổng quan</span>
-            </Link>
-          </div>
           <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-foreground flex items-center gap-3 mt-5">
             <div className="p-2.5 rounded-2xl bg-primary/10 text-primary ">
               <Users className="h-7 w-7" />
@@ -1391,40 +1387,32 @@ export const EmployeeManagement: React.FC = () => {
                 ) : (
                   <span className="text-primary">{employeeCount.toLocaleString()}</span>
                 )}
-                <span className="text-sm font-bold text-success-forest bg-emerald-500/10 px-2 py-0.5 rounded-full flex items-center gap-0.5">
-                  Staff
-                </span>
               </CardTitle>
             </CardHeader>
-            <CardContent className="pt-0">
-              <p className="text-sm font-medium text-muted-foreground">Tổng nhân sự trong toàn hệ thống</p>
-            </CardContent>
           </Card>
 
           <Card className="border-border shadow-xs bg-card overflow-hidden relative">
-            <div className="absolute top-0 right-0 p-4 opacity-10 text-emerald-500">
+            <div className="absolute top-0 right-0 p-4 opacity-10 text-success-forest">
               <ShieldCheck className="h-20 w-20" />
             </div>
             <CardHeader className="pb-2">
               <CardDescription className="text-xs font-semibold text-muted-foreground uppercase">
-                Đang làm việc (Active)
+                Đang làm việc
               </CardDescription>
               <CardTitle className="text-3xl font-extrabold text-foreground flex items-center gap-2 mt-1">
                 {statsLoading ? (
-                  <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
+                  <Loader2 className="h-6 w-6 animate-spin text-success-forest" />
                 ) : (
-                  <span className="text-emerald-600">
+                  <span className="text-success-forest">
                     {(statusStats.find(s => s.name === "ACTIVE")?.value ?? employeeCount).toLocaleString()}
                   </span>
                 )}
-                <span className="text-xs font-semibold text-emerald-600 bg-emerald-500/10 px-2.5 py-0.5 rounded-full">Active</span>
               </CardTitle>
             </CardHeader>
-            <CardContent className="pt-0"><p className="text-xs text-muted-foreground">Nhân viên đang làm việc chính thức</p></CardContent>
           </Card>
 
           <Card className="border-border shadow-xs bg-card overflow-hidden relative">
-            <div className="absolute top-0 right-0 p-4 opacity-10 text-purple-500">
+            <div className="absolute top-0 right-0 p-4 opacity-10 text-primary">
               <Building2 className="h-20 w-20" />
             </div>
             <CardHeader className="pb-2">
@@ -1433,14 +1421,12 @@ export const EmployeeManagement: React.FC = () => {
               </CardDescription>
               <CardTitle className="text-3xl font-extrabold text-foreground flex items-center gap-2 mt-1">
                 {statsLoading ? (
-                  <Loader2 className="h-6 w-6 animate-spin text-purple-600" />
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
                 ) : (
-                  <span className="text-purple-600">{departments.length}</span>
+                  <span className="text-primary">{departments.length}</span>
                 )}
-                <span className="text-xs font-semibold text-purple-600 bg-purple-500/10 px-2.5 py-0.5 rounded-full">Phòng ban</span>
               </CardTitle>
             </CardHeader>
-            <CardContent className="pt-0"><p className="text-xs text-muted-foreground">Số lượng phòng ban doanh nghiệp</p></CardContent>
           </Card>
         </div>
 
@@ -1454,7 +1440,7 @@ export const EmployeeManagement: React.FC = () => {
               className="text-lg font-semibold gap-2 text-muted-foreground hover:opacity-80 hover:text-foreground p-0 h-auto"
             >
               {showOptionalCharts ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              <span>Biểu đồ thống kê nhân sự cơ bản (Giới tính, Trạng thái, Độ tuổi)</span>
+              <span>Biểu đồ thống kê nhân sự</span>
             </Button>
           </div>
 
@@ -1530,17 +1516,17 @@ export const EmployeeManagement: React.FC = () => {
         <div className="space-y-4">
           <h3 className="text-base font-extrabold text-foreground flex items-center gap-2">
             <PieIcon className="h-5 w-5 text-primary" />
-            <span>5.11.1 Khu vực tổng quan (Overview Section)</span>
+            <span>Khu vực tổng quan</span>
           </h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-5">
             {/* Chart 1: Donut Employment Type */}
             <Card className="lg:col-span-4 border-border shadow-xs bg-card">
               <CardHeader className="pb-2 flex flex-row items-start justify-between gap-2">
-                <div>
-                  <CardTitle className="text-sm font-semibold">1. Phân bổ Loại hình nhân viên</CardTitle>
-                  <CardDescription className="text-xs">FULL_TIME vs PART_TIME (trừ TERMINATED)</CardDescription>
-                </div>
+                <CardTitle className="text-sm font-extrabold flex items-center gap-2">
+                  <Briefcase className="h-4 w-4 text-primary" />
+                  <span>Loại hình nhân viên</span>
+                </CardTitle>
                 {renderYearSelector(employmentYear, setEmploymentYear)}
               </CardHeader>
               <CardContent className="min-h-[200px] flex items-center justify-center p-3">
@@ -1560,10 +1546,10 @@ export const EmployeeManagement: React.FC = () => {
             {/* Chart 2: Vertical Bar Department */}
             <Card className="lg:col-span-4 border-border shadow-xs bg-card">
               <CardHeader className="pb-2 flex flex-row items-start justify-between gap-2">
-                <div>
-                  <CardTitle className="text-sm font-semibold">2. Số lượng theo Phòng ban</CardTitle>
-                  <CardDescription className="text-xs">Sắp xếp giảm dần theo số lượng</CardDescription>
-                </div>
+                <CardTitle className="text-sm font-extrabold flex items-center gap-2">
+                  <BarChart3 className="h-4 w-4 text-primary" />
+                  <span>Nhân viên theo phòng ban</span>
+                </CardTitle>
                 {renderYearSelector(departmentYear, setDepartmentYear)}
               </CardHeader>
               <CardContent className="min-h-[200px] flex items-center justify-center p-3">
@@ -1574,8 +1560,8 @@ export const EmployeeManagement: React.FC = () => {
                       <XAxis dataKey="name" style={{ fontSize: "10px" }} interval={0} angle={-15} textAnchor="end" />
                       <YAxis style={{ fontSize: "10px" }} />
                       <Tooltip />
-                      <Bar dataKey="value" radius={[6, 6, 0, 0]} fill="#2b5748">
-                        {departmentStats.map((_, idx) => <Cell key={idx} fill={DEPT_COLORS[idx % DEPT_COLORS.length]} />)}
+                      <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+                        {departmentStats.map((_, idx) => <Cell key={idx} fill={THEME_PALETTE[idx % THEME_PALETTE.length]} />)}
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
@@ -1583,45 +1569,39 @@ export const EmployeeManagement: React.FC = () => {
               </CardContent>
             </Card>
 
-            {/* Card cảnh báo và hành động gửi mail chỉ dành cho Admin. */}
+            {/* Card cảnh báo hợp đồng thử việc */}
             {!isHrOnly && <Card
               onClick={handleSelectExpiringProbation}
-              className="lg:col-span-4 border-2 border-amber-500/40 bg-gradient-to-br from-amber-500/10 via-card to-card shadow-xs cursor-pointer group flex flex-col justify-between"
+              className="lg:col-span-4 border border-brand-cobalt/30 bg-brand-cobalt/5 shadow-xs cursor-pointer group flex flex-col justify-between"
             >
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-extrabold text-amber-600 flex items-center justify-between">
-                  <span className="flex items-center gap-1.5"><ShieldAlert className="h-4 w-4" /> 4. HĐ Thử việc sắp hết hạn</span>
-                  <span className="px-2.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-black">7 Ngày</span>
+                <CardTitle className="text-sm font-extrabold text-brand-cobalt flex items-center justify-between">
+                  <span className="flex items-center gap-1.5"><ShieldAlert className="h-4 w-4" /> Hợp đồng thử việc sắp hết hạn</span>
                 </CardTitle>
-                <CardDescription className="text-xs">Click card để filter danh sách trong 7 ngày tới</CardDescription>
               </CardHeader>
               <CardContent className="py-2 flex items-center justify-between">
-                <div className="text-4xl font-extrabold text-amber-600 flex items-center gap-2">
+                <div className="text-4xl font-extrabold text-brand-cobalt flex items-center gap-2">
                   {statsLoading ? (
-                    <Loader2 className="h-6 w-6 animate-spin text-amber-600" />
+                    <Loader2 className="h-6 w-6 animate-spin text-brand-cobalt" />
                   ) : (
                     <>
                       {expiringProbationCount} <span className="text-xs font-semibold text-muted-foreground">hợp đồng</span>
                     </>
                   )}
                 </div>
-                <Button size="sm" onClick={handleOpenNotifyHR} disabled={notifyLoading} className="bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs gap-1">
+                <Button size="sm" onClick={handleOpenNotifyHR} disabled={notifyLoading} className="bg-brand-cobalt hover:bg-brand-cobalt/90 text-white font-semibold text-xs gap-1 cursor-pointer">
                   <Mail className="h-3.5 w-3.5" /> Gửi Mail HR
                 </Button>
               </CardContent>
-              <div className="px-4 py-1 bg-amber-500/10 text-[10px] font-bold text-amber-800 flex justify-between">
-                <span>Luồng 5.2</span>
-                <span className="underline">Filter bảng danh sách &rarr;</span>
-              </div>
             </Card>}
 
             {/* Chart 3: Donut Contract Status */}
             <Card className="lg:col-span-6 border-border shadow-xs bg-card">
               <CardHeader className="pb-2 flex flex-row items-start justify-between gap-2">
-                <div>
-                  <CardTitle className="text-sm font-semibold">3. Trạng thái Hợp đồng (Bao gồm TERMINATED)</CardTitle>
-                  <CardDescription className="text-xs">ACTIVE, PROBATION, EXPIRED, TERMINATED</CardDescription>
-                </div>
+                <CardTitle className="text-sm font-extrabold flex items-center gap-2">
+                  <PieIcon className="h-4 w-4 text-primary" />
+                  <span>Trạng thái hợp đồng</span>
+                </CardTitle>
                 {renderYearSelector(contractYear, setContractYear)}
               </CardHeader>
               <CardContent className="min-h-[200px] flex items-center justify-center p-3">
@@ -1641,10 +1621,10 @@ export const EmployeeManagement: React.FC = () => {
             {/* Chart 5: Bar Staff Roles */}
             <Card className="lg:col-span-6 border-border shadow-xs bg-card">
               <CardHeader className="pb-2 flex flex-row items-start justify-between gap-2">
-                <div>
-                  <CardTitle className="text-sm font-semibold">5. Nhân viên theo Vai trò nội bộ</CardTitle>
-                  <CardDescription className="text-xs">Loại trừ role STUDENT / PARENT</CardDescription>
-                </div>
+                <CardTitle className="text-sm font-extrabold flex items-center gap-2">
+                  <Users className="h-4 w-4 text-primary" />
+                  <span>Nhân viên theo vai trò nội bộ</span>
+                </CardTitle>
                 {renderYearSelector(staffRoleYear, setStaffRoleYear)}
               </CardHeader>
               <CardContent className="min-h-[200px] flex items-center justify-center p-3">
@@ -1655,8 +1635,8 @@ export const EmployeeManagement: React.FC = () => {
                       <XAxis dataKey="name" style={{ fontSize: "10px" }} interval={0} angle={-10} textAnchor="end" />
                       <YAxis style={{ fontSize: "10px" }} />
                       <Tooltip />
-                      <Bar dataKey="value" radius={[6, 6, 0, 0]} fill="#6366f1">
-                        {staffRoleStats.map((_, idx) => <Cell key={idx} fill={ROLE_COLORS[idx % ROLE_COLORS.length]} />)}
+                      <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+                        {staffRoleStats.map((_, idx) => <Cell key={idx} fill={THEME_PALETTE[idx % THEME_PALETTE.length]} />)}
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
@@ -1683,17 +1663,17 @@ export const EmployeeManagement: React.FC = () => {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <Button onClick={() => setCreateSingleModalOpen(true)} variant="default" size="sm" className="h-9 gap-1.5 font-bold bg-blue-600 hover:bg-blue-700 text-white cursor-pointer shadow-sm">
+              <Button onClick={() => setCreateSingleModalOpen(true)} variant="default" size="sm" className="h-9 gap-1.5 font-bold bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer shadow-xs">
                 <Plus className="h-4 w-4" /> <span>Thêm 1 nhân viên</span>
               </Button>
-              <Button onClick={handleSyncProfiles} variant="outline" size="sm" disabled={syncLoading} className="h-9 gap-1.5 font-semibold text-indigo-600 border-indigo-500/30 hover:bg-indigo-500/10 cursor-pointer" title="Đồng bộ toàn bộ tài khoản nhân sự chưa có hồ sơ">
+              <Button onClick={handleSyncProfiles} variant="outline" size="sm" disabled={syncLoading} className="h-9 gap-1.5 font-semibold text-brand-cobalt border-brand-cobalt/30 hover:bg-brand-cobalt/10 cursor-pointer" title="Đồng bộ toàn bộ tài khoản nhân sự chưa có hồ sơ">
                 {syncLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                 <span>Đồng bộ hồ sơ</span>
               </Button>
-              <Button onClick={handleExportUsersExcel} variant="outline" size="sm" disabled={exportCsvLoading} className="h-9 gap-1.5 font-semibold text-emerald-600 border-emerald-500/30 hover:bg-emerald-500/10 cursor-pointer">
-                <FileSpreadsheet className="h-4 w-4" /> <span>Xuất File CSV</span>
+              <Button onClick={handleExportUsersExcel} variant="outline" size="sm" disabled={exportCsvLoading} className="h-9 gap-1.5 font-semibold text-success-forest border-success-forest/30 hover:bg-success-forest/10 cursor-pointer">
+                <FileSpreadsheet className="h-4 w-4" /> <span>Xuất tệp CSV</span>
               </Button>
-              <Button onClick={() => setBulkCreateEmployeesModalOpen(true)} variant="outline" size="sm" className="h-9 gap-1.5 font-semibold text-blue-600 border-indigo-500/30 hover:bg-indigo-500/10 cursor-pointer">
+              <Button onClick={() => setBulkCreateEmployeesModalOpen(true)} variant="outline" size="sm" className="h-9 gap-1.5 font-semibold text-brand-cobalt border-brand-cobalt/30 hover:bg-brand-cobalt/10 cursor-pointer">
                 <UserPlus className="h-4 w-4" /> <span>Thêm nhiều nhân viên</span>
               </Button>
               <Button onClick={() => setInviteModalOpen(true)} variant="outline" size="sm" className="h-9 gap-1.5 font-semibold text-primary border-border/40 cursor-pointer">
@@ -2084,8 +2064,8 @@ export const EmployeeManagement: React.FC = () => {
                       <TableCell>
                         <div className="flex items-center gap-2.5">
                           <div className="h-8 w-8 rounded-full bg-primary/10 text-primary font-semibold flex items-center justify-center text-xs shrink-0 border border-primary/20 overflow-hidden">
-                            {user.avatarUrl ? (
-                              <img src={user.avatarUrl} alt={user.fullName} className="h-full w-full object-cover" />
+                            {resolveAvatarUrl(user.avatarUrl) ? (
+                              <img src={resolveAvatarUrl(user.avatarUrl)} alt={user.fullName} className="h-full w-full object-cover" />
                             ) : (
                               user.fullName ? user.fullName.charAt(0).toUpperCase() : "U"
                             )}
@@ -2132,10 +2112,10 @@ export const EmployeeManagement: React.FC = () => {
                         {((user as any).employmentType || (user as any).employmentTypeEnum) ? (
                           <span className={`px-2.5 py-0.5 rounded-full text-xs font-extrabold ${
                             ((user as any).employmentType || (user as any).employmentTypeEnum) === "PART_TIME"
-                              ? "bg-amber-500/10 text-amber-600 border border-amber-500/20"
-                              : "bg-indigo-500/10 text-indigo-600 border border-indigo-500/20"
+                              ? "bg-brand-cobalt/10 text-brand-cobalt border border-brand-cobalt/20"
+                              : "bg-primary/10 text-primary border border-primary/20"
                           }`}>
-                            {((user as any).employmentType || (user as any).employmentTypeEnum)}
+                            {((user as any).employmentType || (user as any).employmentTypeEnum) === "PART_TIME" ? "Thời vụ" : "Chính thức"}
                           </span>
                         ) : (
                           <span className="text-muted-foreground text-xs">--</span>
@@ -2146,20 +2126,24 @@ export const EmployeeManagement: React.FC = () => {
                       <TableCell className="text-center">
                         {((user as any).userStatus || user.status) ? (
                           <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold inline-flex items-center gap-1 ${
-                            ((user as any).userStatus || user.status) === "ACTIVE" ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" :
-                            ((user as any).userStatus || user.status) === "LOCKED" ? "bg-red-500/10 text-red-600 border border-red-500/20" :
-                            ((user as any).userStatus || user.status) === "VERIFICATION" ? "bg-amber-500/10 text-amber-600 border border-amber-500/20" :
-                            ((user as any).userStatus || user.status) === "DELETED" ? "bg-rose-500/10 text-rose-600 border border-rose-500/20" :
+                            ((user as any).userStatus || user.status) === "ACTIVE" ? "bg-success-forest/10 text-success-forest border border-success-forest/20" :
+                            ((user as any).userStatus || user.status) === "LOCKED" ? "bg-destructive/10 text-destructive border border-destructive/20" :
+                            ((user as any).userStatus || user.status) === "VERIFICATION" ? "bg-brand-cobalt/10 text-brand-cobalt border border-brand-cobalt/20" :
+                            ((user as any).userStatus || user.status) === "DELETED" ? "bg-destructive/10 text-destructive border border-destructive/20" :
                             "bg-muted text-muted-foreground border border-border/40"
                           }`}>
                             <span className={`h-1.5 w-1.5 rounded-full ${
-                              ((user as any).userStatus || user.status) === "ACTIVE" ? "bg-emerald-500" :
-                              ((user as any).userStatus || user.status) === "LOCKED" ? "bg-red-500" :
-                              ((user as any).userStatus || user.status) === "VERIFICATION" ? "bg-amber-500" :
-                              ((user as any).userStatus || user.status) === "DELETED" ? "bg-rose-500" :
+                              ((user as any).userStatus || user.status) === "ACTIVE" ? "bg-success-forest" :
+                              ((user as any).userStatus || user.status) === "LOCKED" ? "bg-destructive" :
+                              ((user as any).userStatus || user.status) === "VERIFICATION" ? "bg-brand-cobalt" :
+                              ((user as any).userStatus || user.status) === "DELETED" ? "bg-destructive" :
                               "bg-muted-foreground"
                             }`} />
-                            {((user as any).userStatus || user.status)}
+                            {((user as any).userStatus || user.status) === "ACTIVE" ? "Hoạt động" :
+                             ((user as any).userStatus || user.status) === "LOCKED" ? "Đã khóa" :
+                             ((user as any).userStatus || user.status) === "VERIFICATION" ? "Chờ xác thực" :
+                             ((user as any).userStatus || user.status) === "DELETED" ? "Đã xóa" :
+                             ((user as any).userStatus || user.status)}
                           </span>
                         ) : (
                           <span className="text-muted-foreground text-xs">--</span>
@@ -2170,12 +2154,15 @@ export const EmployeeManagement: React.FC = () => {
                       <TableCell className="text-center">
                         {((user as any).employeeStatus || (user as any).contractStatus) ? (
                           <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${
-                            ((user as any).employeeStatus || (user as any).contractStatus) === "ACTIVE" ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" :
-                            ((user as any).employeeStatus || (user as any).contractStatus) === "PROBATION" ? "bg-amber-500/10 text-amber-600 border border-amber-500/20" :
-                            ((user as any).employeeStatus || (user as any).contractStatus) === "ON_LEAVE" ? "bg-blue-500/10 text-blue-600 border border-blue-500/20" :
-                            "bg-red-500/10 text-red-600 border border-red-500/20"
+                            ((user as any).employeeStatus || (user as any).contractStatus) === "ACTIVE" ? "bg-success-forest/10 text-success-forest border border-success-forest/20" :
+                            ((user as any).employeeStatus || (user as any).contractStatus) === "PROBATION" ? "bg-brand-cobalt/10 text-brand-cobalt border border-brand-cobalt/20" :
+                            ((user as any).employeeStatus || (user as any).contractStatus) === "ON_LEAVE" ? "bg-primary/10 text-primary border border-primary/20" :
+                            "bg-destructive/10 text-destructive border border-destructive/20"
                           }`}>
-                            {((user as any).employeeStatus || (user as any).contractStatus)}
+                            {((user as any).employeeStatus || (user as any).contractStatus) === "ACTIVE" ? "Đang hiệu lực" :
+                             ((user as any).employeeStatus || (user as any).contractStatus) === "PROBATION" ? "Thử việc" :
+                             ((user as any).employeeStatus || (user as any).contractStatus) === "ON_LEAVE" ? "Nghỉ phép" :
+                             "Đã chấm dứt"}
                           </span>
                         ) : (
                           <span className="text-muted-foreground text-xs">--</span>
@@ -2190,7 +2177,7 @@ export const EmployeeManagement: React.FC = () => {
                       {/* Row Actions: Xem chi tiết, Gán vai trò, Khóa/Mở khóa, Xuất Excel, Sửa, Xóa */}
                       <TableCell className="text-center">
                         <div className="flex items-center justify-center gap-1">
-                          <Button onClick={() => handleOpenDetailModalForUser(user)} variant="ghost" size="icon" className="h-7 w-7 text-sky-600 hover:bg-sky-500/10 cursor-pointer" title="Xem chi tiết (Detail Modal 9 Tabs)">
+                          <Button onClick={() => handleOpenDetailModalForUser(user)} variant="ghost" size="icon" className="h-7 w-7 text-brand-cobalt hover:bg-brand-cobalt/10 cursor-pointer" title="Xem chi tiết">
                             <Eye className="h-3.5 w-3.5" />
                           </Button>
 
@@ -2200,19 +2187,19 @@ export const EmployeeManagement: React.FC = () => {
                           </Button>
 
                           {/* Quick Toggle Lock / Unlock */}
-                          <Button onClick={() => handleQuickToggleStatus(user as any)} variant="ghost" size="icon" className={`h-7 w-7 cursor-pointer ${user.status === "ACTIVE" ? "text-amber-600 hover:bg-amber-500/10" : "text-emerald-600 hover:bg-emerald-500/10"}`} title={user.status === "ACTIVE" ? "Khóa tài khoản" : "Mở khóa tài khoản"}>
+                          <Button onClick={() => handleQuickToggleStatus(user as any)} variant="ghost" size="icon" className={`h-7 w-7 cursor-pointer ${user.status === "ACTIVE" ? "text-destructive hover:bg-destructive/10" : "text-success-forest hover:bg-success-forest/10"}`} title={user.status === "ACTIVE" ? "Khóa tài khoản" : "Mở khóa tài khoản"}>
                             {user.status === "ACTIVE" ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}
                           </Button>
 
-                          <Button onClick={() => handleExportSingleEmployeeDetailExcel(user.id)} variant="ghost" size="icon" className="h-7 w-7 text-emerald-600 hover:bg-emerald-500/10 cursor-pointer" title="Xuất file Excel/CSV chi tiết 1 nhân sự">
+                          <Button onClick={() => handleExportSingleEmployeeDetailExcel(user.id)} variant="ghost" size="icon" className="h-7 w-7 text-success-forest hover:bg-success-forest/10 cursor-pointer" title="Xuất file Excel chi tiết 1 nhân sự">
                             <FileSpreadsheet className="h-3.5 w-3.5" />
                           </Button>
 
-                          <Button onClick={() => handleOpenDetailModalForUser(user)} variant="ghost" size="icon" className="h-7 w-7 text-blue-600 hover:bg-blue-500/10 cursor-pointer" title="Chỉnh sửa thông tin">
+                          <Button onClick={() => handleOpenDetailModalForUser(user)} variant="ghost" size="icon" className="h-7 w-7 text-primary hover:bg-primary/10 cursor-pointer" title="Chỉnh sửa thông tin">
                             <Edit className="h-3.5 w-3.5" />
                           </Button>
 
-                          <Button onClick={() => handleDeleteUser(user.id)} variant="ghost" size="icon" className="h-7 w-7 text-red-600 hover:bg-red-500/10 cursor-pointer" title="Xóa người dùng / Chuyển vào Thùng rác">
+                          <Button onClick={() => handleDeleteUser(user.id)} variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:bg-destructive/10 cursor-pointer" title="Xóa người dùng / Chuyển vào Thùng rác">
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </div>

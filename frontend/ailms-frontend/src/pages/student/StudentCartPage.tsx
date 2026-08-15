@@ -5,7 +5,7 @@ import { orderApi } from "@/api/orders/orderApi";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/useToast";
-import { ShoppingCart, ArrowRight, BookOpen, Layers3, Loader2, Package, UserRound, Users } from "lucide-react";
+import { ShoppingCart, ArrowRight, BookOpen, Loader2, Package, UserRound, Users } from "lucide-react";
 import { Trash2 } from "lucide-react";
 import axios from "axios";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -112,7 +112,6 @@ export const StudentCartPage: React.FC = () => {
   const deliveryMeta = (mode: StudentCartItem["deliveryMode"]) => {
     if (mode === "GROUP_CLASS") return { label: "Lớp học nhóm", icon: Users };
     if (mode === "ONE_ON_ONE") return { label: "Kèm riêng 1-1", icon: UserRound };
-    if (mode === "COMBO") return { label: "Gói kết hợp", icon: Layers3 };
     return { label: "Tự học", icon: BookOpen };
   };
 
@@ -258,9 +257,11 @@ export const StudentCartPage: React.FC = () => {
                   }}>
                     <SelectTrigger className="flex-1 text-xs"><SelectValue placeholder="Chọn voucher của bạn" /></SelectTrigger>
                     <SelectContent>
-                      {vouchers.map((voucher) => (
+                      {vouchers.length === 0 ? (
+                        <SelectItem value="NO_VOUCHERS" disabled>Bạn chưa có mã giảm giá nào</SelectItem>
+                      ) : vouchers.map((voucher) => (
                         <SelectItem key={voucher.id} value={voucher.code} disabled={!voucher.usable}>
-                          {voucher.code} — {voucher.discountType === "PERCENT" ? `${voucher.discountValue}%` : formatVND(voucher.discountValue)}
+                          {voucher.code} — {voucher.discountType === "PERCENT" ? `${String(voucher.discountValue)}%` : formatVND(voucher.discountValue)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -272,7 +273,7 @@ export const StudentCartPage: React.FC = () => {
 
                 {couponError && <p className="text-[11px] text-rose-600 dark:text-rose-400 font-semibold">{couponError}</p>}
                 {couponApplied && <p className="text-[11px] text-emerald-600 font-bold">Mã coupon hợp lệ!</p>}
-                {vouchers.length === 0 && <p className="text-[11px] text-muted-foreground">Bạn chưa có voucher khả dụng.</p>}
+                {vouchers.length === 0 && <p className="text-[11px] text-muted-foreground">Bạn chưa có mã giảm giá nào.</p>}
               </div>
 
               <div className="pt-3 border-t border-border/40 space-y-2 text-xs">

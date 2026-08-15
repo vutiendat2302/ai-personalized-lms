@@ -11,6 +11,7 @@ export interface ChatMessage {
   createdAt: string;
   status?: MessageStatus;
   feedback?: "THUMBS_UP" | "THUMBS_DOWN" | null;
+  imageUrl?: string;
 }
 
 export interface AiChatRequestPayload {

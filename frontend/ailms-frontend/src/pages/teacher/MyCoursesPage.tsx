@@ -46,7 +46,7 @@ export function MyCoursesPage() {
     description: "",
     coverImage: "",
     price: 0,
-    deliveryMode: "SELF_STUDY", // SELF_STUDY | GROUP | ONE_ON_ONE | COMBO
+    deliveryMode: "SELF_STUDY", // SELF_STUDY | GROUP | ONE_ON_ONE
     chapters: [{ title: "Chương 1: Giới thiệu tổng quan", lessons: [{ title: "Bài 1: Làm quen khái niệm" }] }],
   });
 
@@ -103,16 +103,19 @@ export function MyCoursesPage() {
     }
     setSubmitting(true);
     try {
-      await courseApi.createCourse({
+      if (!userId) {
+        showBanner("Không xác định được tài khoản giảng viên", true);
+        return;
+      }
+      await courseApi.createTeacherCourse(userId, {
         name: courseForm.name,
-        categoryId: Number(courseForm.categoryId) || undefined,
+        categoryId: courseForm.categoryId,
+        link: "",
         level: courseForm.level,
         description: courseForm.description,
-        coverImage: courseForm.coverImage,
-        suggestedPrice: Number(courseForm.price) || 0,
-      } as any);
+      });
 
-      showBanner("Đã gửi yêu cầu phê duyệt khóa học mới thành công!");
+      showBanner("Đã tạo bản nháp. Hãy hoàn thiện nội dung rồi gửi duyệt.");
       setIsWizardOpen(false);
       setWizardStep(1);
       setCourseForm({
@@ -524,7 +527,6 @@ export function MyCoursesPage() {
                       { id: "SELF_STUDY", label: "Self-Study (Tự Học Online)", desc: "Học viên tự học qua video có sẵn" },
                       { id: "GROUP", label: "Group Class (Lớp Nhóm)", desc: "Học theo lịch trình lớp trực tuyến" },
                       { id: "ONE_ON_ONE", label: "1-1 Coaching (Kèm Cặp)", desc: "Giảng dạy 1 kèm 1 chuyên sâu" },
-                      { id: "COMBO", label: "Combo Gói Tổng Hợp", desc: "Kết hợp video tự học và các buổi Q&A" },
                     ].map((mode) => {
                       const isSelected = courseForm.deliveryMode === mode.id;
 

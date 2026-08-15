@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -90,10 +90,21 @@ import { DepartmentDetailModal } from "@/components/admin/department/DepartmentD
 import { UnassignedEmployeesModal } from "@/components/admin/department/UnassignedEmployeesModal";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
-const DEPT_COLORS = ["#2563eb", "#7c3aed", "#db2777", "#ea580c", "#059669", "#d97706", "#06b6d4"];
+const DEPT_COLORS = [
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
+  "var(--primary)",
+  "var(--color-brand-cobalt)",
+];
 const CURRENT_YEAR = new Date().getFullYear();
 const YEAR_OPTIONS = Array.from({ length: 6 }, (_, i) => CURRENT_YEAR - i);
 
+/**
+ * Lấy danh sách số trang hiển thị phân trang
+ */
 const getPageNumbers = (currentPage: number, total: number) => {
   const pages: (number | string)[] = [];
   if (total <= 7) {
@@ -132,7 +143,7 @@ export const DepartmentManagement: React.FC = () => {
   const [departments, setDepartments] = useState<DepartmentResponse[]>([]);
   const [selectedDeptIds, setSelectedDeptIds] = useState<string[]>([]);
 
-  // 5.12.1 Overview Stats States
+  // Overview Stats States
   const [totalDepartments, setTotalDepartments] = useState<number>(0);
   const [activeDepartments, setActiveDepartments] = useState<number>(0);
   const [emptyDepartments, setEmptyDepartments] = useState<number>(0);
@@ -143,16 +154,16 @@ export const DepartmentManagement: React.FC = () => {
   const [typeBreakdownData, setTypeBreakdownData] = useState<{ name: string; fullTime: number; partTime: number }[]>([]);
   const [chartYear, setChartYear] = useState<string>("ALL");
 
-  // 5.12.2 Filter & Search
+  // Filter & Search
   const [searchKeyword, setSearchKeyword] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("ALL");
   const [filterHasEmployees, setFilterHasEmployees] = useState<string>("ALL");
   const [filterStartDate, setFilterStartDate] = useState("");
   const [filterEndDate, setFilterEndDate] = useState("");
 
-  // Multi-column sorting (EmployeeManagement pattern)
-  const [sortRules, setSortRules] = useState<Array<{ field: string; dir: "ASC" | "DESC" }>>([
-    { field: "id", dir: "DESC" }
+  // Multi-column sorting
+  const [sortRules, setSortRules] = useState<{ field: string; dir: "ASC" | "DESC" }[]>([
+    { field: "id", dir: "DESC" },
   ]);
 
   // Pagination
@@ -161,6 +172,12 @@ export const DepartmentManagement: React.FC = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [totalElements, setTotalElements] = useState(0);
   const [jumpPageInput, setJumpPageInput] = useState<string>("1");
+
+  // Helper thay đổi trang đồng bộ với input
+  const changePage = (newPage: number) => {
+    setPage(newPage);
+    setJumpPageInput(String(newPage + 1));
+  };
 
   // Loading States
   const [loading, setLoading] = useState(false);
@@ -179,16 +196,22 @@ export const DepartmentManagement: React.FC = () => {
     onAction?: () => void;
   } | null>(null);
 
+  /**
+   * Hiển thị thông báo banner tạm thời
+   */
   const showBanner = (msg: string, isError = false) => {
     if (isError) {
       setErrorBanner(msg);
-      setTimeout(() => setErrorBanner(""), 3500);
+      setTimeout(() => { setErrorBanner(""); }, 3500);
     } else {
       setSuccessBanner(msg);
-      setTimeout(() => setSuccessBanner(""), 3500);
+      setTimeout(() => { setSuccessBanner(""); }, 3500);
     }
   };
 
+  /**
+   * Kiểm tra bản ghi phòng ban có khớp với các tiêu chí lọc hay không
+   */
   const doesDeptMatchFilters = (d: DepartmentResponse): boolean => {
     if (!d) return false;
     if (filterStatus !== "ALL") {
@@ -200,16 +223,16 @@ export const DepartmentManagement: React.FC = () => {
     }
     if (searchKeyword.trim()) {
       const kw = searchKeyword.trim().toLowerCase();
-      const nameMatch = d.name ? d.name.toLowerCase().includes(kw) : false;
-      const codeMatch = d.code ? d.code.toLowerCase().includes(kw) : false;
+      const nameMatch = Boolean(d.name.toLowerCase().includes(kw));
+      const codeMatch = Boolean(d.code.toLowerCase().includes(kw));
       const descMatch = d.description ? d.description.toLowerCase().includes(kw) : false;
       if (!nameMatch && !codeMatch && !descMatch) return false;
     }
-    if (filterStartDate && d.createdAt) {
-      if (d.createdAt.slice(0, 10) < filterStartDate) return false;
+    if (filterStartDate && d.createdAt && d.createdAt.slice(0, 10) < filterStartDate) {
+      return false;
     }
-    if (filterEndDate && d.createdAt) {
-      if (d.createdAt.slice(0, 10) > filterEndDate) return false;
+    if (filterEndDate && d.createdAt && d.createdAt.slice(0, 10) > filterEndDate) {
+      return false;
     }
     return true;
   };
@@ -219,6 +242,9 @@ export const DepartmentManagement: React.FC = () => {
     return location.hash === "#management" ? "management" : "statistics";
   });
 
+  /**
+   * Cuộn trang mượt tới section chỉ định
+   */
   const scrollToSection = (sectionId: "statistics" | "management") => {
     setActiveSubTab(sectionId);
     const element = document.getElementById(sectionId);
@@ -241,7 +267,7 @@ export const DepartmentManagement: React.FC = () => {
   const [formModalOpen, setFormModalOpen] = useState(false);
   const [editingDept, setEditingDept] = useState<DepartmentResponse | null>(null);
 
-  // --- Forms (Zod + react-hook-form, giống RoleManagement) ---
+  // Forms
   const createForm = useForm<DeptFormValues>({
     resolver: zodResolver(deptSchema),
     defaultValues: { name: "", description: "" },
@@ -252,39 +278,26 @@ export const DepartmentManagement: React.FC = () => {
     defaultValues: { name: "", description: "", status: "ACTIVE" },
   });
 
-  // --- Effects ---
-  useEffect(() => {
-    setJumpPageInput(String(page + 1));
-  }, [page]);
-
-  useEffect(() => {
-    fetchOverviewStats();
-  }, [chartYear]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchDepartments();
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [page, pageSize, searchKeyword, filterStatus, filterHasEmployees, filterStartDate, filterEndDate, sortRules]);
-
-  // --- API Calls ---
-  const fetchOverviewStats = async () => {
+  // API Calls
+  /**
+   * Lấy thống kê tổng quan và số liệu biểu đồ phòng ban
+   */
+  const fetchOverviewStats = useCallback(async () => {
     setStatsLoading(true);
     setStatsError(false);
     try {
       const year = chartYear !== "ALL" ? Number(chartYear) : undefined;
       const data = await departmentApi.getOverviewStats(year);
 
-      setTotalDepartments(data.totalDepartments ?? 0);
-      setActiveDepartments(data.activeDepartments ?? 0);
-      setEmptyDepartments(data.emptyDepartments ?? 0);
-      setCountEmployeeNotDepartment(data.countEmployeeNotDepartment ?? 0);
+      setTotalDepartments(Number(data.totalDepartments) || 0);
+      setActiveDepartments(Number(data.activeDepartments) || 0);
+      setEmptyDepartments(Number(data.emptyDepartments) || 0);
+      setCountEmployeeNotDepartment(Number(data.countEmployeeNotDepartment) || 0);
 
       if (data.employeesByDepartment) {
         setEmployeesByDeptData(
           Object.entries(data.employeesByDepartment)
-            .map(([name, value]) => ({ name, value: Number(value) }))
+            .map(([name, value]) => ({ name, value: Number(value) || 0 }))
             .sort((a, b) => b.value - a.value)
         );
       } else {
@@ -295,8 +308,9 @@ export const DepartmentManagement: React.FC = () => {
         const grouped: Record<string, { fullTime: number; partTime: number }> = {};
         data.employmentTypeBreakdown.forEach((item) => {
           if (!grouped[item.deptName]) grouped[item.deptName] = { fullTime: 0, partTime: 0 };
-          if (item.employmentType === "FULL_TIME") grouped[item.deptName].fullTime += item.count;
-          else if (item.employmentType === "PART_TIME") grouped[item.deptName].partTime += item.count;
+          const cnt = Number(item.count) || 0;
+          if (item.employmentType === "FULL_TIME") grouped[item.deptName].fullTime += cnt;
+          else if (item.employmentType === "PART_TIME") grouped[item.deptName].partTime += cnt;
         });
         setTypeBreakdownData(
           Object.entries(grouped).map(([name, v]) => ({ name, fullTime: v.fullTime, partTime: v.partTime }))
@@ -304,22 +318,25 @@ export const DepartmentManagement: React.FC = () => {
       } else {
         setTypeBreakdownData([]);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Lỗi lấy thống kê Phòng ban:", err);
       setStatsError(true);
     } finally {
       setStatsLoading(false);
     }
-  };
+  }, [chartYear]);
 
-  const fetchDepartments = async () => {
+  /**
+   * Lấy danh sách phòng ban có phân trang, tìm kiếm và sắp xếp
+   */
+  const fetchDepartments = useCallback(async () => {
     setLoading(true);
     setTableError("");
     try {
       const sortParams = sortRules.length > 0
         ? sortRules.map(r => `${r.field}:${r.dir.toLowerCase()}`)
         : ["id:desc"];
-      const params: any = {
+      const params: Record<string, unknown> = {
         page,
         size: pageSize,
         sort: sortParams,
@@ -332,19 +349,20 @@ export const DepartmentManagement: React.FC = () => {
 
       const res = await departmentApi.searchDepartments(params);
 
-      if (res?.data?.success && res.data.data?.content) {
+      if (res.data.success && res.data.data.content) {
         const pageData = res.data.data;
-        setDepartments(pageData.content || []);
-        setTotalPages(pageData.totalPages || 1);
-        setTotalElements(pageData.totalElements || 0);
+        setDepartments(pageData.content);
+        setTotalPages(pageData.totalPages);
+        setTotalElements(pageData.totalElements);
       } else {
         setDepartments([]);
         setTotalPages(1);
         setTotalElements(0);
-        setTableError(res?.data?.message || "Không thể tải danh sách phòng ban.");
+        setTableError(res.data.message ?? "Không thể tải danh sách phòng ban.");
       }
-    } catch (err: any) {
-      const errMsg = err?.response?.data?.message || err.message || "Lỗi kết nối máy chủ. Vui lòng thử lại!";
+    } catch (err: unknown) {
+      const errorObj = err as { response?: { data?: { message?: string } }; message?: string };
+      const errMsg = errorObj.response?.data?.message ?? errorObj.message ?? "Lỗi kết nối máy chủ. Vui lòng thử lại!";
       setTableError(errMsg);
       setDepartments([]);
       setTotalPages(1);
@@ -352,15 +370,35 @@ export const DepartmentManagement: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filterEndDate, filterHasEmployees, filterStartDate, filterStatus, page, pageSize, searchKeyword, sortRules]);
 
-  // --- Handlers ---
-  const handleSearchSubmit = (e: React.FormEvent) => {
+  // Effects
+  useEffect(() => {
+    void fetchOverviewStats();
+  }, [fetchOverviewStats]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void fetchDepartments();
+    }, 300);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [fetchDepartments]);
+
+  // Handlers
+  /**
+   * Xử lý submit form tìm kiếm phòng ban
+   */
+  const handleSearchSubmit = (e: React.SyntheticEvent) => {
     e.preventDefault();
-    setPage(0);
-    fetchDepartments();
+    changePage(0);
+    void fetchDepartments();
   };
 
+  /**
+   * Đặt lại tất cả các điều kiện lọc về mặc định
+   */
   const handleResetFilters = () => {
     setSearchKeyword("");
     setFilterStatus("ALL");
@@ -368,41 +406,46 @@ export const DepartmentManagement: React.FC = () => {
     setFilterStartDate("");
     setFilterEndDate("");
     setSortRules([{ field: "id", dir: "DESC" }]);
-    setPage(0);
+    changePage(0);
   };
 
-  // Multi-column sorting helper (Exact EmployeeManagement algorithm)
+  /**
+   * Xử lý sắp xếp đa cột (multi-column sort)
+   */
   const handleSort = (field: string) => {
     setSortRules(prevRules => {
       const existingIndex = prevRules.findIndex(r => r.field === field);
 
       if (existingIndex === -1) {
-        // Click 1: Sắp xếp Tăng dần (ASC)
         const filtered = prevRules.filter(r => r.field !== "id");
         return [...filtered, { field, dir: "ASC" }];
       } else {
         const currentRule = prevRules[existingIndex];
         if (currentRule.dir === "ASC") {
-          // Click 2: Đổi sang Giảm dần (DESC)
           const updated = [...prevRules];
           updated[existingIndex] = { field, dir: "DESC" };
           return updated;
         } else {
-          // Click 3: Bỏ sắp xếp cột này
           const updated = prevRules.filter(r => r.field !== field);
           return updated.length === 0 ? [{ field: "id", dir: "DESC" }] : updated;
         }
       }
     });
-    setPage(0);
+    changePage(0);
   };
 
+  /**
+   * Lấy thông tin thứ tự và hướng sắp xếp của cột
+   */
   const getSortRuleInfo = (field: string) => {
     const idx = sortRules.findIndex(r => r.field === field);
     if (idx === -1) return null;
     return { priority: idx + 1, dir: sortRules[idx].dir };
   };
 
+  /**
+   * Render icon hiển thị hướng và ưu tiên sắp xếp
+   */
   const renderSortIcon = (field: string) => {
     const info = getSortRuleInfo(field);
     if (!info) return <ArrowUpDown className="h-3.5 w-3.5 opacity-40 group-hover:opacity-100" />;
@@ -414,38 +457,56 @@ export const DepartmentManagement: React.FC = () => {
     );
   };
 
+  /**
+   * Chọn hoặc bỏ chọn tất cả phòng ban
+   */
   const handleSelectAll = (checked: boolean) => {
-    if (checked) setSelectedDeptIds(departments.map(d => String(d.id)));
+    if (checked) setSelectedDeptIds(departments.map(d => d.id));
     else setSelectedDeptIds([]);
   };
 
+  /**
+   * Chọn hoặc bỏ chọn một phòng ban cụ thể
+   */
   const handleSelectDept = (id: string) => {
     if (selectedDeptIds.includes(id)) setSelectedDeptIds(selectedDeptIds.filter(i => i !== id));
     else setSelectedDeptIds([...selectedDeptIds, id]);
   };
 
-  const handleOpenDetailModal = (dept: DepartmentResponse, initialTab: string = "general") => {
+  /**
+   * Mở modal xem chi tiết phòng ban
+   */
+  const handleOpenDetailModal = (dept: DepartmentResponse, initialTab = "general") => {
     setSelectedDeptForDetail(dept);
     setDetailModalTab(initialTab);
     setDetailModalOpen(true);
   };
 
+  /**
+   * Mở modal tạo mới phòng ban
+   */
   const handleOpenCreateModal = () => {
     setEditingDept(null);
     createForm.reset({ name: "", description: "" });
     setFormModalOpen(true);
   };
 
+  /**
+   * Mở modal chỉnh sửa phòng ban
+   */
   const handleOpenEditModal = (dept: DepartmentResponse) => {
     setEditingDept(dept);
     editForm.reset({
-      name: dept.name || "",
-      description: dept.description || "",
+      name: dept.name,
+      description: dept.description ?? "",
       status: dept.status,
     });
     setFormModalOpen(true);
   };
 
+  /**
+   * Đóng modal form thêm/sửa phòng ban
+   */
   const handleCloseFormModal = () => {
     setFormModalOpen(false);
     setEditingDept(null);
@@ -453,58 +514,62 @@ export const DepartmentManagement: React.FC = () => {
     editForm.reset({ name: "", description: "", status: "ACTIVE" });
   };
 
+  /**
+   * Lưu thông tin tạo mới hoặc cập nhật phòng ban
+   */
   const handleSaveDepartment = async (values: DeptFormValues | DeptEditFormValues) => {
     setFormSubmitting(true);
     try {
       if (editingDept) {
         const v = values as DeptEditFormValues;
-        await departmentApi.updateDepartment(String(editingDept.id), {
+        await departmentApi.updateDepartment(editingDept.id, {
           name: v.name.trim(),
           description: (v.description ?? "").trim(),
           status: v.status,
         });
         showBanner("Cập nhật Phòng ban thành công!");
         handleCloseFormModal();
-        fetchDepartments();
-        fetchOverviewStats();
+        void fetchDepartments();
+        void fetchOverviewStats();
       } else {
         const v = values as DeptFormValues;
         const res = await departmentApi.createDepartment({
           name: v.name.trim(),
           description: (v.description ?? "").trim(),
         });
-        const newDept = res?.data?.data;
+        const newDept = res.data.data;
         if (newDept && newDept.id) {
           const isMatch = doesDeptMatchFilters(newDept);
           if (isMatch) {
-            setNewlyCreatedId(String(newDept.id));
-            setDepartments(prev => [newDept, ...prev.filter(d => String(d.id) !== String(newDept.id))]);
+            setNewlyCreatedId(newDept.id);
+            setDepartments(prev => [newDept, ...prev.filter(d => d.id !== newDept.id)]);
             setTotalElements(prev => prev + 1);
             showBanner(`Tạo mới Phòng ban "${newDept.name}" thành công!`);
-            setTimeout(() => setNewlyCreatedId(null), 3500);
+            setTimeout(() => { setNewlyCreatedId(null); }, 3500);
           } else {
             setActionBanner({
               message: `Đã tạo mới Phòng ban "${newDept.name}" thành công.`,
               actionText: "Xem bản ghi này",
               onAction: () => {
                 handleResetFilters();
-                setNewlyCreatedId(String(newDept.id));
-                setDepartments(prev => [newDept, ...prev.filter(d => String(d.id) !== String(newDept.id))]);
+                setNewlyCreatedId(newDept.id);
+                setDepartments(prev => [newDept, ...prev.filter(d => d.id !== newDept.id)]);
                 scrollToSection("management");
                 setActionBanner(null);
-                setTimeout(() => setNewlyCreatedId(null), 4000);
+                setTimeout(() => { setNewlyCreatedId(null); }, 4000);
               },
             });
-            setTimeout(() => setActionBanner(null), 7000);
+            setTimeout(() => { setActionBanner(null); }, 7000);
           }
         } else {
-          fetchDepartments();
+          void fetchDepartments();
         }
         handleCloseFormModal();
-        fetchOverviewStats();
+        void fetchOverviewStats();
       }
-    } catch (err: any) {
-      showBanner(err?.response?.data?.message || err.message || "Lỗi lưu Phòng ban", true);
+    } catch (err: unknown) {
+      const errorObj = err as { response?: { data?: { message?: string } }; message?: string };
+      showBanner(errorObj.response?.data?.message ?? errorObj.message ?? "Lỗi lưu Phòng ban", true);
     } finally {
       setFormSubmitting(false);
     }
@@ -512,20 +577,27 @@ export const DepartmentManagement: React.FC = () => {
 
   const [deleteConfirmDeptId, setDeleteConfirmDeptId] = useState<string | number | null>(null);
 
+  /**
+   * Mở dialog xác nhận xóa phòng ban
+   */
   const handleDeleteDepartment = (deptId: string | number) => {
     setDeleteConfirmDeptId(deptId);
   };
 
+  /**
+   * Thực hiện gọi API xóa phòng ban sau khi xác nhận
+   */
   const confirmDeleteDepartment = async () => {
     if (!deleteConfirmDeptId) return;
     try {
       await departmentApi.deleteDepartment(String(deleteConfirmDeptId));
       showBanner("Xóa Phòng ban thành công!");
       if (detailModalOpen) setDetailModalOpen(false);
-      fetchDepartments();
-      fetchOverviewStats();
-    } catch (err: any) {
-      showBanner(err?.response?.data?.message || err.message || "Không thể xóa Phòng ban còn nhân viên đang gán!", true);
+      void fetchDepartments();
+      void fetchOverviewStats();
+    } catch (err: unknown) {
+      const errorObj = err as { response?: { data?: { message?: string } }; message?: string };
+      showBanner(errorObj.response?.data?.message ?? errorObj.message ?? "Không thể xóa Phòng ban còn nhân viên đang gán!", true);
     } finally {
       setDeleteConfirmDeptId(null);
     }
@@ -568,21 +640,15 @@ export const DepartmentManagement: React.FC = () => {
       {/* Page Title Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-border/30 pb-4">
         <div>
-          <div className="flex items-center gap-2 text-sm font-semibold text-primary mb-1">
-            <Link to="/dashboard" className="flex items-center gap-1 hover:underline">
-              <ArrowLeft className="h-3.5 w-3.5" />
-              <span>Quay lại Tổng quan</span>
-            </Link>
-          </div>
           <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-foreground flex items-center gap-3 mt-2">
             <div className="p-2.5 rounded-2xl bg-primary/10 text-primary">
               <Building2 className="h-7 w-7" />
             </div>
-            <span>Quản lý Phòng ban (Department Management)</span>
+            <span>Quản lý Phòng ban</span>
           </h1>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <Button onClick={fetchDepartments} variant="outline" size="sm" className="rounded-xl gap-1.5 font-semibold">
+          <Button onClick={() => { void fetchDepartments(); }} variant="outline" size="sm" className="rounded-xl gap-1.5 font-semibold">
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Làm mới
           </Button>
           <Button onClick={handleOpenCreateModal} size="sm" className="rounded-xl gap-1 font-semibold bg-primary text-primary-foreground">
@@ -596,22 +662,22 @@ export const DepartmentManagement: React.FC = () => {
         <div className="flex items-center justify-between h-12">
           <div className="flex gap-6 md:gap-8 h-full items-center text-base font-semibold">
             <button
-              onClick={() => scrollToSection("statistics")}
+              onClick={() => { scrollToSection("statistics"); }}
               className={`flex items-center gap-2 h-full border-b-2 transition-colors cursor-pointer ${
                 activeSubTab === "statistics" ? "border-primary text-primary font-extrabold" : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
             >
               <BarChart3 className="h-4 w-4" />
-              <span>Thống kê & Phân tích (5.12.1)</span>
+              <span>Thống kê &amp; Phân tích</span>
             </button>
             <button
-              onClick={() => scrollToSection("management")}
+              onClick={() => { scrollToSection("management"); }}
               className={`flex items-center gap-2 h-full border-b-2 transition-colors cursor-pointer ${
                 activeSubTab === "management" ? "border-primary text-primary font-extrabold" : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
             >
               <Building2 className="h-4 w-4" />
-              <span>Danh sách Phòng ban (5.12.3)</span>
+              <span>Danh sách Phòng ban</span>
             </button>
           </div>
         </div>
@@ -633,50 +699,50 @@ export const DepartmentManagement: React.FC = () => {
                 1. Tổng số Phòng ban / Hoạt động
               </CardDescription>
               <CardTitle className="text-3xl font-extrabold text-foreground flex items-center gap-2 mt-1">
-                <span className="text-primary">{statsLoading ? "..." : totalDepartments} Phòng</span>
-                <span className="text-xs font-semibold text-emerald-600 bg-emerald-500/10 px-2.5 py-0.5 rounded-full">{activeDepartments} ACTIVE</span>
+                <span className="text-primary">{statsLoading ? "..." : String(totalDepartments)} Phòng</span>
+                <span className="text-xs font-semibold text-success-forest bg-success-forest/10 px-2.5 py-0.5 rounded-full">{activeDepartments} Hoạt động</span>
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-0"><p className="text-xs text-muted-foreground">Quy mô cơ cấu tổ chức và phòng ban trong trung tâm</p></CardContent>
           </Card>
 
-          {/* Card 2: Phòng ban Rỗng — click scroll xuống bảng + filter */}
+          {/* Card 2: Phòng ban Rỗng */}
           <Card
             onClick={() => {
               setFilterHasEmployees("FALSE");
-              setPage(0);
+              changePage(0);
               scrollToSection("management");
               showBanner("Đã lọc danh sách Phòng ban chưa có nhân viên nào!");
             }}
-            className="border-2 border-amber-500/40 bg-linear-to-br from-amber-500/10 via-card to-card shadow-xs cursor-pointer hover:border-amber-500 hover:shadow-md hover:scale-[1.005] transition-all group flex flex-col justify-between"
+            className="border-2 border-brand-cobalt/40 bg-linear-to-br from-brand-cobalt/10 via-card to-card shadow-xs cursor-pointer hover:border-brand-cobalt hover:shadow-md hover:scale-[1.005] transition-all group flex flex-col justify-between"
           >
             <CardHeader className="pb-2">
-              <CardDescription className="text-xs font-extrabold text-amber-600 uppercase flex items-center justify-between">
-                <span className="flex items-center gap-1"><ShieldAlert className="h-4 w-4" /> 2. Phòng ban Rỗng (0 Nhân viên)</span>
-                <span className="px-2 py-0.5 rounded-full bg-amber-600 text-white text-[10px] font-black">CẢNH BÁO</span>
+              <CardDescription className="text-xs font-extrabold text-brand-cobalt uppercase flex items-center justify-between">
+                <span className="flex items-center gap-1"><ShieldAlert className="h-4 w-4" /> 2. Phòng ban chưa có nhân viên</span>
+                <span className="px-2 py-0.5 rounded-full bg-brand-cobalt text-white text-[10px] font-black">CẢNH BÁO</span>
               </CardDescription>
-              <CardTitle className="text-3xl font-extrabold text-amber-600 flex items-center gap-2 mt-1">
-                <span>{statsLoading ? "..." : emptyDepartments}</span>
-                <span className="text-xs font-semibold text-amber-600 bg-amber-500/10 px-2 py-0.5 rounded-full">Phòng rỗng</span>
+              <CardTitle className="text-3xl font-extrabold text-brand-cobalt flex items-center gap-2 mt-1">
+                <span>{statsLoading ? "..." : String(emptyDepartments)}</span>
+                <span className="text-xs font-semibold text-brand-cobalt bg-brand-cobalt/10 px-2 py-0.5 rounded-full">Chưa có nhân viên</span>
               </CardTitle>
             </CardHeader>
-            <CardContent className="pt-0"><p className="text-xs text-muted-foreground">Nhấn để lọc phòng ban tạo thừa hoặc chưa gán nhân sự →</p></CardContent>
+            <CardContent className="pt-0"><p className="text-xs text-muted-foreground">Nhấn để lọc phòng ban chưa gán nhân sự →</p></CardContent>
           </Card>
 
           {/* Card 3: Tổng nhân sự */}
           <Card className="border-border shadow-xs bg-card overflow-hidden relative">
-            <div className="absolute top-0 right-0 p-4 opacity-10 text-purple-600">
+            <div className="absolute top-0 right-0 p-4 opacity-10 text-primary">
               <Users className="h-20 w-20" />
             </div>
             <CardHeader className="pb-2">
               <CardDescription className="text-xs font-semibold text-muted-foreground uppercase">
                 3. Tổng Nhân sự Trực thuộc
               </CardDescription>
-              <CardTitle className="text-3xl font-extrabold text-purple-600 flex items-center gap-2 mt-1">
+              <CardTitle className="text-3xl font-extrabold text-primary flex items-center gap-2 mt-1">
                 <span>
                   {statsLoading ? "..." : (
                     employeesByDeptData.length > 0
-                      ? `${employeesByDeptData.reduce((s, d) => s + d.value, 0)} Nhân viên`
+                      ? `${employeesByDeptData.reduce((s, d) => s + (Number(d.value) || 0), 0)} Nhân viên`
                       : "— Nhân viên"
                   )}
                 </span>
@@ -685,19 +751,19 @@ export const DepartmentManagement: React.FC = () => {
             <CardContent className="pt-0"><p className="text-xs text-muted-foreground">Đã gán và phân bổ vào các phòng ban chức năng</p></CardContent>
           </Card>
 
-          {/* Card 4: Số nhân viên chưa gán phòng ban — click mở modal */}
+          {/* Card 4: Số nhân viên chưa gán phòng ban */}
           <Card
-            onClick={() => setUnassignedModalOpen(true)}
-            className="border-2 border-purple-500/40 bg-linear-to-br from-purple-500/10 via-card to-card shadow-xs cursor-pointer hover:border-purple-500 hover:shadow-md hover:scale-[1.005] transition-all group flex flex-col justify-between"
+            onClick={() => { setUnassignedModalOpen(true); }}
+            className="border-2 border-brand-cobalt/40 bg-linear-to-br from-brand-cobalt/10 via-card to-card shadow-xs cursor-pointer hover:border-brand-cobalt hover:shadow-md hover:scale-[1.005] transition-all group flex flex-col justify-between"
           >
             <CardHeader className="pb-2">
-              <CardDescription className="text-xs font-extrabold text-purple-600 uppercase flex items-center justify-between">
+              <CardDescription className="text-xs font-extrabold text-brand-cobalt uppercase flex items-center justify-between">
                 <span className="flex items-center gap-1"><Users className="h-4 w-4" /> 4. Chưa Gán Phòng Ban</span>
-                <span className="px-2 py-0.5 rounded-full bg-purple-600 text-white text-[10px] font-black">XEM CHI TIẾT</span>
+                <span className="px-2 py-0.5 rounded-full bg-brand-cobalt text-white text-[10px] font-black">XEM CHI TIẾT</span>
               </CardDescription>
-              <CardTitle className="text-3xl font-extrabold text-purple-600 flex items-center gap-2 mt-1">
-                <span>{statsLoading ? "..." : countEmployeeNotDepartment}</span>
-                <span className="text-xs font-semibold text-purple-600 bg-purple-500/10 px-2 py-0.5 rounded-full">Nhân sự</span>
+              <CardTitle className="text-3xl font-extrabold text-brand-cobalt flex items-center gap-2 mt-1">
+                <span>{statsLoading ? "..." : String(countEmployeeNotDepartment)}</span>
+                <span className="text-xs font-semibold text-brand-cobalt bg-brand-cobalt/10 px-2 py-0.5 rounded-full">Nhân sự</span>
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-0"><p className="text-xs text-muted-foreground">Nhấn để xem danh sách & gán phòng ban đơn/hàng loạt →</p></CardContent>
@@ -741,7 +807,7 @@ export const DepartmentManagement: React.FC = () => {
                   <span className="text-xs">Đang tải dữ liệu...</span>
                 </div>
               ) : statsError ? (
-                <div className="flex flex-col items-center gap-2 text-red-500">
+                <div className="flex flex-col items-center gap-2 text-destructive">
                   <AlertCircle className="h-7 w-7" />
                   <span className="text-xs font-semibold">Lỗi tải dữ liệu thống kê</span>
                 </div>
@@ -756,9 +822,11 @@ export const DepartmentManagement: React.FC = () => {
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                     <XAxis type="number" style={{ fontSize: "11px" }} />
                     <YAxis dataKey="name" type="category" style={{ fontSize: "11px" }} width={140} />
-                    <Tooltip formatter={(v: any) => [`${v} Nhân viên`, "Số lượng nhân sự"]} />
-                    <Bar dataKey="value" radius={[0, 6, 6, 0]} fill="#2563eb">
-                      {employeesByDeptData.map((_, idx) => <Cell key={idx} fill={DEPT_COLORS[idx % DEPT_COLORS.length]} />)}
+                    <Tooltip formatter={(v) => [`${v ?? 0} Nhân viên`, "Số lượng nhân sự"]} />
+                    <Bar dataKey="value" radius={[0, 6, 6, 0]} fill="var(--primary)">
+                      {employeesByDeptData.map((item, idx) => (
+                        <Cell key={`cell-${item.name}`} fill={DEPT_COLORS[idx % DEPT_COLORS.length]} />
+                      ))}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
@@ -766,14 +834,14 @@ export const DepartmentManagement: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* Chart 2: Cơ cấu FULL_TIME vs PART_TIME */}
+          {/* Chart 2: Cơ cấu Hợp đồng */}
           <Card className="lg:col-span-6 border-border shadow-xs bg-card">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                <Briefcase className="h-4 w-4 text-emerald-600" />
-                <span>5. Cơ cấu Hợp đồng FULL_TIME vs PART_TIME</span>
+                <Briefcase className="h-4 w-4 text-success-forest" />
+                <span>5. Cơ cấu Hợp đồng lao động</span>
               </CardTitle>
-              <CardDescription className="text-xs">Hữu ích để thấy tỷ lệ cơ hữu vs thời vụ theo từng phòng</CardDescription>
+              <CardDescription className="text-xs">Hữu ích để thấy tỷ lệ nhân sự chính thức và thời vụ theo từng phòng</CardDescription>
             </CardHeader>
             <CardContent className="min-h-60 flex items-center justify-center">
               {statsLoading ? (
@@ -782,7 +850,7 @@ export const DepartmentManagement: React.FC = () => {
                   <span className="text-xs">Đang tải dữ liệu...</span>
                 </div>
               ) : statsError ? (
-                <div className="flex flex-col items-center gap-2 text-red-500">
+                <div className="flex flex-col items-center gap-2 text-destructive">
                   <AlertCircle className="h-7 w-7" />
                   <span className="text-xs font-semibold">Lỗi tải dữ liệu thống kê</span>
                 </div>
@@ -799,8 +867,8 @@ export const DepartmentManagement: React.FC = () => {
                     <YAxis style={{ fontSize: "11px" }} />
                     <Tooltip />
                     <Legend wrapperStyle={{ fontSize: "11px" }} />
-                    <Bar dataKey="fullTime" name="FULL_TIME (Cơ hữu)" fill="#10b981" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="partTime" name="PART_TIME (Thời vụ)" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="fullTime" name="Chính thức" fill="var(--chart-2)" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="partTime" name="Thời vụ" fill="var(--brand-cobalt)" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -841,7 +909,7 @@ export const DepartmentManagement: React.FC = () => {
                   type="text"
                   placeholder="Tên phòng ban, mã phòng ban..."
                   value={searchKeyword}
-                  onChange={(e) => setSearchKeyword(e.target.value)}
+                  onChange={(e) => { setSearchKeyword(e.target.value); }}
                   className="pl-8 h-9 text-sm border border-border/30 bg-background rounded-lg focus-visible:ring-2 focus-visible:ring-primary/20 placeholder:opacity-50"
                 />
               </div>
@@ -868,7 +936,7 @@ export const DepartmentManagement: React.FC = () => {
                 <SelectContent>
                   <SelectItem value="ALL">Tất cả</SelectItem>
                   <SelectItem value="TRUE">Có nhân viên</SelectItem>
-                  <SelectItem value="FALSE">Không có nhân viên (rỗng)</SelectItem>
+                  <SelectItem value="FALSE">Chưa có nhân viên</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -881,7 +949,7 @@ export const DepartmentManagement: React.FC = () => {
                 value={filterStartDate}
                 onChange={(isoDate) => {
                   setFilterStartDate(isoDate);
-                  setPage(0);
+                  changePage(0);
                 }}
               />
             </div>
@@ -894,7 +962,7 @@ export const DepartmentManagement: React.FC = () => {
                 value={filterEndDate}
                 onChange={(isoDate) => {
                   setFilterEndDate(isoDate);
-                  setPage(0);
+                  changePage(0);
                 }}
               />
             </div>
@@ -922,15 +990,15 @@ export const DepartmentManagement: React.FC = () => {
               <TableHeader className="sticky top-0 z-10 bg-card/95 backdrop-blur-md shadow-2xs border-b border-border/40">
                 <TableRow className="border-b border-border/30 bg-muted/20 hover:bg-muted/20">
                   <TableHead className="w-8 pb-4">
-                    <Checkbox checked={departments.length > 0 && selectedDeptIds.length === departments.length} onCheckedChange={(checked) => handleSelectAll(!!checked)} className="translate-y-0.5 border-border/30" />
+                    <Checkbox checked={departments.length > 0 && selectedDeptIds.length === departments.length} onCheckedChange={(checked) => { handleSelectAll(Boolean(checked)); }} className="translate-y-0.5 border-border/30" />
                   </TableHead>
-                  <TableHead className="cursor-pointer pb-4 select-none text-sm font-semibold uppercase tracking-wider group" onClick={() => handleSort("code")}>
+                  <TableHead className="cursor-pointer pb-4 select-none text-sm font-semibold uppercase tracking-wider group" onClick={() => { handleSort("code"); }}>
                     <div className="flex items-center gap-1.5 pl-2">
                       <span className={getSortRuleInfo("code") ? "text-primary font-bold" : "text-muted-foreground"}>Mã Phòng</span>
                       {renderSortIcon("code")}
                     </div>
                   </TableHead>
-                  <TableHead className="cursor-pointer pb-4 select-none text-sm font-semibold uppercase tracking-wider group" onClick={() => handleSort("name")}>
+                  <TableHead className="cursor-pointer pb-4 select-none text-sm font-semibold uppercase tracking-wider group" onClick={() => { handleSort("name"); }}>
                     <div className="flex items-center gap-1.5 pl-2">
                       <span className={getSortRuleInfo("name") ? "text-primary font-bold" : "text-muted-foreground"}>Tên Phòng ban</span>
                       {renderSortIcon("name")}
@@ -957,39 +1025,39 @@ export const DepartmentManagement: React.FC = () => {
                   </TableHead>
                   <TableHead className="pb-4 select-none text-sm font-semibold uppercase tracking-wider text-center group">
                     <div className="flex items-center gap-1.5 justify-center">
-                      <span className={`cursor-pointer ${getSortRuleInfo("employeeCount") ? "text-primary font-bold" : "text-muted-foreground"}`} onClick={() => handleSort("employeeCount")}>
+                      <span className={`cursor-pointer ${getSortRuleInfo("employeeCount") ? "text-primary font-bold" : "text-muted-foreground"}`} onClick={() => { handleSort("employeeCount"); }}>
                         Số lượng NV
                       </span>
-                      <span className="cursor-pointer" onClick={() => handleSort("employeeCount")}>{renderSortIcon("employeeCount")}</span>
+                      <span className="cursor-pointer" onClick={() => { handleSort("employeeCount"); }}>{renderSortIcon("employeeCount")}</span>
                       <Popover>
                         <PopoverTrigger nativeButton={true} render={<Button variant="ghost" size="icon" className="h-5 w-5 p-0 hover:bg-muted"><Filter className={`h-3.5 w-3.5 ${filterHasEmployees !== "ALL" ? "text-primary font-bold" : "text-muted-foreground"}`} /></Button>} />
                         <PopoverContent className="w-48 p-2 text-xs bg-popover border border-border shadow-xl rounded-xl">
                           <div className="font-bold mb-2 pb-1 border-b border-border/40 text-foreground">Lọc số lượng NV</div>
-                          <Select value={filterHasEmployees} onValueChange={(val) => { setFilterHasEmployees(val); setPage(0); }}>
+                          <Select value={filterHasEmployees} onValueChange={(val) => { setFilterHasEmployees(val); changePage(0); }}>
                             <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Tất cả" /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="ALL">Tất cả</SelectItem>
-                              <SelectItem value="TRUE">Có nhân viên (&gt;0)</SelectItem>
-                              <SelectItem value="FALSE">Chưa có nhân viên (0)</SelectItem>
+                              <SelectItem value="TRUE">Có nhân viên</SelectItem>
+                              <SelectItem value="FALSE">Chưa có nhân viên</SelectItem>
                             </SelectContent>
                           </Select>
                         </PopoverContent>
                       </Popover>
                     </div>
                   </TableHead>
-                  <TableHead className="cursor-pointer pb-4 select-none text-sm font-semibold uppercase tracking-wider text-center group" onClick={() => handleSort("createdAt")}>
+                  <TableHead className="cursor-pointer pb-4 select-none text-sm font-semibold uppercase tracking-wider text-center group" onClick={() => { handleSort("createdAt"); }}>
                     <div className="flex items-center gap-1.5 justify-center">
                       <span className={getSortRuleInfo("createdAt") ? "text-primary font-bold" : "text-muted-foreground"}>Ngày tạo</span>
                       {renderSortIcon("createdAt")}
                     </div>
                   </TableHead>
-                  <TableHead className="cursor-pointer pb-4 select-none text-sm font-semibold uppercase tracking-wider text-center group" onClick={() => handleSort("updatedAt")}>
+                  <TableHead className="cursor-pointer pb-4 select-none text-sm font-semibold uppercase tracking-wider text-center group" onClick={() => { handleSort("updatedAt"); }}>
                     <div className="flex items-center gap-1.5 justify-center">
                       <span className={getSortRuleInfo("updatedAt") ? "text-primary font-bold" : "text-muted-foreground"}>Cập nhật lần cuối</span>
                       {renderSortIcon("updatedAt")}
                     </div>
                   </TableHead>
-                  <TableHead className="text-sm text-center pb-4 font-semibold text-muted-foreground uppercase tracking-wider">Actions</TableHead>
+                  <TableHead className="text-sm text-center pb-4 font-semibold text-muted-foreground uppercase tracking-wider">Thao tác</TableHead>
                 </TableRow>
               </TableHeader>
 
@@ -998,13 +1066,13 @@ export const DepartmentManagement: React.FC = () => {
                   <TableRow>
                     <TableCell colSpan={8} className="py-16 text-center">
                       {tableError ? (
-                        <div className="flex flex-col items-center gap-3 text-red-500">
+                        <div className="flex flex-col items-center gap-3 text-destructive">
                           <AlertCircle className="h-10 w-10 opacity-60" />
                           <div>
                             <p className="font-semibold text-sm">Lỗi tải dữ liệu</p>
                             <p className="text-xs text-muted-foreground mt-1">{tableError}</p>
                           </div>
-                          <button onClick={fetchDepartments} className="text-xs text-primary hover:underline font-semibold flex items-center gap-1">
+                          <button onClick={() => { void fetchDepartments(); }} className="text-xs text-primary hover:underline font-semibold flex items-center gap-1">
                             <RefreshCw className="h-3 w-3" /> Thử lại
                           </button>
                         </div>
@@ -1021,19 +1089,19 @@ export const DepartmentManagement: React.FC = () => {
                   </TableRow>
                 ) : (
                   departments.map((dept) => {
-                    const isNewlyCreated = String(dept.id) === newlyCreatedId;
+                    const isNewlyCreated = dept.id === newlyCreatedId;
                     return (
                       <TableRow
                         key={dept.id}
                         className={cn(
                           "transition-all duration-700 border-border/30",
                           isNewlyCreated
-                            ? "bg-emerald-500/20 dark:bg-emerald-950/40 border-l-4 border-l-emerald-500 font-semibold shadow-xs"
+                            ? "bg-primary/10 border-l-4 border-l-primary font-semibold shadow-xs"
                             : "hover:bg-foreground/10"
                         )}
                       >
                         <TableCell>
-                          <Checkbox checked={selectedDeptIds.includes(String(dept.id))} onCheckedChange={() => handleSelectDept(String(dept.id))} className="translate-y-0.5 border-border/30" />
+                          <Checkbox checked={selectedDeptIds.includes(dept.id)} onCheckedChange={() => { handleSelectDept(dept.id); }} className="translate-y-0.5 border-border/30" />
                         </TableCell>
 
                         <TableCell className="font-mono font-bold text-primary text-sm pl-2">
@@ -1042,16 +1110,16 @@ export const DepartmentManagement: React.FC = () => {
 
                         <TableCell>
                           <div>
-                            <p onClick={() => handleOpenDetailModal(dept)} className="font-semibold text-foreground hover:text-primary cursor-pointer transition-colors text-sm">
+                            <p onClick={() => { handleOpenDetailModal(dept); }} className="font-semibold text-foreground hover:text-primary cursor-pointer transition-colors text-sm">
                               {dept.name}
                             </p>
-                            <p className="text-xs text-muted-foreground truncate max-w-xs">{dept.description || "Chưa thiết lập mô tả"}</p>
+                            <p className="text-xs text-muted-foreground truncate max-w-xs">{dept.description ?? "Chưa thiết lập mô tả"}</p>
                           </div>
                         </TableCell>
 
                         <TableCell className="text-center">
-                          <Badge className={dept.status === "ACTIVE" ? "bg-emerald-600 text-white font-bold text-[11px]" : "bg-red-500 text-white font-bold text-[11px]"}>
-                            {dept.status === "ACTIVE" ? "ACTIVE" : "INACTIVE"}
+                          <Badge className={dept.status === "ACTIVE" ? "bg-success-forest text-white font-bold text-[11px]" : "bg-destructive text-white font-bold text-[11px]"}>
+                            {dept.status === "ACTIVE" ? "Đang hoạt động" : "Ngừng hoạt động"}
                           </Badge>
                         </TableCell>
 
@@ -1060,7 +1128,7 @@ export const DepartmentManagement: React.FC = () => {
                             "px-2.5 py-0.5 rounded-full text-xs border font-bold",
                             (dept.employeeCount ?? 0) > 0
                               ? "bg-primary/10 text-primary border-primary/20"
-                              : "bg-amber-500/10 text-amber-600 border-amber-500/20"
+                              : "bg-muted/40 text-muted-foreground border-border"
                           )}>
                             {dept.employeeCount ?? 0} NV
                           </span>
@@ -1076,20 +1144,20 @@ export const DepartmentManagement: React.FC = () => {
 
                         <TableCell className="text-center">
                           <div className="flex items-center justify-center gap-1">
-                            <Button onClick={() => handleOpenDetailModal(dept)} variant="ghost" size="icon" className="h-8 w-8 text-primary hover:bg-primary/10" title="Xem chi tiết & Nhân viên">
+                            <Button onClick={() => { handleOpenDetailModal(dept); }} variant="ghost" size="icon" className="h-8 w-8 text-primary hover:bg-primary/10" title="Xem chi tiết & Nhân viên">
                               <Eye className="h-4 w-4" />
                             </Button>
-                            <Button onClick={() => handleOpenEditModal(dept)} variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:bg-blue-500/10" title="Sửa Phòng ban">
+                            <Button onClick={() => { handleOpenEditModal(dept); }} variant="ghost" size="icon" className="h-8 w-8 text-brand-cobalt hover:bg-brand-cobalt/10" title="Sửa Phòng ban">
                               <Edit className="h-4 w-4" />
                             </Button>
-                            <Button onClick={() => handleOpenDetailModal(dept, "employees")} variant="ghost" size="icon" className="h-8 w-8 text-purple-600 hover:bg-purple-500/10 cursor-pointer" title="Chuyển nhân viên sang phòng khác">
+                            <Button onClick={() => { handleOpenDetailModal(dept, "employees"); }} variant="ghost" size="icon" className="h-8 w-8 text-primary hover:bg-primary/10 cursor-pointer" title="Chuyển nhân viên sang phòng khác">
                               <ArrowRightLeft className="h-4 w-4" />
                             </Button>
                             <Button
-                              onClick={() => handleDeleteDepartment(dept.id)}
+                              onClick={() => { handleDeleteDepartment(dept.id); }}
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 text-red-600 hover:bg-red-500/10 cursor-pointer"
+                              className="h-8 w-8 text-destructive hover:bg-destructive/10 cursor-pointer"
                               title="Xóa Phòng ban"
                             >
                               <Trash2 className="h-4 w-4" />
@@ -1114,7 +1182,7 @@ export const DepartmentManagement: React.FC = () => {
             <div className="flex flex-wrap items-center gap-4">
               <div className="flex items-center gap-2">
                 <span className="text-muted-foreground">Số dòng/trang:</span>
-                <Select value={String(pageSize)} onValueChange={(val) => { setPageSize(Number(val)); setPage(0); }}>
+                <Select value={String(pageSize)} onValueChange={(val) => { setPageSize(Number(val)); changePage(0); }}>
                   <SelectTrigger className="h-8 w-16 text-xs bg-background border border-border rounded-lg font-bold"><SelectValue placeholder={String(pageSize)} /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="10">10</SelectItem>
@@ -1127,15 +1195,15 @@ export const DepartmentManagement: React.FC = () => {
                 onSubmit={(e) => {
                   e.preventDefault();
                   const pNum = parseInt(jumpPageInput, 10);
-                  if (!isNaN(pNum) && pNum >= 1 && pNum <= totalPages) setPage(pNum - 1);
+                  if (!isNaN(pNum) && pNum >= 1 && pNum <= totalPages) changePage(pNum - 1);
                 }}
                 className="flex items-center gap-1.5"
               >
                 <span className="text-muted-foreground">Tới trang:</span>
-                <Input type="number" min={1} max={totalPages || 1} value={jumpPageInput} onChange={(e) => setJumpPageInput(e.target.value)} className="h-8 w-14 text-center text-xs font-bold bg-background border border-border rounded-lg" />
+                <Input type="number" min={1} max={totalPages || 1} value={jumpPageInput} onChange={(e) => { setJumpPageInput(e.target.value); }} className="h-8 w-14 text-center text-xs font-bold bg-background border border-border rounded-lg" />
               </form>
               <div className="flex items-center gap-1">
-                <Button disabled={page === 0} onClick={() => setPage(p => p - 1)} variant="outline" size="sm" className="h-8 text-xs font-semibold rounded-lg">
+                <Button disabled={page === 0} onClick={() => { changePage(page - 1); }} variant="outline" size="sm" className="h-8 text-xs font-semibold rounded-lg">
                   <ChevronLeft className="h-3.5 w-3.5" /> Trước
                 </Button>
                 {getPageNumbers(page, totalPages).map((p, idx) => {
@@ -1143,12 +1211,12 @@ export const DepartmentManagement: React.FC = () => {
                   const pageNum = p as number;
                   const isCurrent = pageNum === page;
                   return (
-                    <Button key={pageNum} onClick={() => setPage(pageNum)} variant={isCurrent ? "default" : "outline"} size="sm" className="h-8 w-8 text-xs font-semibold rounded-lg">
+                    <Button key={pageNum} onClick={() => { changePage(pageNum); }} variant={isCurrent ? "default" : "outline"} size="sm" className="h-8 w-8 text-xs font-semibold rounded-lg">
                       {pageNum + 1}
                     </Button>
                   );
                 })}
-                <Button disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)} variant="outline" size="sm" className="h-8 text-xs font-semibold rounded-lg">
+                <Button disabled={page >= totalPages - 1} onClick={() => { changePage(page + 1); }} variant="outline" size="sm" className="h-8 text-xs font-semibold rounded-lg">
                   Sau <ChevronRight className="h-3.5 w-3.5" />
                 </Button>
               </div>
@@ -1160,14 +1228,14 @@ export const DepartmentManagement: React.FC = () => {
       {/* Department Detail Modal */}
       <DepartmentDetailModal
         open={detailModalOpen}
-        onClose={() => setDetailModalOpen(false)}
+        onClose={() => { setDetailModalOpen(false); }}
         department={selectedDeptForDetail}
         allDepartments={departments}
         initialTab={detailModalTab}
         onEditDept={(dept) => { setDetailModalOpen(false); handleOpenEditModal(dept); }}
         onDeleteDept={handleDeleteDepartment}
         onShowBanner={showBanner}
-        onRefreshData={() => { fetchDepartments(); fetchOverviewStats(); }}
+        onRefreshData={() => { void fetchDepartments(); void fetchOverviewStats(); }}
       />
 
       {/* CREATE / EDIT DEPARTMENT MODAL */}
@@ -1185,11 +1253,11 @@ export const DepartmentManagement: React.FC = () => {
           {/* CREATE FORM */}
           {!editingDept && (
             <Form {...createForm}>
-              <form onSubmit={createForm.handleSubmit(handleSaveDepartment)} className="space-y-4 py-2">
+              <form onSubmit={(e) => { void createForm.handleSubmit((values) => { void handleSaveDepartment(values); })(e); }} className="space-y-4 py-2">
 
                 {/* Code - Readonly (auto-generated by BE) */}
                 <div className="space-y-1">
-                  <Label className="text-xs font-semibold text-muted-foreground">Mã Code Phòng ban (Readonly)</Label>
+                  <Label className="text-xs font-semibold text-muted-foreground">Mã phòng ban</Label>
                   <Input
                     placeholder="Tự động sinh (VD: DP-2607-A1B2C3)"
                     disabled
@@ -1248,13 +1316,13 @@ export const DepartmentManagement: React.FC = () => {
           {/* EDIT FORM */}
           {editingDept && (
             <Form {...editForm}>
-              <form onSubmit={editForm.handleSubmit(handleSaveDepartment)} className="space-y-4 py-2">
+              <form onSubmit={(e) => { void editForm.handleSubmit((values) => { void handleSaveDepartment(values); })(e); }} className="space-y-4 py-2">
 
                 {/* Code - Readonly */}
                 <div className="space-y-1">
-                  <Label className="text-xs font-semibold text-muted-foreground">Mã Code Phòng ban (Readonly)</Label>
+                  <Label className="text-xs font-semibold text-muted-foreground">Mã phòng ban</Label>
                   <Input
-                    value={editingDept.code ?? ""}
+                    value={editingDept.code}
                     disabled
                     className="h-9 text-sm font-mono uppercase border-border/30 bg-muted/40 text-muted-foreground cursor-not-allowed"
                   />
@@ -1338,23 +1406,21 @@ export const DepartmentManagement: React.FC = () => {
         description="Bạn có chắc chắn muốn xóa Phòng ban này? Thao tác này sẽ gỡ hoàn toàn dữ liệu phòng ban."
         confirmText="Xóa ngay"
         cancelText="Hủy bỏ"
-        onConfirm={confirmDeleteDepartment}
+        onConfirm={() => { void confirmDeleteDepartment(); }}
       />
 
       {/* UNASSIGNED EMPLOYEES MODAL */}
       <UnassignedEmployeesModal
         open={unassignedModalOpen}
-        onClose={() => setUnassignedModalOpen(false)}
+        onClose={() => { setUnassignedModalOpen(false); }}
         allDepartments={departments}
         onSuccess={() => {
-          fetchOverviewStats();
-          fetchDepartments();
+          void fetchOverviewStats();
+          void fetchDepartments();
         }}
-        onShowBanner={(msg, isErr) => showBanner(msg, isErr)}
+        onShowBanner={(msg, isErr) => { showBanner(msg, isErr); }}
       />
 
     </div>
   );
 };
-
-

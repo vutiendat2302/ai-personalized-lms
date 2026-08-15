@@ -7,6 +7,7 @@ import com.ailms.repository.ContractTemplateRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -18,6 +19,7 @@ import java.util.List;
  * INDEFINITE là hai loại hợp đồng lao động quy định tại Điều 20.</p>
  */
 @Component
+@Profile("!test")
 @RequiredArgsConstructor
 @Slf4j
 public class ContractTemplateDataInitializer implements CommandLineRunner {

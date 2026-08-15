@@ -320,11 +320,19 @@ export const HRManagement: React.FC = () => {
     }
   };
 
-  const handleApproveLeave = (id: string, status: "APPROVED" | "REJECTED") => {
-    setLeaveRequests((prev) =>
-      prev.map((l) => (l.id === id ? { ...l, status } : l))
-    );
-    showBanner(`Đã cập nhật trạng thái đơn nghỉ phép thành ${status}`);
+  /** Duyệt đơn nghỉ bằng API thật rồi đồng bộ response về bảng. */
+  const handleApproveLeave = async (id: string, status: "APPROVED" | "REJECTED") => {
+    try {
+      const response = await hrApi.approveLeaveRequest(
+        id,
+        status,
+        status === "REJECTED" ? "Từ chối bởi HR" : undefined,
+      );
+      setLeaveRequests((prev) => prev.map((item) => item.id === id ? response.data.data : item));
+      showBanner(`Đã cập nhật trạng thái đơn nghỉ phép thành ${status}`);
+    } catch (cause: any) {
+      showBanner(cause?.response?.data?.message || "Không thể cập nhật đơn nghỉ phép.", true);
+    }
   };
 
   const handleApproveSalary = (id: string) => {

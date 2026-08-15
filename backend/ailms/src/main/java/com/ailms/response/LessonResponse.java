@@ -27,6 +27,8 @@ public class LessonResponse {
 
     private Integer durationMin;
 
+    private Integer durationSec;
+
     private Integer orderIndex;
 
     private BaseStatusEnum status;

@@ -116,9 +116,6 @@ export const ClassManagementPage: React.FC = () => {
         })
       );
 
-      const currentUserId = String(auth.user?.id || "");
-      const currentUsername = String(auth.user?.username || "").toLowerCase();
-
       const parsedClasses = classRows.map((item: any, index: number) => {
         const members = memberRows[index] || [];
         const teacherMember = members.find(
@@ -134,9 +131,6 @@ export const ClassManagementPage: React.FC = () => {
         const waitlisted = members.filter((member: any) => member.status === "WAITLISTED");
 
         const realCode = item.code || item.classCode || String(item.id || "");
-        const memberUserIds = members.map((m: any) => String(m.userId));
-        const memberUsernames = members.map((m: any) => String(m.username || "").toLowerCase());
-
         return {
           id: String(item.id),
           code: String(realCode),
@@ -161,23 +155,11 @@ export const ClassManagementPage: React.FC = () => {
           members: activeStudents,
           waitlist: waitlisted,
           sessions: [],
-          _allMemberUserIds: memberUserIds,
-          _allMemberUsernames: memberUsernames,
         } as any;
       });
 
-      let userClasses = parsedClasses;
-      if (!isAdminOrHR) {
-        userClasses = parsedClasses.filter((c: any) => {
-          const isMainTeacherId = currentUserId && String(c.teacher.id) === currentUserId;
-          const isMainTeacherName = currentUsername && c.teacher.name.toLowerCase().includes(currentUsername);
-          const isMemberUserId = currentUserId && c._allMemberUserIds.includes(currentUserId);
-          const isMemberUsername = currentUsername && c._allMemberUsernames.includes(currentUsername);
-
-          return isMainTeacherId || isMainTeacherName || isMemberUserId || isMemberUsername;
-        });
-
-      }
+      // API teaching/me đã giới hạn bằng user trong JWT; không lọc lại để tránh loại nhầm lớp hợp lệ.
+      const userClasses = parsedClasses;
 
       const visibleCategoryNames = new Set(
         isAdminOrHR

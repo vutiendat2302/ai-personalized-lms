@@ -180,7 +180,8 @@ PRIMARY KEY (role_id, permission_id)
 | content_type | VARCHAR | VIDEO / PDF / TEXT / LIVE |
 | content_url | VARCHAR | Content URL |
 | description | TEXT | Description |
-| duration_min | INT | Duration (minutes) |
+| duration_min | INT | Estimated learning duration (minutes) |
+| duration_sec | INT | Actual VIDEO/AUDIO media duration (seconds) |
 | is_preview | BOOLEAN | Preview lesson |
 | order_index | INT | Display order |
 | status | TINYINT | Status |
@@ -698,6 +699,7 @@ Các cột MoMo ở v4 được giữ để tương thích migration đã áp d�
 - `support_conversation.last_hr_message_at`, `last_visitor_message_at` và `close_requested_at` lưu mốc timeout: supporter được yêu cầu đóng sau 5 phút visitor chưa phản hồi; hệ thống tự đóng sau 20 phút.
 - `support_conversation.full_name` và `email` là thông tin định danh chính trên hàng đợi supporter; `phone` chỉ còn tùy chọn và không hiển thị trên card.
 - Policy support không dùng bảng riêng. Tài liệu được lưu ở MinIO dưới `policies/`, metadata dùng `file_metadata.usage_type = POLICY`; bản `ACTIVE` mới nhất là bản hiện hành.
+- Thumbnail khóa học dùng `file_metadata.usage_type = COURSE_THUMBNAIL`, `reference_entity_type = Course` và `reference_entity_id` là Snowflake ID của khóa học.
 - Migration `v19_expand_file_usage_type_for_policy.sql` bổ sung giá trị `POLICY` vào enum `file_metadata.usage_type` của MySQL, đồng bộ với backend.
 - `support_chat_message.message_type` hỗ trợ thêm `RESOURCE_CARD` và `ATTACHMENT`. Card catalog và thông tin file MinIO được lưu trong cột JSON `metadata`.
 - Attachment dùng prefix MinIO `support/{conversationId}/`, giới hạn 10MB và chỉ được gửi khi conversation `ACTIVE`; schema không cần migration mới vì `message_type` là `VARCHAR` và `metadata` đã là JSON.
@@ -705,10 +707,10 @@ Các cột MoMo ở v4 được giữ để tương thích migration đã áp d�
 - `class_stream_post` bổ sung loại bài, ghim, khóa bình luận và ẩn nội dung.
 - `class_stream_comment` lưu trả lời phân trang; khóa ngoại bài dùng cascade để không để lại bình luận mồ côi.
 
-## Liên kết lớp cho COMBO (v11)
+## Chuẩn hóa hình thức gói học (v23)
 
-- `course_package.class_id` được dùng cho cả `GROUP_CLASS` và `COMBO` có thành phần lớp nhóm.
-- Một lớp có thể được nhiều package tham chiếu; sức chứa được kiểm tra tập trung bằng thành viên thực tế trong `class_member`.
-- Migration gắn lại COMBO vào lớp `ACTIVE` đúng khóa học khi có thể; COMBO không có lớp được chuẩn hóa thành tự học + 1-1 bằng cách bỏ `max_group_size` không còn ý nghĩa.
+- `course_package.delivery_mode` chỉ còn `SELF_STUDY`, `GROUP_CLASS`, `ONE_ON_ONE`.
+- `course_package.class_id` chỉ dùng cho `GROUP_CLASS`; sức chứa được kiểm tra bằng thành viên thực tế trong `class_member`.
+- Migration v23 chuyển dữ liệu hình thức cũ theo quyền lợi chính: có lớp thành `GROUP_CLASS`, có buổi gia sư thành `ONE_ON_ONE`, còn lại thành `SELF_STUDY`.
 
 ---

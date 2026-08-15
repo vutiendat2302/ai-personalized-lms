@@ -10,6 +10,9 @@ import com.ailms.entity.EnrollmentPackageEntity;
 import com.ailms.entity.LearningActivityLogEntity;
 import com.ailms.entity.SubmissionEntity;
 import com.ailms.entity.CertificateEntity;
+import com.ailms.entity.ReviewEntity;
+import com.ailms.entity.UserEntity;
+import com.ailms.entity.CourseTeacherEntity;
 import com.ailms.entity.CartItemEntity;
 import com.ailms.entity.OrderEntity;
 import com.ailms.entity.ClassOnlineEntity;
@@ -19,9 +22,11 @@ import com.ailms.entity.QuizAttemptEntity;
 import com.ailms.entity.enums.BaseStatusEnum;
 import com.ailms.entity.enums.ClassMemberRole;
 import com.ailms.entity.enums.ClassMemberStatusEnum;
+import com.ailms.entity.enums.CourseTeacherStatusEnum;
 import com.ailms.entity.StudyGoalEntity;
 import com.ailms.entity.enums.DeliveryModeEnum;
 import com.ailms.entity.enums.OrderStatusEnum;
+import com.ailms.entity.enums.ApprovalStatusEnum;
 import com.ailms.entity.enums.CoursePackageStatusEnum;
 import com.ailms.event.AuditLogEvent;
 import com.ailms.exception.BusinessException;
@@ -37,8 +42,11 @@ import com.ailms.repository.StudentInterestRepository;
 import com.ailms.repository.StudyGoalRepository;
 import com.ailms.repository.SubmissionRepository;
 import com.ailms.repository.CertificateRepository;
+import com.ailms.repository.ReviewRepository;
+import com.ailms.repository.CourseTeacherRepository;
 import com.ailms.repository.CartItemRepository;
 import com.ailms.repository.OrderRepository;
+import com.ailms.repository.ApprovalRequestRepository;
 import com.ailms.repository.ClassOnlineRepository;
 import com.ailms.repository.LearningSessionRepository;
 import com.ailms.repository.LessonRepository;
@@ -95,6 +103,13 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class StudentPortalService implements IStudentPortalService {
+
+    /** Nhóm entity học tập không được lẫn vào tab lịch sử hệ thống của học viên. */
+    private static final List<String> LEARNING_AUDIT_ENTITY_TYPES = List.of(
+            "COURSE", "LESSON", "RESOURCE_LESSON", "LEARNING_ACTIVITY_LOG", "LEARNING_SESSION",
+            "QUIZ", "QUIZ_ATTEMPT", "ASSIGNMENT", "CLASS", "CLASS_MEMBER", "CLASS_STREAM_POST",
+            "CLASS_STREAM_COMMENT", "ENROLLMENT", "ENROLLMENT_PACKAGE", "REVIEW", "CERTIFICATE"
+    );
     private static final int MAX_PAGE_SIZE = 100;
     private static final int UPCOMING_DAYS = 14;
 
@@ -111,8 +126,11 @@ public class StudentPortalService implements IStudentPortalService {
     private final ApplicationEventPublisher applicationEventPublisher;
     private final SubmissionRepository submissionRepository;
     private final CertificateRepository certificateRepository;
+    private final ReviewRepository reviewRepository;
+    private final CourseTeacherRepository courseTeacherRepository;
     private final CartItemRepository cartItemRepository;
     private final OrderRepository orderRepository;
+    private final ApprovalRequestRepository approvalRequestRepository;
     private final ClassOnlineRepository classOnlineRepository;
     private final LearningSessionRepository learningSessionRepository;
     private final IStudentLearningService studentLearningService;
@@ -180,7 +198,7 @@ public class StudentPortalService implements IStudentPortalService {
     public PageResponse<StudentActivityHistoryResponse> getSystemHistory(Long userId, int page, int size,
             String action, LocalDateTime from, LocalDateTime to) {
         Page<AuditLogEntity> result = auditLogRepository
-                .searchByUserId(userId, normalizeFilter(action), from, to, pageRequest(page, size));
+                .searchByUserId(userId, LEARNING_AUDIT_ENTITY_TYPES, normalizeFilter(action), from, to, pageRequest(page, size));
         return PageResponse.from(result.map(this::mapSystemHistory));
     }
 
@@ -277,8 +295,16 @@ public class StudentPortalService implements IStudentPortalService {
         final String statusFilter = requestedStatus;
         Map<Long, CourseProgressEntity> progressByEnrollment = courseProgressRepository.findByUserId(userId).stream()
                 .collect(Collectors.toMap(CourseProgressEntity::getEnrollmentId, Function.identity(), (a, b) -> a));
+        List<EnrollmentEntity> enrollments = enrollmentRepository.findByUserEntity_Id(userId);
+        List<Long> courseIds = enrollments.stream().map(item -> item.getCourseEntity().getId()).distinct().toList();
+        Map<Long, ReviewEntity> reviewsByCourse = courseIds.isEmpty() ? Map.of()
+                : reviewRepository.findByCourseIdInAndUserId(courseIds, userId).stream()
+                .collect(Collectors.toMap(ReviewEntity::getCourseId, Function.identity(), (a, b) -> a));
+        Map<Long, CertificateEntity> certificatesByEnrollment = certificateRepository
+                .findByUserIdOrderByIssuedAtDesc(userId).stream()
+                .collect(Collectors.toMap(CertificateEntity::getEnrollmentId, Function.identity(), (a, b) -> a));
         LocalDateTime now = LocalDateTime.now();
-        return enrollmentRepository.findByUserEntity_Id(userId).stream().map(enrollment -> {
+        return enrollments.stream().map(enrollment -> {
             List<EnrollmentPackageEntity> activePackages = enrollmentPackageRepository
                     .findActiveByEnrollment(enrollment.getId(), now);
             if (activePackages.isEmpty()) return null;
@@ -290,16 +316,46 @@ public class StudentPortalService implements IStudentPortalService {
                     .max(Comparator.comparingInt(this::deliveryPriority)).orElse(DeliveryModeEnum.SELF_STUDY);
             String enrollmentStatus = Byte.valueOf((byte) 1).equals(enrollment.getStatus()) ? "COMPLETED"
                     : Byte.valueOf((byte) 2).equals(enrollment.getStatus()) ? "EXPIRED" : "ACTIVE";
-            return StudentPortalItemResponse.CourseCard.builder().id(course.getId()).title(course.getName())
+            ReviewEntity review = reviewsByCourse.get(course.getId());
+            CertificateEntity certificate = certificatesByEnrollment.get(enrollment.getId());
+            UserEntity teacher = resolveEnrollmentTeacher(enrollment);
+            return StudentPortalItemResponse.CourseCard.builder().id(course.getId()).enrollmentId(enrollment.getId())
+                    .title(course.getName())
                     .courseCode(course.getCode()).courseLink(course.getLink()).description(course.getDescription())
                     .level(course.getLevel() != null ? course.getLevel().name() : null)
                     .categoryName(course.getCategoryEntity() != null ? course.getCategoryEntity().getName() : null)
                     .coverImage(course.getThumbnailUrl())
                     .deliveryMode(mode).progressPercent(progress != null ? progress.getProgressPercent() : 0)
                     .expiresAt(expiresAt).expired("EXPIRED".equals(enrollmentStatus)).status(enrollmentStatus)
-                    .lastAccessedAt(progress != null ? progress.getLastAccessedAt() : enrollment.getEnrolledAt()).build();
+                    .lastAccessedAt(progress != null ? progress.getLastAccessedAt() : enrollment.getEnrolledAt())
+                    .teacherId(teacher != null ? teacher.getId() : null)
+                    .teacherName(teacher != null ? teacher.getFullName() : null)
+                    .teacherAvatarUrl(teacher != null ? teacher.getAvatarUrl() : null)
+                    .reviewId(review != null ? review.getId() : null)
+                    .courseRating(review != null ? review.getRating() : null)
+                    .courseComment(review != null ? review.getComment() : null)
+                    .teacherRating(review != null ? review.getTeacherRating() : null)
+                    .teacherComment(review != null ? review.getTeacherComment() : null)
+                    .certificateId(certificate != null ? certificate.getId() : null)
+                    .certificateCode(certificate != null ? certificate.getCertificateCode() : null)
+                    .certificateStatus(certificate != null && certificate.getStatus() != null
+                            ? certificate.getStatus().name() : null)
+                    .build();
         }).filter(Objects::nonNull)
                 .filter(card -> statusFilter == null || statusFilter.equals(card.getStatus())).toList();
+    }
+
+    /** Tìm giáo viên chính của lớp đã ghi danh, fallback sang giáo viên phụ trách khóa học tự học. */
+    private UserEntity resolveEnrollmentTeacher(EnrollmentEntity enrollment) {
+        if (enrollment.getClassEntity() != null) {
+            List<com.ailms.entity.ClassMemberEntity> teachers = classMemberRepository
+                    .findById_ClassIdAndRoleInClassInAndStatus(enrollment.getClassEntity().getId(),
+                            List.of(ClassMemberRole.TEACHER), ClassMemberStatusEnum.ACTIVE);
+            if (!teachers.isEmpty()) return teachers.get(0).getUserEntity();
+        }
+        return courseTeacherRepository.findByCourseEntity_IdAndStatus(
+                        enrollment.getCourseEntity().getId(), CourseTeacherStatusEnum.ACTIVE).stream()
+                .map(CourseTeacherEntity::getUserEntity).findFirst().orElse(null);
     }
 
     /** Lấy curriculum sau khi xác nhận học viên sở hữu khóa học. */
@@ -315,8 +371,7 @@ public class StudentPortalService implements IStudentPortalService {
 
     /** Ưu tiên hình thức nhiều quyền lợi hơn khi một khóa học có nhiều package còn hiệu lực. */
     private int deliveryPriority(DeliveryModeEnum mode) {
-        if (mode == DeliveryModeEnum.ONE_ON_ONE) return 4;
-        if (mode == DeliveryModeEnum.COMBO) return 3;
+        if (mode == DeliveryModeEnum.ONE_ON_ONE) return 3;
         if (mode == DeliveryModeEnum.GROUP_CLASS) return 2;
         return 1;
     }
@@ -645,9 +700,7 @@ public class StudentPortalService implements IStudentPortalService {
         return StudentPortalItemResponse.CartItem.builder().id(item.getId()).coursePackageId(pack.getId())
                 .courseId(pack.getCourseEntity().getId()).courseTitle(pack.getCourseEntity().getName()).packageName(pack.getName())
                 .deliveryMode(pack.getDeliveryMode()).price(pack.getPrice())
-                .requiresTutorNeeds(pack.getDeliveryMode() == DeliveryModeEnum.ONE_ON_ONE
-                        || (pack.getDeliveryMode() == DeliveryModeEnum.COMBO
-                        && pack.getIncludedTutorSessions() != null && pack.getIncludedTutorSessions() > 0))
+                .requiresTutorNeeds(pack.getDeliveryMode() == DeliveryModeEnum.ONE_ON_ONE)
                 .oneOnOneNeeds(deserializeCartNeeds(item.getOneOnOneNeeds())).build();
     }
 
@@ -663,12 +716,18 @@ public class StudentPortalService implements IStudentPortalService {
 
     /** Chuyển đơn hàng cùng các dòng sản phẩm sang DTO. */
     private StudentPortalItemResponse.OrderItem mapOrder(OrderEntity item) {
+        String refundRequestStatus = approvalRequestRepository
+                .findFirstByTargetTypeAndTargetIdAndStatusOrderByLevelDesc(
+                        "REFUND_ORDER", item.getId(), ApprovalStatusEnum.PENDING)
+                .map(request -> request.getStatus().name())
+                .orElse(null);
         return StudentPortalItemResponse.OrderItem.builder().id(item.getId())
                 .items(item.getItems().stream().map(line -> StudentPortalItemResponse.OrderLine.builder()
                         .courseName(line.getCoursePackageEntity().getCourseEntity().getName())
                         .packageName(line.getCoursePackageEntity().getName()).price(line.getPriceSnapshot()).build()).toList())
                 .totalAmount(item.getTotalAmount()).discountAmount(item.getDiscountAmount()).finalAmount(item.getFinalAmount())
-                .couponCode(item.getCouponCode()).status(item.getStatus()).createdAt(item.getCreatedAt()).expiredAt(item.getExpiredAt())
+                .couponCode(item.getCouponCode()).status(item.getStatus()).refundRequestStatus(refundRequestStatus)
+                .createdAt(item.getCreatedAt()).expiredAt(item.getExpiredAt())
                 .eligibleForRefund(item.getStatus() == OrderStatusEnum.PAID && item.getPaidAt() != null
                         && item.getPaidAt().isAfter(LocalDateTime.now().minusDays(7))).build();
     }

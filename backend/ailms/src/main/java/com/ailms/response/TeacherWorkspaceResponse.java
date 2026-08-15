@@ -65,6 +65,7 @@ public final class TeacherWorkspaceResponse {
         private String status;
         private Long secondsLeftToReview;
         private String reviewNote;
+        private String trialRequestId;
     }
 
     /** Thông tin bài nộp đang chờ giáo viên chấm. */

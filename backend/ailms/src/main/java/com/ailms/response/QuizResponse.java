@@ -5,6 +5,7 @@ import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import com.ailms.entity.enums.BaseStatusEnum;
 
 @Getter
@@ -43,7 +44,7 @@ public class QuizResponse {
 
     private BaseStatusEnum status;
 
-    private Object questions;
+    private List<QuizQuestionResponse> questions;
 
     private String createdBy;
 

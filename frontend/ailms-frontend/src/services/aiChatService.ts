@@ -4,6 +4,7 @@ import { getAccessToken, httpClient } from "@/api/httpClient";
 import type { ApiResponse, PageResponse } from "@/types/base";
 
 const CHAT_STREAM_ENDPOINT = "/api/v1/ai/chat/stream";
+const IMAGE_CHAT_STREAM_ENDPOINT = "/api/v1/ai/chat/image/stream";
 const PUBLIC_CHAT_STREAM_ENDPOINT = "/api/v1/public/ai/chat/stream";
 
 export async function streamChat(
@@ -22,6 +23,44 @@ export async function streamChat(
     },
     credentials: "include",
     body: JSON.stringify(payload),
+    signal: options.signal,
+  });
+
+  const conversationId = response.headers.get("X-Conversation-Id");
+  if (conversationId) options.onConversationId?.(conversationId);
+
+  return readSSE(response, options);
+}
+
+/** Stream Gemini Vision phân tích ảnh và văn bản đính kèm qua Backend gateway. */
+export async function streamChatWithImage(
+  payload: {
+    question?: string;
+    conversationId?: string;
+    module?: string;
+    route?: string;
+    image: File;
+  },
+  options: Omit<SSEReaderOptions, "signal"> & {
+    signal?: AbortSignal;
+    onConversationId?: (conversationId: string) => void;
+  }
+): Promise<void> {
+  const token = getAccessToken();
+  const formData = new FormData();
+  if (payload.question) formData.append("question", payload.question);
+  if (payload.conversationId) formData.append("conversationId", payload.conversationId);
+  if (payload.module) formData.append("module", payload.module);
+  if (payload.route) formData.append("route", payload.route);
+  formData.append("image", payload.image);
+
+  const response = await fetch(IMAGE_CHAT_STREAM_ENDPOINT, {
+    method: "POST",
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    credentials: "include",
+    body: formData,
     signal: options.signal,
   });
 

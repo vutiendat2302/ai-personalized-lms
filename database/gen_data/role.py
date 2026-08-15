@@ -1,7 +1,7 @@
 """
 seed_roles.py
 --------------
-Seed dữ liệu cho bảng `roles` (5 role: ADMIN, HR, TEACHER, TA, STUDENT).
+Seed dữ liệu cho bảng `role` theo đúng các workspace hiện có của hệ thống.
 """
 
 from snowflake_id import snowflake
@@ -11,7 +11,10 @@ ROLES = [
      "description": "Toàn quyền quản trị hệ thống, cấu hình và phân quyền.",
      "is_system": True},
     {"code": "HR", "name": "Nhân sự",
-     "description": "Quản lý hồ sơ nhân viên, phòng ban và chấm công.",
+     "description": "Quản lý nhân sự, vận hành đào tạo, đơn hàng và các quy trình phê duyệt.",
+     "is_system": True},
+    {"code": "SUPPORT", "name": "Chuyên viên hỗ trợ",
+     "description": "Tiếp nhận và xử lý hội thoại hỗ trợ khách hàng trên kênh tư vấn.",
      "is_system": True},
     {"code": "TEACHER", "name": "Giảng viên",
      "description": "Phụ trách giảng dạy, xây dựng nội dung và chấm điểm khóa học.",
@@ -19,7 +22,7 @@ ROLES = [
     {"code": "TA", "name": "Trợ giảng",
      "description": "Hỗ trợ giảng viên trong việc quản lý lớp học và chấm bài.",
      "is_system": True},
-    {"code": "STUDENT", "name": "Sinh viên",
+    {"code": "STUDENT", "name": "Học viên",
      "description": "Người học, tham gia khóa học và nộp bài tập.",
      "is_system": True},
 ]
@@ -32,12 +35,17 @@ def get_id_by_code(cursor, code: str):
 
 
 def seed(cursor):
-    """Insert dữ liệu role nếu chưa tồn tại (idempotent theo `code`)."""
+    """Đồng bộ role hệ thống theo code và bảo toàn ID đang được tham chiếu."""
     print("→ Seeding roles...")
     for r in ROLES:
         existing_id = get_id_by_code(cursor, r["code"])
         if existing_id:
-            print(f"   [skip] role {r['code']} đã tồn tại (id={existing_id})")
+            cursor.execute(
+                """UPDATE role SET name=%s, description=%s, is_system=%s, updated_at=NOW()
+                   WHERE id=%s""",
+                (r["name"], r["description"], r["is_system"], existing_id),
+            )
+            print(f"   [update] role {r['code']} (id={existing_id})")
             continue
         new_id = snowflake.next_id()
         cursor.execute(

@@ -61,6 +61,7 @@ export const OrderManagement: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [selectedOrder, setSelectedOrder] = useState<OrderResponse | null>(null);
+  const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null);
   const [refundReason, setRefundReason] = useState("");
   const [refunding, setRefunding] = useState(false);
 
@@ -88,6 +89,22 @@ export const OrderManagement: React.FC = () => {
   useEffect(() => {
     fetchOrders();
   }, []);
+
+  const handleViewDetail = async (ord: OrderResponse) => {
+    setLoadingDetailId(ord.id);
+    try {
+      const res = await orderApi.getOrderById(ord.id);
+      if (res.data?.success && res.data?.data) {
+        setSelectedOrder(res.data.data);
+      } else {
+        setSelectedOrder(ord);
+      }
+    } catch {
+      setSelectedOrder(ord);
+    } finally {
+      setLoadingDetailId(null);
+    }
+  };
 
   const filteredOrders = orders.filter((ord) => {
     const matchesSearch =
@@ -136,7 +153,7 @@ export const OrderManagement: React.FC = () => {
     switch (status) {
       case "PAID":
         return (
-          <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 text-[10px] font-bold flex items-center gap-1 w-fit">
+          <span className="px-2.5 py-0.5 rounded-full bg-success-forest/10 text-success-forest border border-success-forest/20 text-[10px] font-bold flex items-center gap-1 w-fit">
             <CheckCircle2 className="h-3 w-3" /> Đã thanh toán
           </span>
         );
@@ -148,7 +165,7 @@ export const OrderManagement: React.FC = () => {
         );
       case "REFUNDED":
         return (
-          <span className="px-2.5 py-0.5 rounded-full bg-rose-500/10 text-rose-600 border border-rose-500/20 text-[10px] font-bold flex items-center gap-1 w-fit">
+          <span className="px-2.5 py-0.5 rounded-full bg-destructive/10 text-destructive border border-destructive/20 text-[10px] font-bold flex items-center gap-1 w-fit">
             <RotateCcw className="h-3 w-3" /> Đã hoàn tiền
           </span>
         );
@@ -166,18 +183,17 @@ export const OrderManagement: React.FC = () => {
 
   return (
     <div className="space-y-6">
+
+
       {/* Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h2 className="text-xl font-extrabold text-foreground tracking-tight flex items-center gap-2">
             <ShoppingBag className="h-5 w-5 text-primary" />
-            <span>Quản Lý Đơn Hàng & Thanh Toán</span>
+            <span>Quản lý đơn hàng</span>
           </h2>
-          <p className="text-xs text-muted-foreground">
-            Theo dõi tất cả đơn hàng, trạng thái thanh toán và hoàn tiền cho học viên.
-          </p>
         </div>
-        <Button onClick={fetchOrders} variant="outline" size="sm" className="rounded-xl gap-1 text-xs font-bold">
+        <Button onClick={fetchOrders} variant="outline" size="sm" className="rounded-xl gap-1 text-xs font-bold cursor-pointer">
           <RefreshCw className="h-3.5 w-3.5" /> Làm mới
         </Button>
       </div>
@@ -208,9 +224,9 @@ export const OrderManagement: React.FC = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">Tất cả trạng thái</SelectItem>
-                <SelectItem value="PAID">Đã thanh toán (PAID)</SelectItem>
-                <SelectItem value="PENDING">Chờ thanh toán (PENDING)</SelectItem>
-                <SelectItem value="REFUNDED">Đã hoàn tiền (REFUNDED)</SelectItem>
+                <SelectItem value="PAID">Đã thanh toán</SelectItem>
+                <SelectItem value="PENDING">Chờ thanh toán</SelectItem>
+                <SelectItem value="REFUNDED">Đã hoàn tiền</SelectItem>
                 <SelectItem value="EXPIRED">Đã hết hạn / Hủy</SelectItem>
               </SelectContent>
             </Select>
@@ -245,7 +261,7 @@ export const OrderManagement: React.FC = () => {
                     </TableCell>
                     <TableCell>
                       {ord.couponCode ? (
-                        <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 font-extrabold text-[10px] border border-emerald-500/20">
+                        <span className="px-2 py-0.5 rounded-full bg-success-forest/10 text-success-forest font-extrabold text-[10px] border border-success-forest/20">
                           {ord.couponCode}
                         </span>
                       ) : (
@@ -260,8 +276,9 @@ export const OrderManagement: React.FC = () => {
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => setSelectedOrder(ord)}
-                        className="h-7 text-xs font-semibold gap-1 text-primary hover:bg-primary/10"
+                        disabled={loadingDetailId === ord.id}
+                        onClick={() => void handleViewDetail(ord)}
+                        className="h-7 text-xs font-semibold gap-1 text-primary hover:bg-primary/10 cursor-pointer"
                       >
                         <Eye className="h-3.5 w-3.5" /> Chi tiết
                       </Button>
@@ -414,13 +431,13 @@ export const OrderManagement: React.FC = () => {
                     Chi tiết đơn hàng {selectedOrder.id}
                   </h3>
                   <p className="text-xs text-muted-foreground">
-                    Khách hàng: {selectedOrder.userName} ({selectedOrder.userEmail})
+                    Khách hàng: {selectedOrder.userName} · {selectedOrder.userEmail}
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setSelectedOrder(null)}
-                className="p-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground"
+                className="p-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -449,21 +466,25 @@ export const OrderManagement: React.FC = () => {
                 <h4 className="font-extrabold uppercase text-[10px] text-muted-foreground tracking-wider">
                   Sản phẩm trong đơn:
                 </h4>
-                {selectedOrder.items.map((it) => (
-                  <div key={it.id} className="p-3 rounded-xl bg-card border border-border flex justify-between items-center">
-                    <div>
-                      <h5 className="font-bold text-foreground text-xs">{it.courseName}</h5>
-                      <p className="text-[10px] text-muted-foreground">{it.packageName} • {it.itemType}</p>
+                {(selectedOrder.items && selectedOrder.items.length > 0) ? (
+                  selectedOrder.items.map((it) => (
+                    <div key={it.id} className="p-3 rounded-xl bg-card border border-border flex justify-between items-center">
+                      <div>
+                        <h5 className="font-bold text-foreground text-xs">{it.courseName || it.packageName}</h5>
+                        <p className="text-[10px] text-muted-foreground">{it.packageName} {it.itemType ? `• ${it.itemType}` : ""}</p>
+                      </div>
+                      <span className="font-bold text-foreground">{(it.finalPrice || 0).toLocaleString()} đ</span>
                     </div>
-                    <span className="font-bold text-foreground">{it.finalPrice.toLocaleString()} đ</span>
-                  </div>
-                ))}
+                  ))
+                ) : (
+                  <p className="text-xs text-muted-foreground italic py-2">Không có dữ liệu chi tiết sản phẩm.</p>
+                )}
               </div>
 
               {/* Refund Action if order is PAID */}
               {selectedOrder.status === "PAID" && (
-                <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 space-y-3">
-                  <h4 className="font-bold text-rose-600 flex items-center gap-1.5 text-xs">
+                <div className="p-4 rounded-2xl bg-destructive/10 border border-destructive/20 space-y-3">
+                  <h4 className="font-bold text-destructive flex items-center gap-1.5 text-xs">
                     <RotateCcw className="h-4 w-4" /> Hoàn tiền đơn hàng này
                   </h4>
                   <Input

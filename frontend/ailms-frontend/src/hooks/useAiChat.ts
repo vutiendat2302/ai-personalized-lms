@@ -6,6 +6,7 @@ import {
   getConversations,
   renameConversation as renameConversationApi,
   streamChat,
+  streamChatWithImage,
 } from "@/services/aiChatService";
 
 /** Sinh ID tạm cho message chỉ dùng để render phía frontend. */
@@ -59,8 +60,8 @@ export function useAiChat(route: string, module: string) {
   }, []);
 
   /** Gửi câu hỏi hiện tại và nhận câu trả lời SSE. */
-  const sendMessage = useCallback(async () => {
-    const question = input.trim();
+  const sendMessage = useCallback(async (customText?: string) => {
+    const question = (typeof customText === "string" ? customText : input).trim();
     if (!question || isStreaming) return;
     const userMessage: ChatMessage = {
       id: generateId("msg"), role: "user", content: question,
@@ -121,6 +122,72 @@ export function useAiChat(route: string, module: string) {
     }
   }, [conversationId, flushPendingBuffer, input, isStreaming, module, refreshConversations, route]);
 
+  /** Gửi câu hỏi kèm tệp hình ảnh để Gemini Vision phân tích. */
+  const sendImageMessage = useCallback(async (imageFile: File, customText?: string) => {
+    if (!imageFile || isStreaming) return;
+    const question = (typeof customText === "string" ? customText : input).trim();
+    const imageUrl = URL.createObjectURL(imageFile);
+    const userMessage: ChatMessage = {
+      id: generateId("msg"), role: "user",
+      content: question || "Phân tích hình ảnh này",
+      imageUrl,
+      createdAt: new Date().toISOString(), status: "completed",
+    };
+    const assistantMessage: ChatMessage = {
+      id: generateId("msg"), role: "assistant", content: "",
+      createdAt: new Date().toISOString(), status: "streaming",
+    };
+    setInput("");
+    setMessages((previous) => [...previous, userMessage, assistantMessage]);
+    setIsStreaming(true);
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    try {
+      await streamChatWithImage({
+        image: imageFile,
+        question: question || undefined,
+        conversationId: conversationId || undefined,
+        route,
+        module,
+      }, {
+        signal: controller.signal,
+        onConversationId: setConversationId,
+        onChunk: (chunk: string) => {
+          pendingBufferRef.current += chunk;
+          if (animFrameRef.current === null) {
+            animFrameRef.current = requestAnimationFrame(() => {
+              animFrameRef.current = null;
+              flushPendingBuffer(assistantMessage.id);
+            });
+          }
+        },
+        onComplete: () => {
+          flushPendingBuffer(assistantMessage.id);
+          setMessages((previous) => previous.map((message) =>
+            message.id === assistantMessage.id ? { ...message, status: "completed" } : message
+          ));
+          void refreshConversations();
+        },
+        onError: () => setMessages((previous) => previous.map((message) =>
+          message.id === assistantMessage.id
+            ? { ...message, content: message.content || "Không thể phân tích ảnh lúc này.", status: "error" }
+            : message
+        )),
+      });
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError")) {
+        setMessages((previous) => previous.map((message) =>
+          message.id === assistantMessage.id
+            ? { ...message, content: message.content || "Có lỗi phân tích ảnh.", status: "error" }
+            : message
+        ));
+      }
+    } finally {
+      setIsStreaming(false);
+      abortControllerRef.current = null;
+    }
+  }, [conversationId, flushPendingBuffer, input, isStreaming, module, refreshConversations, route]);
+
   /** Dừng stream đang chạy và giữ phần câu trả lời đã nhận. */
   const stopGenerating = useCallback(() => {
     abortControllerRef.current?.abort();
@@ -161,7 +228,7 @@ export function useAiChat(route: string, module: string) {
 
   return {
     messages, conversations, input, setInput, isStreaming, isHistoryLoading, historyError,
-    conversationId, sendMessage, stopGenerating, startNewConversation,
+    conversationId, sendMessage, sendImageMessage, stopGenerating, startNewConversation,
     openConversation, removeConversation, renameConversation, refreshConversations,
   };
 }

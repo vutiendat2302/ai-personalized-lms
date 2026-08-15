@@ -9,6 +9,7 @@ export type FileUsageTypeEnum =
   | "LESSON_RESOURCE"
   | "LESSON_VIDEO"
   | "COURSE_LESSON"
+  | "COURSE_THUMBNAIL"
   | "POLICY"
   | "OTHER";
 

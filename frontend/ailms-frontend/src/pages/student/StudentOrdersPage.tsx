@@ -181,7 +181,12 @@ export const StudentOrdersPage: React.FC = () => {
                 </Button>
 
                 <div className="col-span-2 flex flex-wrap items-center justify-end gap-2 pt-1">
-                  {ord.status === "PAID" && ord.eligibleForRefund && (
+                  {ord.status === "PAID" && ord.refundRequestStatus === "PENDING" && (
+                    <span className="inline-flex h-8 items-center rounded-md border border-amber-300 bg-amber-50 px-3 text-xs font-semibold text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+                      Đang chờ HR duyệt hoàn tiền
+                    </span>
+                  )}
+                  {ord.status === "PAID" && ord.eligibleForRefund && !ord.refundRequestStatus && (
                     <Button
                       size="sm"
                       variant="outline"
@@ -232,7 +237,7 @@ export const StudentOrdersPage: React.FC = () => {
 
             <form onSubmit={handleRefundSubmit} className="space-y-4 text-xs">
               <p className="text-muted-foreground">
-                Vui lòng nhập lý do muốn hoàn tiền. Đơn hàng còn trong hạn bảo hành refund.
+                Vui lòng nhập lý do muốn hoàn tiền. Yêu cầu sẽ được HR/Admin xem xét trước khi hoàn tiền.
               </p>
 
               <Textarea
@@ -254,7 +259,7 @@ export const StudentOrdersPage: React.FC = () => {
                   Hủy
                 </Button>
                 <Button type="submit" disabled={refundLoading || !refundReason.trim()} className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold cursor-pointer">
-                  {refundLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Đang hoàn tiền...</> : "Gửi yêu cầu hoàn tiền"}
+                  {refundLoading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Đang gửi...</> : "Gửi yêu cầu hoàn tiền"}
                 </Button>
               </div>
             </form>

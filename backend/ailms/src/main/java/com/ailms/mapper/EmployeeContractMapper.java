@@ -13,6 +13,7 @@ public interface EmployeeContractMapper {
 
     @Mapping(target = "employeeId", source = "employee.userId")
     @Mapping(target = "fullName", source = "employee.userEntity.fullName")
+    @Mapping(target = "avatarUrl", source = "employee.userEntity.avatarUrl")
     @Mapping(target = "employeeCode", source = "employee.employeeCode")
     @Mapping(target = "departmentName", source = "employee.department.name")
     @Mapping(target = "position", source = "employee.position")

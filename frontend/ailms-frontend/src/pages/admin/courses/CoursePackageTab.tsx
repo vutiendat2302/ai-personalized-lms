@@ -17,7 +17,6 @@ import {
   BookOpen,
   Users,
   User,
-  Layers,
   Eye,
   EyeOff,
   Trash2,
@@ -138,29 +137,27 @@ export const CoursePackageTab: React.FC<CoursePackageTabProps> = ({
       case "SELF_STUDY":
       case "SELF_PACED":
         return (
-          <Badge className="bg-emerald-100/90 text-emerald-800 border border-emerald-300/80 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border-emerald-800 font-extrabold px-2.5 py-1 text-[11px] uppercase rounded-full shadow-xs">
-            <BookOpen className="w-3.5 h-3.5 mr-1 text-emerald-600 dark:text-emerald-400" /> Tự Học
+          <Badge className="bg-muted text-muted-foreground border border-border font-extrabold px-2.5 py-1 text-[11px] uppercase rounded-full shadow-xs">
+            <BookOpen className="w-3.5 h-3.5 mr-1 text-muted-foreground" /> Tự Học
           </Badge>
         );
       case "GROUP_CLASS":
       case "LIVE_CLASS":
         return (
-          <Badge className="bg-blue-100/90 text-blue-800 border border-blue-300/80 dark:bg-blue-950/80 dark:text-blue-300 dark:border-blue-800 font-extrabold px-2.5 py-1 text-[11px] uppercase rounded-full shadow-xs">
-            <Users className="w-3.5 h-3.5 mr-1 text-blue-600 dark:text-blue-400" /> Lớp Học Nhóm
+          <Badge className="bg-primary/10 text-primary border border-primary/20 font-extrabold px-2.5 py-1 text-[11px] uppercase rounded-full shadow-xs">
+            <Users className="w-3.5 h-3.5 mr-1 text-primary" /> Lớp Học Nhóm
           </Badge>
         );
       case "ONE_ON_ONE":
         return (
-          <Badge className="bg-violet-100/90 text-violet-800 border border-violet-300/80 dark:bg-violet-950/80 dark:text-violet-300 dark:border-violet-800 font-extrabold px-2.5 py-1 text-[11px] uppercase rounded-full shadow-xs">
-            <User className="w-3.5 h-3.5 mr-1 text-violet-600 dark:text-violet-400" /> 1 Kèm 1 VIP
+          <Badge className="bg-secondary text-secondary-foreground border border-border font-extrabold px-2.5 py-1 text-[11px] uppercase rounded-full shadow-xs">
+            <User className="w-3.5 h-3.5 mr-1 text-secondary-foreground" /> 1 Kèm 1 VIP
           </Badge>
         );
-      case "HYBRID":
-      case "COMBO":
       default:
         return (
-          <Badge className="bg-amber-100/90 text-amber-800 border border-amber-300/80 dark:bg-amber-950/80 dark:text-amber-300 dark:border-amber-800 font-extrabold px-2.5 py-1 text-[11px] uppercase rounded-full shadow-xs">
-            <Layers className="w-3.5 h-3.5 mr-1 text-amber-600 dark:text-amber-400" /> Hybrid / Combo
+          <Badge variant="outline" className="font-extrabold px-2.5 py-1 text-[11px] uppercase rounded-full shadow-xs">
+            Không xác định
           </Badge>
         );
     }
@@ -174,7 +171,7 @@ export const CoursePackageTab: React.FC<CoursePackageTabProps> = ({
   return (
     <div className="space-y-6">
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-xs text-red-700 flex items-center gap-2">
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive flex items-center gap-2 font-semibold">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           {error}
         </div>
@@ -183,8 +180,8 @@ export const CoursePackageTab: React.FC<CoursePackageTabProps> = ({
       {/* Action Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-bold text-slate-900">Danh Sách Gói Bán Khóa Học</h2>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <h2 className="text-lg font-bold text-foreground">Danh Sách Gói Bán Khóa Học</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
             Cấu hình giá bán và hình thức triển khai cho học viên
           </p>
         </div>
@@ -192,14 +189,14 @@ export const CoursePackageTab: React.FC<CoursePackageTabProps> = ({
           onClick={openCreateDialog}
           disabled={!canCreatePackage}
           title={!canCreatePackage ? "Khóa học phải được phê duyệt và ở trạng thái ACTIVE" : undefined}
-          className="bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-sm"
+          className="bg-primary text-primary-foreground hover:bg-primary/90 font-medium shadow-sm cursor-pointer"
         >
           <Plus className="w-4 h-4 mr-1.5" /> Tạo Gói Bán Mới
         </Button>
       </div>
 
       {!canCreatePackage && (
-        <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+        <div className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-600 font-medium">
           <BookOpen className="mt-0.5 h-4 w-4 shrink-0" />
           <div>
             <p className="font-semibold">Chưa thể tạo gói bán</p>
@@ -211,12 +208,12 @@ export const CoursePackageTab: React.FC<CoursePackageTabProps> = ({
       {/* Package Cards List */}
       <div className="space-y-3">
         {packages.length === 0 ? (
-          <Card className="border-dashed border-2 p-8 text-center bg-slate-50">
-            <p className="text-sm text-slate-500">Chưa có gói bán nào cho khóa học này.</p>
+          <Card className="border-dashed border-2 p-8 text-center bg-muted/20">
+            <p className="text-sm text-muted-foreground">Chưa có gói bán nào cho khóa học này.</p>
             <Button
               variant="outline"
               size="sm"
-              className="mt-3"
+              className="mt-3 cursor-pointer"
               onClick={openCreateDialog}
               disabled={!canCreatePackage}
             >
@@ -229,8 +226,8 @@ export const CoursePackageTab: React.FC<CoursePackageTabProps> = ({
               key={pkg.id}
               className={`border transition-all ${
                 pkg.active
-                  ? "border-slate-200 bg-white hover:border-slate-300"
-                  : "border-slate-200 bg-slate-50/70 opacity-70"
+                  ? "border-border bg-card hover:border-primary/40"
+                  : "border-border bg-muted/40 opacity-70"
               }`}
             >
               <CardContent className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -242,24 +239,24 @@ export const CoursePackageTab: React.FC<CoursePackageTabProps> = ({
                 {/* Middle: Title, Price, Duration */}
                 <div className="flex-1 space-y-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-bold text-slate-900 text-base">{pkg.name}</h3>
+                    <h3 className="font-bold text-foreground text-base">{pkg.name}</h3>
                     {!pkg.active && (
-                      <Badge variant="outline" className="text-xs text-slate-400">
+                      <Badge variant="outline" className="text-xs text-muted-foreground">
                         Đang ẩn
                       </Badge>
                     )}
                   </div>
                   <div className="flex items-center gap-3 text-sm flex-wrap">
-                    <span className="font-extrabold text-blue-600 text-lg">
+                    <span className="font-extrabold text-primary text-lg">
                       {formatVND(pkg.price)}
                     </span>
                     {(pkg as any).originalPrice && (pkg as any).originalPrice > pkg.price && (
-                      <span className="text-slate-400 text-xs line-through font-semibold">
+                      <span className="text-muted-foreground text-xs line-through font-semibold">
                         {formatVND((pkg as any).originalPrice)}
                       </span>
                     )}
-                    <span className="text-slate-400">•</span>
-                    <span className="text-slate-600 font-medium text-xs bg-slate-100 px-2 py-0.5 rounded">
+                    <span className="text-muted-foreground">•</span>
+                    <span className="text-muted-foreground font-medium text-xs bg-muted px-2 py-0.5 rounded">
                       {pkg.durationDays ? `${pkg.durationDays} ngày` : "Trọn đời"}
                     </span>
                   </div>
@@ -267,15 +264,15 @@ export const CoursePackageTab: React.FC<CoursePackageTabProps> = ({
 
                 {/* Class link for GROUP_CLASS */}
                 {pkg.deliveryMode === "GROUP_CLASS" && (
-                  <div className="md:w-1/3 bg-slate-50 border border-slate-200/80 rounded-lg p-3 text-xs flex items-center justify-between">
+                  <div className="md:w-1/3 bg-muted/30 border border-border rounded-lg p-3 text-xs flex items-center justify-between">
                     <div>
-                      <span className="text-slate-500 block">Lớp gán kèm:</span>
+                      <span className="text-muted-foreground block">Lớp gán kèm:</span>
                       <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-                        <span className="font-bold text-slate-800">
+                        <span className="font-bold text-foreground">
                           {pkg.attachedClassName || (pkg as any).className || "Chưa gắn lớp"}
                         </span>
                         {((pkg as any).currentMemberCount != null || pkg.attachedClassCapacity) && (
-                          <Badge variant="outline" className="text-[11px] font-semibold bg-white text-slate-700 border-slate-200 px-1.5 py-0">
+                          <Badge variant="outline" className="text-[11px] font-semibold bg-background text-foreground border-border px-1.5 py-0">
                             ({(pkg as any).currentMemberCount ?? pkg.attachedClassCapacity?.current ?? 0}/{(pkg as any).maxMembers ?? pkg.attachedClassCapacity?.max ?? 0})
                           </Badge>
                         )}
@@ -285,7 +282,7 @@ export const CoursePackageTab: React.FC<CoursePackageTabProps> = ({
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 text-xs text-blue-600 hover:text-blue-700 p-1 font-semibold cursor-pointer"
+                        className="h-7 text-xs text-primary hover:bg-primary/10 p-1 font-semibold cursor-pointer"
                         onClick={() =>
                           navigate(`/admin/classes/${pkg.attachedClassId || (pkg as any).classId}`, {
                             state: { returnUrl: `/admin/courses/${courseId}` },
@@ -299,16 +296,16 @@ export const CoursePackageTab: React.FC<CoursePackageTabProps> = ({
                 )}
 
                 {/* Actions */}
-                <div className="flex items-center gap-2 border-t md:border-t-0 pt-3 md:pt-0 border-slate-100 flex-wrap justify-end">
+                <div className="flex items-center gap-2 border-t md:border-t-0 pt-3 md:pt-0 border-border flex-wrap justify-end">
                   {/* View Detail */}
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-8 px-2.5 text-xs text-slate-600 hover:bg-slate-100 gap-1.5"
+                    className="h-8 px-2.5 text-xs text-foreground hover:bg-muted gap-1.5 cursor-pointer"
                     onClick={() => setDetailPkg(pkg)}
                     title="Xem chi tiết gói bán"
                   >
-                    <Eye className="w-3.5 h-3.5" />
+                    <Eye className="w-3.5 h-3.5 text-primary" />
                     Chi tiết
                   </Button>
 
@@ -316,10 +313,10 @@ export const CoursePackageTab: React.FC<CoursePackageTabProps> = ({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className={`h-8 px-2.5 text-xs gap-1.5 ${
+                    className={`h-8 px-2.5 text-xs gap-1.5 cursor-pointer ${
                       pkg.active
-                        ? "text-amber-600 hover:bg-amber-50"
-                        : "text-emerald-600 hover:bg-emerald-50"
+                        ? "text-amber-600 hover:bg-amber-500/10"
+                        : "text-emerald-600 hover:bg-emerald-500/10"
                     }`}
                     onClick={() => handleToggleActive(pkg.id)}
                     title={pkg.active ? "Ẩn gói bán" : "Hiện gói bán"}
@@ -332,7 +329,7 @@ export const CoursePackageTab: React.FC<CoursePackageTabProps> = ({
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-8 px-2.5 text-xs gap-1.5"
+                    className="h-8 px-2.5 text-xs gap-1.5 cursor-pointer"
                     onClick={() => openEditDialog(pkg)}
                     title="Chỉnh sửa gói bán"
                   >
@@ -344,7 +341,7 @@ export const CoursePackageTab: React.FC<CoursePackageTabProps> = ({
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-8 px-2.5 text-xs gap-1.5 text-rose-500 hover:text-rose-600 hover:bg-rose-50"
+                    className="h-8 px-2.5 text-xs gap-1.5 text-destructive hover:bg-destructive/10 cursor-pointer"
                     onClick={() => setDeleteTarget(pkg)}
                     title="Xóa gói bán"
                   >
@@ -361,8 +358,8 @@ export const CoursePackageTab: React.FC<CoursePackageTabProps> = ({
       <Dialog open={Boolean(detailPkg)} onOpenChange={(o) => { if (!o) setDetailPkg(null); }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-base font-bold">
-              <Info className="h-4 w-4 text-blue-500" />
+            <DialogTitle className="flex items-center gap-2 text-base font-bold text-foreground">
+              <Info className="h-4 w-4 text-primary" />
               Thông tin chi tiết Gói bán
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
@@ -375,67 +372,67 @@ export const CoursePackageTab: React.FC<CoursePackageTabProps> = ({
               <div className="flex items-center gap-2 flex-wrap">
                 {getDeliveryModeBadge(detailPkg.deliveryMode)}
                 {detailPkg.active ? (
-                  <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200">● Đang hoạt động</Badge>
+                  <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20">● Đang hoạt động</Badge>
                 ) : (
-                  <Badge className="bg-slate-100 text-slate-500 border-slate-200">● Đang ẩn</Badge>
+                  <Badge className="bg-muted text-muted-foreground border-border">● Đang ẩn</Badge>
                 )}
               </div>
 
               <div>
-                <p className="text-lg font-bold text-slate-900">{detailPkg.name}</p>
+                <p className="text-lg font-bold text-foreground">{detailPkg.name}</p>
                 {(detailPkg as any).description && (
-                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">{(detailPkg as any).description}</p>
+                  <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{(detailPkg as any).description}</p>
                 )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <div className="bg-slate-50 rounded-xl p-3 space-y-0.5">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Giá bán</p>
-                  <p className="text-base font-black text-blue-600">{formatVND(detailPkg.price)}</p>
+                <div className="bg-muted/40 rounded-xl p-3 space-y-0.5">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Giá bán</p>
+                  <p className="text-base font-black text-primary">{formatVND(detailPkg.price)}</p>
                 </div>
                 {(detailPkg as any).originalPrice && (
-                  <div className="bg-slate-50 rounded-xl p-3 space-y-0.5">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Giá gốc</p>
-                    <p className="text-base font-black text-slate-400 line-through">{formatVND((detailPkg as any).originalPrice)}</p>
+                  <div className="bg-muted/40 rounded-xl p-3 space-y-0.5">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Giá gốc</p>
+                    <p className="text-base font-black text-muted-foreground line-through">{formatVND((detailPkg as any).originalPrice)}</p>
                   </div>
                 )}
                 {detailPkg.durationDays && (
-                  <div className="bg-slate-50 rounded-xl p-3 flex items-center gap-2.5">
-                    <Calendar className="h-4 w-4 text-blue-500 shrink-0" />
+                  <div className="bg-muted/40 rounded-xl p-3 flex items-center gap-2.5">
+                    <Calendar className="h-4 w-4 text-primary shrink-0" />
                     <div>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase">Thời hạn</p>
-                      <p className="text-sm font-bold">{detailPkg.durationDays} ngày</p>
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase">Thời hạn</p>
+                      <p className="text-sm font-bold text-foreground">{detailPkg.durationDays} ngày</p>
                     </div>
                   </div>
                 )}
                 {(detailPkg as any).includedTutorSessions != null && (
-                  <div className="bg-slate-50 rounded-xl p-3 flex items-center gap-2.5">
-                    <Clock className="h-4 w-4 text-violet-500 shrink-0" />
+                  <div className="bg-muted/40 rounded-xl p-3 flex items-center gap-2.5">
+                    <Clock className="h-4 w-4 text-primary shrink-0" />
                     <div>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase">Buổi kèm</p>
-                      <p className="text-sm font-bold">{(detailPkg as any).includedTutorSessions} buổi</p>
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase">Buổi kèm</p>
+                      <p className="text-sm font-bold text-foreground">{(detailPkg as any).includedTutorSessions} buổi</p>
                     </div>
                   </div>
                 )}
                 {(detailPkg as any).maxGroupSize != null && (
-                  <div className="bg-slate-50 rounded-xl p-3 flex items-center gap-2.5">
-                    <Users className="h-4 w-4 text-emerald-500 shrink-0" />
+                  <div className="bg-muted/40 rounded-xl p-3 flex items-center gap-2.5">
+                    <Users className="h-4 w-4 text-primary shrink-0" />
                     <div>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase">Sĩ số</p>
-                      <p className="text-sm font-bold">Tối đa {(detailPkg as any).maxGroupSize} HV</p>
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase">Sĩ số</p>
+                      <p className="text-sm font-bold text-foreground">Tối đa {(detailPkg as any).maxGroupSize} HV</p>
                     </div>
                   </div>
                 )}
               </div>
 
               {(detailPkg.attachedClassName || (detailPkg as any).className) && (
-                <div className="bg-blue-50 border border-blue-200/60 rounded-lg p-3 flex items-center justify-between text-xs">
+                <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 flex items-center justify-between text-xs">
                   <div>
-                    <p className="text-slate-500">Lớp gán kèm</p>
+                    <p className="text-muted-foreground">Lớp gán kèm</p>
                     <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
-                      <p className="font-bold text-slate-800">{detailPkg.attachedClassName || (detailPkg as any).className}</p>
+                      <p className="font-bold text-foreground">{detailPkg.attachedClassName || (detailPkg as any).className}</p>
                       {((detailPkg as any).currentMemberCount != null || detailPkg.attachedClassCapacity) && (
-                        <Badge variant="outline" className="text-[11px] font-semibold bg-white text-slate-700 border-blue-200 px-1.5 py-0">
+                        <Badge variant="outline" className="text-[11px] font-semibold bg-background text-foreground border-border px-1.5 py-0">
                           ({(detailPkg as any).currentMemberCount ?? detailPkg.attachedClassCapacity?.current ?? 0}/{(detailPkg as any).maxMembers ?? detailPkg.attachedClassCapacity?.max ?? 0})
                         </Badge>
                       )}
@@ -445,7 +442,7 @@ export const CoursePackageTab: React.FC<CoursePackageTabProps> = ({
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-7 text-xs text-blue-600 p-1 font-semibold cursor-pointer"
+                      className="h-7 text-xs text-primary hover:bg-primary/10 p-1 font-semibold cursor-pointer"
                       onClick={() =>
                         navigate(`/admin/classes/${detailPkg.attachedClassId || (detailPkg as any).classId}`, {
                           state: { returnUrl: `/admin/courses/${courseId}` },
@@ -458,14 +455,14 @@ export const CoursePackageTab: React.FC<CoursePackageTabProps> = ({
                 </div>
               )}
 
-              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <div className="flex justify-end gap-2 pt-2 border-t border-border">
                 <Button variant="outline" size="sm" onClick={() => setDetailPkg(null)} className="rounded-lg text-xs font-semibold cursor-pointer">
                   Đóng
                 </Button>
                 <Button
                   size="sm"
                   onClick={() => { setDetailPkg(null); openEditDialog(detailPkg); }}
-                  className="bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold gap-1.5 cursor-pointer"
+                  className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg text-xs font-semibold gap-1.5 cursor-pointer"
                 >
                   <Edit className="h-3.5 w-3.5" />
                   Chỉnh sửa gói
@@ -480,7 +477,7 @@ export const CoursePackageTab: React.FC<CoursePackageTabProps> = ({
       <Dialog open={Boolean(deleteTarget)} onOpenChange={(o) => { if (!o && !deleteLoading) setDeleteTarget(null); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-base font-bold text-rose-600">
+            <DialogTitle className="flex items-center gap-2 text-base font-bold text-destructive">
               <AlertTriangle className="h-4 w-4" />
               Xác nhận xóa Gói bán
             </DialogTitle>
@@ -489,11 +486,11 @@ export const CoursePackageTab: React.FC<CoursePackageTabProps> = ({
             </DialogDescription>
           </DialogHeader>
           <div className="py-2">
-            <div className="bg-rose-50 border border-rose-200 rounded-lg p-3">
-              <p className="text-sm font-bold text-slate-900">{deleteTarget?.name}</p>
-              <div className="flex items-center gap-2 mt-1 text-xs text-slate-500">
+            <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3">
+              <p className="text-sm font-bold text-foreground">{deleteTarget?.name}</p>
+              <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
                 {deleteTarget && getDeliveryModeBadge(deleteTarget.deliveryMode)}
-                <span className="font-semibold text-blue-600">{formatVND(deleteTarget?.price)}</span>
+                <span className="font-semibold text-primary">{formatVND(deleteTarget?.price)}</span>
               </div>
             </div>
           </div>
@@ -511,7 +508,7 @@ export const CoursePackageTab: React.FC<CoursePackageTabProps> = ({
               size="sm"
               onClick={handleDeleteConfirm}
               disabled={deleteLoading}
-              className="bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold gap-1.5 cursor-pointer"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-lg text-xs font-semibold gap-1.5 cursor-pointer"
             >
               {deleteLoading ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
               Xác nhận xóa

@@ -5,6 +5,9 @@ import com.ailms.entity.enums.OrderStatusEnum;
 import com.ailms.entity.enums.PaymentTransactionStatusEnum;
 import com.ailms.repository.*;
 import com.ailms.response.*;
+import com.ailms.exception.ResourceNotFoundException;
+import com.ailms.service.IEmailService;
+import com.ailms.service.ISalesDashboardService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -27,10 +30,13 @@ public class SalesController {
     private final CoursePackageRepository coursePackageRepository;
     private final CartItemRepository cartItemRepository;
     private final UserRepository userRepository;
+    private final IEmailService emailService;
+    private final ISalesDashboardService salesDashboardService;
 
     @GetMapping("/dashboard/kpi")
     public ResponseEntity<ApiResponse<SalesKpiResponse>> getSalesKpi() {
-        LocalDateTime now = LocalDateTime.now();
+        return ResponseEntity.ok(ApiResponse.of("Sales KPI retrieved successfully", salesDashboardService.getKpi()));
+        /*LocalDateTime now = LocalDateTime.now();
         LocalDateTime todayStart = now.toLocalDate().atStartOfDay();
         LocalDateTime yesterdayStart = todayStart.minusDays(1);
 
@@ -69,12 +75,13 @@ public class SalesController {
                 .expiringCouponsCount(expiringCouponsCount > 0 ? expiringCouponsCount : 3)
                 .build();
 
-        return ResponseEntity.ok(ApiResponse.of("Sales KPI retrieved successfully", kpi));
+        return ResponseEntity.ok(ApiResponse.of("Sales KPI retrieved successfully", kpi));*/
     }
 
     @GetMapping("/dashboard/revenue-chart")
     public ResponseEntity<ApiResponse<List<SalesDailyRevenueResponse>>> getDailyRevenueChart() {
-        List<SalesDailyRevenueResponse> result = new ArrayList<>();
+        return ResponseEntity.ok(ApiResponse.of("Daily revenue chart retrieved successfully", salesDashboardService.getDailyRevenue()));
+        /*List<SalesDailyRevenueResponse> result = new ArrayList<>();
         LocalDateTime now = LocalDateTime.now();
 
         for (int i = 29; i >= 0; i--) {
@@ -98,12 +105,13 @@ public class SalesController {
                     .build());
         }
 
-        return ResponseEntity.ok(ApiResponse.of("Daily revenue chart retrieved successfully", result));
+        return ResponseEntity.ok(ApiResponse.of("Daily revenue chart retrieved successfully", result));*/
     }
 
     @GetMapping("/dashboard/top-packages")
     public ResponseEntity<ApiResponse<List<SalesTopPackageResponse>>> getTopPackages() {
-        List<SalesTopPackageResponse> topList = coursePackageRepository.findAll().stream()
+        return ResponseEntity.ok(ApiResponse.of("Top packages retrieved successfully", salesDashboardService.getTopPackages()));
+        /*List<SalesTopPackageResponse> topList = coursePackageRepository.findAll().stream()
                 .limit(5)
                 .map(pkg -> SalesTopPackageResponse.builder()
                         .id(String.valueOf(pkg.getId()))
@@ -123,12 +131,13 @@ public class SalesController {
             );
         }
 
-        return ResponseEntity.ok(ApiResponse.of("Top packages retrieved successfully", topList));
+        return ResponseEntity.ok(ApiResponse.of("Top packages retrieved successfully", topList));*/
     }
 
     @GetMapping("/dashboard/urgent-tasks")
     public ResponseEntity<ApiResponse<List<SalesUrgentTaskResponse>>> getUrgentTasks() {
-        List<SalesUrgentTaskResponse> tasks = new ArrayList<>();
+        return ResponseEntity.ok(ApiResponse.of("Urgent tasks retrieved successfully", salesDashboardService.getUrgentTasks()));
+        /*List<SalesUrgentTaskResponse> tasks = new ArrayList<>();
 
         // Pending expiring
         orderRepository.findAll().stream()
@@ -177,7 +186,7 @@ public class SalesController {
                     .build());
         }
 
-        return ResponseEntity.ok(ApiResponse.of("Urgent tasks retrieved successfully", tasks));
+        return ResponseEntity.ok(ApiResponse.of("Urgent tasks retrieved successfully", tasks));*/
     }
 
     @GetMapping("/pending-carts")
@@ -231,35 +240,25 @@ public class SalesController {
                     .build());
         }
 
-        if (responseList.isEmpty()) {
-            responseList.add(SalesPendingCartResponse.builder()
-                    .userId("usr-301")
-                    .userName("Trần Bảo Nam")
-                    .userEmail("baonam.tran@gmail.com")
-                    .userPhone("0944556677")
-                    .userAvatar(null)
-                    .cartItems(Collections.singletonList(
-                            SalesPendingCartResponse.CartItemDetail.builder()
-                                    .id("ci-1")
-                                    .coursePackageId("pkg-1")
-                                    .courseName("Fullstack Web Pro 1-1")
-                                    .packageName("Gói Kèm 1-1 Chuyên Sâu Pro")
-                                    .deliveryMode("ONE_ON_ONE")
-                                    .price(new BigDecimal("3280000"))
-                                    .addedAt(LocalDateTime.now().minusHours(14))
-                                    .build()
-                    ))
-                    .totalPrice(new BigDecimal("3280000"))
-                    .oldestItemAddedAt(LocalDateTime.now().minusHours(14))
-                    .hoursInCart(14L)
-                    .build());
-        }
-
         return ResponseEntity.ok(ApiResponse.of("Pending carts retrieved successfully", responseList));
     }
 
+    /** Gửi email nhắc thanh toán cho người dùng đang có sản phẩm trong giỏ. */
     @PostMapping("/pending-carts/{userId}/reminder")
     public ResponseEntity<ApiResponse<Void>> sendCartReminder(@PathVariable String userId) {
-        return ResponseEntity.ok(ApiResponse.message("Sent cart reminder email to user " + userId));
+        Long parsedUserId;
+        try {
+            parsedUserId = Long.valueOf(userId);
+        } catch (NumberFormatException exception) {
+            throw new ResourceNotFoundException("User not found: " + userId);
+        }
+        UserEntity user = userRepository.findById(parsedUserId)
+                .orElseThrow(() -> ResourceNotFoundException.of("User", parsedUserId));
+        if (cartItemRepository.findByUserEntity_Id(parsedUserId).isEmpty()) {
+            throw new IllegalStateException("Người dùng không còn sản phẩm trong giỏ hàng.");
+        }
+        emailService.sendBulkEmail(List.of(user.getEmail()), "Nhắc thanh toán giỏ hàng",
+                "Bạn vẫn còn sản phẩm trong giỏ hàng. Hãy quay lại hệ thống để hoàn tất thanh toán.");
+        return ResponseEntity.ok(ApiResponse.message("Cart reminder sent successfully"));
     }
 }

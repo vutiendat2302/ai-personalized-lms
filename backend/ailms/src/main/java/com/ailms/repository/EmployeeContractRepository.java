@@ -14,7 +14,9 @@ import java.util.List;
 @Repository
 public interface EmployeeContractRepository extends JpaRepository<EmployeeContractEntity, Long>, JpaSpecificationExecutor<EmployeeContractEntity> {
     List<EmployeeContractEntity> findByEmployee_UserId(Long userId);
+    List<EmployeeContractEntity> findByEmployee_IdAndStatus(Long employeeId, BaseStatusEnum status);
     List<EmployeeContractEntity> findByStatusAndEndDate(BaseStatusEnum status, LocalDate endDate);
+    List<EmployeeContractEntity> findByStatusAndEndDateBetween(BaseStatusEnum status, LocalDate startDate, LocalDate endDate);
     java.util.Optional<EmployeeContractEntity> findBySigningToken(String signingToken);
 
     @Query("SELECT c.status, COUNT(c) FROM EmployeeContractEntity c GROUP BY c.status")

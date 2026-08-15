@@ -57,6 +57,18 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           {isUser ? userName : "AI Copilot"}
         </div>
 
+        {/* Attached image if any */}
+        {message.imageUrl && (
+          <div className="mb-2">
+            <img
+              src={message.imageUrl}
+              alt="Ảnh đính kèm"
+              className="max-h-48 max-w-full rounded-lg object-contain border border-border/40 shadow-xs cursor-pointer hover:opacity-95"
+              onClick={() => window.open(message.imageUrl, "_blank")}
+            />
+          </div>
+        )}
+
         {/* Message content */}
         {message.content ? (
           <div>

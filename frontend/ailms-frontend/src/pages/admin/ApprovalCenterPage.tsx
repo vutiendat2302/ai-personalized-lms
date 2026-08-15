@@ -13,7 +13,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { OneOnOneConnectionApprovalTab } from "@/components/admin/approval/OneOnOneConnectionApprovalTab";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -44,6 +43,18 @@ interface ApprovalItem {
 }
 
 interface MineResponse { requested?: Record<string, unknown>[]; toApprove?: Record<string, unknown>[] }
+type ApprovalSection = "CONNECTIONS" | "COURSES" | "REFUNDS" | "OPERATIONS";
+
+/** Nhóm các loại yêu cầu vào đúng tab quản trị. */
+const matchesSection = (section: ApprovalSection, item: ApprovalItem) => {
+  if (section === "REFUNDS") return item.targetType === "REFUND_ORDER";
+  if (section === "COURSES") return item.targetType === "COURSE";
+  if (section === "OPERATIONS") return [
+    "CLASS_TRANSFER_REQUEST", "TEACHER_CHANGE_REQUEST", "CLASS_TEACHER_LEAVE_REQUEST",
+    "TEACHER_CLASS_TRANSFER", "LEAVE_REQUEST", "TEACHING_PAYMENT",
+  ].includes(item.targetType);
+  return false;
+};
 
 const TYPE_LABELS: Record<string, string> = {
   CONTRACT: "Hợp đồng", SALARY: "Phiếu lương", TEACHING_PAYMENT: "Thanh toán buổi dạy", LEAVE_REQUEST: "Đơn nghỉ phép",
@@ -64,11 +75,11 @@ export const ApprovalCenterPage: React.FC = () => {
   const { success, error } = useToast();
   const location = useLocation();
   const navigate = useNavigate();
-  const restoredView = (location.state as { approvalView?: { sectionTab?: "CONNECTIONS" | "COURSES"; tab?: "PENDING" | "ALL"; search?: string; status?: string; page?: number } } | null)?.approvalView;
+  const restoredView = (location.state as { approvalView?: { sectionTab?: ApprovalSection; tab?: "PENDING" | "ALL"; search?: string; status?: string; page?: number } } | null)?.approvalView;
   const [items, setItems] = useState<ApprovalItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
-  const [sectionTab, setSectionTab] = useState<"CONNECTIONS" | "COURSES">(restoredView?.sectionTab ?? "CONNECTIONS");
+  const [sectionTab, setSectionTab] = useState<ApprovalSection>(restoredView?.sectionTab ?? "CONNECTIONS");
   const [tab, setTab] = useState<"PENDING" | "ALL">(restoredView?.tab || "PENDING");
   const [search, setSearch] = useState(restoredView?.search || "");
   const [status, setStatus] = useState(restoredView?.status || "ALL");
@@ -95,7 +106,7 @@ export const ApprovalCenterPage: React.FC = () => {
     try {
       const [response, pendingCourses, oneOnOneResponse] = await Promise.all([
         httpClient.get<ApiResponse<MineResponse>>("/v1/approvals/mine"),
-        courseApi.searchCourses({ status: "PENDING", page: 0, size: 100, sortBy: "createdAt", sortDirection: "ASC" }),
+        courseApi.getPendingApprovalCourses({ page: 0, size: 200, sort: ["createdAt:asc"] }),
         hrApi.getOneOnOneRequests(),
       ]);
       setOneOnOneRequests((oneOnOneResponse.data.data || []).map(item => ({
@@ -147,7 +158,7 @@ export const ApprovalCenterPage: React.FC = () => {
   }, [detail?.id]);
 
   const filtered = useMemo(() => items.filter(item => {
-    if (item.targetType !== "COURSE") return false;
+    if (!matchesSection(sectionTab, item)) return false;
     if (tab === "PENDING" && (!item.assignedToMe || item.status !== "PENDING")) return false;
     if (status !== "ALL" && item.status !== status) return false;
     const key = search.trim().toLocaleLowerCase("vi");
@@ -156,7 +167,7 @@ export const ApprovalCenterPage: React.FC = () => {
   }).sort((a, b) => {
     const delta = new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime();
     return dateSort === "ASC" ? delta : -delta;
-  }), [items, tab, status, search, dateSort]);
+  }), [items, sectionTab, tab, status, search, dateSort]);
   const pages = Math.max(1, Math.ceil(filtered.length / pageSize));
   const visible = filtered.slice(page * pageSize, page * pageSize + pageSize);
   useEffect(() => {
@@ -170,11 +181,25 @@ export const ApprovalCenterPage: React.FC = () => {
   const selectedItems = items.filter(item => selectedIds.includes(item.id) && item.status === "PENDING");
   const selectedApprovedItems = items.filter(item => selectedIds.includes(item.id) && item.status === "CONFIRMED" && !item.id.startsWith("COURSE-"));
   const displayTitle = (item: ApprovalItem) => item.title || TYPE_LABELS[item.targetType] || "Yêu cầu nghiệp vụ";
+  /** Mở đúng màn hình nghiệp vụ để quản trị viên xem khóa học thật. */
+  const openApprovalDetail = (item: ApprovalItem) => {
+    if (item.targetType === "COURSE") {
+      navigate(`/admin/courses/${item.targetId}`, {
+        state: {
+          returnTo: location.pathname,
+          returnLabel: "Hàng đợi yêu cầu xử lý",
+          approvalView: { sectionTab, tab, search, status, page },
+        },
+      });
+      return;
+    }
+    setDetail(item);
+  };
   const summary = useMemo(() => ({
-    pending: items.filter(item => item.targetType === "COURSE" && item.status === "PENDING").length,
-    approved: items.filter(item => item.targetType === "COURSE" && item.status === "CONFIRMED").length,
-    rejected: items.filter(item => item.targetType === "COURSE" && item.status === "REJECTED").length,
-  }), [items]);
+    pending: items.filter(item => matchesSection(sectionTab, item) && item.status === "PENDING").length,
+    approved: items.filter(item => matchesSection(sectionTab, item) && item.status === "CONFIRMED").length,
+    rejected: items.filter(item => matchesSection(sectionTab, item) && item.status === "REJECTED").length,
+  }), [items, sectionTab]);
 
   /** Đồng bộ một yêu cầu kết nối sau khi HR duyệt hoặc từ chối. */
   const updateOneOnOneRequest = (updated: HrOneOnOneRequestResponse) => {
@@ -264,29 +289,31 @@ export const ApprovalCenterPage: React.FC = () => {
     : <Badge className="bg-rose-500/10 text-rose-700 hover:bg-rose-500/10"><XCircle className="mr-1 h-3 w-3" />{value === "REJECTED" ? "Từ chối" : "Đã hủy"}</Badge>;
 
   return <div className="mx-auto max-w-375 space-y-5 p-6">
-    <div className="flex flex-wrap items-start justify-between gap-3"><div><h1 className="flex items-center gap-2 text-2xl font-bold"><FileCheck2 className="h-6 w-6 text-primary" />Trung tâm phê duyệt</h1><p className="mt-1 text-xs text-muted-foreground">Phê duyệt kết nối 1-1 và khóa học được tách thành hai hàng đợi độc lập.</p></div><Button variant="outline" onClick={() => void load()} disabled={loading}><RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />Làm mới</Button></div>
-    <Tabs value={sectionTab} onValueChange={(value) => { setSectionTab(value as "CONNECTIONS" | "COURSES"); }} className="space-y-4">
-      <TabsList className="h-10 w-full justify-start sm:w-auto">
-        <TabsTrigger value="CONNECTIONS" className="px-4">Phê duyệt kết nối</TabsTrigger>
-        <TabsTrigger value="COURSES" className="px-4">Phê duyệt khóa học</TabsTrigger>
-      </TabsList>
-      <TabsContent value="CONNECTIONS">
+    <div className="flex flex-wrap items-start justify-between gap-3"><div><h1 className="flex items-center gap-2 text-2xl font-bold"><FileCheck2 className="h-6 w-6 text-primary" />Trung tâm phê duyệt</h1><p className="mt-1 text-xs text-muted-foreground">Quản lý các yêu cầu kết nối, khóa học và hoàn tiền trong một hàng đợi tập trung.</p></div><Button variant="outline" onClick={() => void load()} disabled={loading}><RefreshCw className={`mr-2 h-4 w-4 ${loading ? "animate-spin" : ""}`} />Làm mới</Button></div>
+    <div className="space-y-4">
+      <div className="flex h-10 w-full justify-start gap-1 rounded-lg bg-muted p-1 sm:w-auto">
+        <Button type="button" size="sm" variant={sectionTab === "CONNECTIONS" ? "default" : "ghost"} onClick={() => setSectionTab("CONNECTIONS")}>Phê duyệt kết nối</Button>
+        <Button type="button" size="sm" variant={sectionTab === "COURSES" ? "default" : "ghost"} onClick={() => setSectionTab("COURSES")}>Phê duyệt khóa học</Button>
+        <Button type="button" size="sm" variant={sectionTab === "REFUNDS" ? "default" : "ghost"} onClick={() => setSectionTab("REFUNDS")}>Phê duyệt hoàn tiền</Button>
+        <Button type="button" size="sm" variant={sectionTab === "OPERATIONS" ? "default" : "ghost"} onClick={() => setSectionTab("OPERATIONS")}>Vận hành lớp</Button>
+      </div>
+      {sectionTab === "CONNECTIONS" && <div>
         <OneOnOneConnectionApprovalTab
           requests={oneOnOneRequests}
           loading={loading}
           onRequestUpdated={updateOneOnOneRequest}
         />
-      </TabsContent>
-      <TabsContent value="COURSES" className="space-y-5">
+      </div>}
+      {sectionTab !== "CONNECTIONS" && <div className="space-y-5">
     <div className="grid gap-3 sm:grid-cols-3">
       <Card role="button" tabIndex={0} onClick={() => { setTab("PENDING"); setStatus("ALL"); }} className="cursor-pointer overflow-hidden border-amber-200/70 transition-all hover:-translate-y-0.5 hover:shadow-md"><CardContent className="flex items-center justify-between bg-linear-to-br from-amber-50 to-background p-5"><div><p className="text-xs font-semibold text-amber-800">Cần xử lý</p><p className="mt-1 text-3xl font-bold tracking-tight text-amber-600">{summary.pending}</p><p className="mt-1 text-[11px] text-muted-foreground">Yêu cầu đang chờ quyết định</p></div><div className="rounded-2xl bg-amber-100 p-3 text-amber-700"><Clock3 className="h-6 w-6" /></div></CardContent></Card>
       <Card role="button" tabIndex={0} onClick={() => { setTab("ALL"); setStatus("CONFIRMED"); }} className="cursor-pointer overflow-hidden border-emerald-200/70 transition-all hover:-translate-y-0.5 hover:shadow-md"><CardContent className="flex items-center justify-between bg-linear-to-br from-emerald-50 to-background p-5"><div><p className="text-xs font-semibold text-emerald-800">Đã phê duyệt</p><p className="mt-1 text-3xl font-bold tracking-tight text-emerald-600">{summary.approved}</p><p className="mt-1 text-[11px] text-muted-foreground">Đã hoàn tất xử lý thành công</p></div><div className="rounded-2xl bg-emerald-100 p-3 text-emerald-700"><CheckCircle2 className="h-6 w-6" /></div></CardContent></Card>
       <Card role="button" tabIndex={0} onClick={() => { setTab("ALL"); setStatus("REJECTED"); }} className="cursor-pointer overflow-hidden border-rose-200/70 transition-all hover:-translate-y-0.5 hover:shadow-md"><CardContent className="flex items-center justify-between bg-linear-to-br from-rose-50 to-background p-5"><div><p className="text-xs font-semibold text-rose-800">Đã từ chối</p><p className="mt-1 text-3xl font-bold tracking-tight text-rose-600">{summary.rejected}</p><p className="mt-1 text-[11px] text-muted-foreground">Yêu cầu không được chấp thuận</p></div><div className="rounded-2xl bg-rose-100 p-3 text-rose-700"><XCircle className="h-6 w-6" /></div></CardContent></Card>
     </div>
-    <Card><CardHeader className="pb-3"><div className="flex gap-5 border-b"><button className={`pb-3 text-sm font-bold ${tab === "PENDING" ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`} onClick={() => setTab("PENDING")}>Khóa học chờ duyệt</button><button className={`pb-3 text-sm font-bold ${tab === "ALL" ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`} onClick={() => setTab("ALL")}>Lịch sử duyệt khóa học</button></div></CardHeader><CardContent className="space-y-4">
+    <Card><CardHeader className="pb-3"><div className="flex gap-2 border-b"><Button type="button" variant="ghost" className={`rounded-none pb-3 text-sm font-bold ${tab === "PENDING" ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`} onClick={() => setTab("PENDING")}>{sectionTab === "REFUNDS" ? "Hoàn tiền chờ duyệt" : sectionTab === "OPERATIONS" ? "Vận hành chờ duyệt" : "Khóa học chờ duyệt"}</Button><Button type="button" variant="ghost" className={`rounded-none pb-3 text-sm font-bold ${tab === "ALL" ? "border-b-2 border-primary text-primary" : "text-muted-foreground"}`} onClick={() => setTab("ALL")}>{sectionTab === "REFUNDS" ? "Lịch sử hoàn tiền" : sectionTab === "OPERATIONS" ? "Lịch sử vận hành lớp" : "Lịch sử duyệt khóa học"}</Button></div></CardHeader><CardContent className="space-y-4">
       <div className="grid gap-2 md:grid-cols-[1fr_170px_190px]"><div className="relative"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-9" value={search} onChange={e => setSearch(e.target.value)} placeholder="Tên khóa học, người gửi..." /></div><Select value={status} onValueChange={setStatus} disabled={tab === "PENDING"}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="ALL">Tất cả trạng thái</SelectItem><SelectItem value="PENDING">Chờ duyệt</SelectItem><SelectItem value="CONFIRMED">Đã duyệt</SelectItem><SelectItem value="REJECTED">Từ chối</SelectItem><SelectItem value="CANCELLED">Đã hủy</SelectItem></SelectContent></Select><Select value={dateSort} onValueChange={value => setDateSort(value as "DESC" | "ASC")}><SelectTrigger><ArrowDownUp className="mr-2 h-4 w-4 text-muted-foreground" /><SelectValue /></SelectTrigger><SelectContent><SelectItem value="DESC">Ngày gửi: Mới nhất</SelectItem><SelectItem value="ASC">Ngày gửi: Cũ nhất</SelectItem></SelectContent></Select></div>
       {!loading && selectableVisible.length > 0 && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-muted/20 p-3"><label className="flex cursor-pointer items-center gap-2 text-xs font-semibold"><Checkbox checked={allVisibleSelected} onCheckedChange={checked => setSelectedIds(current => checked ? [...new Set([...current, ...selectableVisible.map(item => item.id)])] : current.filter(id => !selectableVisible.some(item => item.id === id)))} />Chọn các yêu cầu có thể xử lý trên trang</label><div className="flex flex-wrap items-center gap-2"><span className="text-xs text-muted-foreground">Đã chọn <strong className="text-foreground">{selectedItems.length + selectedApprovedItems.length}</strong></span>{selectedIds.length > 0 && <Button size="sm" variant="outline" onClick={() => setSelectedIds([])}>Bỏ chọn</Button>}{selectedItems.length > 0 && <><Button size="sm" variant="destructive" onClick={() => { setRejectReason(""); setBulkRejectOpen(true); }}>Từ chối {selectedItems.length} yêu cầu</Button>{tab === "PENDING" && <Button size="sm" onClick={() => setBulkApproveOpen(true)}><CheckCircle2 className="mr-1.5 h-4 w-4" />Duyệt hàng loạt</Button>}</>}{selectedApprovedItems.length > 0 && <Button size="sm" variant="destructive" onClick={() => setBulkDeleteOpen(true)}><Trash2 className="mr-1.5 h-4 w-4" />Xóa {selectedApprovedItems.length} yêu cầu đã duyệt</Button>}</div></div>}
-      {loading ? <div className="flex h-64 items-center justify-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" />Đang tải khóa học cần phê duyệt...</div> : loadError ? <div className="flex h-64 flex-col items-center justify-center gap-3 text-sm text-destructive"><AlertTriangle className="h-7 w-7" />{loadError}<Button variant="outline" onClick={() => void load()}>Thử lại</Button></div> : !visible.length ? <div className="flex h-64 flex-col items-center justify-center text-center"><FileCheck2 className="mb-3 h-10 w-10 text-muted-foreground/40" /><p className="font-semibold">Không có khóa học cần phê duyệt</p><p className="mt-1 text-xs text-muted-foreground">Không có khóa học phù hợp với bộ lọc hiện tại.</p></div> : tab === "PENDING" ? (
+      {loading ? <div className="flex h-64 items-center justify-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" />Đang tải yêu cầu cần phê duyệt...</div> : loadError ? <div className="flex h-64 flex-col items-center justify-center gap-3 text-sm text-destructive"><AlertTriangle className="h-7 w-7" />{loadError}<Button variant="outline" onClick={() => void load()}>Thử lại</Button></div> : !visible.length ? <div className="flex h-64 flex-col items-center justify-center text-center"><FileCheck2 className="mb-3 h-10 w-10 text-muted-foreground/40" /><p className="font-semibold">Không có yêu cầu cần phê duyệt</p><p className="mt-1 text-xs text-muted-foreground">Không có yêu cầu phù hợp với bộ lọc hiện tại.</p></div> : tab === "PENDING" ? (
         <div className="grid gap-4 lg:grid-cols-2">
           {visible.map(item => <Card key={item.id} className="group overflow-hidden border-border/70 transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md">
             <CardContent className="p-0">
@@ -298,7 +325,7 @@ export const ApprovalCenterPage: React.FC = () => {
               <div className="space-y-3 p-4">
                 {item.description && <p className="line-clamp-2 min-h-8 text-xs leading-4 text-muted-foreground">{item.description}</p>}
                 <div className="grid grid-cols-2 gap-3 rounded-lg bg-muted/35 p-3 text-xs"><div><p className="text-[10px] uppercase tracking-wide text-muted-foreground">Người gửi</p><p className="mt-1 truncate font-semibold">{item.requesterName || "Chưa xác định"}</p></div><div><p className="text-[10px] uppercase tracking-wide text-muted-foreground">Thời gian gửi</p><p className="mt-1 font-semibold">{dateTime(item.createdAt)}</p></div></div>
-                <div className="flex flex-wrap items-center justify-end gap-2"><Button size="sm" variant="outline" onClick={() => setDetail(item)}><Eye className="mr-1.5 h-4 w-4" />Xem chi tiết</Button>{item.assignedToMe && <><Button size="sm" variant="outline" className="border-rose-200 text-rose-700 hover:bg-rose-50" onClick={() => { setRejectTarget(item); setRejectReason(""); }}>Từ chối</Button><Button size="sm" onClick={() => setApproveTarget(item)}><CheckCircle2 className="mr-1.5 h-4 w-4" />Phê duyệt</Button></>}</div>
+                <div className="flex flex-wrap items-center justify-end gap-2"><Button size="sm" variant="outline" onClick={() => openApprovalDetail(item)}><Eye className="mr-1.5 h-4 w-4" />Xem chi tiết</Button>{item.assignedToMe && <><Button size="sm" variant="outline" className="border-rose-200 text-rose-700 hover:bg-rose-50" onClick={() => { setRejectTarget(item); setRejectReason(""); }}>Từ chối</Button><Button size="sm" onClick={() => setApproveTarget(item)}><CheckCircle2 className="mr-1.5 h-4 w-4" />Phê duyệt</Button></>}</div>
               </div>
             </CardContent>
           </Card>)}
@@ -308,17 +335,17 @@ export const ApprovalCenterPage: React.FC = () => {
           <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-muted/20 px-4 py-3"><div><p className="text-sm font-bold">Lịch sử yêu cầu</p><p className="text-[11px] text-muted-foreground">Hiển thị {visible.length} trên tổng số {filtered.length} yêu cầu phù hợp</p></div>{status !== "ALL" && <Button size="sm" variant="ghost" onClick={() => setStatus("ALL")}><XCircle className="mr-1.5 h-4 w-4" />Bỏ lọc trạng thái</Button>}</div>
           <div className="max-w-full overflow-x-auto"><Table>
             <TableHeader className="sticky top-0 z-10 bg-slate-50/95 backdrop-blur"><TableRow className="hover:bg-transparent"><TableHead className="w-11"><Checkbox checked={allVisibleSelected} onCheckedChange={checked => setSelectedIds(current => checked ? [...new Set([...current, ...selectableVisible.map(item => item.id)])] : current.filter(id => !selectableVisible.some(item => item.id === id)))} aria-label="Chọn tất cả yêu cầu có thể xử lý" /></TableHead><TableHead className="min-w-70 font-bold text-slate-700">Nội dung yêu cầu</TableHead><TableHead className="min-w-47.5 font-bold text-slate-700">Người gửi</TableHead><TableHead className="min-w-32.5 font-bold text-slate-700">Ngày gửi</TableHead><TableHead className="min-w-30 font-bold text-slate-700">Trạng thái</TableHead><TableHead className="min-w-32.5 font-bold text-slate-700">Ngày xử lý</TableHead><TableHead className="min-w-37.5 font-bold text-slate-700">Người xử lý</TableHead><TableHead className="text-right font-bold text-slate-700">Thao tác</TableHead></TableRow></TableHeader>
-            <TableBody>{visible.map((item, index) => <TableRow key={item.id} className={`${index % 2 ? "bg-slate-50/35" : "bg-background"} transition-colors hover:bg-primary/4`}><TableCell>{canSelectItem(item) ? <Checkbox checked={selectedIds.includes(item.id)} onCheckedChange={checked => setSelectedIds(current => checked ? [...new Set([...current, item.id])] : current.filter(id => id !== item.id))} aria-label={`Chọn ${displayTitle(item)}`} /> : <Checkbox disabled aria-label="Yêu cầu không có thao tác hàng loạt phù hợp" />}</TableCell><TableCell><div className="flex items-start gap-3"><div className={`mt-0.5 h-9 w-1 shrink-0 rounded-full ${item.status === "PENDING" ? "bg-amber-400" : item.status === "CONFIRMED" ? "bg-emerald-500" : "bg-rose-500"}`} /><div><p className="line-clamp-1 font-semibold text-slate-900">{displayTitle(item)}</p><div className="mt-1.5 flex flex-wrap items-center gap-1.5"><Badge variant="outline" className="bg-white text-[10px]">{TYPE_LABELS[item.targetType] || item.targetType}</Badge>{item.categoryName && <span className="text-[11px] text-muted-foreground">{item.categoryName}</span>}</div></div></div></TableCell><TableCell><p className="font-medium text-slate-800">{item.requesterName || "Chưa xác định"}</p>{item.requesterEmail && <p className="mt-0.5 max-w-47.5 truncate text-[11px] text-muted-foreground">{item.requesterEmail}</p>}</TableCell><TableCell className="whitespace-nowrap text-xs text-slate-600">{dateTime(item.createdAt)}</TableCell><TableCell>{statusBadge(item.status)}</TableCell><TableCell className="whitespace-nowrap text-xs text-slate-600">{item.decidedAt ? dateTime(item.decidedAt) : <span className="text-muted-foreground">Chưa xử lý</span>}</TableCell><TableCell className="text-xs font-medium text-slate-700">{item.targetType === "COURSE" && !item.approverName ? "HR / Admin" : item.approverName || "—"}</TableCell><TableCell><div className="flex justify-end gap-1"><Button size="sm" variant="outline" className="h-8 shadow-none" onClick={() => setDetail(item)}><Eye className="mr-1.5 h-3.5 w-3.5" />Xem</Button>{item.status === "CONFIRMED" && !item.id.startsWith("COURSE-") && <Button size="icon" variant="ghost" className="h-8 w-8 text-rose-600 hover:bg-rose-50 hover:text-rose-700" onClick={() => setDeleteTarget(item)} title="Xóa yêu cầu đã phê duyệt"><Trash2 className="h-4 w-4" /></Button>}</div></TableCell></TableRow>)}</TableBody>
+            <TableBody>{visible.map((item, index) => <TableRow key={item.id} className={`${index % 2 ? "bg-slate-50/35" : "bg-background"} transition-colors hover:bg-primary/4`}><TableCell>{canSelectItem(item) ? <Checkbox checked={selectedIds.includes(item.id)} onCheckedChange={checked => setSelectedIds(current => checked ? [...new Set([...current, item.id])] : current.filter(id => id !== item.id))} aria-label={`Chọn ${displayTitle(item)}`} /> : <Checkbox disabled aria-label="Yêu cầu không có thao tác hàng loạt phù hợp" />}</TableCell><TableCell><div className="flex items-start gap-3"><div className={`mt-0.5 h-9 w-1 shrink-0 rounded-full ${item.status === "PENDING" ? "bg-amber-400" : item.status === "CONFIRMED" ? "bg-emerald-500" : "bg-rose-500"}`} /><div><p className="line-clamp-1 font-semibold text-slate-900">{displayTitle(item)}</p><div className="mt-1.5 flex flex-wrap items-center gap-1.5"><Badge variant="outline" className="bg-white text-[10px]">{TYPE_LABELS[item.targetType] || item.targetType}</Badge>{item.categoryName && <span className="text-[11px] text-muted-foreground">{item.categoryName}</span>}</div></div></div></TableCell><TableCell><p className="font-medium text-slate-800">{item.requesterName || "Chưa xác định"}</p>{item.requesterEmail && <p className="mt-0.5 max-w-47.5 truncate text-[11px] text-muted-foreground">{item.requesterEmail}</p>}</TableCell><TableCell className="whitespace-nowrap text-xs text-slate-600">{dateTime(item.createdAt)}</TableCell><TableCell>{statusBadge(item.status)}</TableCell><TableCell className="whitespace-nowrap text-xs text-slate-600">{item.decidedAt ? dateTime(item.decidedAt) : <span className="text-muted-foreground">Chưa xử lý</span>}</TableCell><TableCell className="text-xs font-medium text-slate-700">{item.targetType === "COURSE" && !item.approverName ? "HR / Admin" : item.approverName || "—"}</TableCell><TableCell><div className="flex justify-end gap-1"><Button size="sm" variant="outline" className="h-8 shadow-none" onClick={() => openApprovalDetail(item)}><Eye className="mr-1.5 h-3.5 w-3.5" />Xem</Button>{item.status === "CONFIRMED" && !item.id.startsWith("COURSE-") && <Button size="icon" variant="ghost" className="h-8 w-8 text-rose-600 hover:bg-rose-50 hover:text-rose-700" onClick={() => setDeleteTarget(item)} title="Xóa yêu cầu đã phê duyệt"><Trash2 className="h-4 w-4" /></Button>}</div></TableCell></TableRow>)}</TableBody>
           </Table></div>
         </div>
       )}
       {!loading && filtered.length > pageSize && <div className="flex items-center justify-end gap-2"><Button size="icon" variant="outline" disabled={page === 0} onClick={() => setPage(p => p - 1)}><ChevronLeft className="h-4 w-4" /></Button><span className="text-xs">Trang {page + 1}/{pages}</span><Button size="icon" variant="outline" disabled={page >= pages - 1} onClick={() => setPage(p => p + 1)}><ChevronRight className="h-4 w-4" /></Button></div>}
     </CardContent></Card>
-      </TabsContent>
-    </Tabs>
+      </div>}
+    </div>
     <Dialog open={Boolean(detail)} onOpenChange={open => !open && setDetail(null)}><DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto"><DialogHeader><DialogTitle>{detail?.title || `Chi tiết ${TYPE_LABELS[detail?.targetType || ""] || "yêu cầu"}`}</DialogTitle><DialogDescription>Phiên bản dữ liệu thực tế được gửi lên để HR/Admin thẩm định.</DialogDescription></DialogHeader>{detail && <div className="space-y-4 text-sm">
       <div className="flex items-center justify-between rounded-xl bg-muted/30 p-4"><div><p className="text-xs text-muted-foreground">Loại yêu cầu</p><p className="font-bold">{TYPE_LABELS[detail.targetType] || detail.targetType}</p></div>{statusBadge(detail.status)}</div>
-      {detailLoading ? <div className="flex h-36 items-center justify-center gap-2 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" />Đang tải thông tin khóa học...</div> : detail.targetType === "COURSE" && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-primary/5 p-4"><div><p className="font-bold">{detail.title || "Khóa học cần duyệt"}</p><p className="mt-1 text-xs text-muted-foreground">{detail.categoryName || "Chưa phân loại"} · Giá đề xuất {Number(detail.suggestedPrice || 0).toLocaleString("vi-VN")} đ</p></div><Button type="button" onClick={() => navigate(`/admin/courses/${detail.targetId}`, { state: { returnTo: `${location.pathname}${location.search}`, returnLabel: "Hàng đợi yêu cầu xử lý", approvalView: { sectionTab, tab, search, status, page } } })}><Eye className="mr-1.5 h-4 w-4" />Xem chi tiết khóa học</Button></div>}
+      {detailLoading ? <div className="flex h-36 items-center justify-center gap-2 text-muted-foreground"><Loader2 className="h-5 w-5 animate-spin" />Đang tải thông tin khóa học...</div> : detail.targetType === "COURSE" && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-primary/5 p-4"><div><p className="font-bold">{detail.title || "Khóa học cần duyệt"}</p><p className="mt-1 text-xs text-muted-foreground">{detail.categoryName || "Chưa phân loại"} · Giá đề xuất {Number(detail.suggestedPrice || 0).toLocaleString("vi-VN")} đ</p></div><Button type="button" onClick={() => navigate(`/admin/courses/${detail.targetId}`, { state: { returnTo: `${location.pathname}${location.search}`, returnLabel: "Hàng đợi yêu cầu xử lý", approvalView: { sectionTab, tab, search, status, page } } })}><Eye className="mr-1.5 h-4 w-4" />Mở trang quản lý khóa học</Button></div>}
       {!detailLoading && targetDetails && <div className="rounded-xl border p-4"><p className="mb-3 text-xs font-bold uppercase text-muted-foreground">Phiên bản đối tượng cần duyệt</p><div className="grid gap-2 sm:grid-cols-2">{Object.entries(targetDetails).filter(([, value]) => value == null || ["string", "number", "boolean"].includes(typeof value)).slice(0, 18).map(([key, value]) => <div key={key} className="rounded-lg bg-muted/30 p-3"><p className="text-[10px] uppercase text-muted-foreground">{key.replace(/([A-Z])/g, " $1").trim()}</p><p className="mt-1 wrap-break-word font-semibold">{value == null || value === "" ? "Chưa cập nhật" : String(value)}</p></div>)}</div></div>}
       <div className="grid gap-3 sm:grid-cols-2"><div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Người gửi</p><p className="font-bold">{detail.requesterName}</p><p className="text-xs text-muted-foreground">{detail.requesterEmail || "Chưa có email"}</p></div><div className="rounded-lg border p-3"><p className="text-xs text-muted-foreground">Thời gian</p><p>Gửi: <strong>{dateTime(detail.createdAt)}</strong></p><p>Xử lý: <strong>{dateTime(detail.decidedAt)}</strong></p></div></div>
       {detail.requestReason && <div className="rounded-xl border border-rose-500/30 bg-rose-500/5 p-4"><p className="text-xs font-bold text-muted-foreground">Lý do hoàn tiền từ học viên</p><p className="mt-1">{detail.requestReason}</p></div>}

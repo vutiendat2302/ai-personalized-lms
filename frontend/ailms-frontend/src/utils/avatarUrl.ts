@@ -1,5 +1,5 @@
 /** Ghép đường dẫn asset backend theo cùng base URL với Axios client. */
-const resolveBackendAssetUrl = (path: string): string => {
+export const resolveBackendAssetUrl = (path: string): string => {
   if (/^(https?:|blob:|data:)/i.test(path)) return path;
   const base = (import.meta.env.VITE_BE_URL || import.meta.env.VITE_API_BASE_URL || "/api").replace(/\/+$/, "");
   const normalized = path.startsWith("/") ? path : `/${path}`;

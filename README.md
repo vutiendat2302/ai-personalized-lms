@@ -376,7 +376,7 @@ sequenceDiagram
     participant DB as MySQL Database
     participant MinIO as MinIO Storage
 
-    S->>FE: Chọn gói học (Self-Study, 1-on-1, Group, Combo) & Áp dụng Voucher
+    S->>FE: Chọn gói học (Self-Study, 1-on-1 hoặc Group) & Áp dụng Voucher
     FE->>BE: POST /api/v1/orders/checkout
     BE->>BE: Kiểm tra tính hợp lệ Voucher & Tính tổng tiền
     BE->>PayPal: Create Order (Intent: CAPTURE, Currency: USD)
@@ -495,7 +495,7 @@ npm run dev
 
 ## 9. Tài khoản Mặc định & Dữ liệu Phát triển (Seed Data)
 
-Khi biến môi trường `SPRING_PROFILES_ACTIVE=seed` được kích hoạt, hệ thống tự động khởi tạo dữ liệu mẫu:
+Khi biến môi trường `SPRING_PROFILES_ACTIVE=seed` được kích hoạt, hệ thống tự động bổ sung các tài khoản mặc định còn thiếu. Cấu hình `SPRING_JPA_HIBERNATE_DDL_AUTO` mặc định là `update`; không dùng `create` hoặc `create-drop` trên database có dữ liệu vì mỗi lần Backend restart sẽ tạo lại schema:
 
 | Vai trò (Role) | Email tài khoản | Mật khẩu mặc định | Không gian truy cập tương ứng |
 | :--- | :--- | :--- | :--- |

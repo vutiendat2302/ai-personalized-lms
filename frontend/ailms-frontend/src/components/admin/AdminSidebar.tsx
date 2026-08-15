@@ -109,18 +109,10 @@ export const AdminSidebar: React.FC = () => {
       items: [
         { label: "Sales Dashboard", path: "/sales/dashboard", icon: TrendingUp },
         { label: "Đơn hàng", path: "/sales/orders", icon: ShoppingBag },
-        { label: "Thanh toán & Đối soát", path: "/sales/payments", icon: Receipt },
-        { label: "Mã giảm giá (Coupon)", path: "/sales/coupons", icon: Tag },
-        { label: "Gói học (Packages)", path: "/sales/course-packages", icon: Package },
+        { label: "Mã giảm giá", path: "/admin/coupons", icon: Tag },
+        { label: "Gói học", path: "/sales/course-packages", icon: Package },
         { label: "Ghi danh & Kích hoạt", path: "/sales/enrollments", icon: UserCheck },
-        { label: "Giỏ hàng đang treo", path: "/sales/carts", icon: ShoppingCart, badge: "2" },
-      ],
-    },
-
-    {
-      title: "BÁO CÁO & GIÁM SÁT",
-      items: [
-        { label: "Thống kê & Analytics", path: "/analytics", icon: BarChart3 }, 
+        { label: "Giỏ hàng đang treo", path: "/sales/carts", icon: ShoppingCart },
       ],
     },
   ];

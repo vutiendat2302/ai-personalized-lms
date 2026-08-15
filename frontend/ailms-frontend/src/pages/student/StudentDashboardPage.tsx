@@ -11,8 +11,6 @@ import {
 } from "@/api/student/studentApi";
 import { courseApi } from "@/api/courses/courseApi";
 import type { CategoryResponse } from "@/types/admin";
-import { OnboardingModal } from "@/components/student/OnboardingModal";
-import { useToast } from "@/hooks/useToast";
 import { useAuth } from "@/hooks/useAuth";
 import { formatCourseLevel } from "@/utils/searchUtils";
 import { Button } from "@/components/ui/button";
@@ -33,7 +31,6 @@ export const StudentDashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const { auth } = useAuth();
   const { user } = auth;
-  const { success } = useToast();
 
   const [metrics, setMetrics] = useState<StudentDashboardMetrics | null>(null);
   const [myCourses, setMyCourses] = useState<StudentCourseCard[]>([]);
@@ -44,7 +41,6 @@ export const StudentDashboardPage: React.FC = () => {
   const [nextLessonTitle, setNextLessonTitle] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
-  const [showOnboarding, setShowOnboarding] = useState(false);
 
   // Category states from Landing page
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
@@ -193,9 +189,6 @@ export const StudentDashboardPage: React.FC = () => {
 
         if (metricsData) {
           setMetrics(metricsData);
-          if (!metricsData.hasSetGoals) {
-            setShowOnboarding(true);
-          }
         }
 
         setMyCourses(coursesData || []);
@@ -229,12 +222,6 @@ export const StudentDashboardPage: React.FC = () => {
 
     void loadDashboardData();
   }, []);
-
-  const handleOnboardingComplete = async (goal: any, interests: string[]) => {
-    await studentApi.submitOnboarding(goal, interests);
-    success("Đã hoàn tất thiết lập mục tiêu & sở thích cá nhân hóa!");
-    setShowOnboarding(false);
-  };
 
   if (loading) {
     return (
@@ -273,13 +260,6 @@ export const StudentDashboardPage: React.FC = () => {
 
   return (
     <div className="w-full bg-background text-foreground space-y-0 pb-16">
-      {/* Onboarding Stepper Modal */}
-      <OnboardingModal
-        isOpen={showOnboarding}
-        onComplete={handleOnboardingComplete}
-        onSkipAll={() => setShowOnboarding(false)}
-      />
-
       {/* ==========================================
           [SECTION 1] Welcome + Streak + Goals (FULL-WIDTH BACK VÀNG #f3e8d8)
           ========================================== */}

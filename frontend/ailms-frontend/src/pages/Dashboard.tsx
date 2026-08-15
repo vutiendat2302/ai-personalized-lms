@@ -1841,7 +1841,7 @@ export const Dashboard: React.FC = () => {
       {/* Title block */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-foreground">Hệ thống Quản trị viên (Admin Dashboard)</h1>
+          <h1 className="text-2xl font-extrabold tracking-tight text-foreground">Hệ thống Quản trị viên</h1>
           <p className="text-sm text-muted-foreground">Phân quyền, quản lý vai trò và theo dõi số liệu người dùng.</p>
         </div>
         <div className="flex items-center gap-1.5 text-xs bg-primary/10 px-3 py-1.5 rounded-lg text-primary font-bold">

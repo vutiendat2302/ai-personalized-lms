@@ -76,7 +76,14 @@ CATEGORIES = [
         "name": "Sinh học",
         "description": "Sinh học phân tử, di truyền học, sinh học tế bào và công nghệ sinh học.",
         "status": "ACTIVE"
-    }
+    },
+    {"name": "Quản trị dự án", "description": "Agile, Scrum, quản trị phạm vi, tiến độ, chi phí, rủi ro và chứng chỉ PMP.", "status": "ACTIVE"},
+    {"name": "Kế toán & Kiểm toán", "description": "Nguyên lý kế toán, báo cáo tài chính, thuế, kiểm toán và kiểm soát nội bộ.", "status": "ACTIVE"},
+    {"name": "Quản trị nhân sự", "description": "Tuyển dụng, đào tạo, quản trị hiệu suất, lương thưởng và văn hóa doanh nghiệp.", "status": "ACTIVE"},
+    {"name": "Thương mại điện tử", "description": "Vận hành sàn, bán hàng đa kênh, thương mại số và tối ưu chuyển đổi.", "status": "ACTIVE"},
+    {"name": "Tâm lý & Phát triển cá nhân", "description": "Tâm lý học ứng dụng, tư duy phản biện, định hướng nghề nghiệp và phát triển bản thân.", "status": "ACTIVE"},
+    {"name": "Nghệ thuật & Sáng tạo", "description": "Âm nhạc, hội họa, nhiếp ảnh, viết sáng tạo và sản xuất nội dung.", "status": "ACTIVE"},
+    {"name": "Điện - Điện tử & IoT", "description": "Mạch điện, hệ thống nhúng, robotics và Internet vạn vật.", "status": "ACTIVE"},
 ]
 
 
@@ -87,12 +94,15 @@ def get_id_by_name(cursor, name: str):
 
 
 def seed(cursor):
-    """Insert dữ liệu category nếu chưa tồn tại (idempotent theo `name`)."""
+    """Đồng bộ category theo tên và cập nhật metadata của bản ghi hiện hữu."""
     print("→ Seeding categories...")
     for c in CATEGORIES:
         existing_id = get_id_by_name(cursor, c["name"])
         if existing_id:
-            print(f"   [skip] category {c['name']} đã tồn tại (id={existing_id})")
+            cursor.execute(
+                "UPDATE category SET description=%s, status=%s, updated_at=NOW() WHERE id=%s",
+                (c["description"], c["status"], existing_id),
+            )
             continue
         new_id = snowflake.next_id()
         cursor.execute(
@@ -103,3 +113,4 @@ def seed(cursor):
             (new_id, c["name"], c["description"], c["status"]),
         )
         print(f"   [insert] category {c['name']} (id={new_id})")
+    print(f"   [completed] categories synchronized: {len(CATEGORIES)}")

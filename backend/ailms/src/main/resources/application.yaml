@@ -9,8 +9,8 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
-      ##(create, update, create-drop, validate)
-      ddl-auto: update
+      # Không dùng create/create-drop vì Backend restart không được xóa dữ liệu nghiệp vụ.
+      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:update}
     show-sql: true
     properties:
       hibernate:

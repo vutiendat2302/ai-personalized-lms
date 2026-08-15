@@ -5,6 +5,7 @@ import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import com.ailms.entity.enums.BaseStatusEnum;
 
 @Getter
@@ -40,4 +41,7 @@ public class QuizRequest {
     private LocalDateTime dueAt;
 
     private BaseStatusEnum status;
+
+    @jakarta.validation.Valid
+    private List<QuizQuestionRequest> questions;
 }

@@ -78,7 +78,6 @@ const enumLabel = (value: string) => ({
   SELF_STUDY: "Tự học",
   GROUP_CLASS: "Lớp nhóm",
   ONE_ON_ONE: "1 kèm 1",
-  COMBO: "Kết hợp",
   DRAFT: "Nháp",
   PENDING: "Chờ duyệt",
   ACTIVE: "Đang hoạt động",
