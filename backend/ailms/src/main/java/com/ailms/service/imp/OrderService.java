@@ -1071,4 +1071,65 @@ public class OrderService implements IOrderService {
 
     /** Dòng checkout đã chuẩn hóa cho thanh toán trực tiếp và giỏ hàng. */
     private record CheckoutLine(Long packageId, OrderItemTypeEnum itemType, OneOnOneNeedsRequest needs) {}
+
+    /**
+     * Hoàn thành đơn hàng PENDING không qua PayPal; chỉ dùng cho seed/dev.
+     * Tạo payment transaction giả trạng thái SUCCESS rồi gọi provisionOrder thật
+     * để tăng enrollment_count, tạo OneOnOneRequest và gán lớp nhóm đúng logic BE.
+     */
+    @Override
+    @Transactional
+    public OrderResponse adminCompleteOrder(Long orderId) {
+        /** Delegate sang overload với backdateAt=null để dùng thời điểm hiện tại. */
+        return adminCompleteOrder(orderId, null);
+    }
+
+    /**
+     * Hoàn thành đơn hàng PENDING bằng Admin với ngày tuỳ chọn (seed backdate).
+     * backdateAt null → dùng LocalDateTime.now(); khác null → đặt paid_at theo giá trị truyền vào.
+     */
+    @Override
+    @Transactional
+    public OrderResponse adminCompleteOrder(Long orderId, LocalDateTime backdateAt) {
+        OrderEntity order = orderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() -> ResourceNotFoundException.of("Order", orderId));
+        if (order.getStatus() == OrderStatusEnum.PAID) {
+            return orderMapper.toResponse(order);
+        }
+        if (order.getStatus() != OrderStatusEnum.PENDING) {
+            throw new BusinessException("Chỉ đơn hàng PENDING mới có thể được Admin hoàn thành.");
+        }
+
+        LocalDateTime effectiveAt = (backdateAt != null) ? backdateAt : LocalDateTime.now();
+
+        // Tạo transaction giả SUCCESS để đáp ứng refund flow sau này nếu cần
+        PaymentTransactionEntity tx = PaymentTransactionEntity.builder()
+                .orderEntity(order)
+                .paymentMethod("ADMIN_COMPLETE")
+                .amount(order.getFinalAmount())
+                .status(PaymentTransactionStatusEnum.SUCCESS)
+                .paypalRequestId("ADMIN-" + UUID.randomUUID().toString().replace("-", ""))
+                .transactionRef("ADMIN-SEED-" + orderId)
+                .paidAt(effectiveAt)
+                .build();
+        paymentTransactionRepository.save(tx);
+
+        // Cấp quyền học thật — tăng enrollment_count, tạo 1-1 request, gán lớp nhóm
+        provisionOrder(order);
+        markVoucherUsed(order);
+
+        order.setStatus(OrderStatusEnum.PAID);
+        order.setPaidAt(effectiveAt);
+        orderRepository.save(order);
+
+        notificationService.createSystemNotification(order.getUserEntity(), NotificationTypeEnum.GENERAL,
+                "Thanh toán thành công",
+                "Đơn hàng " + order.getId() + " đã được kích hoạt bởi Admin.",
+                order.getId(), "/student/orders");
+        removePurchasedPackagesFromCart(order);
+        eventPublisher.publishEvent(new AuditLogEvent(
+                this, "ADMIN_COMPLETE_ORDER", "ORDER", order.getId(), OrderStatusEnum.PENDING, order));
+        eventPublisher.publishEvent(new OrderInvoiceGenerationEvent(this, order.getId(), false));
+        return orderMapper.toResponse(order);
+    }
 }

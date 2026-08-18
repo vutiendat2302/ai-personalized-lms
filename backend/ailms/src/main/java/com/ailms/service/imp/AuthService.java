@@ -7,7 +7,13 @@ import org.springframework.context.ApplicationEventPublisher;
 
 import com.ailms.entity.UserEntity;
 import com.ailms.entity.enums.UserStatusEnum;
-import com.ailms.exception.*;
+import com.ailms.common.util.CodeGenerator;
+import com.ailms.entity.RoleEntity;
+import com.ailms.entity.StudentProfileEntity;
+import com.ailms.entity.UserRoleEntity;
+import com.ailms.repository.RoleRepository;
+import com.ailms.repository.StudentProfileRepository;
+import com.ailms.repository.UserRoleRepository;
 import com.ailms.repository.UserRepository;
 import com.ailms.request.*;
 import com.ailms.response.JwtAuthenticationResponse;

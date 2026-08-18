@@ -160,8 +160,10 @@ public class MinioFileStorageService implements IFileStorageService {
                     if (isAllowed) {
                         String scheme = request.getHeader("X-Forwarded-Proto");
                         if (!StringUtils.hasText(scheme)) scheme = "http";
-                        if ("https".equalsIgnoreCase(scheme) || hostOnly.contains("ts.net") || hostOnly.contains("taile")) {
-                            targetEndpoint = scheme + "://" + hostOnly;
+                        if ("https".equalsIgnoreCase(scheme) || hostOnly.contains("trycloudflare.com") || hostOnly.contains("ts.net") || hostOnly.contains("taile")) {
+                            targetEndpoint = (hostOnly.contains("trycloudflare.com") || "https".equalsIgnoreCase(scheme))
+                                    ? "https://" + hostOnly
+                                    : scheme + "://" + hostOnly;
                         } else {
                             targetEndpoint = scheme + "://" + hostOnly + ":9000";
                         }

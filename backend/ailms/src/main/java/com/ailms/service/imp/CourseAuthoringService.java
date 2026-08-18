@@ -414,8 +414,12 @@ public class CourseAuthoringService implements ICourseAuthoringService {
     public QuizResponse createQuiz(QuizRequest request) {
         log.info("Creating quiz for courseId: {}, sectionId: {}, lessonId: {}",
                 request.getCourseId(), request.getSectionId(), request.getLessonId());
-        Long courseId = resolveCourseId(request.getCourseId(), request.getSectionId(), request.getLessonId());
-        requireEditableCourse(courseId);
+        Long courseId = request.getCourseId() == null && request.getSectionId() == null && request.getLessonId() == null
+                ? null
+                : resolveCourseId(request.getCourseId(), request.getSectionId(), request.getLessonId());
+        if (courseId != null) {
+            requireEditableCourse(courseId);
+        }
         request.setCourseId(courseId);
         QuizEntity quiz = quizMapper.toEntity(request);
         quiz.setCode(CodeGenerator.generate(QUIZ_CODE_PREFIX, quizRepository::existsByCode));
@@ -479,7 +483,7 @@ public class CourseAuthoringService implements ICourseAuthoringService {
         return null;
     }
 
-    /** Xác định course cha từ context assessment và chặn context thiếu hoặc mâu thuẫn. */
+    /** Xác định course cha từ context assessment và chặn context mâu thuẫn. */
     private Long resolveCourseId(Long courseId, Long sectionId, Long lessonId) {
         Long resolved = courseId;
         if (lessonId != null) {

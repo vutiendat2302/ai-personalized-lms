@@ -169,7 +169,7 @@ public class CourseDetailService implements ICourseDetailService {
                 .fullName(creator.getFullName())
                 .avatarUrl(creator.getAvatarUrl())
                 .title(employee != null ? employee.getPosition() : null)
-                .bio(null)
+                .bio(employee != null ? employee.getBio() : null)
                 .build();
     }
 

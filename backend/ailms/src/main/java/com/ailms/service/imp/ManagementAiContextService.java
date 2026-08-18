@@ -45,9 +45,19 @@ import com.ailms.repository.LeaveRequestRepository;
 import com.ailms.repository.LessonRepository;
 import com.ailms.repository.LessonResourceRepository;
 import com.ailms.repository.OrderRepository;
+import com.ailms.repository.QuizRepository;
 import com.ailms.repository.StudentProfileRepository;
 import com.ailms.repository.UserCouponRepository;
 import com.ailms.repository.UserRepository;
+import com.ailms.repository.ContractTemplateRepository;
+import com.ailms.request.GenerateEmployeeContractRequest;
+import com.ailms.request.QuizQuestionOptionRequest;
+import com.ailms.request.QuizQuestionRequest;
+import com.ailms.request.QuizRequest;
+import com.ailms.response.QuizResponse;
+import com.ailms.response.EmployeeContractResponse;
+import com.ailms.service.ICourseAuthoringService;
+import com.ailms.service.IEmployeeContractService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -88,15 +98,19 @@ public class ManagementAiContextService {
     private final CourseSectionRepository courseSectionRepository;
     private final LessonRepository lessonRepository;
     private final LessonResourceRepository lessonResourceRepository;
+    private final QuizRepository quizRepository;
     private final StudentProfileRepository studentProfileRepository;
     private final EnrollmentRepository enrollmentRepository;
     private final CourseProgressRepository courseProgressRepository;
     private final DepartmentRepository departmentRepository;
     private final ApplicationEventPublisher applicationEventPublisher;
     private final AiNotificationActionService aiNotificationActionService;
+    private final ICourseAuthoringService courseAuthoringService;
+    private final IEmployeeContractService employeeContractService;
+    private final ContractTemplateRepository contractTemplateRepository;
 
     /** Thực thi đúng một tool allow-list và ghi audit metadata không chứa dữ liệu nhạy cảm. */
-    @Transactional(readOnly = true)
+    @Transactional
     public Map<String, Object> execute(
             String toolName, Map<String, Object> arguments, AiToolAccessContext context) {
         Map<String, Object> result = switch (toolName) {
@@ -129,6 +143,7 @@ public class ManagementAiContextService {
             case "draft_coupon_and_distribute" -> withAdmin(context, () -> draftCouponAndDistribute(arguments, context));
             case "get_sales_kpi_and_order_analytics" -> withAdmin(context, () -> salesKpiAndOrderAnalytics(arguments));
             case "query_abandoned_carts_and_retarget" -> withAdmin(context, () -> abandonedCartsAndRetarget(arguments));
+            case "create_quiz_for_course_or_lesson" -> withTeacherOrAdmin(context, () -> createQuizForCourseOrLesson(arguments, context));
             default -> throw new BadRequestException("Tool AI không được hỗ trợ");
         };
         applicationEventPublisher.publishEvent(new AuditLogEvent(
@@ -342,6 +357,23 @@ public class ManagementAiContextService {
     private Map<String, Object> withAdmin(
             AiToolAccessContext context, java.util.function.Supplier<Map<String, Object>> supplier) {
         requireAdmin(context);
+        return supplier.get();
+    }
+
+    /** Xác thực người dùng có quyền Admin, HR hoặc Giảng viên trước khi thực thi. */
+    private void requireTeacherOrAdmin(AiToolAccessContext context) {
+        boolean authorized = context.roles().stream()
+                .anyMatch(role -> role.equals("ROLE_ADMIN") || role.equals("ROLE_TEACHER")
+                        || role.equals("ROLE_INSTRUCTOR") || role.equals("ROLE_HR"));
+        if (!authorized) {
+            throw new ForbiddenException("Chỉ Giảng viên hoặc Quản trị viên mới được tạo và lưu bài kiểm tra");
+        }
+    }
+
+    /** Chạy supplier sau khi xác thực role Teacher hoặc Admin. */
+    private Map<String, Object> withTeacherOrAdmin(
+            AiToolAccessContext context, java.util.function.Supplier<Map<String, Object>> supplier) {
+        requireTeacherOrAdmin(context);
         return supplier.get();
     }
 
@@ -787,7 +819,7 @@ public class ManagementAiContextService {
         }
 
         List<EmployeeContractEntity> activeContracts = employeeContractRepository
-                .findByEmployee_IdAndStatus(employee.getUserId(), BaseStatusEnum.ACTIVE);
+                .findByEmployee_UserIdAndStatus(employee.getUserId(), BaseStatusEnum.ACTIVE);
 
         Map<String, Object> res = new LinkedHashMap<>();
         res.put("found", true);
@@ -828,18 +860,30 @@ public class ManagementAiContextService {
     /** Tạo hợp đồng lao động mới cho nhân viên và tự động chấm dứt hợp đồng cũ nếu được yêu cầu. */
     private Map<String, Object> createOrRenewEmployeeContract(Map<String, Object> arguments, AiToolAccessContext context) {
         String employeeIdStr = optionalString(arguments, "employeeId");
-        if (employeeIdStr == null) {
-            throw new BadRequestException("Cần truyền employeeId");
-        }
-        Long employeeId;
-        try {
-            employeeId = Long.valueOf(employeeIdStr);
-        } catch (NumberFormatException e) {
-            throw new BadRequestException("employeeId không hợp lệ");
-        }
+        String employeeCode = optionalString(arguments, "employeeCode");
+        String keyword = optionalString(arguments, "keyword");
 
-        EmployeeEntity employee = employeeRepository.findById(employeeId)
-                .orElseThrow(() -> ResourceNotFoundException.of("Employee", employeeIdStr));
+        EmployeeEntity employee = null;
+        if (employeeIdStr != null) {
+            try {
+                employee = employeeRepository.findById(Long.valueOf(employeeIdStr)).orElse(null);
+            } catch (NumberFormatException ignored) {}
+            if (employee == null) {
+                employee = employeeRepository.findByEmployeeCode(employeeIdStr).orElse(null);
+            }
+        }
+        if (employee == null && employeeCode != null) {
+            employee = employeeRepository.findByEmployeeCode(employeeCode).orElse(null);
+        }
+        if (employee == null && keyword != null) {
+            employee = employeeRepository.findAll().stream()
+                    .filter(candidate -> containsEmployee(candidate, keyword))
+                    .findFirst()
+                    .orElse(null);
+        }
+        if (employee == null) {
+            throw new ResourceNotFoundException("Không tìm thấy thông tin nhân viên: " + (employeeIdStr != null ? employeeIdStr : (employeeCode != null ? employeeCode : keyword)));
+        }
 
         String contractTypeStr = optionalString(arguments, "contractType");
         String salaryTypeStr = optionalString(arguments, "salaryType");
@@ -890,7 +934,7 @@ public class ManagementAiContextService {
         }
 
         List<EmployeeContractEntity> activeContracts = employeeContractRepository
-                .findByEmployee_IdAndStatus(employee.getUserId(), BaseStatusEnum.ACTIVE);
+                .findByEmployee_UserIdAndStatus(employee.getUserId(), BaseStatusEnum.ACTIVE);
 
         if (!activeContracts.isEmpty() && !forceTerminateOldContract) {
             return Map.of(
@@ -908,35 +952,40 @@ public class ManagementAiContextService {
             employeeContractRepository.save(oldContract);
         }
 
-        String signingToken = UUID.randomUUID().toString();
-        EmployeeContractEntity newContract = EmployeeContractEntity.builder()
-                .employee(employee)
-                .contractTypeEnum(contractType)
-                .salaryTypeEnum(salaryType)
-                .baseSalary(baseSalary)
-                .startDate(startDate)
-                .endDate(endDate)
-                .status(BaseStatusEnum.ACTIVE)
-                .signingStatus(SigningStatusEnum.PENDING_EMPLOYEE_SIGN)
-                .signingToken(signingToken)
-                .signingTokenExpiresAt(LocalDateTime.now().plusDays(7))
-                .build();
+        Long templateId = contractTemplateRepository
+                .findFirstByContractTypeEnumAndStatusOrderByIdDesc(contractType, BaseStatusEnum.ACTIVE)
+                .map(template -> template.getId())
+                .orElseThrow(() -> new BadRequestException(
+                        "Chưa có mẫu hợp đồng ACTIVE phù hợp với loại " + contractType + ". Vui lòng tạo mẫu trước."));
 
-        EmployeeContractEntity saved = employeeContractRepository.save(newContract);
+        EmployeeContractResponse generated = employeeContractService.generateContract(
+                GenerateEmployeeContractRequest.builder()
+                        .employeeId(employee.getUserId())
+                        .contractTypeEnum(contractType)
+                        .templateId(templateId)
+                        .startDate(startDate)
+                        .endDate(endDate)
+                        .baseSalary(baseSalary)
+                        .salaryTypeEnum(salaryType)
+                        .build());
 
         Map<String, Object> res = new LinkedHashMap<>();
         res.put("status", "SUCCESS");
-        res.put("contractId", String.valueOf(saved.getId()));
+        res.put("contractId", String.valueOf(generated.getId()));
         res.put("employeeCode", employee.getEmployeeCode());
         res.put("fullName", employee.getUserEntity() != null ? employee.getUserEntity().getFullName() : "");
-        res.put("contractType", saved.getContractTypeEnum().name());
-        res.put("salaryType", saved.getSalaryTypeEnum().name());
-        res.put("baseSalary", saved.getBaseSalary());
-        res.put("startDate", saved.getStartDate().toString());
-        res.put("endDate", saved.getEndDate() != null ? saved.getEndDate().toString() : "Vô thời hạn");
-        res.put("signingStatus", saved.getSigningStatus().name());
+        res.put("contractType", generated.getContractTypeEnum().name());
+        res.put("salaryType", generated.getSalaryTypeEnum().name());
+        res.put("baseSalary", generated.getBaseSalary());
+        res.put("startDate", generated.getStartDate().toString());
+        res.put("endDate", generated.getEndDate() != null ? generated.getEndDate().toString() : "Vô thời hạn");
+        res.put("signingStatus", generated.getSigningStatus().name());
+        res.put("fileKey", generated.getFileKey());
+        res.put("fileName", generated.getFileName());
+        res.put("downloadUrl", generated.getDownloadUrl());
+        res.put("templateId", String.valueOf(templateId));
         res.put("terminatedOldContractsCount", activeContracts.size());
-        res.put("message", "Đã tạo hợp đồng mới thành công và chuyển hợp đồng cũ sang TERMINATED.");
+        res.put("message", "Đã tạo hợp đồng mới bằng luồng sinh PDF của hệ thống, lưu tệp PDF vào MinIO và chuyển hợp đồng cũ sang TERMINATED.");
         return res;
     }
 
@@ -1316,6 +1365,126 @@ public class ManagementAiContextService {
                 "potentialCustomersCount", cartCount,
                 "message", String.format("Hiện có %d mục trong giỏ hàng sẵn sàng cho chương trình voucher tiếp thị lại.", cartCount)
         );
+    }
+
+    /** Đọc giá trị Long an toàn từ argument map. */
+    private Long optionalLong(Map<String, Object> arguments, String key) {
+        String val = optionalString(arguments, key);
+        if (val == null || val.isBlank()) return null;
+        try {
+            return Long.valueOf(val.trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /** Tạo bài kiểm tra Quiz trực tiếp vào CSDL hệ thống qua AI Tool Calling. */
+    private Map<String, Object> createQuizForCourseOrLesson(Map<String, Object> arguments, AiToolAccessContext context) {
+        String title = optionalString(arguments, "title");
+        if (title == null || title.isBlank()) {
+            throw new BadRequestException("Tiêu đề bài kiểm tra không được để trống");
+        }
+        String description = optionalString(arguments, "description");
+        int timeLimitMin = positiveInt(arguments, "timeLimitMin", 15, 300);
+        if (!arguments.containsKey("timeLimitMin") && arguments.containsKey("duration")) {
+            timeLimitMin = positiveInt(arguments, "duration", 15, 300);
+        }
+        Object passScoreObj = arguments.get("passScore");
+        if (passScoreObj == null) passScoreObj = arguments.get("passing_score");
+        BigDecimal passScore = passScoreObj != null ? new BigDecimal(String.valueOf(passScoreObj)) : BigDecimal.valueOf(80.00);
+
+        Long courseId = optionalLong(arguments, "courseId");
+        if (courseId == null) courseId = optionalLong(arguments, "course_id");
+        Long sectionId = optionalLong(arguments, "sectionId");
+        if (sectionId == null) sectionId = optionalLong(arguments, "section_id");
+        Long lessonId = optionalLong(arguments, "lessonId");
+        if (lessonId == null) lessonId = optionalLong(arguments, "lesson_id");
+
+        Object questionsObj = arguments.get("questions");
+        if (!(questionsObj instanceof List<?> questionsList) || questionsList.isEmpty()) {
+            throw new BadRequestException("Danh sách câu hỏi không được để trống");
+        }
+
+        List<QuizQuestionRequest> questionRequests = new ArrayList<>();
+        for (Object qItem : questionsList) {
+            if (qItem instanceof Map<?, ?> qMap) {
+                String content = String.valueOf(qMap.get("content"));
+                String qType = qMap.get("questionType") != null ? String.valueOf(qMap.get("questionType")) : "SINGLE_CHOICE";
+                String explanation = qMap.get("explanation") != null ? String.valueOf(qMap.get("explanation")) : null;
+                Object pointsObj = qMap.get("points");
+                BigDecimal points = pointsObj != null ? new BigDecimal(String.valueOf(pointsObj)) : BigDecimal.ONE;
+
+                List<QuizQuestionOptionRequest> optionRequests = new ArrayList<>();
+                Object optionsObj = qMap.get("options");
+                if (optionsObj instanceof List<?> optList) {
+                    for (Object optItem : optList) {
+                        if (optItem instanceof Map<?, ?> optMap) {
+                            String optContent = String.valueOf(optMap.get("content"));
+                            boolean isCorrect = Boolean.TRUE.equals(optMap.get("isCorrect"))
+                                    || "true".equalsIgnoreCase(String.valueOf(optMap.get("isCorrect")));
+                            optionRequests.add(QuizQuestionOptionRequest.builder()
+                                    .content(optContent)
+                                    .isCorrect(isCorrect)
+                                    .build());
+                        }
+                    }
+                }
+
+                if (optionRequests.isEmpty()) {
+                    throw new BadRequestException("Mỗi câu hỏi phải có ít nhất 2 phương án trả lời");
+                }
+
+                questionRequests.add(QuizQuestionRequest.builder()
+                        .content(content)
+                        .questionType(qType)
+                        .points(points)
+                        .explanation(explanation)
+                        .options(optionRequests)
+                        .build());
+            }
+        }
+
+        QuizRequest quizRequest = QuizRequest.builder()
+                .courseId(courseId)
+                .sectionId(sectionId)
+                .lessonId(lessonId)
+                .title(title)
+                .description(description)
+                .timeLimitMin(timeLimitMin)
+                .passScore(passScore)
+                .maxAttempts(3)
+                .shuffleQuestions(true)
+                .status(BaseStatusEnum.ACTIVE)
+                .questions(questionRequests)
+                .build();
+
+        QuizResponse createdQuiz = courseAuthoringService.createQuiz(quizRequest);
+        if (createdQuiz != null && createdQuiz.getId() != null) {
+            quizRepository.findById(createdQuiz.getId()).ifPresent(q -> {
+                q.setCreatedBy(context.ownerId());
+                quizRepository.save(q);
+            });
+        }
+
+        String courseName = "thư viện quiz cá nhân";
+        if (courseId != null) {
+            courseName = courseRepository.findById(courseId).map(CourseEntity::getName).orElse(courseName);
+        }
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("status", "SUCCESS");
+        response.put("quizId", String.valueOf(createdQuiz.getId()));
+        response.put("quizCode", createdQuiz.getCode());
+        response.put("title", createdQuiz.getTitle());
+        response.put("courseId", courseId != null ? String.valueOf(courseId) : null);
+        response.put("courseName", courseName);
+        response.put("questionCount", questionRequests.size());
+        response.put("timeLimitMin", timeLimitMin);
+        response.put("passScore", passScore);
+        response.put("actionUrl", "/teacher/assessments?tab=quizzes");
+        response.put("message", String.format("Đã lưu thành công bài kiểm tra '%s' gồm %d câu hỏi vào %s (Mã bài kiểm tra: %s). Bạn có thể xem và làm thử tại [👉 Quản Lý Bài Kiểm Tra](/teacher/assessments?tab=quizzes).",
+                createdQuiz.getTitle(), questionRequests.size(), courseName, createdQuiz.getCode()));
+        return response;
     }
 
     /** Đổi null thành chuỗi rỗng khi xây searchable text. */

@@ -21,7 +21,7 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 
-/** Đồng bộ policy hiện hành từ MinIO sang RAG và loại vector phiên bản cũ. */
+/** Đồng bộ toàn bộ policy đang ACTIVE từ MinIO sang RAG. */
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -30,22 +30,27 @@ public class PolicyKnowledgeSyncListener {
     private final IFileStorageService fileStorageService;
     private final AiServiceClient aiServiceClient;
 
-    /** Backfill policy đã tồn tại khi Backend khởi động. */
+    /** Backfill toàn bộ policy đang ACTIVE khi Backend khởi động. */
     @EventListener(ApplicationReadyEvent.class)
     public void syncExistingPolicy() {
-        currentPolicy().ifPresent(this::syncSafely);
+        syncAllActivePolicies();
     }
 
-    /** Đồng bộ policy mới sau khi transaction metadata đã commit. */
+    /** Đồng bộ lại toàn bộ policy sau khi metadata mới commit để không bỏ sót tài liệu cũ. */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onPolicyChanged(PolicyFileChangedEvent event) {
-        fileMetadataRepository.findById(event.fileId()).filter(this::isActivePolicy).ifPresent(this::syncSafely);
+        syncAllActivePolicies();
+    }
+
+    /** Ingest toàn bộ policy ACTIVE, giữ lại vector của các tài liệu còn hiệu lực. */
+    private void syncAllActivePolicies() {
+        fileMetadataRepository.findByUsageTypeAndStatus(FileUsageTypeEnum.POLICY, BaseStatusEnum.ACTIVE)
+                .forEach(this::syncSafely);
     }
 
     /** Đồng bộ có cô lập lỗi để upload policy không bị rollback vì AI Service. */
     private void syncSafely(FileMetadataEntity policy) {
         try {
-            removeOldPolicyVectors(policy.getId());
             aiServiceClient.ingest(toIngestRequest(policy));
         } catch (RuntimeException exception) {
             log.warn("Không thể đồng bộ policy {} sang RAG: {}", policy.getId(), exception.getMessage());
@@ -80,21 +85,4 @@ public class PolicyKnowledgeSyncListener {
         throw new IllegalArgumentException("Policy chỉ hỗ trợ PDF, DOCX, TXT hoặc Markdown để embedding");
     }
 
-    /** Xóa source policy cũ để AI không trộn nhiều phiên bản chính sách. */
-    private void removeOldPolicyVectors(Long currentId) {
-        fileMetadataRepository.findByUsageTypeAndStatus(FileUsageTypeEnum.POLICY, BaseStatusEnum.ACTIVE).stream()
-                .map(FileMetadataEntity::getId).filter(id -> !id.equals(currentId))
-                .forEach(id -> aiServiceClient.deleteSource("policy-" + id));
-    }
-
-    /** Lấy đúng policy active mới nhất. */
-    private java.util.Optional<FileMetadataEntity> currentPolicy() {
-        return fileMetadataRepository.findFirstByUsageTypeAndStatusOrderByCreatedAtDesc(
-                FileUsageTypeEnum.POLICY, BaseStatusEnum.ACTIVE);
-    }
-
-    /** Kiểm tra event chỉ xử lý policy đang active. */
-    private boolean isActivePolicy(FileMetadataEntity file) {
-        return file.getUsageType() == FileUsageTypeEnum.POLICY && file.getStatus() == BaseStatusEnum.ACTIVE;
-    }
 }
