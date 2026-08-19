@@ -14,7 +14,7 @@ export interface CartItem {
   categoryName?: string;
   image?: string;
   packageName: string;
-  deliveryMode: "SELF_STUDY" | "GROUP_CLASS" | "ONE_ON_ONE" | "COMBO";
+  deliveryMode: "SELF_STUDY" | "GROUP_CLASS" | "ONE_ON_ONE";
   price: number;
 }
 
@@ -110,12 +110,15 @@ export interface CouponResponse {
   discountType: DiscountType;
   value: number; // e.g. 20 for 20% or 500000 for 500k
   usedCount: number;
-  maxUsage: number;
+  maxUsage: number | null;
   validFrom: string;
   validTo: string;
   status: "ACTIVE" | "EXPIRED" | "DISABLED";
   applicableCourseId?: string | null;
   applicableCourseName?: string;
+  applicableCourseIds?: string[];
+  applicableCourseNames?: string[];
+  distributionScope?: "NONE" | "ALL_STUDENTS" | "SELECTED_STUDENTS";
 }
 
 export interface ValidateCouponRequest {
@@ -128,11 +131,21 @@ export interface CreateCouponRequest {
   code: string;
   discountType: DiscountType;
   value: number;
-  maxUsage: number;
+  maxUsage: number | null;
   validFrom: string;
   validTo: string;
   applicableCourseId?: string | number | null;
+  applicableCourseIds?: string[];
+  distributionScope?: "NONE" | "ALL_STUDENTS" | "SELECTED_STUDENTS";
+  status?: "ACTIVE" | "DISABLED";
 }
+
+/** Chuẩn hóa coupon backend sang model UI đang dùng value/status. */
+const normalizeCoupon = (coupon: Omit<CouponResponse, "status"> & { discountValue?: number; status?: string }): CouponResponse => ({
+  ...coupon,
+  value: coupon.discountValue ?? coupon.value,
+  status: coupon.status === "INACTIVE" ? "DISABLED" : (coupon.status as CouponResponse["status"]),
+});
 
 export const orderApi = {
   /** Kiểm tra lịch 1-1 mong muốn với các lớp hiện tại mà chưa tạo đơn hàng. */
@@ -216,11 +229,52 @@ export const orderApi = {
       message?: string;
     }>>("/v1/coupons/validate", payload),
 
-  getCoupons: (params?: any) =>
-    httpClient.get<ApiResponse<CouponResponse[]>>("/v1/coupons", { params }),
+  getCoupons: async (params?: Record<string, string | number>) => {
+    const response = await httpClient.get<ApiResponse<CouponResponse[]>>("/v1/coupons", { params });
+    return { ...response, data: { ...response.data, data: (response.data.data || []).map(normalizeCoupon) } };
+  },
 
-  createCoupon: (payload: CreateCouponRequest) =>
-    httpClient.post<ApiResponse<CouponResponse>>("/v1/coupons", payload),
+  createCoupon: async (payload: CreateCouponRequest) => {
+    const response = await httpClient.post<ApiResponse<CouponResponse>>("/v1/coupons", {
+      code: payload.code.trim().toUpperCase(),
+      discountType: payload.discountType,
+      discountValue: payload.value,
+      maxUsage: payload.maxUsage,
+      validFrom: `${payload.validFrom}T00:00:00`,
+      validTo: `${payload.validTo}T23:59:59`,
+      applicableCourseId: payload.applicableCourseId || null,
+      applicableCourseIds: payload.applicableCourseIds || [],
+      distributionScope: payload.distributionScope || "NONE",
+      status: payload.status === "DISABLED" ? "INACTIVE" : "ACTIVE",
+    });
+    return { ...response, data: { ...response.data, data: normalizeCoupon(response.data.data) } };
+  },
+
+  updateCoupon: async (id: string, payload: CreateCouponRequest) => {
+    const response = await httpClient.put<ApiResponse<CouponResponse>>(`/v1/coupons/${id}`, {
+      code: payload.code.trim().toUpperCase(),
+      discountType: payload.discountType,
+      discountValue: payload.value,
+      maxUsage: payload.maxUsage,
+      validFrom: `${payload.validFrom}T00:00:00`,
+      validTo: `${payload.validTo}T23:59:59`,
+      applicableCourseId: payload.applicableCourseId || null,
+      applicableCourseIds: payload.applicableCourseIds || [],
+      distributionScope: payload.distributionScope || "NONE",
+      status: payload.status === "DISABLED" ? "INACTIVE" : "ACTIVE",
+    });
+    return { ...response, data: { ...response.data, data: normalizeCoupon(response.data.data) } };
+  },
+
+  assignCouponToUser: (couponId: string, userId: string) =>
+    httpClient.post<ApiResponse<unknown>>(`/v1/coupons/${couponId}/users/${userId}`),
+
+  assignCouponToAllStudents: (couponId: string) =>
+    httpClient.post<ApiResponse<number>>(`/v1/coupons/${couponId}/students`),
+
+  /** Gửi voucher cho nhiều học viên được chọn. */
+  assignCouponToUsers: (couponId: string, userIds: string[]) =>
+    httpClient.post<ApiResponse<number>>(`/v1/coupons/${couponId}/students/bulk`, userIds),
 
   deleteCoupon: (id: string | number) =>
     httpClient.delete<ApiResponse<void>>(`/v1/coupons/${id}`),

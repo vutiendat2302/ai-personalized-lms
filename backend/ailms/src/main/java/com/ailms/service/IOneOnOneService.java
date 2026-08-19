@@ -14,6 +14,9 @@ public interface IOneOnOneService {
     /** Lấy các gợi ý phù hợp chuyên môn cho giáo viên/trợ giảng. */
     List<OneOnOneRequestResponse> getSuggestions(Long instructorId);
 
+    /** Lấy các yêu cầu đã được người dạy hiện tại nhận. */
+    List<OneOnOneRequestResponse> getAssignedRequests(Long instructorId);
+
     /** Người dạy nhận độc quyền một yêu cầu đang mở. */
     OneOnOneRequestResponse accept(Long instructorId, Long requestId);
 
@@ -32,8 +35,17 @@ public interface IOneOnOneService {
     /** HR xem toàn bộ yêu cầu cần theo dõi. */
     List<OneOnOneRequestResponse> getHrRequests();
 
-    /** HR đánh dấu đã kết nối thông tin liên hệ giữa hai bên. */
-    OneOnOneRequestResponse markContacted(Long requestId);
+    /** HR kết nối hai bên và tạo lớp cùng lịch học thử. */
+    OneOnOneRequestResponse markContacted(Long requestId, OneOnOneTrialClassRequest request);
+
+    /** HR đổi lịch buổi học thử đã tạo. */
+    OneOnOneRequestResponse rescheduleTrialClass(Long requestId, OneOnOneTrialClassRequest request);
+
+    /** Đóng trial quá hạn nhận xét và mở lại matching giáo viên. */
+    int expireUnreviewedTrials();
+
+    /** Học viên cập nhật nhu cầu và mở lại matching, kể cả đổi giáo viên sau khi ghép. */
+    OneOnOneRequestResponse rematch(Long studentId, Long requestId, OneOnOneRematchRequest request);
 
     /** HR từ chối người đang nhận và mở lại yêu cầu cho người dạy khác. */
     OneOnOneRequestResponse rejectConnection(Long requestId, String reason);

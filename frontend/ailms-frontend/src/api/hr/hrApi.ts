@@ -41,6 +41,7 @@ export interface EmployeeContractResponse {
   employeeId: string;
   employeeCode?: string;
   fullName?: string;
+  avatarUrl?: string | null;
   departmentName?: string;
   position?: string;
   contractType?: ContractType | string;
@@ -151,6 +152,10 @@ export interface HrOneOnOneRequestResponse {
   availablePeriod?: string | null;
   availableDays?: string | null;
   preferredTimes?: string | null;
+  trialStartAt?: string | null;
+  trialEndAt?: string | null;
+  trialClassId?: string | null;
+  trialSessionId?: string | null;
   createdAt: string;
 }
 
@@ -161,15 +166,32 @@ export interface HrInstructorCandidateResponse {
   role: string;
 }
 
+export interface OneOnOneTrialSchedulePayload {
+  className: string;
+  startAt?: string;
+  endAt?: string;
+  learningMode: string;
+  linkOrLocation?: string;
+  notes?: string;
+}
+
 export const hrApi = {
   /** Lấy các yêu cầu học 1-1 để HR theo dõi và xác nhận kết nối. */
   getOneOnOneRequests: async () =>
     httpClient.get<ApiResponse<HrOneOnOneRequestResponse[]>>("/v1/hr/one-on-one/requests"),
 
-  /** Đánh dấu HR đã kết nối học viên với người dạy được phân công. */
-  markOneOnOneContacted: async (requestId: string) =>
+  /** Kết nối hai bên và tạo lớp cùng buổi học thử trong một transaction. */
+  markOneOnOneContacted: async (requestId: string, payload: OneOnOneTrialSchedulePayload) =>
     httpClient.post<ApiResponse<HrOneOnOneRequestResponse>>(
       `/v1/hr/one-on-one/requests/${requestId}/mark-contacted`,
+      payload,
+    ),
+
+  /** HR đổi lịch buổi học thử đã tạo, vẫn kiểm tra trùng lịch ở backend. */
+  rescheduleOneOnOneTrial: async (requestId: string, payload: OneOnOneTrialSchedulePayload) =>
+    httpClient.put<ApiResponse<HrOneOnOneRequestResponse>>(
+      `/v1/hr/one-on-one/requests/${requestId}/trial-class`,
+      payload,
     ),
 
   /** Từ chối người đang nhận lớp và mở lại matching cho người dạy khác. */
@@ -265,5 +287,7 @@ export const hrApi = {
     httpClient.post<ApiResponse<LeaveRequestResponse>>("/v1/leave-requests", payload),
 
   approveLeaveRequest: (id: string, status: "APPROVED" | "REJECTED", reason?: string) =>
-    httpClient.post<ApiResponse<LeaveRequestResponse>>(`/v1/leave-requests/${id}/approve`, { status, reason }),
+    httpClient.post<ApiResponse<LeaveRequestResponse>>(`/v1/leave-requests/${id}/approve`, null, {
+      params: { approve: status === "APPROVED", rejectionReason: reason },
+    }),
 };

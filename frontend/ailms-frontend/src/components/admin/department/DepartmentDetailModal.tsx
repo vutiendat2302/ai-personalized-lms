@@ -77,6 +77,9 @@ export const DepartmentDetailModal: React.FC<DepartmentDetailModalProps> = ({
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [loadingAuditLogs, setLoadingAuditLogs] = useState(false);
 
+  /**
+   * Lấy danh sách nhân viên thuộc phòng ban
+   */
   const fetchEmployees = async () => {
     if (!department) return;
     setLoadingEmployees(true);
@@ -99,6 +102,9 @@ export const DepartmentDetailModal: React.FC<DepartmentDetailModalProps> = ({
     }
   };
 
+  /**
+   * Lấy danh sách nhật ký kiểm toán (audit log) của phòng ban
+   */
   const fetchAuditLogs = async () => {
     if (!department) return;
     setLoadingAuditLogs(true);
@@ -165,6 +171,9 @@ export const DepartmentDetailModal: React.FC<DepartmentDetailModalProps> = ({
     }
   }, [department, open]);
 
+  /**
+   * Định dạng hiển thị tên hoặc email của người dùng từ userMap
+   */
   const formatUserDisplay = (userVal?: string | null, fallback = "Hệ thống") => {
     if (!userVal) return fallback;
     const str = String(userVal);
@@ -176,6 +185,9 @@ export const DepartmentDetailModal: React.FC<DepartmentDetailModalProps> = ({
     return str;
   };
 
+  /**
+   * Chuyển danh sách nhân viên được chọn sang phòng ban mới
+   */
   const handleTransferSelectedEmployees = async () => {
     if (!targetDeptId) {
       if (onShowBanner) onShowBanner("Vui lòng chọn phòng ban đích để chuyển nhân viên!", true);
@@ -209,6 +221,9 @@ export const DepartmentDetailModal: React.FC<DepartmentDetailModalProps> = ({
     }
   };
 
+  /**
+   * Gỡ danh sách nhân viên được chọn khỏi phòng ban
+   */
   const handleRemoveSelectedEmployees = async (specificEmpId?: string) => {
     const idsToRemove = specificEmpId ? [specificEmpId] : selectedEmpIds;
     if (idsToRemove.length === 0) {
@@ -236,6 +251,9 @@ export const DepartmentDetailModal: React.FC<DepartmentDetailModalProps> = ({
     }
   };
 
+  /**
+   * Lấy ID của nhân viên dưới dạng chuỗi string
+   */
   const getEmpId = (emp: any) => String(emp.id || emp.userId);
 
   // Lọc động các loại HĐ xuất hiện trong database của phòng ban
@@ -280,7 +298,7 @@ export const DepartmentDetailModal: React.FC<DepartmentDetailModalProps> = ({
                   <span className="font-mono text-xs font-extrabold px-2.5 py-0.5 rounded-lg bg-primary/10 text-primary border border-primary/20">
                     {department.code}
                   </span>
-                  <Badge className={department.status === "ACTIVE" ? "bg-emerald-600 text-white font-bold text-xs" : "bg-red-500 text-white font-bold text-xs"}>
+                  <Badge className={department.status === "ACTIVE" ? "bg-success-forest text-white font-bold text-xs" : "bg-destructive text-white font-bold text-xs"}>
                     {department.status === "ACTIVE" ? "Đang hoạt động" : "Ngừng hoạt động"}
                   </Badge>
                 </div>
@@ -318,13 +336,13 @@ export const DepartmentDetailModal: React.FC<DepartmentDetailModalProps> = ({
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0 overflow-hidden">
           <TabsList className="px-6 border-b border-border/30 bg-muted/20 justify-start gap-4 rounded-none h-12">
             <TabsTrigger value="general" className="font-bold text-xs gap-1.5 cursor-pointer">
-              <FileText className="h-3.5 w-3.5" /> Tab 1 — Thông tin chung
+              <FileText className="h-3.5 w-3.5" /> Thông tin chung
             </TabsTrigger>
             <TabsTrigger value="employees" className="font-bold text-xs gap-1.5 cursor-pointer">
-              <Users className="h-3.5 w-3.5" /> Tab 2 — Nhân viên thuộc phòng ({employees.length})
+              <Users className="h-3.5 w-3.5" /> Nhân viên thuộc phòng ({employees.length})
             </TabsTrigger>
             <TabsTrigger value="audit" className="font-bold text-xs gap-1.5 cursor-pointer">
-              <History className="h-3.5 w-3.5" /> Tab 3 — Audit Log
+              <History className="h-3.5 w-3.5" /> Lịch sử thay đổi
             </TabsTrigger>
           </TabsList>
 
@@ -340,11 +358,11 @@ export const DepartmentDetailModal: React.FC<DepartmentDetailModalProps> = ({
                 </CardHeader>
                 <CardContent className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                   <div>
-                    <Label className="text-xs font-bold text-muted-foreground">ID Hệ thống (ID)</Label>
+                    <Label className="text-xs font-bold text-muted-foreground">Mã ID hệ thống</Label>
                     <div className="mt-1 font-mono font-bold text-sm text-foreground">{department.id}</div>
                   </div>
                   <div>
-                    <Label className="text-xs font-bold text-muted-foreground">Mã Phòng ban (Code)</Label>
+                    <Label className="text-xs font-bold text-muted-foreground">Mã phòng ban</Label>
                     <div className="mt-1 font-mono font-extrabold text-sm text-primary">{department.code}</div>
                   </div>
                   <div>
@@ -354,7 +372,7 @@ export const DepartmentDetailModal: React.FC<DepartmentDetailModalProps> = ({
                   <div>
                     <Label className="text-xs font-bold text-muted-foreground">Trạng thái</Label>
                     <div className="mt-1">
-                      <Badge className={department.status === "ACTIVE" ? "bg-emerald-600 text-white font-bold" : "bg-red-500 text-white font-bold"}>
+                      <Badge className={department.status === "ACTIVE" ? "bg-success-forest text-white font-bold" : "bg-destructive text-white font-bold"}>
                         {department.status === "ACTIVE" ? "Đang hoạt động" : "Ngừng hoạt động"}
                       </Badge>
                     </div>
@@ -380,21 +398,21 @@ export const DepartmentDetailModal: React.FC<DepartmentDetailModalProps> = ({
                     </div>
                   </div>
                   <div>
-                    <Label className="text-xs font-bold text-muted-foreground">Người tạo (Created By)</Label>
+                    <Label className="text-xs font-bold text-muted-foreground">Người tạo</Label>
                     <div className="mt-1 font-semibold text-foreground flex items-center gap-1">
                       <User className="h-3.5 w-3.5 text-primary" />
                       <span>{formatUserDisplay(department.createdBy, "Hệ thống")}</span>
                     </div>
                   </div>
                   <div>
-                    <Label className="text-xs font-bold text-muted-foreground">Người cập nhật (Updated By)</Label>
+                    <Label className="text-xs font-bold text-muted-foreground">Người cập nhật</Label>
                     <div className="mt-1 font-semibold text-foreground flex items-center gap-1">
-                      <User className="h-3.5 w-3.5 text-blue-500" />
+                      <User className="h-3.5 w-3.5 text-brand-cobalt" />
                       <span>{formatUserDisplay(department.updatedBy, "Chưa cập nhật")}</span>
                     </div>
                   </div>
                   <div className="sm:col-span-2">
-                    <Label className="text-xs font-bold text-muted-foreground">Mô tả chức năng & Nhiệm vụ</Label>
+                    <Label className="text-xs font-bold text-muted-foreground">Mô tả chức năng &amp; Nhiệm vụ</Label>
                     <div className="mt-1 text-foreground bg-muted/20 p-3 rounded-lg border">{department.description || "Chưa thiết lập mô tả chức năng."}</div>
                   </div>
                 </CardContent>
@@ -435,7 +453,7 @@ export const DepartmentDetailModal: React.FC<DepartmentDetailModalProps> = ({
                     onClick={() => handleRemoveSelectedEmployees()}
                     disabled={selectedEmpIds.length === 0 || removing}
                     variant="outline"
-                    className="font-bold text-xs gap-1.5 border-red-500/30 text-red-600 hover:bg-red-500/10 cursor-pointer"
+                    className="font-bold text-xs gap-1.5 border-destructive/30 text-destructive hover:bg-destructive/10 cursor-pointer"
                   >
                     {removing ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserMinus className="h-4 w-4" />}
                     {removing ? "Đang gỡ..." : `Gỡ khỏi phòng (${selectedEmpIds.length})`}
@@ -443,11 +461,11 @@ export const DepartmentDetailModal: React.FC<DepartmentDetailModalProps> = ({
                 </div>
               </div>
 
-              {/* Filter loại hợp đồng - LẤY ĐỘNG TỪ DATABASE */}
+              {/* Filter loại hợp đồng */}
               <div className="flex flex-wrap items-center gap-3 p-3 rounded-xl bg-muted/20 border border-border/30 text-xs">
                 <span className="font-bold text-muted-foreground flex items-center gap-1"><Filter className="h-3.5 w-3.5" /> Lọc nhanh:</span>
                 <div className="flex items-center gap-1">
-                  <span className="text-muted-foreground">Loại HĐ:</span>
+                  <span className="text-muted-foreground">Loại hợp đồng:</span>
                   <Select value={filterEmploymentType} onValueChange={setFilterEmploymentType}>
                     <SelectTrigger className="h-8 text-xs w-44 bg-background font-semibold"><SelectValue placeholder="Tất cả" /></SelectTrigger>
                     <SelectContent>
@@ -478,8 +496,8 @@ export const DepartmentDetailModal: React.FC<DepartmentDetailModalProps> = ({
                       </th>
                       <th className="p-3">Mã NV</th>
                       <th className="p-3">Họ và tên</th>
-                      <th className="p-3">Chức vụ (Position)</th>
-                      <th className="p-3 text-center">Hình thức (Type)</th>
+                      <th className="p-3">Chức vụ</th>
+                      <th className="p-3 text-center">Hình thức hợp đồng</th>
                       <th className="p-3 text-center">Trạng thái</th>
                       <th className="p-3 text-right">Thao tác</th>
                     </tr>
@@ -497,7 +515,7 @@ export const DepartmentDetailModal: React.FC<DepartmentDetailModalProps> = ({
                     ) : employeesError ? (
                       <tr>
                         <td colSpan={7} className="p-8 text-center">
-                          <div className="flex flex-col items-center gap-2 text-red-500">
+                          <div className="flex flex-col items-center gap-2 text-destructive">
                             <AlertCircle className="h-7 w-7 opacity-70" />
                             <p className="font-semibold text-sm">Lỗi tải nhân viên</p>
                             <p className="text-xs text-muted-foreground">{employeesError}</p>
@@ -540,8 +558,8 @@ export const DepartmentDetailModal: React.FC<DepartmentDetailModalProps> = ({
                             <td className="p-3 text-center">
                               <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
                                 (emp.status || "ACTIVE") === "ACTIVE"
-                                  ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
-                                  : "bg-red-500/10 text-red-600 border-red-500/20"
+                                  ? "bg-success-forest/10 text-success-forest border-success-forest/20"
+                                  : "bg-destructive/10 text-destructive border-destructive/20"
                               }`}>
                                 {emp.status || "ACTIVE"}
                               </span>
@@ -552,7 +570,7 @@ export const DepartmentDetailModal: React.FC<DepartmentDetailModalProps> = ({
                                 variant="ghost"
                                 disabled={removing}
                                 onClick={() => handleRemoveSelectedEmployees(empIdStr)}
-                                className="h-7 text-xs font-semibold text-red-600 hover:text-red-700 hover:bg-red-500/10 rounded-lg gap-1 cursor-pointer"
+                                className="h-7 text-xs font-semibold text-destructive hover:bg-destructive/10 rounded-lg gap-1 cursor-pointer"
                                 title="Gỡ nhân viên khỏi phòng ban này"
                               >
                                 <UserMinus className="h-3.5 w-3.5" /> Gỡ khỏi phòng
@@ -571,7 +589,7 @@ export const DepartmentDetailModal: React.FC<DepartmentDetailModalProps> = ({
             <TabsContent value="audit" className="mt-0 space-y-4">
               <div className="flex items-center justify-between">
                 <h4 className="text-sm font-extrabold text-foreground flex items-center gap-2">
-                  <Activity className="h-4 w-4 text-primary" /> Lịch sử Thay đổi & Audit Log Phòng ban
+                  <Activity className="h-4 w-4 text-primary" /> Lịch sử thay đổi phòng ban
                 </h4>
                 {loadingAuditLogs && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
               </div>

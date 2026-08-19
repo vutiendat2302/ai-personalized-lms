@@ -2,9 +2,11 @@ package com.ailms.service.imp;
 
 import com.ailms.entity.*;
 import com.ailms.entity.enums.BaseStatusEnum;
+import com.ailms.entity.enums.ClassKindEnum;
 import com.ailms.entity.enums.EmployeeStatusEnum;
 import com.ailms.entity.enums.OneOnOneRequestStatusEnum;
 import com.ailms.repository.*;
+import com.ailms.request.OneOnOneTrialClassRequest;
 import com.ailms.service.INotificationService;
 import com.ailms.service.IOrderService;
 import org.junit.jupiter.api.Test;
@@ -38,6 +40,51 @@ class OneOnOneServiceTest {
     @Mock private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks private OneOnOneService service;
+
+    /** HR xác nhận kết nối phải tạo lớp, thành viên và buổi học thử ngay trong cùng luồng. */
+    @Test
+    void markContactedCreatesTrialClassAndSession() {
+        UserEntity student = UserEntity.builder().id(10L).fullName("Học viên").build();
+        UserEntity instructor = UserEntity.builder().id(20L).fullName("Giáo viên").build();
+        CategoryEntity category = CategoryEntity.builder().id(40L).name("Toán").build();
+        CourseEntity course = CourseEntity.builder().id(50L).name("Toán 10").categoryEntity(category).build();
+        CoursePackageEntity coursePackage = CoursePackageEntity.builder()
+                .id(60L).name("Gói 1-1").includedTutorSessions(20).courseEntity(course).build();
+        EnrollmentPackageEntity enrollmentPackage = EnrollmentPackageEntity.builder()
+                .id(70L).coursePackageEntity(coursePackage).build();
+        OneOnOneRequestEntity request = OneOnOneRequestEntity.builder()
+                .id(80L).studentEntity(student).enrollmentPackageEntity(enrollmentPackage)
+                .assignedInstructorEntity(instructor).status(OneOnOneRequestStatusEnum.INSTRUCTOR_ACCEPTED).build();
+        LocalDateTime startAt = LocalDateTime.now().plusDays(1);
+        OneOnOneTrialClassRequest payload = OneOnOneTrialClassRequest.builder()
+                .className("Lớp thử Toán 10").startAt(startAt).endAt(startAt.plusMinutes(45))
+                .learningMode("GOOGLE_MEET").linkOrLocation("https://meet.example/trial").build();
+
+        when(requestRepository.findByIdForUpdate(80L)).thenReturn(java.util.Optional.of(request));
+        when(requestRepository.save(any(OneOnOneRequestEntity.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(classRepository.save(any(ClassEntity.class))).thenAnswer(invocation -> {
+            ClassEntity saved = invocation.getArgument(0);
+            if (saved.getId() == null) saved.setId(90L);
+            return saved;
+        });
+        when(classOnlineRepository.save(any(ClassOnlineEntity.class))).thenAnswer(invocation -> {
+            ClassOnlineEntity saved = invocation.getArgument(0);
+            if (saved.getId() == null) saved.setId(100L);
+            return saved;
+        });
+        when(classOnlineRepository.findByTeacherEntity_Id(20L)).thenReturn(List.of());
+        when(classMemberRepository.findById_UserId(10L)).thenReturn(List.of());
+        when(userRoleRepository.findByUserEntity_IdWithRole(20L)).thenReturn(List.of());
+
+        var response = service.markContacted(80L, payload);
+
+        assertThat(response.getStatus()).isEqualTo(OneOnOneRequestStatusEnum.TRIAL_SCHEDULED);
+        assertThat(response.getTrialClassId()).isEqualTo(90L);
+        assertThat(response.getTrialSessionId()).isEqualTo(100L);
+        assertThat(request.getTrialClassEntity().getClassKind()).isEqualTo(ClassKindEnum.ONE_ON_ONE_TRIAL);
+        verify(classMemberRepository, times(2)).save(any(ClassMemberEntity.class));
+        verify(classOnlineRepository).save(any(ClassOnlineEntity.class));
+    }
 
     /** Từ chối kết nối phải chặn assignee cũ, mở REMATCHING và thông báo ứng viên khác. */
     @Test

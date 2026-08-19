@@ -33,6 +33,15 @@ public interface UserRoleRepository extends BaseRepository<UserRoleEntity, Long>
     """)
     List<String> findAdminAndHrEmails();
 
+    /** Lấy người dùng Admin/HR để nhận thông báo workflow cần xử lý. */
+    @Query("""
+        SELECT DISTINCT ur.userEntity FROM UserRoleEntity ur
+        JOIN ur.roleEntity role
+        WHERE UPPER(role.code) IN ('ADMIN', 'HR', 'ROLE_ADMIN', 'ROLE_HR')
+           OR UPPER(role.name) IN ('ADMIN', 'HR', 'ROLE_ADMIN', 'ROLE_HR', 'NHÂN SỰ')
+        """)
+    List<UserEntity> findAdminAndHrUsers();
+
     @Query("""
         SELECT DISTINCT ur.userEntity FROM UserRoleEntity ur
         JOIN ur.roleEntity role

@@ -15,6 +15,12 @@ public interface ICertificateService {
      */
     CertificateResponse evaluateAndGenerateCertificate(Long enrollmentId);
 
+    /** Cấp hoặc lấy chứng chỉ sau khi xác minh enrollment thuộc học viên hiện tại. */
+    CertificateResponse evaluateAndGenerateForUser(Long enrollmentId, Long userId);
+
+    /** Tự động cấp chứng chỉ nếu enrollment đã đủ điều kiện, không làm hỏng giao dịch học tập khi chưa đủ. */
+    CertificateResponse issueIfEligible(Long enrollmentId);
+
     /**
      * Xác minh thông tin chứng chỉ thông qua mã chứng chỉ.
      *
@@ -30,6 +36,9 @@ public interface ICertificateService {
      * @return đối tượng chứa thông tin chi tiết kết quả
      */
     CertificateResponse getByEnrollmentId(Long enrollmentId);
+
+    /** Render PDF chứng chỉ đã cấp sau khi xác minh chủ sở hữu. */
+    byte[] downloadForOwner(Long certificateId, Long userId);
 
     /**
      * Thu hồi chứng chỉ đã cấp kèm theo lý do cụ thể.

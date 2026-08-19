@@ -179,6 +179,14 @@ export const CourseAdminDetailPage: React.FC = () => {
     finally { setLessonLoading(false); }
   };
 
+  /** Mở đúng bài học trong Learning Space ở chế độ preview của quản trị viên. */
+  const openLessonInLearningSpace = (lessonId: string | number) => {
+    if (!id || lessonId == null) return;
+    navigate(`/learn/courses/${id}/lessons/${lessonId}`, {
+      state: { returnTo: `/admin/courses/${id}` },
+    });
+  };
+
   if (loading) return <div className="py-20 flex justify-center gap-2 text-sm text-slate-500"><Loader2 className="h-5 w-5 animate-spin" /> Đang tải khóa học...</div>;
   if (error || !course) return <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-700 flex gap-2"><AlertTriangle className="h-5 w-5" /> {error || "Không tìm thấy khóa học"}</div>;
 
@@ -371,7 +379,7 @@ export const CourseAdminDetailPage: React.FC = () => {
                       <button
                         type="button"
                         key={lIdx}
-                        onClick={() => void openLessonDetail(les)}
+                        onClick={() => openLessonInLearningSpace(les.id)}
                         className="w-full flex items-center justify-between p-2.5 rounded-lg bg-slate-50/70 hover:bg-blue-50 hover:text-blue-700 text-xs text-left transition-colors cursor-pointer"
                       >
                         <div className="flex items-center gap-2.5 font-medium text-slate-800">

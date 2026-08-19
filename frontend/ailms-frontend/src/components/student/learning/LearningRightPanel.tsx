@@ -4,10 +4,11 @@ import { FileText, StickyNote, Download, Paperclip } from "lucide-react";
 interface LearningRightPanelProps {
   description?: string;
   resources?: any[];
+  notes?: string;
+  onNotesChange?: (value: string) => void;
 }
 
-export const LearningRightPanel: React.FC<LearningRightPanelProps> = ({ description, resources = [] }) => {
-  const [notes, setNotes] = useState("");
+export const LearningRightPanel: React.FC<LearningRightPanelProps> = ({ description, resources = [], notes = "", onNotesChange }) => {
   const [activeTab, setActiveTab] = useState<"info" | "notes">("info");
 
   const renderDescription = () => {
@@ -76,7 +77,29 @@ export const LearningRightPanel: React.FC<LearningRightPanelProps> = ({ descript
                 </div>
                 <div className="space-y-1.5">
                   {resources.map((res: any, idx: number) => {
-                    const downloadUrl = res.fileUrl || (res.fileKey ? `/api/v1/files/download?fileKey=${encodeURIComponent(res.fileKey)}` : "#");
+                    const raw = res.fileUrl || res.fileKey || "";
+                    let downloadUrl = "#";
+                    if (raw) {
+                      if (raw.startsWith("/api/v1/files/download")) {
+                        downloadUrl = raw;
+                      } else if (raw.startsWith("http://") || raw.startsWith("https://")) {
+                        if (raw.includes("minio:9000") || raw.includes("localhost:9000")) {
+                          try {
+                            const urlObj = new URL(raw);
+                            const pathParts = urlObj.pathname.split("/").filter(Boolean);
+                            const fileKey = pathParts.length > 1 ? pathParts.slice(1).join("/") : pathParts.join("/");
+                            downloadUrl = `/api/v1/files/download?fileKey=${encodeURIComponent(fileKey)}`;
+                          } catch {
+                            downloadUrl = `/api/v1/files/download?fileKey=${encodeURIComponent(raw)}`;
+                          }
+                        } else {
+                          downloadUrl = raw;
+                        }
+                      } else {
+                        downloadUrl = `/api/v1/files/download?fileKey=${encodeURIComponent(raw)}`;
+                      }
+                    }
+
                     return (
                       <div key={res.id || idx} className="p-2 bg-gray-50 border border-gray-200 rounded-lg flex items-center justify-between text-xs">
                         <span className="font-semibold text-gray-800 truncate mr-2">{res.name || "Tài liệu đính kèm"}</span>
@@ -84,7 +107,7 @@ export const LearningRightPanel: React.FC<LearningRightPanelProps> = ({ descript
                           href={downloadUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className="p-1 hover:bg-blue-100 text-blue-600 rounded transition shrink-0"
+                          className="p-1 hover:bg-blue-100 text-blue-600 rounded transition shrink-0 cursor-pointer"
                           title="Tải về"
                         >
                           <Download className="w-3.5 h-3.5" />
@@ -101,7 +124,7 @@ export const LearningRightPanel: React.FC<LearningRightPanelProps> = ({ descript
             <h4 className="text-xs font-bold text-gray-800 uppercase tracking-wider mb-2">Ghi chú cá nhân</h4>
             <textarea
               value={notes}
-              onChange={(e) => setNotes(e.target.value)}
+              onChange={(e) => onNotesChange?.(e.target.value)}
               placeholder="Ghi lại các ý chính khi xem bài giảng..."
               className="flex-1 w-full p-3 text-xs border border-gray-200 rounded-lg focus:ring-1 focus:ring-blue-500 focus:outline-none resize-none"
             />

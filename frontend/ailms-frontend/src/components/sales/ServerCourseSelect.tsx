@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { adminCourseClassApi } from "@/api/courses/adminCourseClassApi";
+import { salesApi, type CoursePackageItem } from "@/api/sales/salesApi";
 import { Search, BookOpen, Check, ChevronsUpDown, Loader2, X, Info, GraduationCap, Tag, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -23,6 +24,8 @@ interface ServerCourseSelectProps {
   allLabel?: string;
   className?: string;
   disabled?: boolean;
+  /** Giới hạn lựa chọn vào các khóa học đã có gói bán. */
+  onlyPackagedCourses?: boolean;
 }
 
 export const ServerCourseSelect: React.FC<ServerCourseSelectProps> = ({
@@ -33,6 +36,7 @@ export const ServerCourseSelect: React.FC<ServerCourseSelectProps> = ({
   allLabel = "Tất cả khóa học",
   className,
   disabled = false,
+  onlyPackagedCourses = false,
 }) => {
   const [open, setOpen] = useState(false);
   const [keyword, setKeyword] = useState("");
@@ -65,27 +69,19 @@ export const ServerCourseSelect: React.FC<ServerCourseSelectProps> = ({
     setLoading(true);
     pageRef.current = 0;
     try {
-      const res = await adminCourseClassApi.searchCourses({
-        keyword: searchKey.trim() || undefined,
-        page: 0,
-        size: 15,
-        status: "ACTIVE",
-      });
+      const res = onlyPackagedCourses
+        ? await salesApi.searchCoursePackages({ keyword: searchKey.trim() || undefined, page: 0, size: 15 })
+        : await adminCourseClassApi.searchCourses({ keyword: searchKey.trim() || undefined, page: 0, size: 15, status: "ACTIVE" });
 
-      const items = (res?.content || []).map((c: any) => ({
-        id: String(c.id),
-        name: c.name || `Khóa học #${c.id}`,
-        code: c.code || String(c.id),
-        categoryName: c.categoryName || c.category?.name,
-        level: c.level,
-        status: c.status || "ACTIVE",
-        price: c.price,
-      }));
+      const rawItems: CourseItemOption[] = onlyPackagedCourses
+        ? (res?.content || []).map((pkg: CoursePackageItem) => ({ id: String(pkg.courseId), name: pkg.courseName || `Khóa học #${pkg.courseId}`, code: String(pkg.courseId), status: "ACTIVE" }))
+        : (res?.content || []).map((c: any) => ({ id: String(c.id), name: c.name || `Khóa học #${c.id}`, code: c.code || String(c.id), categoryName: c.categoryName || c.category?.name, level: c.level, status: c.status || "ACTIVE", price: c.price }));
+      const items = Array.from(new Map<string, CourseItemOption>(rawItems.map((item: CourseItemOption) => [item.id, item])).values());
 
       setCourses(items);
       setTotalElements(res?.totalElements || items.length);
       setTotalPages(res?.totalPages || 1);
-      const more = res ? res.page < res.totalPages - 1 : false;
+      const more = res ? 1 < (res.totalPages || 1) : false;
       setHasMore(more);
       hasMoreRef.current = more;
     } catch {
@@ -98,7 +94,7 @@ export const ServerCourseSelect: React.FC<ServerCourseSelectProps> = ({
       loadingRef.current = false;
       setLoading(false);
     }
-  }, []);
+  }, [onlyPackagedCourses]);
 
   // Fetch next page (Infinite Scroll / Phân trang tiếp)
   const fetchNextPage = useCallback(async () => {
@@ -107,28 +103,20 @@ export const ServerCourseSelect: React.FC<ServerCourseSelectProps> = ({
     setLoading(true);
     const nextPage = pageRef.current + 1;
     try {
-      const res = await adminCourseClassApi.searchCourses({
-        keyword: debouncedKeyword.trim() || undefined,
-        page: nextPage,
-        size: 15,
-        status: "ACTIVE",
-      });
+      const res = onlyPackagedCourses
+        ? await salesApi.searchCoursePackages({ keyword: debouncedKeyword.trim() || undefined, page: nextPage, size: 15 })
+        : await adminCourseClassApi.searchCourses({ keyword: debouncedKeyword.trim() || undefined, page: nextPage, size: 15, status: "ACTIVE" });
 
-      const newItems = (res?.content || []).map((c: any) => ({
-        id: String(c.id),
-        name: c.name || `Khóa học #${c.id}`,
-        code: c.code || String(c.id),
-        categoryName: c.categoryName || c.category?.name,
-        level: c.level,
-        status: c.status || "ACTIVE",
-        price: c.price,
-      }));
+      const rawItems: CourseItemOption[] = onlyPackagedCourses
+        ? (res?.content || []).map((pkg: CoursePackageItem) => ({ id: String(pkg.courseId), name: pkg.courseName || `Khóa học #${pkg.courseId}`, code: String(pkg.courseId), status: "ACTIVE" }))
+        : (res?.content || []).map((c: any) => ({ id: String(c.id), name: c.name || `Khóa học #${c.id}`, code: c.code || String(c.id), categoryName: c.categoryName || c.category?.name, level: c.level, status: c.status || "ACTIVE", price: c.price }));
+      const newItems = Array.from(new Map<string, CourseItemOption>(rawItems.map((item: CourseItemOption) => [item.id, item])).values());
 
       setCourses((prev) => [...prev, ...newItems]);
       pageRef.current = nextPage;
       setTotalElements(res?.totalElements || 0);
       setTotalPages(res?.totalPages || 1);
-      const more = res ? res.page < res.totalPages - 1 : false;
+      const more = res ? nextPage + 1 < (res.totalPages || 1) : false;
       setHasMore(more);
       hasMoreRef.current = more;
     } catch {
@@ -138,7 +126,7 @@ export const ServerCourseSelect: React.FC<ServerCourseSelectProps> = ({
       loadingRef.current = false;
       setLoading(false);
     }
-  }, [debouncedKeyword]);
+  }, [debouncedKeyword, onlyPackagedCourses]);
 
   // Load single course details when value is set from external
   useEffect(() => {

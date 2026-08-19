@@ -16,7 +16,7 @@ import java.util.Optional;
 public interface UserCouponRepository extends BaseRepository<UserCouponEntity, Long> {
 
     /** Lấy danh sách voucher của học viên cùng dữ liệu coupon để hiển thị. */
-    @EntityGraph(attributePaths = {"couponEntity", "couponEntity.applicableCourseEntity"})
+    @EntityGraph(attributePaths = {"couponEntity", "couponEntity.applicableCourseEntity", "couponEntity.applicableCourseEntities"})
     List<UserCouponEntity> findByUserEntity_IdOrderByCreatedAtDesc(Long userId);
 
     /** Khóa voucher khả dụng theo mã trong lúc tạo checkout. */
@@ -36,6 +36,9 @@ public interface UserCouponRepository extends BaseRepository<UserCouponEntity, L
 
     /** Kiểm tra voucher đã được cấp cho học viên hay chưa. */
     boolean existsByUserEntity_IdAndCouponEntity_Id(Long userId, Long couponId);
+
+    /** Đếm tổng số học viên đã nhận coupon để quản trị hiển thị phạm vi phát. */
+    long countByCouponEntity_Id(Long couponId);
 
     /** Đếm số quyền voucher đang giữ chỗ để không bán vượt global maxUsage. */
     long countByCouponEntity_IdAndStatus(Long couponId, UserCouponStatusEnum status);

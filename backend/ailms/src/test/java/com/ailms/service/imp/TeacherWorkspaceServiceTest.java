@@ -3,6 +3,9 @@ package com.ailms.service.imp;
 import com.ailms.entity.*;
 import com.ailms.entity.enums.ClassMemberRole;
 import com.ailms.entity.enums.ClassMemberStatusEnum;
+import com.ailms.entity.enums.ApprovalStatusEnum;
+import com.ailms.entity.enums.BaseStatusEnum;
+import com.ailms.entity.enums.CourseTeacherStatusEnum;
 import com.ailms.exception.BusinessException;
 import com.ailms.repository.*;
 import com.ailms.request.TeacherWorkspaceRequest;
@@ -20,10 +23,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
 /** Kiểm tra các invariant phân quyền và điểm số quan trọng của Teacher workspace. */
@@ -55,6 +60,8 @@ class TeacherWorkspaceServiceTest {
     @Mock private INotificationService notificationService;
     @Mock private ITeacherActivityService teacherActivityService;
     @Mock private IClassSessionManagementService classSessionManagementService;
+    @Mock private UserRoleRepository userRoleRepository;
+    @Mock private OneOnOneRequestRepository oneOnOneRequestRepository;
 
     @InjectMocks private TeacherWorkspaceService service;
 
@@ -93,6 +100,95 @@ class TeacherWorkspaceServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("điểm tối đa");
         verify(assessmentService, never()).gradeSubmission(anyLong(), any(), anyLong());
+    }
+
+    /** Cho tạo yêu cầu nghỉ lớp khi số buổi hoàn thành nhỏ hơn 30% và không gỡ membership ngay. */
+    @Test
+    void createsClassWithdrawalBelowThirtyPercentWithoutRemovingMembership() {
+        ClassEntity clazz = ClassEntity.builder().id(10L).name("Lớp Java").build();
+        ClassMemberEntity member = managedMember(clazz);
+        when(classMemberRepository.findById_ClassIdAndId_UserId(10L, 1L)).thenReturn(Optional.of(member));
+        when(classOnlineRepository.findByClassEntity_Id(10L)).thenReturn(List.of(
+                session(clazz, BaseStatusEnum.COMPLETED), session(clazz, BaseStatusEnum.ACTIVE),
+                session(clazz, BaseStatusEnum.ACTIVE), session(clazz, BaseStatusEnum.ACTIVE)));
+        when(approvalRequestRepository.existsByTargetTypeAndTargetIdAndCreatedByAndStatus(
+                "CLASS_TEACHER_LEAVE_REQUEST", 10L, 1L, ApprovalStatusEnum.PENDING)).thenReturn(false);
+        when(approvalRequestRepository.save(any(ApprovalRequestEntity.class))).thenAnswer(invocation -> {
+            ApprovalRequestEntity saved = invocation.getArgument(0);
+            saved.setId(99L);
+            return saved;
+        });
+        when(userRoleRepository.findHrUsers()).thenReturn(List.of());
+
+        var result = service.createClassWithdrawal(1L,
+                TeacherWorkspaceRequest.ClassWithdrawalCreate.builder()
+                        .classId(10L).reason("Không thể tiếp tục lịch dạy").build());
+
+        assertThat(result.getType()).isEqualTo("CLASS_TEACHER_LEAVE_REQUEST");
+        assertThat(member.getStatus()).isEqualTo(ClassMemberStatusEnum.ACTIVE);
+        verify(classMemberRepository, never()).save(any());
+    }
+
+    /** Từ chối yêu cầu nghỉ lớp khi tỷ lệ hoàn thành chạm đúng 30%. */
+    @Test
+    void rejectsClassWithdrawalAtThirtyPercent() {
+        ClassEntity clazz = ClassEntity.builder().id(10L).build();
+        when(classMemberRepository.findById_ClassIdAndId_UserId(10L, 1L))
+                .thenReturn(Optional.of(managedMember(clazz)));
+        when(classOnlineRepository.findByClassEntity_Id(10L)).thenReturn(List.of(
+                session(clazz, BaseStatusEnum.COMPLETED), session(clazz, BaseStatusEnum.COMPLETED),
+                session(clazz, BaseStatusEnum.COMPLETED), session(clazz, BaseStatusEnum.ACTIVE),
+                session(clazz, BaseStatusEnum.ACTIVE), session(clazz, BaseStatusEnum.ACTIVE),
+                session(clazz, BaseStatusEnum.ACTIVE), session(clazz, BaseStatusEnum.ACTIVE),
+                session(clazz, BaseStatusEnum.ACTIVE), session(clazz, BaseStatusEnum.ACTIVE)));
+
+        assertThatThrownBy(() -> service.createClassWithdrawal(1L,
+                TeacherWorkspaceRequest.ClassWithdrawalCreate.builder().classId(10L).reason("Xin nghỉ").build()))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("dưới 30%");
+        verify(approvalRequestRepository, never()).save(any());
+    }
+
+    /** Không tạo hai yêu cầu nghỉ cùng một lớp đang PENDING. */
+    @Test
+    void rejectsDuplicatePendingClassWithdrawal() {
+        ClassEntity clazz = ClassEntity.builder().id(10L).build();
+        when(classMemberRepository.findById_ClassIdAndId_UserId(10L, 1L))
+                .thenReturn(Optional.of(managedMember(clazz)));
+        when(classOnlineRepository.findByClassEntity_Id(10L)).thenReturn(List.of());
+        when(approvalRequestRepository.existsByTargetTypeAndTargetIdAndCreatedByAndStatus(
+                "CLASS_TEACHER_LEAVE_REQUEST", 10L, 1L, ApprovalStatusEnum.PENDING)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.createClassWithdrawal(1L,
+                TeacherWorkspaceRequest.ClassWithdrawalCreate.builder().classId(10L).reason("Xin nghỉ").build()))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("đang chờ duyệt");
+    }
+
+    /** Membership người dạy ACTIVE phải làm cùng session của lớp xuất hiện trên lịch giáo viên. */
+    @Test
+    void activeTeacherMembershipExposesAssignedClassSession() {
+        CourseEntity course = CourseEntity.builder().id(20L).name("Java").build();
+        ClassEntity clazz = ClassEntity.builder().id(10L).name("Java Group 01").courseEntity(course).build();
+        LocalDateTime start = LocalDate.now().plusDays(1).atTime(19, 0);
+        ClassOnlineEntity session = ClassOnlineEntity.builder().id(30L).classEntity(clazz)
+                .title("Buổi 1").scheduledAt(start).durationMin(60).status(BaseStatusEnum.ACTIVE).build();
+        when(classMemberRepository.findById_UserId(1L)).thenReturn(List.of(managedMember(clazz)));
+        when(courseTeacherRepository.findByUserEntity_IdAndStatus(1L, CourseTeacherStatusEnum.ACTIVE))
+                .thenReturn(List.of());
+        when(classOnlineRepository
+                .findByClassEntity_IdInAndScheduledAtGreaterThanEqualAndScheduledAtLessThanOrderByScheduledAtAsc(
+                        eq(List.of(10L)), any(LocalDateTime.class), any(LocalDateTime.class)))
+                .thenReturn(List.of(session));
+
+        var result = service.getOnlineSessions(1L, start.toLocalDate(), start.toLocalDate());
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().getClassId()).isEqualTo("10");
+        assertThat(result.getFirst().getClassName()).isEqualTo("Java Group 01");
+    }
+
+    /** Tạo session tối giản phục vụ kiểm tra tỷ lệ buổi đã hoàn thành. */
+    private ClassOnlineEntity session(ClassEntity clazz, BaseStatusEnum status) {
+        return ClassOnlineEntity.builder().classEntity(clazz).status(status).build();
     }
 
     /** Tạo membership Teacher ACTIVE dùng chung cho các test quyền lớp. */

@@ -56,9 +56,22 @@ public class AiChatController {
             @RequestParam(value = "route", required = false) String route,
             @RequestPart("image") MultipartFile image,
             @AuthenticationPrincipal CustomUserDetails currentUser) {
+        return chatFileStream(question, conversationId, module, route, image, currentUser);
+    }
+
+    /** Stream phân tích tệp tài liệu PDF, DOCX, TXT hoặc hình ảnh đính kèm trong chat. */
+    @PostMapping(value = "/chat/file/stream", consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
+            produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public ResponseEntity<Flux<String>> chatFileStream(
+            @RequestParam(value = "question", required = false) String question,
+            @RequestParam(value = "conversationId", required = false) String conversationId,
+            @RequestParam(value = "module", required = false) String module,
+            @RequestParam(value = "route", required = false) String route,
+            @RequestPart(value = "file", required = false) MultipartFile file,
+            @AuthenticationPrincipal CustomUserDetails currentUser) {
         AiChatRequest request = AiChatRequest.builder()
                 .question(question == null || question.isBlank()
-                        ? "Hãy phân tích ảnh đính kèm và trả lời câu hỏi xuất hiện trong ảnh nếu có."
+                        ? "Hãy phân tích nội dung tệp đính kèm và giải thích các điểm quan trọng."
                         : question)
                 .conversationId(conversationId)
                 .module(module)
@@ -70,7 +83,7 @@ public class AiChatController {
         return ResponseEntity.ok()
                 .header("X-Conversation-Id", request.getConversationId())
                 .contentType(MediaType.TEXT_EVENT_STREAM)
-                .body(aiChatService.chatImageStream(request, image, currentUser));
+                .body(aiChatService.chatFileStream(request, file, currentUser));
     }
 
     /** Phân trang hội thoại theo scope backend suy từ authority hiện tại. */

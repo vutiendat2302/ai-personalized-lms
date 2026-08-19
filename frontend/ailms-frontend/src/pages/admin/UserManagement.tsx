@@ -2373,7 +2373,7 @@ export const UserManagement: React.FC = () => {
                   }`}
                 >
                   <GraduationCap className="h-3.5 w-3.5" />
-                  <span>Học viên (Academic)</span>
+                  <span>Học tập</span>
                 </button>
               )}
 
@@ -2463,7 +2463,7 @@ export const UserManagement: React.FC = () => {
                           <p className="font-mono font-bold text-foreground">{selectedUserDetail.userAccount?.id}</p>
                         </div>
                         <div className="p-3 rounded-lg border border-border bg-card">
-                          <span className="text-muted-foreground">Người tạo (Created By):</span>
+                          <span className="text-muted-foreground">Người tạo:</span>
                           <p className="font-bold text-foreground">{selectedUserDetail.createdBy || "Hệ thống / Admin"}</p>
                         </div>
                         <div className="p-3 rounded-lg border border-border bg-card">
@@ -2492,7 +2492,7 @@ export const UserManagement: React.FC = () => {
 
                         <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400">
                           <Star className="h-5 w-5 mb-1" />
-                          <span className="text-[10px] font-bold uppercase">Điểm trung bình (GPA)</span>
+                          <span className="text-[10px] font-bold uppercase">Điểm trung bình</span>
                           <p className="text-lg font-black">{selectedUserDetail.studentProfile.avgGrade ?? "8.5 / 10"}</p>
                         </div>
 

@@ -2,6 +2,7 @@ package com.ailms.controller;
 
 import com.ailms.exception.UnauthorizedException;
 import com.ailms.request.OneOnOneTrialResultRequest;
+import com.ailms.request.OneOnOneRematchRequest;
 import com.ailms.response.ApiResponse;
 import com.ailms.response.OneOnOneRequestResponse;
 import com.ailms.security.CustomUserDetails;
@@ -42,6 +43,17 @@ public class StudentOneOnOneController {
         return ResponseEntity.ok(ApiResponse.of(
                 "Trial result processed successfully",
                 oneOnOneService.submitTrialResult(requireUserId(currentUser), requestId, request)));
+    }
+
+    /** Hủy ghép hiện tại, lưu nhu cầu mới và tìm người dạy khác. */
+    @PostMapping("/{requestId}/rematch")
+    public ResponseEntity<ApiResponse<OneOnOneRequestResponse>> rematch(
+            @AuthenticationPrincipal CustomUserDetails currentUser,
+            @PathVariable Long requestId,
+            @Valid @RequestBody OneOnOneRematchRequest request) {
+        return ResponseEntity.ok(ApiResponse.of(
+                "One-on-one request reopened for matching",
+                oneOnOneService.rematch(requireUserId(currentUser), requestId, request)));
     }
 
     /** Lấy ID người dùng đã đăng nhập. */

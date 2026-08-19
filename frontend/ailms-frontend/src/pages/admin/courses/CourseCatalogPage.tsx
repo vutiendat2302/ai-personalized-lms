@@ -78,7 +78,6 @@ const enumLabel = (value: string) => ({
   SELF_STUDY: "Tự học",
   GROUP_CLASS: "Lớp nhóm",
   ONE_ON_ONE: "1 kèm 1",
-  COMBO: "Kết hợp",
   DRAFT: "Nháp",
   PENDING: "Chờ duyệt",
   ACTIVE: "Đang hoạt động",
@@ -86,6 +85,9 @@ const enumLabel = (value: string) => ({
   INACTIVE: "Ẩn / Lưu trữ",
   DELETED: "Đã xóa",
 }[value] ?? value);
+
+/** Danh sách cấp độ chuẩn của hệ thống, độc lập với dữ liệu khóa học hiện có. */
+const ALL_COURSE_LEVELS: CourseLevel[] = ["BEGINNER", "INTERMEDIATE", "ADVANCED"];
 
 type SortField = "createdAt" | "rating" | "enrollmentCount" | "referencePrice" | "name";
 
@@ -321,6 +323,8 @@ export const CourseCatalogPage: React.FC = () => {
           categoryId: String(course.categoryId),
           status: course.status as CourseStatus,
           level: course.level as CourseLevel,
+          coverImage: course.thumbnailUrl || course.coverImage || course.imageUrl || "",
+          thumbnailUrl: course.thumbnailUrl || course.coverImage || "",
           teachers: mappedTeachers,
           rating: Number(course.avgRating || 0),
           reviewCount: Number(course.reviewCount || 0),
@@ -548,18 +552,12 @@ export const CourseCatalogPage: React.FC = () => {
     () => Array.from(new Set(courses.map((course) => course.status))),
     [courses],
   );
-  const availableLevels = useMemo(
-    () => Array.from(new Set(courses.map((course) => course.level))),
-    [courses],
-  );
+  const availableLevels = ALL_COURSE_LEVELS;
   const availableDeliveryModes = useMemo(
     () => Array.from(new Set(courses.flatMap((course) => course.packages.map((pkg) => pkg.deliveryMode)))),
     [courses],
   );
-  const formLevels = useMemo(
-    () => Array.from(new Set([...availableLevels, editingCourse?.level].filter(Boolean) as CourseLevel[])),
-    [availableLevels, editingCourse?.level],
-  );
+  const formLevels = ALL_COURSE_LEVELS;
   const formStatuses = useMemo(
     () => Array.from(new Set([...availableStatuses, editingCourse?.status].filter(Boolean) as CourseStatus[])),
     [availableStatuses, editingCourse?.status],
@@ -979,7 +977,7 @@ export const CourseCatalogPage: React.FC = () => {
                 {/* Cover Image Container */}
                 <div className="relative h-44 w-full bg-slate-100 overflow-hidden">
                   <CourseCover
-                    src={course.coverImage}
+                    src={course.thumbnailUrl || course.coverImage}
                     name={course.name}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   />
@@ -1195,7 +1193,7 @@ export const CourseCatalogPage: React.FC = () => {
                     <TableCell className="font-semibold text-foreground">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded bg-slate-100 overflow-hidden shrink-0 border border-border/20">
-                          <CourseCover src={course.coverImage} name={course.name} className="w-full h-full object-cover" />
+                          <CourseCover src={course.thumbnailUrl || course.coverImage} name={course.name} className="w-full h-full object-cover" />
                         </div>
                         <span className="hover:text-blue-600 line-clamp-1">{course.name}</span>
                       </div>

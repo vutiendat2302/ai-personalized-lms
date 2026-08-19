@@ -5,7 +5,7 @@ import lombok.*;
 
 import java.time.LocalDateTime;
 
-/** Thông tin lớp và buổi thử do người dạy đã nhận yêu cầu tạo. */
+/** Thông tin lớp và buổi thử được tạo khi HR xác nhận kết nối hai bên. */
 @Getter
 @Setter
 @NoArgsConstructor
@@ -16,10 +16,8 @@ public class OneOnOneTrialClassRequest {
     @Size(max = 255)
     private String className;
 
-    @NotNull(message = "Thời gian bắt đầu là bắt buộc")
     private LocalDateTime startAt;
 
-    @NotNull(message = "Thời gian kết thúc là bắt buộc")
     private LocalDateTime endAt;
 
     @NotBlank(message = "Hình thức học là bắt buộc")

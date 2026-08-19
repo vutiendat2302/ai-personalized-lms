@@ -34,6 +34,15 @@ public class InstructorOneOnOneController {
                 oneOnOneService.getSuggestions(requireUserId(currentUser))));
     }
 
+    /** Lấy các yêu cầu đã nhận để theo dõi lớp thử và gửi nhận xét. */
+    @GetMapping("/requests/assigned")
+    public ResponseEntity<ApiResponse<List<OneOnOneRequestResponse>>> getAssignedRequests(
+            @AuthenticationPrincipal CustomUserDetails currentUser) {
+        return ResponseEntity.ok(ApiResponse.of(
+                "Assigned one-on-one requests retrieved successfully",
+                oneOnOneService.getAssignedRequests(requireUserId(currentUser))));
+    }
+
     /** Nhận độc quyền một yêu cầu đang chờ hoặc rematching. */
     @PostMapping("/requests/{requestId}/accept")
     public ResponseEntity<ApiResponse<OneOnOneRequestResponse>> accept(

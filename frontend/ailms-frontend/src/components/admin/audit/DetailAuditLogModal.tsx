@@ -160,26 +160,28 @@ export const DetailAuditLogModal: React.FC<DetailAuditLogModalProps> = ({
     (item) => !showChangesOnly || item.status !== "unchanged"
   );
 
+  /** Trả về class màu badge cho từng loại hành động theo token màu index.css */
   const getActionColor = (action: string) => {
     const act = action.toLowerCase();
     if (act.includes("create") || act.includes("add") || act.includes("insert")) {
-      return "bg-green-500/10 text-green-600 border-green-500/20";
+      return "bg-success-forest/10 text-success-forest border-success-forest/20";
     }
     if (act.includes("update") || act.includes("edit") || act.includes("modify") || act.includes("transfer")) {
-      return "bg-blue-500/10 text-blue-600 border-blue-500/20";
+      return "bg-brand-cobalt/10 text-brand-cobalt border-brand-cobalt/20";
     }
     if (act.includes("delete") || act.includes("remove") || act.includes("destroy") || act.includes("clear")) {
-      return "bg-red-500/10 text-red-600 border-red-500/20";
+      return "bg-destructive/10 text-destructive border-destructive/20";
     }
     if (act.includes("login_failed")) {
-      return "bg-orange-500/10 text-orange-600 border-orange-500/20";
+      return "bg-destructive/10 text-destructive border-destructive/20";
     }
     if (act.includes("login") || act.includes("auth")) {
-      return "bg-cyan-500/10 text-cyan-600 border-cyan-500/20";
+      return "bg-chart-1/10 text-chart-1 border-chart-1/20";
     }
-    return "bg-slate-500/10 text-slate-600 border-slate-500/20";
+    return "bg-muted text-muted-foreground border-border";
   };
 
+  /** Định dạng thời gian hiển thị chuẩn Tiếng Việt */
   const formatDate = (dateStr: string) => {
     try {
       const d = new Date(dateStr);
@@ -196,6 +198,7 @@ export const DetailAuditLogModal: React.FC<DetailAuditLogModalProps> = ({
     }
   };
 
+  /** Lấy các chữ cái đầu của tên để làm Avatar fallback */
   const getInitials = (name: string) => {
     if (!name) return "?";
     return name
@@ -206,6 +209,7 @@ export const DetailAuditLogModal: React.FC<DetailAuditLogModalProps> = ({
       .toUpperCase();
   };
 
+  /** Định dạng văn bản hiển thị giá trị cũ/mới dạng JSON hoặc chuỗi */
   const formatValText = (val: any) => {
     if (val === null || val === undefined) return "—";
     if (val === "") return '"" (Trống)';
@@ -231,6 +235,7 @@ export const DetailAuditLogModal: React.FC<DetailAuditLogModalProps> = ({
   const hasChanges = (currentLog.oldValue !== null && currentLog.oldValue !== undefined && currentLog.oldValue !== "" && currentLog.oldValue !== "null") ||
                      (currentLog.newValue !== null && currentLog.newValue !== undefined && currentLog.newValue !== "" && currentLog.newValue !== "null");
 
+  /** Sao chép nội dung IP hoặc User-Agent vào clipboard */
   const copyToClipboard = (text: string, type: "ip" | "ua") => {
     if (!text) return;
     navigator.clipboard.writeText(text);
@@ -243,6 +248,7 @@ export const DetailAuditLogModal: React.FC<DetailAuditLogModalProps> = ({
     }
   };
 
+  /** Tải file CSV chi tiết 1 bản ghi nhật ký kiểm toán */
   const handleDownloadLogDetail = async () => {
     try {
       const response = await auditLogApi.exportSingleAuditLogToCsv(currentLog.id);
@@ -259,6 +265,7 @@ export const DetailAuditLogModal: React.FC<DetailAuditLogModalProps> = ({
     }
   };
 
+  /** Hiển thị đối tượng bị tác động dựa theo hành động kiểm toán */
   const renderAffectedObject = () => {
     const entityType = currentLog.entityType || "N/A";
     const entityId = currentLog.entityId || "—";
@@ -269,15 +276,15 @@ export const DetailAuditLogModal: React.FC<DetailAuditLogModalProps> = ({
         <div className="space-y-3 text-xs">
           <div className="flex items-center justify-between gap-2 border-b border-border/20 pb-2">
             <span className="text-muted-foreground font-semibold">Nhân viên bị tác động:</span>
-            <span className="font-bold text-foreground font-mono bg-muted/60 px-2 py-0.5 rounded">ID: #{entityId}</span>
+            <span className="font-bold text-foreground font-mono bg-muted/60 px-2 py-0.5 rounded">ID: {entityId}</span>
           </div>
           <div className="flex items-center justify-between gap-2">
             <span className="text-muted-foreground">Phòng ban cũ (Trước):</span>
-            <span className="font-bold text-destructive font-mono bg-destructive/10 border border-destructive/20 px-2.5 py-0.5 rounded">ID: #{currentLog.oldValue || "—"}</span>
+            <span className="font-bold text-destructive font-mono bg-destructive/10 border border-destructive/20 px-2.5 py-0.5 rounded">ID: {currentLog.oldValue || "—"}</span>
           </div>
           <div className="flex items-center justify-between gap-2">
             <span className="text-muted-foreground">Phòng ban mới (Sau):</span>
-            <span className="font-bold text-emerald-600 font-mono bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded">ID: #{currentLog.newValue || "—"}</span>
+            <span className="font-bold text-success-forest font-mono bg-success-forest/10 border border-success-forest/20 px-2.5 py-0.5 rounded">ID: {currentLog.newValue || "—"}</span>
           </div>
         </div>
       );
@@ -288,7 +295,7 @@ export const DetailAuditLogModal: React.FC<DetailAuditLogModalProps> = ({
         <div className="space-y-3 text-xs">
           <div className="flex items-center justify-between gap-2 border-b border-border/20 pb-2">
             <span className="text-muted-foreground font-semibold">Tài khoản được gán/gỡ:</span>
-            <span className="font-bold text-foreground font-mono bg-muted/60 px-2 py-0.5 rounded">ID: #{entityId}</span>
+            <span className="font-bold text-foreground font-mono bg-muted/60 px-2 py-0.5 rounded">ID: {entityId}</span>
           </div>
           <div className="flex items-center justify-between gap-2">
             <span className="text-muted-foreground">Vai trò tác động:</span>
@@ -303,14 +310,14 @@ export const DetailAuditLogModal: React.FC<DetailAuditLogModalProps> = ({
     return (
       <div className="space-y-3 text-xs">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-muted-foreground font-semibold">Loại thực thể:</span>
+          <span className="text-muted-foreground font-semibold">Loại thành phần:</span>
           <span className="font-bold text-primary uppercase font-mono text-[11px] bg-primary/10 border border-primary/20 px-2.5 py-0.5 rounded">
             {entityType}
           </span>
         </div>
         <div className="flex items-center justify-between gap-2">
-          <span className="text-muted-foreground font-semibold">ID Thực thể:</span>
-          <span className="font-bold text-foreground font-mono bg-muted/60 px-2 py-0.5 rounded">#{entityId}</span>
+          <span className="text-muted-foreground font-semibold">ID Thành phần:</span>
+          <span className="font-bold text-foreground font-mono bg-muted/60 px-2 py-0.5 rounded">{entityId}</span>
         </div>
       </div>
     );
@@ -344,18 +351,18 @@ export const DetailAuditLogModal: React.FC<DetailAuditLogModalProps> = ({
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <DialogTitle className="text-2xl font-black tracking-tight text-foreground">
-                      Nhật ký Hoạt động #{currentLog.id}
+                      Nhật ký Hoạt động ID: {currentLog.id}
                     </DialogTitle>
                     <span className={`px-2.5 py-0.5 rounded-lg font-mono text-xs font-bold border uppercase tracking-wider ${getActionColor(currentLog.action)}`}>
                       {currentLog.action}
                     </span>
                     <Badge variant="outline" className="font-mono text-xs font-bold border-border/40 bg-muted/40">
-                      {currentLog.entityType || "SYSTEM"} #{currentLog.entityId || "N/A"}
+                      {currentLog.entityType || "SYSTEM"} {currentLog.entityId ? `ID: ${currentLog.entityId}` : "N/A"}
                     </Badge>
                   </div>
 
                   <DialogDescription className="text-xs text-muted-foreground mt-1 flex items-center gap-4 flex-wrap">
-                    <span>Thực hiện: <strong className="text-foreground">{currentLog.userFullName || "Hệ thống / Guest"}</strong></span>
+                    <span>Thực hiện: <strong className="text-foreground">{currentLog.userFullName || "Hệ thống / Khách"}</strong></span>
                     <span>Thời gian: <strong className="text-foreground">{formatDate(currentLog.occurredAt)}</strong></span>
                     <span>IP: <strong className="text-primary font-mono">{currentLog.ipAddress || "—"}</strong></span>
                   </DialogDescription>
@@ -400,7 +407,7 @@ export const DetailAuditLogModal: React.FC<DetailAuditLogModalProps> = ({
               <div className="p-5 rounded-2xl bg-muted/20 border border-border/30 space-y-4">
                 <h4 className="text-xs font-extrabold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
                   <User className="h-4 w-4 text-primary" />
-                  <span>Tài khoản thực hiện (Actor)</span>
+                  <span>Tài khoản thực hiện</span>
                 </h4>
                 <div className="flex items-center gap-4">
                   <Avatar className="h-14 w-14 border border-border/40 shrink-0">
@@ -410,7 +417,7 @@ export const DetailAuditLogModal: React.FC<DetailAuditLogModalProps> = ({
                     </AvatarFallback>
                   </Avatar>
                   <div className="min-w-0 space-y-1">
-                    <p className="font-extrabold text-sm text-foreground truncate">{currentLog.userFullName || "Hệ thống / Guest"}</p>
+                    <p className="font-extrabold text-sm text-foreground truncate">{currentLog.userFullName || "Hệ thống / Khách"}</p>
                     <p className="text-xs text-muted-foreground truncate">{currentLog.userEmail || "N/A"}</p>
                     <Badge variant="outline" className="font-mono text-[10px] text-muted-foreground mt-1">
                       User ID: {currentLog.userId || "N/A"}
@@ -423,7 +430,7 @@ export const DetailAuditLogModal: React.FC<DetailAuditLogModalProps> = ({
               <div className="p-5 rounded-2xl bg-muted/20 border border-border/30 space-y-4">
                 <h4 className="text-xs font-extrabold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
                   <Info className="h-4 w-4 text-primary" />
-                  <span>Đối tượng bị tác động (Target Entity)</span>
+                  <span>Đối tượng bị tác động</span>
                 </h4>
                 {renderAffectedObject()}
               </div>
@@ -444,7 +451,7 @@ export const DetailAuditLogModal: React.FC<DetailAuditLogModalProps> = ({
                     onClick={() => copyToClipboard(currentLog.ipAddress, "ip")}
                     className="h-7 px-2 text-[10px] font-bold text-primary hover:bg-primary/10 gap-1 cursor-pointer"
                   >
-                    {copiedIp ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                    {copiedIp ? <Check className="h-3 w-3 text-success-forest" /> : <Copy className="h-3 w-3" />}
                     <span>{copiedIp ? "Đã sao chép" : "Sao chép"}</span>
                   </Button>
                 </div>
@@ -466,7 +473,7 @@ export const DetailAuditLogModal: React.FC<DetailAuditLogModalProps> = ({
                     onClick={() => copyToClipboard(currentLog.userAgent, "ua")}
                     className="h-7 px-2 text-[10px] font-bold text-primary hover:bg-primary/10 gap-1 cursor-pointer"
                   >
-                    {copiedUa ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                    {copiedUa ? <Check className="h-3 w-3 text-success-forest" /> : <Copy className="h-3 w-3" />}
                     <span>{copiedUa ? "Đã sao chép" : "Sao chép User Agent"}</span>
                   </Button>
                 </div>
@@ -485,7 +492,7 @@ export const DetailAuditLogModal: React.FC<DetailAuditLogModalProps> = ({
                     <span>Giá trị thay đổi (JSON Diff)</span>
                     {isJsonDiff && (
                       <Badge variant="outline" className="text-[10px] font-bold border-primary/30 text-primary bg-primary/10">
-                        JSON Diff Mode
+                        Chế độ JSON Diff
                       </Badge>
                     )}
                   </div>
@@ -531,9 +538,9 @@ export const DetailAuditLogModal: React.FC<DetailAuditLogModalProps> = ({
                       <tbody className="divide-y divide-border/20">
                         {diffItems.map((item) => {
                           const getRowBg = () => {
-                            if (item.status === "added") return "bg-emerald-500/5 text-emerald-800 dark:text-emerald-300";
-                            if (item.status === "removed") return "bg-rose-500/5 text-rose-800 dark:text-rose-300";
-                            if (item.status === "modified") return "bg-blue-500/5";
+                            if (item.status === "added") return "bg-success-forest/10 text-success-forest";
+                            if (item.status === "removed") return "bg-destructive/10 text-destructive";
+                            if (item.status === "modified") return "bg-brand-cobalt/10";
                             return "hover:bg-muted/10";
                           };
 
@@ -541,16 +548,16 @@ export const DetailAuditLogModal: React.FC<DetailAuditLogModalProps> = ({
                             <tr key={item.key} className={`${getRowBg()} transition-colors`}>
                               <td className="py-3 px-4 font-mono font-bold select-all align-top border-r border-border/20">
                                 <span className="flex items-center gap-1.5">
-                                  {item.status === "added" && <Plus className="h-3.5 w-3.5 text-emerald-500 shrink-0" />}
-                                  {item.status === "removed" && <Minus className="h-3.5 w-3.5 text-rose-500 shrink-0" />}
-                                  {item.status === "modified" && <Edit className="h-3.5 w-3.5 text-blue-500 shrink-0" />}
+                                  {item.status === "added" && <Plus className="h-3.5 w-3.5 text-success-forest shrink-0" />}
+                                  {item.status === "removed" && <Minus className="h-3.5 w-3.5 text-destructive shrink-0" />}
+                                  {item.status === "modified" && <Edit className="h-3.5 w-3.5 text-brand-cobalt shrink-0" />}
                                   {item.key}
                                 </span>
                               </td>
-                              <td className={`py-3 px-4 font-mono whitespace-pre-wrap align-top border-r border-border/20 ${item.status === "removed" || item.status === "modified" ? "text-rose-500 line-through decoration-rose-500/50" : "text-muted-foreground"}`}>
+                              <td className={`py-3 px-4 font-mono whitespace-pre-wrap align-top border-r border-border/20 ${item.status === "removed" || item.status === "modified" ? "text-destructive line-through decoration-destructive/50" : "text-muted-foreground"}`}>
                                 {formatValText(item.oldVal)}
                               </td>
-                              <td className={`py-3 px-4 font-mono whitespace-pre-wrap align-top ${item.status === "added" || item.status === "modified" ? "text-emerald-600 dark:text-emerald-400 font-semibold" : "text-muted-foreground"}`}>
+                              <td className={`py-3 px-4 font-mono whitespace-pre-wrap align-top ${item.status === "added" || item.status === "modified" ? "text-success-forest font-semibold" : "text-muted-foreground"}`}>
                                 {formatValText(item.newVal)}
                               </td>
                             </tr>
@@ -570,8 +577,8 @@ export const DetailAuditLogModal: React.FC<DetailAuditLogModalProps> = ({
                     </pre>
                   </div>
                   <div className="space-y-1.5">
-                    <span className="text-xs font-bold uppercase tracking-wider text-emerald-600">Giá trị mới (Raw string):</span>
-                    <pre className="p-4 bg-emerald-500/5 border border-emerald-500/10 text-emerald-700 dark:text-emerald-300 rounded-xl text-xs font-mono whitespace-pre-wrap max-h-60 overflow-y-auto w-full">
+                    <span className="text-xs font-bold uppercase tracking-wider text-success-forest">Giá trị mới (Raw string):</span>
+                    <pre className="p-4 bg-success-forest/10 border border-success-forest/20 text-success-forest rounded-xl text-xs font-mono whitespace-pre-wrap max-h-60 overflow-y-auto w-full">
                       {formatValText(currentLog.newValue)}
                     </pre>
                   </div>

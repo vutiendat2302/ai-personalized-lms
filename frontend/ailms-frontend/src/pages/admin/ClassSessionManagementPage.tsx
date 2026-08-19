@@ -612,12 +612,6 @@ export const ClassSessionManagementPage: React.FC = () => {
       {/* Page Title Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-border/30 pb-4">
         <div>
-          <div className="flex items-center gap-2 text-sm font-semibold text-primary mb-1">
-            <Link to="/dashboard" className="flex items-center gap-1 hover:underline">
-              <ArrowLeft className="h-3.5 w-3.5" />
-              <span>Quay lại Tổng quan</span>
-            </Link>
-          </div>
           <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-foreground flex items-center gap-3 mt-2">
             <div className="p-2.5 rounded-2xl bg-primary/10 text-primary">
               <Video className="h-7 w-7" />

@@ -19,6 +19,8 @@ public class LessonPreviewResponse {
 
     private Integer durationMin;
 
+    private Integer durationSec;
+
     private String previewType; // "FREE", "LOCKED"
 
     private boolean locked;

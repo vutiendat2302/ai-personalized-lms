@@ -90,6 +90,12 @@ UserService implements IUserService {
     @Transactional(readOnly = true)
     @Override
     public PageResponse<UserResponse> getUsers(UserSearchRequest request) {
+        // Các endpoint lọc theo vai trò phải đọc DB để không trả index Meilisearch đã thiếu role.
+        if (request != null && org.springframework.util.StringUtils.hasText(request.getRoleType())) {
+            Specification<UserEntity> spec = UserSpecification.filterAndSearch(request);
+            Page<UserEntity> page = userRepository.findAll(spec, request.toPageable());
+            return PageResponse.from(page.map(this::mapToUserResponse));
+        }
         PageResponse<UserResponse> indexedResult = meilisearchUserService.search(request);
         if (indexedResult != null) {
             return indexedResult;

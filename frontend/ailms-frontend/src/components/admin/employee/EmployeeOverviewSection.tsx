@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   ResponsiveContainer,
@@ -17,9 +17,7 @@ import {
 import {
   PieChart as PieIcon,
   BarChart3,
-  AlertTriangle,
   Mail,
-  CheckCircle2,
   RefreshCw,
   Users,
   ShieldAlert,
@@ -27,10 +25,10 @@ import {
 } from "lucide-react";
 import { employeeApi } from "@/api/employees/employeeApi";
 
-const EMPLOYMENT_COLORS = ["#2563eb", "#f59e0b"]; // Full-time (Blue), Part-time (Amber)
-const DEPT_COLORS = ["#2b5748", "#7b2525", "#ba6a4c", "#ff97d0", "#fe7f2d", "#4e220f"];
-const CONTRACT_COLORS = ["#10b981", "#f59e0b", "#ef4444", "#6b7280"]; // ACTIVE, PROBATION, EXPIRED, TERMINATED
-const ROLE_COLORS = ["#6366f1", "#8b5cf6", "#ec4899", "#14b8a6", "#f97316", "#06b6d4"];
+// Harmonious 5-color Theme Palette matching index.css
+const THEME_PALETTE = ["#2563eb", "#10b981", "#0284c7", "#f59e0b", "#8b5cf6"];
+const EMPLOYMENT_COLORS = ["#2563eb", "#0284c7"]; // Full-time (Deep Blue), Part-time (Cobalt Blue)
+const CONTRACT_COLORS = ["#10b981", "#0284c7", "#f59e0b", "#ef4444"]; // Active (Green), Probation (Cobalt), Expired (Amber), Terminated (Red)
 
 interface EmployeeOverviewSectionProps {
   onSelectExpiringProbationFilter?: () => void;
@@ -63,11 +61,11 @@ export const EmployeeOverviewSection: React.FC<EmployeeOverviewSectionProps> = (
 
       // Chart 1: Employment Type Donut
       setEmploymentStats([
-        { name: "Toàn thời gian (FULL_TIME)", value: empRes.FULL_TIME || 0 },
-        { name: "Bán thời gian (PART_TIME)", value: empRes.PART_TIME || 0 }
+        { name: "Chính thức", value: empRes.FULL_TIME || 0 },
+        { name: "Thời vụ", value: empRes.PART_TIME || 0 }
       ]);
 
-      // Chart 2: Department Vertical Bar (Sorted DESC)
+      // Chart 2: Department Vertical Bar
       const formattedDepts = Object.entries(deptRes)
         .map(([name, value]) => ({ name, value: Number(value) }))
         .sort((a, b) => b.value - a.value);
@@ -75,10 +73,10 @@ export const EmployeeOverviewSection: React.FC<EmployeeOverviewSectionProps> = (
 
       // Chart 3: Contract Status Donut
       setContractStats([
-        { name: "Đang hiệu lực (ACTIVE)", value: contractRes.ACTIVE || 0 },
-        { name: "Thử việc (PROBATION)", value: contractRes.PROBATION || 0 },
-        { name: "Hết hạn (EXPIRED)", value: contractRes.EXPIRED || 0 },
-        { name: "Chấm dứt (TERMINATED)", value: contractRes.TERMINATED || 0 }
+        { name: "Đang hiệu lực", value: contractRes.ACTIVE || 0 },
+        { name: "Thử việc", value: contractRes.PROBATION || 0 },
+        { name: "Hết hạn", value: contractRes.EXPIRED || 0 },
+        { name: "Đã chấm dứt", value: contractRes.TERMINATED || 0 }
       ]);
 
       // Card 4: Expiring Probation Count
@@ -107,7 +105,7 @@ export const EmployeeOverviewSection: React.FC<EmployeeOverviewSectionProps> = (
     try {
       const res = await employeeApi.notifyExpiringProbation();
       if (onShowBanner) {
-        onShowBanner(res.message || "Đã gửi mail/thông báo nhắc nhở phòng HR thành công!");
+        onShowBanner(res.message || "Đã gửi mail nhắc nhở phòng HR thành công!");
       }
     } catch (err: any) {
       if (onShowBanner) {
@@ -126,21 +124,16 @@ export const EmployeeOverviewSection: React.FC<EmployeeOverviewSectionProps> = (
           <div className="p-1.5 rounded-xl bg-primary/10 text-primary">
             <PieIcon className="h-5 w-5" />
           </div>
-          <div>
-            <h2 className="text-lg font-extrabold tracking-tight text-foreground">
-              Overview & Analytics (5.11.1 Khu vực tổng quan)
-            </h2>
-            <p className="text-xs text-muted-foreground">
-              Load song song không block UI - Tự động cập nhật cache định kỳ 5 phút
-            </p>
-          </div>
+          <h2 className="text-lg font-extrabold tracking-tight text-foreground">
+            Tổng quan &amp; Phân tích nhân sự
+          </h2>
         </div>
         <Button
           variant="outline"
           size="sm"
           onClick={fetchOverviewData}
           disabled={loading}
-          className="h-8 gap-1.5 text-xs font-bold rounded-xl"
+          className="h-8 gap-1.5 text-xs font-bold rounded-xl cursor-pointer"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
           <span>Tải lại dữ liệu</span>
@@ -153,18 +146,10 @@ export const EmployeeOverviewSection: React.FC<EmployeeOverviewSectionProps> = (
         {/* Chart 1: Donut Chart Employment Type */}
         <Card className="lg:col-span-4 border-border shadow-xs hover:shadow-md transition-shadow bg-card">
           <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-extrabold flex items-center gap-2">
-                <Briefcase className="h-4 w-4 text-blue-500" />
-                <span>1. Loại hình nhân viên</span>
-              </CardTitle>
-              <span className="text-[10px] bg-blue-500/10 text-blue-600 px-2 py-0.5 rounded-full font-bold">
-                Active Staff
-              </span>
-            </div>
-            <CardDescription className="text-xs">
-              Phân bổ FULL_TIME vs PART_TIME (trừ TERMINATED)
-            </CardDescription>
+            <CardTitle className="text-sm font-extrabold flex items-center gap-2">
+              <Briefcase className="h-4 w-4 text-primary" />
+              <span>Loại hình nhân viên</span>
+            </CardTitle>
           </CardHeader>
           <CardContent className="pt-2 flex flex-col items-center justify-center min-h-[220px]">
             <ResponsiveContainer width="100%" height={180}>
@@ -195,18 +180,10 @@ export const EmployeeOverviewSection: React.FC<EmployeeOverviewSectionProps> = (
         {/* Chart 2: Vertical Bar Chart Department */}
         <Card className="lg:col-span-4 border-border shadow-xs hover:shadow-md transition-shadow bg-card">
           <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-extrabold flex items-center gap-2">
-                <BarChart3 className="h-4 w-4 text-emerald-600" />
-                <span>2. Nhân viên theo Phòng ban</span>
-              </CardTitle>
-              <span className="text-[10px] bg-emerald-500/10 text-emerald-600 px-2 py-0.5 rounded-full font-bold">
-                Sắp xếp giảm dần
-              </span>
-            </div>
-            <CardDescription className="text-xs">
-              Số lượng nhân viên theo từng department
-            </CardDescription>
+            <CardTitle className="text-sm font-extrabold flex items-center gap-2">
+              <BarChart3 className="h-4 w-4 text-primary" />
+              <span>Nhân viên theo phòng ban</span>
+            </CardTitle>
           </CardHeader>
           <CardContent className="pt-2 flex items-center justify-center min-h-[220px]">
             <ResponsiveContainer width="100%" height={180}>
@@ -218,9 +195,9 @@ export const EmployeeOverviewSection: React.FC<EmployeeOverviewSectionProps> = (
                   formatter={(val: any) => [`${val} người`, "Số lượng"]}
                   contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)" }}
                 />
-                <Bar dataKey="value" radius={[6, 6, 0, 0]} fill="#2b5748">
+                <Bar dataKey="value" radius={[6, 6, 0, 0]}>
                   {deptStats.map((_, index) => (
-                    <Cell key={`dept-bar-${index}`} fill={DEPT_COLORS[index % DEPT_COLORS.length]} />
+                    <Cell key={`dept-bar-${index}`} fill={THEME_PALETTE[index % THEME_PALETTE.length]} />
                   ))}
                 </Bar>
               </BarChart>
@@ -231,37 +208,21 @@ export const EmployeeOverviewSection: React.FC<EmployeeOverviewSectionProps> = (
         {/* Card 4: Expiring Probation Warning KPI Card */}
         <Card
           onClick={onSelectExpiringProbationFilter}
-          className="lg:col-span-4 border-2 border-amber-500/40 bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent shadow-sm hover:shadow-md transition-all cursor-pointer group relative overflow-hidden flex flex-col justify-between"
+          className="lg:col-span-4 border border-brand-cobalt/40 bg-brand-cobalt/5 shadow-xs hover:shadow-md transition-all cursor-pointer group relative overflow-hidden flex flex-col justify-between"
         >
-          <div className="absolute top-3 right-3 flex items-center gap-1.5">
-            <span className="relative flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
-            </span>
-            <span className="px-2 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-black uppercase tracking-wider shadow-xs">
-              Alert 7 ngày
-            </span>
-          </div>
-
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-extrabold text-amber-700 dark:text-amber-300 flex items-center gap-2">
-              <ShieldAlert className="h-5 w-5 text-amber-600 animate-bounce" />
-              <span>4. HĐ Thử việc sắp hết hạn</span>
+            <CardTitle className="text-sm font-extrabold text-brand-cobalt flex items-center gap-2">
+              <ShieldAlert className="h-5 w-5 text-brand-cobalt" />
+              <span>Hợp đồng thử việc sắp hết hạn</span>
             </CardTitle>
-            <CardDescription className="text-xs text-amber-600/90 dark:text-amber-400">
-              Click vào card để filter ngay các hợp đồng cần đánh giá trong 7 ngày tới
-            </CardDescription>
           </CardHeader>
 
           <CardContent className="py-2 flex items-center justify-between">
             <div>
-              <div className="text-4xl font-black tracking-tight text-amber-600 dark:text-amber-400 flex items-baseline gap-2">
+              <div className="text-4xl font-black tracking-tight text-brand-cobalt flex items-baseline gap-2">
                 <span>{expiringProbationCount}</span>
                 <span className="text-xs font-bold text-muted-foreground">hợp đồng</span>
               </div>
-              <p className="text-[11px] font-semibold text-amber-700/80 dark:text-amber-300 mt-1">
-                Yêu cầu HR thực hiện probation-review
-              </p>
             </div>
 
             <Button
@@ -269,34 +230,21 @@ export const EmployeeOverviewSection: React.FC<EmployeeOverviewSectionProps> = (
               variant="default"
               onClick={handleTriggerNotifyHR}
               disabled={notifyLoading}
-              className="bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-xs gap-1.5"
+              className="bg-brand-cobalt hover:bg-brand-cobalt/90 text-white font-bold text-xs rounded-xl shadow-xs gap-1.5 cursor-pointer"
             >
               <Mail className="h-3.5 w-3.5" />
               <span>Gửi Mail HR</span>
             </Button>
           </CardContent>
-
-          <div className="px-4 py-1.5 bg-amber-500/10 border-t border-amber-500/20 text-[10px] font-extrabold text-amber-800 dark:text-amber-200 flex items-center justify-between">
-            <span>Liên kết tự động luồng 5.2</span>
-            <span className="underline group-hover:translate-x-1 transition-transform">Lọc danh sách &rarr;</span>
-          </div>
         </Card>
 
         {/* Chart 3: Donut Chart Contract Status */}
         <Card className="lg:col-span-6 border-border shadow-xs hover:shadow-md transition-shadow bg-card">
           <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-extrabold flex items-center gap-2">
-                <PieIcon className="h-4 w-4 text-purple-600" />
-                <span>3. Trạng thái Hợp đồng (Bao gồm TERMINATED)</span>
-              </CardTitle>
-              <span className="text-[10px] bg-purple-500/10 text-purple-600 px-2 py-0.5 rounded-full font-bold">
-                1 Hợp đồng / Nhân viên
-              </span>
-            </div>
-            <CardDescription className="text-xs">
-              Tỷ lệ hợp đồng ACTIVE, PROBATION, EXPIRED và TERMINATED
-            </CardDescription>
+            <CardTitle className="text-sm font-extrabold flex items-center gap-2">
+              <PieIcon className="h-4 w-4 text-primary" />
+              <span>Trạng thái hợp đồng</span>
+            </CardTitle>
           </CardHeader>
           <CardContent className="pt-2 flex flex-col items-center justify-center min-h-[220px]">
             <ResponsiveContainer width="100%" height={180}>
@@ -327,18 +275,10 @@ export const EmployeeOverviewSection: React.FC<EmployeeOverviewSectionProps> = (
         {/* Chart 5: Vertical Bar Chart Staff Roles */}
         <Card className="lg:col-span-6 border-border shadow-xs hover:shadow-md transition-shadow bg-card">
           <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-extrabold flex items-center gap-2">
-                <Users className="h-4 w-4 text-indigo-600" />
-                <span>5. Nhân viên theo Vai trò (Chỉ role nội bộ)</span>
-              </CardTitle>
-              <span className="text-[10px] bg-indigo-500/10 text-indigo-600 px-2 py-0.5 rounded-full font-bold">
-                Excludes Student/Parent
-              </span>
-            </div>
-            <CardDescription className="text-xs">
-              Số lượng nhân viên theo vai trò HR, Accountant, Manager, Teacher, TA...
-            </CardDescription>
+            <CardTitle className="text-sm font-extrabold flex items-center gap-2">
+              <Users className="h-4 w-4 text-primary" />
+              <span>Nhân viên theo vai trò nội bộ</span>
+            </CardTitle>
           </CardHeader>
           <CardContent className="pt-2 flex items-center justify-center min-h-[220px]">
             <ResponsiveContainer width="100%" height={180}>
@@ -350,9 +290,9 @@ export const EmployeeOverviewSection: React.FC<EmployeeOverviewSectionProps> = (
                   formatter={(val: any) => [`${val} nhân sự`, "Số lượng"]}
                   contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)" }}
                 />
-                <Bar dataKey="value" radius={[6, 6, 0, 0]} fill="#6366f1">
+                <Bar dataKey="value" radius={[6, 6, 0, 0]}>
                   {roleStats.map((_, index) => (
-                    <Cell key={`role-bar-${index}`} fill={ROLE_COLORS[index % ROLE_COLORS.length]} />
+                    <Cell key={`role-bar-${index}`} fill={THEME_PALETTE[index % THEME_PALETTE.length]} />
                   ))}
                 </Bar>
               </BarChart>

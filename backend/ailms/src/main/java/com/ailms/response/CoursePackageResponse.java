@@ -35,6 +35,7 @@ public class CoursePackageResponse {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private Long createdBy;
+    private String createdByName;
     private Long updatedBy;
-
+    private String updatedByName;
 }

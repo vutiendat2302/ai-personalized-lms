@@ -19,6 +19,9 @@ import org.springframework.data.domain.Pageable;
 public interface EmployeeRepository extends BaseRepository<EmployeeEntity, Long> {
     Optional<EmployeeEntity> findByEmployeeCode(String employeeCode);
 
+    /** Lấy hồ sơ nhân viên theo user id để tạo thanh toán đúng người dạy. */
+    Optional<EmployeeEntity> findByUserEntity_Id(Long userId);
+
     boolean existsByEmployeeCode(String employeeCode);
 
     boolean existsByDepartment_Id(Long departmentId);

@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /** Điều phối persistence và stream Admin Copilot qua ai-service. */
 @Service
@@ -33,6 +34,7 @@ public class AiChatService implements IAiChatService {
     private final AiConversationPersistenceService persistenceService;
     private final AiConversationBufferService bufferService;
     private final AiToolAccessTokenService toolAccessTokenService;
+    private final ManagementAiContextService managementAiContextService;
 
     /** Khởi tạo client streaming và service lưu lịch sử. */
     public AiChatService(
@@ -40,37 +42,48 @@ public class AiChatService implements IAiChatService {
             AiServiceClient standardClient,
             AiConversationPersistenceService persistenceService,
             AiConversationBufferService bufferService,
-            AiToolAccessTokenService toolAccessTokenService) {
+            AiToolAccessTokenService toolAccessTokenService,
+            ManagementAiContextService managementAiContextService) {
         this.streamingClient = streamingClient;
         this.standardClient = standardClient;
         this.persistenceService = persistenceService;
         this.bufferService = bufferService;
         this.toolAccessTokenService = toolAccessTokenService;
+        this.managementAiContextService = managementAiContextService;
     }
 
     /** Lưu câu hỏi, gửi context đáng tin cậy và lưu câu trả lời khi stream xong. */
     @Override
     public Flux<String> chatStream(AiChatRequest request, CustomUserDetails currentUser) {
-        return chatStreamInternal(request, currentUser, null, null);
+        return chatStreamInternal(request, currentUser, null, null, null);
     }
 
-    /** Validate ảnh nhỏ, định dạng allow-list rồi stream phân tích mà không lưu ảnh vào hội thoại. */
+    /** Stream phân tích ảnh trong chat sau khi Backend đã kiểm soát file upload. */
     @Override
     public Flux<String> chatImageStream(
             AiChatRequest request, MultipartFile image, CustomUserDetails currentUser) {
-        validateChatImage(image);
+        return chatFileStream(request, image, currentUser);
+    }
+
+    /** Validate tệp tài liệu hoặc ảnh đính kèm, định dạng allow-list rồi stream phân tích. */
+    @Override
+    public Flux<String> chatFileStream(
+            AiChatRequest request, MultipartFile file, CustomUserDetails currentUser) {
+        validateChatFile(file);
         try {
-            return chatStreamInternal(request, currentUser,
-                    Base64.getEncoder().encodeToString(image.getBytes()), image.getContentType());
+            String fileBase64 = Base64.getEncoder().encodeToString(file.getBytes());
+            String mimeType = file.getContentType();
+            String originalFilename = file.getOriginalFilename();
+            return chatStreamInternal(request, currentUser, fileBase64, mimeType, originalFilename);
         } catch (IOException exception) {
-            throw new com.ailms.exception.BadRequestException("Không thể đọc ảnh để phân tích");
+            throw new com.ailms.exception.BadRequestException("Không thể đọc tệp để AI phân tích");
         }
     }
 
-    /** Lưu text hội thoại và chuyển ảnh đã kiểm tra vào request nội bộ chỉ trong vòng đời request. */
+    /** Lưu text hội thoại và chuyển tệp/ảnh đã kiểm tra vào request nội bộ chỉ trong vòng đời request. */
     private Flux<String> chatStreamInternal(
             AiChatRequest request, CustomUserDetails currentUser,
-            String imageBase64, String imageMimeType) {
+            String fileBase64, String fileMimeType, String fileName) {
         Long ownerId = currentUser.getUser().getId();
         AiConversationScope scope = resolveScope(currentUser);
         List<AiHistoryMessageRequest> history = bufferService
@@ -90,8 +103,20 @@ public class AiChatService implements IAiChatService {
                         .role("user")
                         .content(request.getQuestion())
                         .build());
+        String toolAccessToken = toolAccessTokenService.issue(currentUser);
+        String aiQuestion = request.getQuestion();
+        if (scope == AiConversationScope.STUDENT_ASSISTANT) {
+            try {
+                Map<String, Object> learningContext = managementAiContextService.execute(
+                        "get_my_learning_progress", Map.of(), toolAccessTokenService.verify(toolAccessToken));
+                aiQuestion += "\n\nDỮ LIỆU HỌC TẬP THẬT CỦA HỌC VIÊN (chỉ dùng để trả lời, không hiển thị JSON):\n"
+                        + learningContext;
+            } catch (RuntimeException ignored) {
+                // Vẫn cho phép câu hỏi kiến thức chung chạy nếu context cá nhân tạm thời lỗi.
+            }
+        }
         AiServiceChatRequest internalRequest = AiServiceChatRequest.builder()
-                .question(request.getQuestion())
+                .question(aiQuestion)
                 .conversationId(request.getConversationId())
                 .ownerId(String.valueOf(ownerId))
                 .roles(trustedRoles(currentUser))
@@ -99,9 +124,14 @@ public class AiChatService implements IAiChatService {
                 .module(request.getModule())
                 .route(request.getRoute())
                 .history(history)
-                .toolAccessToken(toolAccessTokenService.issue(currentUser))
-                .imageBase64(imageBase64)
-                .imageMimeType(imageMimeType)
+                .toolAccessToken(toolAccessToken)
+                .imageBase64(fileBase64)
+                .imageMimeType(fileMimeType)
+                .fileBase64(fileBase64)
+                .fileMimeType(fileMimeType)
+                .fileName(fileName)
+                .retrievalMode(request.getRetrievalMode() == null
+                        ? "AUTO" : request.getRetrievalMode())
                 .build();
         StringBuilder answer = new StringBuilder();
         return streamingClient.chatStream(internalRequest)
@@ -118,18 +148,23 @@ public class AiChatService implements IAiChatService {
                 });
     }
 
-    /** Chỉ chấp nhận ảnh raster Gemini Vision hỗ trợ và giới hạn 5 MB để tránh gửi payload quá lớn. */
-    private void validateChatImage(MultipartFile image) {
-        if (image == null || image.isEmpty()) {
-            throw new com.ailms.exception.BadRequestException("Cần gửi ảnh để AI phân tích");
+    /** Chấp nhận ảnh và tệp tài liệu PDF, DOCX, TXT với giới hạn tối đa 10 MB. */
+    private void validateChatFile(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new com.ailms.exception.BadRequestException("Cần gửi tệp để AI phân tích");
         }
-        if (image.getSize() > 5 * 1024 * 1024) {
-            throw new com.ailms.exception.BadRequestException("Ảnh phân tích tối đa 5 MB");
+        if (file.getSize() > 10 * 1024 * 1024) {
+            throw new com.ailms.exception.BadRequestException("Kích thước tệp tối đa 10 MB");
         }
-        String mimeType = image.getContentType();
-        if (mimeType == null || !List.of("image/png", "image/jpeg", "image/webp")
-                .contains(mimeType.toLowerCase(Locale.ROOT))) {
-            throw new com.ailms.exception.BadRequestException("Chỉ hỗ trợ ảnh PNG, JPEG hoặc WEBP");
+        String mimeType = file.getContentType();
+        List<String> allowedMimes = List.of(
+                "image/png", "image/jpeg", "image/webp",
+                "application/pdf",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "text/plain");
+        if (mimeType == null || !allowedMimes.contains(mimeType.toLowerCase(Locale.ROOT))) {
+            throw new com.ailms.exception.BadRequestException(
+                    "Định dạng tệp không được hỗ trợ. Chỉ chấp nhận ảnh (PNG, JPEG, WEBP) hoặc tài liệu (PDF, DOCX, TXT)");
         }
     }
 

@@ -24,6 +24,7 @@ import com.ailms.mapper.ClassScheduleMapper;
 import com.ailms.repository.ClassRepository;
 import com.ailms.repository.CourseRepository;
 import com.ailms.repository.ClassScheduleRepository;
+import com.ailms.repository.ClassOnlineRepository;
 import com.ailms.repository.EnrollmentPackageRepository;
 import com.ailms.response.ClassResponse;
 import com.ailms.response.ClassScheduleResponse;
@@ -39,6 +40,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.time.LocalDateTime;
+import java.time.LocalDate;
+import java.time.DayOfWeek;
+import java.time.LocalTime;
 import java.util.Set;
 import java.util.HashSet;
 
@@ -58,6 +62,7 @@ public class ClassService implements IClassService {
     private final ClassMemberRepository classMemberRepository;
     private final ClassMapper classMapper;
     private final ClassScheduleRepository classScheduleRepository;
+    private final ClassOnlineRepository classOnlineRepository;
     private final ClassScheduleMapper classScheduleMapper;
     private final EnrollmentPackageRepository enrollmentPackageRepository;
     private final MeilisearchClassService meilisearchClassService;
@@ -197,7 +202,33 @@ public class ClassService implements IClassService {
                 classScheduleRepository.save(schedule);
             }
         }
+        generateRecurringSessions(classEntity);
         return classScheduleMapper.toResponseList(classScheduleRepository.findByClassEntity_Id(classId));
+    }
+
+    /** Sinh các buổi online lặp theo khung tuần đến ngày kết thúc lớp, tránh tạo trùng. */
+    private void generateRecurringSessions(ClassEntity classEntity) {
+        if (classEntity.getStartDate() == null || classEntity.getEndDate() == null) return;
+        var teacher = classMemberRepository.findById_ClassId(classEntity.getId()).stream()
+                .filter(item -> item.getStatus() == ClassMemberStatusEnum.ACTIVE)
+                .filter(item -> item.getRoleInClass() == ClassMemberRole.TEACHER).findFirst()
+                .map(ClassMemberEntity::getUserEntity).orElse(null);
+        LocalDate cursor = classEntity.getStartDate().toLocalDate();
+        LocalDate end = classEntity.getEndDate().toLocalDate();
+        while (!cursor.isAfter(end)) {
+            for (ClassScheduleEntity slot : classScheduleRepository.findByClassEntity_Id(classEntity.getId())) {
+                DayOfWeek target = DayOfWeek.of(slot.getDayOfWeek());
+                if (cursor.getDayOfWeek() != target) continue;
+                LocalDateTime at = cursor.atTime(slot.getStartTime());
+                boolean exists = classOnlineRepository.findByClassEntity_Id(classEntity.getId()).stream()
+                        .anyMatch(item -> at.equals(item.getScheduledAt()));
+                if (!exists) classOnlineRepository.save(com.ailms.entity.ClassOnlineEntity.builder()
+                        .classEntity(classEntity).teacherEntity(teacher).title("Buổi học - " + classEntity.getName())
+                        .scheduledAt(at).durationMin((int) java.time.Duration.between(slot.getStartTime(), slot.getEndTime()).toMinutes())
+                        .status(BaseStatusEnum.ACTIVE).code(CodeGenerator.generate("BT", classOnlineRepository::existsByCode)).build());
+            }
+            cursor = cursor.plusDays(1);
+        }
     }
 
     @Transactional

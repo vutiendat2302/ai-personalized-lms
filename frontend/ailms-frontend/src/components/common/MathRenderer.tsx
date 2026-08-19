@@ -25,6 +25,8 @@ export const MathRenderer: React.FC<MathRendererProps> = ({
     } else if (rawMath.startsWith("$") && rawMath.endsWith("$")) {
       rawMath = rawMath.substring(1, rawMath.length - 1).trim();
     }
+    // Chuẩn hóa cú pháp thường bị AI sinh nhầm từ \mathbb[N] thành \mathbb{N}.
+    rawMath = rawMath.replace(/\\mathbb\[([^\]]+)\]/g, "\\mathbb{$1}");
 
     const render = () => {
       if ((window as any).katex && containerRef.current) {

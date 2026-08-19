@@ -31,6 +31,8 @@ public class LessonProgressRequest {
 
     private Integer attemptCount;
 
+    private String personalNote;
+
     private LocalDateTime startedAt;
 
     private LocalDateTime completedAt;

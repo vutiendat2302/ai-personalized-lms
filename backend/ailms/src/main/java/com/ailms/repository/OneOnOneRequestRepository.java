@@ -24,6 +24,9 @@ public interface OneOnOneRequestRepository extends BaseRepository<OneOnOneReques
     /** Lấy yêu cầu của học viên theo thời gian mới nhất. */
     List<OneOnOneRequestEntity> findByStudentEntity_IdOrderByCreatedAtDesc(Long studentId);
 
+    /** Lấy các yêu cầu đang được phân công cho người dạy hiện tại. */
+    List<OneOnOneRequestEntity> findByAssignedInstructorEntity_IdOrderByCreatedAtDesc(Long instructorId);
+
     /** Lấy yêu cầu theo trạng thái phục vụ HR. */
     List<OneOnOneRequestEntity> findByStatusInOrderByCreatedAtDesc(List<OneOnOneRequestStatusEnum> statuses);
 
@@ -34,4 +37,7 @@ public interface OneOnOneRequestRepository extends BaseRepository<OneOnOneReques
 
     /** Lấy matching request đang sở hữu lớp 1-1 để giới hạn số buổi chính thức. */
     Optional<OneOnOneRequestEntity> findByTrialClassEntity_Id(Long classId);
+
+    /** Tìm yêu cầu 1-1 sở hữu buổi học thử để mở đúng form nhận xét. */
+    Optional<OneOnOneRequestEntity> findByTrialSessionEntity_Id(Long sessionId);
 }

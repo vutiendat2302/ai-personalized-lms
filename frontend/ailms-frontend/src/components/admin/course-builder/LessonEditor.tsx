@@ -42,7 +42,9 @@ import {
   HelpCircle,
   CheckSquare,
   X,
+  Sparkles,
 } from "lucide-react";
+import { AiQuizGeneratorModal } from "./AiQuizGeneratorModal";
 
 export interface ContentBlock {
   id: string;
@@ -74,6 +76,7 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
   const [contentType, setContentType] = useState("VIDEO");
   const [contentUrl, setContentUrl] = useState("");
   const [durationMin, setDurationMin] = useState(5);
+  const [durationSec, setDurationSec] = useState<number | undefined>();
   const [previewType, setPreviewType] = useState("LOCKED");
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -103,11 +106,12 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
   // Quiz Fields
   const [quizTitle, setQuizTitle] = useState("");
   const [quizTimeLimitMin, setQuizTimeLimitMin] = useState(15);
-  const [quizPassScore, setQuizPassScore] = useState(8.0);
+  const [quizPassScore, setQuizPassScore] = useState(70);
   const [quizMaxAttempts, setQuizMaxAttempts] = useState(3);
   const [quizShuffleQuestions, setQuizShuffleQuestions] = useState(true);
   const [questions, setQuestions] = useState<QuestionItem[]>([]);
   const [showQuizPreview, setShowQuizPreview] = useState(false);
+  const [showAiQuizModal, setShowAiQuizModal] = useState(false);
 
   // Assignment Fields
   const [assignmentTitle, setAssignmentTitle] = useState("");
@@ -133,13 +137,13 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
     }
   };
 
-  // Automatic Video Duration Handler (90% of total duration)
+  // Đồng bộ thời lượng video thực tế từ metadata của tệp đang phát.
   const handleVideoLoadedMetadata = (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
     const videoDurationSec = e.currentTarget.duration;
     if (videoDurationSec && !isNaN(videoDurationSec) && videoDurationSec > 0) {
-      const ninetyPercentSec = videoDurationSec * 0.9;
-      const calculatedMin = Math.max(1, Math.ceil(ninetyPercentSec / 60));
-      setDurationMin(calculatedMin);
+      const roundedDurationSec = Math.max(1, Math.round(videoDurationSec));
+      setDurationSec(roundedDurationSec);
+      setDurationMin(Math.max(1, Math.ceil(roundedDurationSec / 60)));
     }
   };
 
@@ -156,6 +160,7 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
       setContentType(currentType);
       setContentUrl(lesson.contentUrl || "");
       setDurationMin(lesson.durationMin || (currentType === "VIDEO" ? 5 : 5));
+      setDurationSec(lesson.durationSec);
       setPreviewType(lesson.previewType || "LOCKED");
       setIsDirty(false);
 
@@ -197,7 +202,7 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
       if (lesson.linkedQuiz) {
         setQuizTitle(lesson.linkedQuiz.title || (lesson.name ? lesson.name + " - Quiz kiểm tra" : "Quiz đính kèm"));
         setQuizTimeLimitMin(lesson.linkedQuiz.timeLimitMin || 15);
-        setQuizPassScore(lesson.linkedQuiz.passScore || 8.0);
+        setQuizPassScore(lesson.linkedQuiz.passScore ?? 70);
         setQuizMaxAttempts(lesson.linkedQuiz.maxAttempts || 3);
         setQuizShuffleQuestions(lesson.linkedQuiz.shuffleQuestions ?? true);
 
@@ -284,11 +289,13 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
 
   const handlePdfFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !lesson) return;
 
     try {
       setUploadingPdf(true);
-      const res = await fileAdminApi.uploadFile(file, "DOCUMENT", "LESSON_RESOURCE");
+      const res = await fileAdminApi.uploadFile(
+        file, "DOCUMENT", "COURSE_LESSON", undefined, String(lesson.id), "Lesson",
+      );
       const fileUrl = (res as any).fileUrl || res.fileKey;
       setContentUrl(fileUrl);
       setIsDirty(true);
@@ -302,11 +309,13 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
 
   const handleVideoFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !lesson) return;
 
     try {
       setUploadingVideo(true);
-      const res = await fileAdminApi.uploadFile(file, "VIDEO", "LESSON_VIDEO");
+      const res = await fileAdminApi.uploadFile(
+        file, "VIDEO", "LESSON_VIDEO", undefined, String(lesson.id), "Lesson",
+      );
       const fileUrl = (res as any).fileUrl || res.fileKey;
       setContentUrl(fileUrl);
       setIsDirty(true);
@@ -320,11 +329,13 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
 
   const handleResourceFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !lesson) return;
 
     try {
       setUploadingResource(true);
-      const res = await fileAdminApi.uploadFile(file, "DOCUMENT", "LESSON_RESOURCE");
+      const res = await fileAdminApi.uploadFile(
+        file, "DOCUMENT", "LESSON_RESOURCE", undefined, String(lesson.id), "Lesson",
+      );
       const displayName = resourceDisplayName.trim() || file.name || "Tài liệu tham khảo";
       let createdResource: any = null;
 
@@ -452,6 +463,7 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
       contentUrl,
       description: descriptionJson,
       durationMin,
+      durationSec: contentType === "VIDEO" ? durationSec : undefined,
       previewType,
       linkedQuizId: lesson.linkedQuiz?.id,
       linkedAssignmentId: lesson.linkedAssignment?.id,
@@ -459,11 +471,7 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
       isAssignmentAttached,
       quizData: isQuizAttached ? {
         title: quizTitle || (name + " - Quiz kiểm tra"),
-        description: questions.length > 0
-          ? JSON.stringify(questions)
-          : (lesson.linkedQuiz?.description && lesson.linkedQuiz.description.trim().startsWith("[")
-              ? lesson.linkedQuiz.description
-              : (contentUrl || "Bài kiểm tra trắc nghiệm theo bài học")),
+        description: contentUrl || "Bài kiểm tra trắc nghiệm theo bài học",
         questions: questions,
         timeLimitMin: quizTimeLimitMin,
         passScore: quizPassScore,
@@ -1362,6 +1370,15 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
                   type="button"
                   variant="outline"
                   size="sm"
+                  onClick={() => setShowAiQuizModal(true)}
+                  className="h-7 text-xs font-bold text-primary bg-primary/10 border-primary/30 hover:bg-primary/20 cursor-pointer flex items-center gap-1"
+                >
+                  <Sparkles className="w-3.5 h-3.5" /> Sinh Đề Bằng AI
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
                   onClick={() => setShowQuizPreview(true)}
                   className="h-7 text-xs font-bold text-amber-900 bg-amber-100 border-amber-300 hover:bg-amber-200 cursor-pointer"
                 >
@@ -1370,6 +1387,15 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
                 <Badge className="bg-amber-100 text-amber-900 font-bold">Quiz bài học</Badge>
               </div>
             </div>
+
+            {/* AI Quiz Generator Modal */}
+            <AiQuizGeneratorModal
+              open={showAiQuizModal}
+              onOpenChange={setShowAiQuizModal}
+              lessonId={String(lesson.id)}
+              lessonName={name || "Bài học"}
+              onSuccess={() => toast.success("Đã cập nhật bài kiểm tra từ AI!")}
+            />
 
             {/* Quiz Preview Modal inside LessonEditor */}
             {showQuizPreview && (
@@ -1427,10 +1453,12 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs font-bold">Điểm đạt tối thiểu (Thang 10)</Label>
+                  <Label className="text-xs font-bold">Điểm đạt tối thiểu (Thang 100)</Label>
                   <Input
                     type="number"
-                    step="0.5"
+                    min={0}
+                    max={100}
+                    step="1"
                     value={quizPassScore}
                     onChange={(e) => setQuizPassScore(Number(e.target.value))}
                     className="h-9 text-xs bg-background"
@@ -1892,10 +1920,12 @@ export const LessonEditor: React.FC<LessonEditorProps> = ({ lesson, onSave }) =>
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-xs font-bold text-amber-950">Điểm sàn đạt yêu cầu (Thang 10)</Label>
+                      <Label className="text-xs font-bold text-amber-950">Điểm sàn đạt yêu cầu (Thang 100)</Label>
                       <Input
                         type="number"
-                        step="0.5"
+                        min={0}
+                        max={100}
+                        step="1"
                         value={quizPassScore}
                         onChange={(e) => {
                           setQuizPassScore(Number(e.target.value));

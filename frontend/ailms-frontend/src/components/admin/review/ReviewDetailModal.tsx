@@ -90,25 +90,22 @@ export const ReviewDetailModal: React.FC<ReviewDetailModalProps> = ({
               variant="outline"
               className={`px-3 py-1 rounded-full text-xs font-bold ${
                 isActive
-                  ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+                  ? "bg-success-forest/10 text-success-forest border-success-forest/20"
                   : isRejected
-                  ? "bg-red-500/10 text-red-600 border-red-500/20"
+                  ? "bg-destructive/10 text-destructive border-destructive/20"
                   : "bg-amber-500/10 text-amber-600 border-amber-500/20"
               }`}
             >
-              {isActive ? "Đang hiển thị (ACTIVE)" : isRejected ? "Đã ẩn / Từ chối (REJECTED)" : "Chờ kiểm duyệt (INACTIVE)"}
+              {isActive ? "Đã duyệt" : isRejected ? "Đã ẩn" : "Chờ kiểm duyệt"}
             </Badge>
             <span className="text-xs text-muted-foreground font-mono">
-              ID: #{review.id}
+              ID: {review.id}
             </span>
           </div>
           <DialogTitle className="text-2xl font-extrabold tracking-tight flex items-center gap-2">
             <MessageSquare className="h-6 w-6 text-primary" />
-            <span>Chi tiết Đánh giá Khóa học</span>
+            <span>Chi tiết đánh giá khóa học</span>
           </DialogTitle>
-          <DialogDescription className="text-xs text-muted-foreground">
-            Thông tin chi tiết học viên, khóa học và nội dung nhận xét bài đánh giá.
-          </DialogDescription>
         </DialogHeader>
 
         {/* Student & Course Header Card */}

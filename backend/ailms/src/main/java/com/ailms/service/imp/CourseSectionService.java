@@ -8,6 +8,7 @@ import com.ailms.entity.CategoryEntity;
 import com.ailms.entity.CourseEntity;
 import com.ailms.entity.CourseSectionEntity;
 import com.ailms.exception.DuplicateResourceException;
+import com.ailms.exception.BadRequestException;
 import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.mapper.CourseSectionMapper;
 import com.ailms.repository.CourseRepository;
@@ -42,6 +43,9 @@ public class CourseSectionService implements ICourseSectionService {
     @Transactional
     public SectionResponse create(CreateSectionRequest request) {
         log.info("Creating section for course id: {}", request.getCourseId());
+        if (request.getCourseId() == null) {
+            throw new BadRequestException("Course ID is required");
+        }
 
         if (courseSectionRepository.existsByNameAndCourseEntity_Id(request.getName(), request.getCourseId())) {
             throw DuplicateResourceException.of(RESOURCE_NAME, "name and courseId", request.getName() + " in course " + request.getCourseId());

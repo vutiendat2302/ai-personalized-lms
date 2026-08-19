@@ -9,16 +9,42 @@ from app.schemas.assessment_schema import (
 
 
 class AssessmentGenerator:
-    """Trích xuất source tạm thời và giao provider sinh quiz/assignment schema-validated."""
+    """
+    Dịch vụ tạo đề kiểm tra và bài tập tự động từ học liệu (AI Assessment Generation Service).
+
+    Cơ chế hoạt động và xử lý tài liệu tạm thời (In-Memory Ephemeral Processing):
+    - Tiếp nhận yêu cầu từ Giảng viên/Quản trị viên kèm nội dung bài học (`lessonContent`) và tối đa 3 file tài liệu đính kèm (PDF, DOCX, Ảnh dạng Base64).
+    - Giải mã và trích xuất nội dung tài liệu hoàn toàn trong bộ nhớ đệm (RAM) của request, tuyệt đối không lưu tệp rác vào đĩa cứng hay Vector DB.
+    - Hợp nhất toàn bộ tri thức học liệu thành một siêu văn bản (giới hạn 80.000 ký tự) và chuyển giao cho `BaseAIProvider.generate_assessment`
+      để sinh ra các câu hỏi trắc nghiệm (Quiz) hoặc bài tập thực hành (Assignment) có giải thích chi tiết đáp án và barem điểm chuẩn xác.
+    """
 
     def __init__(self, provider: BaseAIProvider) -> None:
-        """Nhận provider abstraction để router không biết chi tiết Gemini SDK."""
+        """
+        Khởi tạo AssessmentGenerator với AI Provider.
+
+        Args:
+            provider (BaseAIProvider): Provider thực hiện sinh nội dung có cấu trúc qua LLM.
+        """
         self.provider = provider
 
     async def generate(
         self, request: AssessmentGenerationRequest
     ) -> AssessmentGenerationResponse:
-        """Ghép nội dung lesson và upload source rồi sinh assessment đúng loại được yêu cầu."""
+        """
+        Điều phối quá trình trích xuất học liệu và gọi LLM sinh bài đánh giá.
+
+        Cơ chế:
+        1. Gọi `_source_text()` để giải mã và trích xuất toàn bộ văn bản từ bài học và các tệp đính kèm.
+        2. Chuyển tiếp tới `provider.generate_assessment()` với tiêu đề bài học, loại bài tập và số lượng câu hỏi mong muốn.
+        3. Trả về cấu trúc Pydantic `AssessmentGenerationResponse` hoàn chỉnh để Backend lưu vào DB.
+
+        Args:
+            request (AssessmentGenerationRequest): Yêu cầu tạo bài tập chứa lessonId, lessonTitle, lessonContent và sourceFiles.
+
+        Returns:
+            AssessmentGenerationResponse: Dữ liệu bài Quiz/Assignment đã qua kiểm định schema.
+        """
         source_text = await self._source_text(request)
         return await self.provider.generate_assessment(
             lesson_title=request.lesson_title,
@@ -28,7 +54,23 @@ class AssessmentGenerator:
         )
 
     async def _source_text(self, request: AssessmentGenerationRequest) -> str:
-        """Trích text PDF/DOCX/ảnh trong memory, giới hạn prompt để tránh payload quá dài."""
+        """
+        Trích xuất và hợp nhất văn bản bài học cùng các tài liệu đính kèm trong bộ nhớ.
+
+        Cơ chế:
+        1. Bắt đầu với nội dung bài học `lesson_content`.
+        2. Lặp qua danh sách `source_files`:
+           - Giải mã chuỗi Base64 thành mảng byte nhị phân.
+           - Chọn extractor thích hợp dựa trên `mime_type` (PDF, DOCX, hoặc Image OCR).
+           - Trích xuất văn bản và đính kèm tên tệp vào danh sách segments.
+        3. Ghép các đoạn phân tách bởi 2 dòng trống và cắt gọn tối đa 80.000 ký tự để bảo vệ token và tránh tràn cửa sổ ngữ cảnh.
+
+        Args:
+            request (AssessmentGenerationRequest): Dữ liệu yêu cầu đầu vào.
+
+        Returns:
+            str: Toàn bộ nội dung học liệu đã được làm sạch và hợp nhất.
+        """
         segments = [f"NỘI DUNG BÀI HỌC:\n{request.lesson_content}"]
         for source_file in request.source_files:
             file_bytes = source_file.decoded_content()

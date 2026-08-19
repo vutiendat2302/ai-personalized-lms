@@ -5,6 +5,7 @@ import com.ailms.entity.CouponEntity;
 import com.ailms.entity.UserCouponEntity;
 import com.ailms.entity.UserEntity;
 import com.ailms.entity.enums.CouponStatusEnum;
+import com.ailms.entity.enums.CouponDistributionScopeEnum;
 import com.ailms.entity.enums.UserCouponStatusEnum;
 import com.ailms.exception.BusinessException;
 import com.ailms.exception.ResourceNotFoundException;
@@ -23,6 +24,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.LinkedHashSet;
+import java.util.Optional;
+
 
 @Service
 @RequiredArgsConstructor
@@ -41,7 +45,7 @@ public class CouponService implements ICouponService {
     @Override
     public List<CouponResponse> getAll() {
         log.info("Getting all coupons");
-        return couponMapper.toResponseList(couponRepository.findAll());
+        return couponRepository.findAll().stream().map(this::toResponse).toList();
     }
 
     @Override
@@ -49,7 +53,7 @@ public class CouponService implements ICouponService {
         log.info("Getting coupon by id: {}", id);
         CouponEntity entity = couponRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, id));
-        return couponMapper.toResponse(entity);
+        return toResponse(entity);
     }
 
     @Override
@@ -57,7 +61,7 @@ public class CouponService implements ICouponService {
         log.info("Getting coupon by code: {}", code);
         CouponEntity entity = couponRepository.findByCode(code)
                 .orElseThrow(() -> new BusinessException("Coupon not found: " + code));
-        return couponMapper.toResponse(entity);
+        return toResponse(entity);
     }
 
     @Override
@@ -69,14 +73,11 @@ public class CouponService implements ICouponService {
         }
 
         CouponEntity entity = couponMapper.toEntity(request);
-        if (request.getApplicableCourseId() != null) {
-            CourseEntity course = courseRepository.findById(request.getApplicableCourseId())
-                    .orElseThrow(() -> ResourceNotFoundException.of("Course", request.getApplicableCourseId()));
-            entity.setApplicableCourseEntity(course);
-        }
+        applyCourses(request, entity);
 
+        if (entity.getDistributionScope() == null) entity.setDistributionScope(CouponDistributionScopeEnum.NONE);
         CouponEntity saved = couponRepository.save(entity);
-        return couponMapper.toResponse(saved);
+        return toResponse(saved);
     }
 
     @Override
@@ -94,16 +95,10 @@ public class CouponService implements ICouponService {
 
         couponMapper.updateFromRequest(request, existing);
 
-        if (request.getApplicableCourseId() != null) {
-            CourseEntity course = courseRepository.findById(request.getApplicableCourseId())
-                    .orElseThrow(() -> ResourceNotFoundException.of("Course", request.getApplicableCourseId()));
-            existing.setApplicableCourseEntity(course);
-        } else {
-            existing.setApplicableCourseEntity(null);
-        }
+        applyCourses(request, existing);
 
         CouponEntity updated = couponRepository.save(existing);
-        return couponMapper.toResponse(updated);
+        return toResponse(updated);
     }
 
     @Override
@@ -139,13 +134,13 @@ public class CouponService implements ICouponService {
             throw new BusinessException("Coupon usage limit reached");
         }
 
-        if (entity.getApplicableCourseEntity() != null && courseId != null) {
-            if (!entity.getApplicableCourseEntity().getId().equals(courseId)) {
+        if (!entity.getApplicableCourseEntities().isEmpty() && courseId != null) {
+            if (entity.getApplicableCourseEntities().stream().noneMatch(course -> course.getId().equals(courseId))) {
                 throw new BusinessException("Coupon is not applicable to this course");
             }
         }
 
-        return couponMapper.toResponse(entity);
+        return toResponse(entity);
     }
 
     /** Cấp coupon cho một học viên và không cho cấp trùng cùng coupon. */
@@ -159,31 +154,115 @@ public class CouponService implements ICouponService {
                 .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, couponId));
         UserEntity user = userRepository.findById(userId)
                 .orElseThrow(() -> ResourceNotFoundException.of("User", userId));
+        coupon.setDistributionScope(CouponDistributionScopeEnum.SELECTED_STUDENTS);
         return mapUserCoupon(userCouponRepository.save(UserCouponEntity.builder()
                 .userEntity(user).couponEntity(coupon).status(UserCouponStatusEnum.AVAILABLE).build()));
     }
 
-    /** Lấy danh sách voucher được cấp và tính trạng thái khả dụng tại thời điểm đọc. */
+    /** Cấp voucher cho toàn bộ học viên đang hoạt động, không tạo bản ghi trùng. */
     @Override
+    @Transactional
+    public int assignToAllStudents(Long couponId) {
+        CouponEntity coupon = couponRepository.findById(couponId)
+                .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, couponId));
+        int assignedCount = 0;
+        coupon.setDistributionScope(CouponDistributionScopeEnum.ALL_STUDENTS);
+        for (UserEntity student : userRepository.findUsersByRoleName("STUDENT", com.ailms.entity.enums.UserStatusEnum.DELETED)) {
+            if (!userCouponRepository.existsByUserEntity_IdAndCouponEntity_Id(student.getId(), couponId)) {
+                userCouponRepository.save(UserCouponEntity.builder()
+                        .userEntity(student).couponEntity(coupon).status(UserCouponStatusEnum.AVAILABLE).build());
+                assignedCount++;
+            }
+        }
+        return assignedCount;
+    }
+
+    /** Cấp voucher cho nhiều học viên hợp lệ và cập nhật phạm vi phát riêng. */
+    @Override
+    @Transactional
+    public int assignToUsers(Long couponId, List<Long> userIds) {
+        CouponEntity coupon = couponRepository.findById(couponId)
+                .orElseThrow(() -> ResourceNotFoundException.of(RESOURCE_NAME, couponId));
+        if (userIds == null || userIds.isEmpty()) throw new BusinessException("Phải chọn ít nhất một học viên.");
+        int assignedCount = 0;
+        for (UserEntity user : userRepository.findAllById(userIds.stream().distinct().toList())) {
+            if (!userCouponRepository.existsByUserEntity_IdAndCouponEntity_Id(user.getId(), couponId)) {
+                userCouponRepository.save(UserCouponEntity.builder().userEntity(user).couponEntity(coupon)
+                        .status(UserCouponStatusEnum.AVAILABLE).build());
+                assignedCount++;
+            }
+        }
+        coupon.setDistributionScope(CouponDistributionScopeEnum.SELECTED_STUDENTS);
+        return assignedCount;
+    }
+
+    /** Lấy danh sách voucher được cấp và tự động đồng bộ voucher toàn hệ thống cho học viên. */
+    @Override
+    @Transactional
     public List<UserCouponResponse> getUserCoupons(Long userId) {
+        syncGlobalCouponsForUser(userId);
         return userCouponRepository.findByUserEntity_IdOrderByCreatedAtDesc(userId).stream()
                 .map(this::mapUserCoupon).toList();
     }
 
+    /** Tự động đồng bộ các coupon toàn hệ thống ALL_STUDENTS còn hoạt động cho học viên. */
+    private void syncGlobalCouponsForUser(Long userId) {
+        List<CouponEntity> globalCoupons = couponRepository.findAll().stream()
+                .filter(c -> c.getStatus() == CouponStatusEnum.ACTIVE
+                        && c.getDistributionScope() == CouponDistributionScopeEnum.ALL_STUDENTS)
+                .toList();
+        for (CouponEntity global : globalCoupons) {
+            if (!userCouponRepository.existsByUserEntity_IdAndCouponEntity_Id(userId, global.getId())) {
+                UserEntity student = userRepository.findById(userId).orElse(null);
+                if (student != null) {
+                    userCouponRepository.save(UserCouponEntity.builder()
+                            .userEntity(student)
+                            .couponEntity(global)
+                            .status(UserCouponStatusEnum.AVAILABLE)
+                            .build());
+                }
+            }
+        }
+    }
+
     /** Kiểm tra voucher thuộc đúng học viên, còn hạn và áp dụng được cho ít nhất một khóa học. */
     @Override
+    @Transactional
     public UserCouponResponse validateUserCoupon(Long userId, String code, List<Long> courseIds) {
-        UserCouponEntity owned = userCouponRepository.findByUserEntity_IdOrderByCreatedAtDesc(userId).stream()
-                .filter(item -> item.getCouponEntity().getCode().equalsIgnoreCase(code))
-                .findFirst().orElseThrow(() -> new BusinessException("Voucher không thuộc tài khoản của bạn."));
+        if (code == null || code.isBlank()) {
+            throw new BusinessException("Mã voucher không được để trống.");
+        }
+        String cleanCode = code.trim();
+        Optional<UserCouponEntity> ownedOpt = userCouponRepository.findByUserEntity_IdOrderByCreatedAtDesc(userId).stream()
+                .filter(item -> item.getCouponEntity().getCode().equalsIgnoreCase(cleanCode))
+                .findFirst();
+        UserCouponEntity owned;
+        if (ownedOpt.isPresent()) {
+            owned = ownedOpt.get();
+        } else {
+            CouponEntity globalCoupon = couponRepository.findByCode(cleanCode)
+                    .orElseThrow(() -> new BusinessException("Mã voucher không tồn tại."));
+            if (globalCoupon.getDistributionScope() == CouponDistributionScopeEnum.ALL_STUDENTS) {
+                UserEntity student = userRepository.findById(userId)
+                        .orElseThrow(() -> ResourceNotFoundException.of("User", userId));
+                owned = userCouponRepository.save(UserCouponEntity.builder()
+                        .userEntity(student)
+                        .couponEntity(globalCoupon)
+                        .status(UserCouponStatusEnum.AVAILABLE)
+                        .build());
+            } else {
+                throw new BusinessException("Voucher không thuộc tài khoản của bạn.");
+            }
+        }
         UserCouponResponse response = mapUserCoupon(owned);
         if (!response.isUsable()) throw new BusinessException(response.getUnavailableReason());
-        Long applicableCourseId = response.getApplicableCourseId();
-        if (applicableCourseId != null && (courseIds == null || !courseIds.contains(applicableCourseId))) {
+        if (response.getApplicableCourseIds() != null && !response.getApplicableCourseIds().isEmpty()
+                && (courseIds == null || response.getApplicableCourseIds().stream().noneMatch(courseIds::contains))) {
             throw new BusinessException("Voucher không áp dụng cho các khóa học đã chọn.");
         }
         return response;
     }
+
 
     /** Chuyển quyền voucher sang DTO và giải thích lý do không thể sử dụng. */
     private UserCouponResponse mapUserCoupon(UserCouponEntity owned) {
@@ -199,7 +278,24 @@ public class CouponService implements ICouponService {
                 .discountType(coupon.getDiscountType()).discountValue(coupon.getDiscountValue())
                 .applicableCourseId(coupon.getApplicableCourseEntity() != null ? coupon.getApplicableCourseEntity().getId() : null)
                 .applicableCourseName(coupon.getApplicableCourseEntity() != null ? coupon.getApplicableCourseEntity().getName() : null)
+                .applicableCourseIds(coupon.getApplicableCourseEntities().stream().map(CourseEntity::getId).toList())
+                .applicableCourseNames(coupon.getApplicableCourseEntities().stream().map(CourseEntity::getName).toList())
                 .validFrom(coupon.getValidFrom()).validTo(coupon.getValidTo()).status(owned.getStatus())
                 .usable(reason == null).unavailableReason(reason).build();
+    }
+
+    /** Ánh xạ coupon trong transaction để dữ liệu khóa học n-n được khởi tạo đầy đủ. */
+    private CouponResponse toResponse(CouponEntity entity) {
+        return couponMapper.toResponse(entity);
+    }
+
+    /** Gán danh sách khóa học mới, đồng thời giữ cột đơn cũ tương thích ngược. */
+    private void applyCourses(com.ailms.request.CouponRequest request, CouponEntity entity) {
+        List<Long> ids = request.getApplicableCourseIds();
+        if (ids == null) ids = request.getApplicableCourseId() == null ? List.of() : List.of(request.getApplicableCourseId());
+        var courses = new LinkedHashSet<>(courseRepository.findAllById(ids));
+        if (courses.size() != ids.stream().distinct().count()) throw new ResourceNotFoundException("Course not found");
+        entity.setApplicableCourseEntities(courses);
+        entity.setApplicableCourseEntity(courses.stream().findFirst().orElse(null));
     }
 }

@@ -309,7 +309,8 @@ public class PublicCatalogService implements IPublicCatalogService {
         courseTeacherRepository.findPublicTeacherStats(ids).forEach(row -> {
             courseCounts.put((Long) row[0], ((Number) row[1]).longValue());
             studentCounts.put((Long) row[0], ((Number) row[2]).longValue());
-            ratings.put((Long) row[0], ((Number) row[3]).doubleValue());
+            double rawRating = ((Number) row[3]).doubleValue();
+            ratings.put((Long) row[0], Math.round(rawRating * 10.0) / 10.0);
         });
         Map<Long, List<PublicCategoryResponse>> categories = new HashMap<>();
         teacherCategoryRepository.findPublicTeacherCategories(ids, BaseStatusEnum.ACTIVE).forEach(row ->
@@ -342,7 +343,6 @@ public class PublicCatalogService implements IPublicCatalogService {
                 .reviewCount(course.getReviewCount()).studentCount(course.getEnrollmentCount())
                 .categoryName(course.getCategoryEntity() == null ? null : course.getCategoryEntity().getName())
                 .deliveryModes(packages.stream().map(CoursePackageEntity::getDeliveryMode)
-                        .filter(mode -> mode != DeliveryModeEnum.COMBO)
                         .map(DeliveryModeEnum::name).distinct().toList()).build();
     }
 

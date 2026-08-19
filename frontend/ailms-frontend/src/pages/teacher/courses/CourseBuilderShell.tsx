@@ -12,6 +12,7 @@ import { ArrowLeft, BookOpen, Layers, CheckCircle, PanelLeftClose, PanelLeftOpen
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/useToast";
 import { useAuth } from "@/hooks/useAuth";
+import { CourseSettingsDialog } from "@/components/admin/course-builder/CourseSettingsDialog";
 
 export const CourseBuilderShell: React.FC = () => {
   const toast = useToast();
@@ -384,6 +385,9 @@ export const CourseBuilderShell: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
+          {id && (curriculum?.status === "DRAFT" || curriculum?.status === "REJECTED") && (
+            <CourseSettingsDialog courseId={id} onUpdated={() => void fetchCurriculum()} />
+          )}
           <Button
             type="button"
             variant="outline"

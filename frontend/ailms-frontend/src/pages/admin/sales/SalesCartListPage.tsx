@@ -41,8 +41,12 @@ export const SalesCartListPage: React.FC = () => {
   };
 
   const handleSendReminder = async (userId: string) => {
-    await salesApi.sendCartReminder(userId);
-    success("Đã gửi email & thông báo nhắc nhở thanh toán giỏ hàng cho học viên!");
+    try {
+      await salesApi.sendCartReminder(userId);
+      success("Đã gửi email nhắc thanh toán cho học viên!");
+    } catch {
+      error("Không thể gửi email nhắc thanh toán. Vui lòng thử lại.");
+    }
   };
 
   return (
@@ -50,9 +54,9 @@ export const SalesCartListPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/40 pb-5">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Giỏ hàng đang treo (Pending Carts)</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Giỏ hàng đang treo</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Danh sách giỏ hàng chưa thanh toán theo học viên — Phục vụ chiến dịch Remarketing & Chăm sóc khách hàng
+            Danh sách giỏ hàng chưa thanh toán theo học viên
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -132,10 +136,10 @@ export const SalesCartListPage: React.FC = () => {
                     <Send className="h-3.5 w-3.5 text-indigo-600" />
                     Nhắc thanh toán
                   </Button>
-                  <Link to="/sales/coupons/new">
+                  <Link to="/admin/coupons">
                     <Button
                       size="sm"
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg gap-1.5 cursor-pointer shadow-sm"
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg gap-1.5 cursor-pointer shadow-xs"
                     >
                       <Tag className="h-3.5 w-3.5" />
                       Tạo Coupon riêng

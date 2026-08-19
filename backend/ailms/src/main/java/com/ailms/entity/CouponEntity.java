@@ -3,12 +3,15 @@ package com.ailms.entity;
 import com.ailms.common.snowflake.SnowflakeId;
 import com.ailms.entity.enums.CouponDiscountTypeEnum;
 import com.ailms.entity.enums.CouponStatusEnum;
+import com.ailms.entity.enums.CouponDistributionScopeEnum;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 /**
  * Lưu trữ thông tin mã giảm giá áp dụng khi thanh toán đơn hàng,
@@ -50,6 +53,14 @@ public class CouponEntity extends BaseEntity {
     @JoinColumn(name = "applicable_course_id")
     private CourseEntity applicableCourseEntity;
 
+    /** Các khóa học cụ thể được áp dụng; rỗng nghĩa là toàn bộ khóa học. */
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(name = "coupon_course",
+            joinColumns = @JoinColumn(name = "coupon_id"),
+            inverseJoinColumns = @JoinColumn(name = "course_id"))
+    @Builder.Default
+    private Set<CourseEntity> applicableCourseEntities = new LinkedHashSet<>();
+
     /** Số lượt sử dụng tối đa của mã giảm giá (null = không giới hạn). */
     @Column(name = "max_usage")
     private Integer maxUsage;
@@ -71,4 +82,10 @@ public class CouponEntity extends BaseEntity {
     @Column(name = "status", nullable = false, length = 20)
     @Enumerated(EnumType.STRING)
     private CouponStatusEnum status;
+
+    /** Phạm vi học viên đã nhận voucher. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "distribution_scope", nullable = false, length = 30)
+    @Builder.Default
+    private CouponDistributionScopeEnum distributionScope = CouponDistributionScopeEnum.NONE;
 }

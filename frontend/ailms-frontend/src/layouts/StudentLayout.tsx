@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, type ReactNode } from "react";
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
 import {
   BookOpen,
@@ -32,7 +32,7 @@ interface NavSection {
   }[];
 }
 
-export const StudentLayout: React.FC = () => {
+export const StudentLayout: React.FC<{ children?: ReactNode }> = ({ children }) => {
   const location = useLocation();
   const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
     return localStorage.getItem("ailms_student_sidebar_collapsed") === "true";
@@ -158,7 +158,7 @@ export const StudentLayout: React.FC = () => {
 
       {/* Main Content */}
       <main className="flex-1 p-6 md:p-8 w-full min-w-0 overflow-x-clip bg-background">
-        <Outlet />
+        {children ?? <Outlet />}
       </main>
       <AiChatWidget />
     </div>

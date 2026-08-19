@@ -13,6 +13,8 @@ Base path: `/api/v1/teacher`. Tất cả endpoint yêu cầu JWT có một trong
 | GET | `/sessions/online?from=2026-08-10&to=2026-08-16` | Lịch tuần/tháng; tối đa 3 tháng |
 | POST | `/sessions/{sessionId}/review` | Gửi nhận xét sau khi buổi học kết thúc |
 
+KPI `sessionsThisWeekCompleted/sessionsThisWeekTotal` và Week View mặc định cùng dùng tuần hiện tại từ thứ Hai đến Chủ Nhật. Khi chuyển tuần/tháng, frontend gửi lại `from/to`; không dùng mốc ngày hard-code.
+
 Payload nhận xét:
 
 ```json

@@ -9,8 +9,8 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
-      ##(create, update, create-drop, validate)
-      ddl-auto: update
+      # Không dùng create/create-drop vì Backend restart không được xóa dữ liệu nghiệp vụ.
+      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:update}
     show-sql: true
     properties:
       hibernate:
@@ -53,8 +53,8 @@ api:
 app:
   jwt:
     secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
-    expiration-ms: 604800000 # 15 minutes - thời gian sống của access token
-    refresh-expiration-ms: 604800000 # 7 days - thời gian sống của refresh token
+    expiration-ms: 120000 # 15 minutes - thời gian sống của access token
+    refresh-expiration-ms: 300000 # 7 days - thời gian sống của refresh token
   frontend:
     url: ${FRONTEND_URL:http://localhost,http://localhost:80,http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:3000,http://213.163.201.42,https://datdepzaivcl.taile009f4.ts.net}
     set-password: ${FRONTEND_SET_PASSWORD_URL:http://localhost:5173/set-password}
@@ -63,6 +63,12 @@ app:
   cookie:
     secure: false
     same-site: Lax
+  simulation:
+    auto-study:
+      enabled: ${SIMULATION_AUTO_STUDY_ENABLED:true}
+      seed-on-startup: ${SIMULATION_AUTO_STUDY_SEED_ON_STARTUP:true}
+      cron: ${SIMULATION_AUTO_STUDY_CRON:0 30 8,14,20,22 * * *}
+      fixed-delay-ms: ${SIMULATION_AUTO_STUDY_FIXED_DELAY_MS:0}
 
 minio:
   endpoint: ${MINIO_ENDPOINT:http://localhost:9000}

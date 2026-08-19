@@ -7,6 +7,7 @@ export interface UpdateProgressPayload {
   lastPositionSec?: number;
   timeSpentSec?: number;
   markCompleted?: boolean;
+  personalNote?: string;
 }
 
 export interface AccessibleLessonResponse {
@@ -16,6 +17,7 @@ export interface AccessibleLessonResponse {
   contentUrl?: string | null;
   description?: string | null;
   durationMin?: number | null;
+  durationSec?: number | null;
   previewType?: string | null;
   locked: boolean;
 }
@@ -35,7 +37,7 @@ export const studentLearningApi = {
 
   /** Ghi tiến độ cho enrollment của chính người dùng hiện tại. */
   updateProgress: async (lessonId: string, enrollmentId: string, payload: UpdateProgressPayload) => {
-    const res = await httpClient.put<ApiResponse<unknown>>(`/v1/learning/lessons/${lessonId}/progress`, payload, {
+    const res = await httpClient.put<ApiResponse<{ progressPercent?: number; completedAt?: string | null; status?: number }>>(`/v1/learning/lessons/${lessonId}/progress`, payload, {
       params: { enrollmentId },
     });
     return res.data.data;

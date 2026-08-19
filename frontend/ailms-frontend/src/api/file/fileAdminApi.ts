@@ -137,12 +137,21 @@ export const fileAdminApi = {
   },
 
   // Upload file mới trực tiếp lên MinIO và lưu metadata
-  uploadFile: async (file: File, fileType?: string, usageType?: string, originalName?: string) => {
+  uploadFile: async (
+    file: File,
+    fileType?: string,
+    usageType?: string,
+    originalName?: string,
+    referenceEntityId?: string,
+    referenceEntityType?: string,
+  ) => {
     const formData = new FormData();
     formData.append("file", file);
     if (fileType && fileType !== "AUTO") formData.append("fileType", fileType);
     if (usageType && usageType !== "AUTO") formData.append("usageType", usageType);
     if (originalName?.trim()) formData.append("originalName", originalName.trim());
+    if (referenceEntityId) formData.append("referenceEntityId", referenceEntityId);
+    if (referenceEntityType) formData.append("referenceEntityType", referenceEntityType);
 
     const res = await httpClient.post<ApiResponse<FileMetadataResponse>>(
       "/v1/files/upload",

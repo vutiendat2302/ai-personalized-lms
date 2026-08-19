@@ -15,6 +15,14 @@ import com.ailms.repository.ReviewRepository;
 import com.ailms.repository.UserRepository;
 import com.ailms.repository.StudentProfileRepository;
 import com.ailms.entity.UserEntity;
+import com.ailms.entity.EnrollmentEntity;
+import com.ailms.entity.ClassMemberEntity;
+import com.ailms.entity.CourseTeacherEntity;
+import com.ailms.entity.enums.ClassMemberRole;
+import com.ailms.entity.enums.ClassMemberStatusEnum;
+import com.ailms.entity.enums.CourseTeacherStatusEnum;
+import com.ailms.repository.ClassMemberRepository;
+import com.ailms.repository.CourseTeacherRepository;
 import com.ailms.repository.specification.ReviewSpecification;
 import com.ailms.request.CreateReviewRequest;
 import com.ailms.request.ReviewSearchRequest;
@@ -32,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.Objects;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -45,6 +54,8 @@ public class ReviewService implements IReviewService {
     private final EnrollmentRepository enrollmentRepository;
     private final UserRepository userRepository;
     private final StudentProfileRepository studentProfileRepository;
+    private final ClassMemberRepository classMemberRepository;
+    private final CourseTeacherRepository courseTeacherRepository;
     private final ReviewMapper reviewMapper;
     private final ApplicationEventPublisher applicationEventPublisher;
 
@@ -59,10 +70,10 @@ public class ReviewService implements IReviewService {
         CourseEntity course = courseRepository.findById(courseId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Course", courseId));
 
-        // Enforce enrollment check
-        boolean isEnrolled = enrollmentRepository.findByUserEntity_IdAndCourseEntity_Id(userId, courseId).isPresent();
-        if (!isEnrolled) {
-            throw new BusinessException("User must be enrolled in the course to leave a review.");
+        EnrollmentEntity enrollment = enrollmentRepository.findByUserEntity_IdAndCourseEntity_Id(userId, courseId)
+                .orElseThrow(() -> new BusinessException("Bạn cần ghi danh khóa học trước khi đánh giá."));
+        if (!Byte.valueOf((byte) 1).equals(enrollment.getStatus()) && enrollment.getCompletedAt() == null) {
+            throw new BusinessException("Bạn chỉ có thể đánh giá sau khi hoàn thành khóa học.");
         }
 
         // Enforce unique (course_id, user_id)
@@ -81,6 +92,10 @@ public class ReviewService implements IReviewService {
 
         UserEntity user = userRepository.findById(userId)
                 .orElseThrow(() -> ResourceNotFoundException.of("User", userId));
+        UserEntity teacher = resolveTeacher(enrollment);
+        if (request.getTeacherRating() != null && teacher == null) {
+            throw new BusinessException("Khóa học chưa có giáo viên chính để nhận đánh giá.");
+        }
 
         ReviewEntity review = ReviewEntity.builder()
                 .courseId(courseId)
@@ -89,6 +104,9 @@ public class ReviewService implements IReviewService {
                 .userEntity(user)
                 .rating(request.getRating())
                 .comment(request.getComment())
+                .teacherId(teacher != null ? teacher.getId() : null)
+                .teacherRating(teacher != null ? request.getTeacherRating() : null)
+                .teacherComment(teacher != null ? request.getTeacherComment() : null)
                 .status(status)
                 .build();
 
@@ -186,6 +204,12 @@ public class ReviewService implements IReviewService {
             studentProfileRepository.findById(response.getUserId())
                     .ifPresent(profile -> response.setSchoolName(profile.getSchoolName()));
         }
+        if (response != null && response.getTeacherId() != null) {
+            userRepository.findById(response.getTeacherId()).ifPresent(teacher -> {
+                response.setTeacherName(teacher.getFullName());
+                response.setTeacherAvatarUrl(teacher.getAvatarUrl());
+            });
+        }
         return response;
     }
 
@@ -211,6 +235,29 @@ public class ReviewService implements IReviewService {
                 r.setSchoolName(userIdToSchoolName.get(r.getUserId()));
             }
         });
+        Map<Long, UserEntity> teachers = userRepository.findAllById(responses.stream()
+                        .map(ReviewResponse::getTeacherId).filter(Objects::nonNull).distinct().toList())
+                .stream().collect(Collectors.toMap(UserEntity::getId, Function.identity()));
+        responses.forEach(response -> {
+            UserEntity teacher = teachers.get(response.getTeacherId());
+            if (teacher != null) {
+                response.setTeacherName(teacher.getFullName());
+                response.setTeacherAvatarUrl(teacher.getAvatarUrl());
+            }
+        });
         return responses;
+    }
+
+    /** Tìm giáo viên chính của đúng lớp học, sau đó mới fallback sang phân công cấp khóa học. */
+    private UserEntity resolveTeacher(EnrollmentEntity enrollment) {
+        if (enrollment.getClassEntity() != null) {
+            List<ClassMemberEntity> teachers = classMemberRepository
+                    .findById_ClassIdAndRoleInClassInAndStatus(enrollment.getClassEntity().getId(),
+                            List.of(ClassMemberRole.TEACHER), ClassMemberStatusEnum.ACTIVE);
+            if (!teachers.isEmpty()) return teachers.get(0).getUserEntity();
+        }
+        return courseTeacherRepository.findByCourseEntity_IdAndStatus(
+                        enrollment.getCourseEntity().getId(), CourseTeacherStatusEnum.ACTIVE).stream()
+                .map(CourseTeacherEntity::getUserEntity).findFirst().orElse(null);
     }
 }

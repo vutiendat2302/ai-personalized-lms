@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { PORTAL_CONFIGS, getPortalHomePath, type PortalType } from "@/utils/workspaceUtils";
-import { ChevronDown, ShieldCheck, GraduationCap, BookOpen, Layers, Check } from "lucide-react";
+import { ChevronDown, ShieldCheck, GraduationCap, BookOpen, MessageCircle, Layers, Check } from "lucide-react";
 
 export const WorkspaceSwitcher: React.FC = () => {
   const { activeWorkspace, availablePortals, switchWorkspace } = useAuth();
@@ -45,6 +45,8 @@ export const WorkspaceSwitcher: React.FC = () => {
         return <GraduationCap className="w-4 h-4 text-emerald-400" />;
       case "BookOpen":
         return <BookOpen className="w-4 h-4 text-purple-400" />;
+      case "MessageCircle":
+        return <MessageCircle className="w-4 h-4 text-amber-400" />;
       default:
         return <Layers className="w-4 h-4 text-indigo-400" />;
     }

@@ -1,5 +1,5 @@
 /** Ghép đường dẫn asset backend theo cùng base URL với Axios client. */
-const resolveBackendAssetUrl = (path: string): string => {
+export const resolveBackendAssetUrl = (path: string): string => {
   if (/^(https?:|blob:|data:)/i.test(path)) return path;
   const base = (import.meta.env.VITE_BE_URL || import.meta.env.VITE_API_BASE_URL || "/api").replace(/\/+$/, "");
   const normalized = path.startsWith("/") ? path : `/${path}`;
@@ -24,7 +24,19 @@ export const resolveAvatarUrl = (value?: string | null): string | undefined => {
 };
 
 const AVATAR_KEYS = new Set([
-  "avatar", "avatarUrl", "studentAvatar", "teacherAvatar", "userAvatar", "authorAvatar",
+  "avatar",
+  "avatarUrl",
+  "studentAvatar",
+  "teacherAvatar",
+  "userAvatar",
+  "authorAvatar",
+  "thumbnailUrl",
+  "thumbnail",
+  "image",
+  "coverImage",
+  "bannerUrl",
+  "courseAvatar",
+  "imageUrl",
 ]);
 
 /** Chuẩn hóa đệ quy các trường avatar ngay tại biên HTTP để mọi danh sách dùng cùng hợp đồng. */

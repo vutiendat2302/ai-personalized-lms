@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Bot, Clock, ExternalLink, FileText, Headset, History, Loader2, Paperclip, RotateCcw, Send, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, Bot, Check, CircleStop, Clock, ExternalLink, FileText, Headset, History, Layers, Loader2, Paperclip, RotateCcw, Send, Sparkles, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -14,6 +14,7 @@ import {
   cancelSupportConversation,
   continueVisitorSupportConversation,
   ensureVisitor,
+  clearVisitorToken,
   getCurrentConversation,
   getSupportMessages,
   getSupportConversationHistory,
@@ -94,11 +95,33 @@ const parseMetadata = <T,>(metadata: string | null, fallback: T): T => {
   try { return JSON.parse(metadata) as T; } catch { return fallback; }
 };
 
+/** Trích xuất mã HTTP status từ response hoặc payload lỗi của API. */
+const getErrorStatus = (error: unknown): number | undefined => {
+  if (typeof error !== "object" || error === null) return undefined;
+  if ("status" in error && typeof (error as { status?: unknown }).status === "number") {
+    return (error as { status: number }).status;
+  }
+  if ("response" in error) {
+    const response = (error as { response?: { status?: number } }).response;
+    return response?.status;
+  }
+  return undefined;
+};
+
 /** Lấy thông báo lỗi validation/API cụ thể để visitor biết cần sửa gì. */
 const errorMessage = (error: unknown, fallback: string): string => {
-  if (typeof error !== "object" || error === null || !("response" in error)) return fallback;
-  const response = (error as { response?: { data?: { message?: string; details?: string[] } } }).response;
-  return response?.data?.details?.[0] ?? response?.data?.message ?? fallback;
+  if (typeof error !== "object" || error === null) return fallback;
+  if ("message" in error && typeof (error as { message?: unknown }).message === "string") {
+    const details = "details" in error && Array.isArray((error as { details?: unknown }).details)
+      ? (error as { details: string[] }).details
+      : undefined;
+    return details?.[0] ?? (error as { message: string }).message ?? fallback;
+  }
+  if ("response" in error) {
+    const response = (error as { response?: { data?: { message?: string; details?: string[] } } }).response;
+    return response?.data?.details?.[0] ?? response?.data?.message ?? fallback;
+  }
+  return fallback;
 };
 
 /** Format học phí course card theo locale Việt Nam, không dựng giá khi backend trả null. */
@@ -112,6 +135,7 @@ export const PublicAiChatWidget: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [newConversationOpen, setNewConversationOpen] = useState(false);
   const [cancelConversationOpen, setCancelConversationOpen] = useState(false);
+  const [endConversationOpen, setEndConversationOpen] = useState(false);
   const [messages, setMessages] = useState<SupportMessage[]>([]);
   const [options, setOptions] = useState<SupportOption[]>([]);
   const [conversation, setConversation] = useState<SupportConversation | null>(null);
@@ -152,10 +176,20 @@ export const PublicAiChatWidget: React.FC = () => {
     initializationAttemptedRef.current = true;
     setLoading(true);
     void Promise.all([ensureVisitor(), getSupportOptions()])
-      .then(async ([session, supportOptions]) => {
+      .then(async ([initialSession, supportOptions]) => {
+        let session = initialSession;
+        let current;
+        try {
+          current = await getCurrentConversation(session.visitorToken);
+        } catch (error: unknown) {
+          const status = getErrorStatus(error);
+          if (status !== 400 && status !== 404) throw error;
+          clearVisitorToken();
+          session = await ensureVisitor();
+          current = await getCurrentConversation(session.visitorToken);
+        }
         setOptions(supportOptions);
         setVisitorToken(session.visitorToken);
-        const current = await getCurrentConversation(session.visitorToken);
         setConversation(current);
         setMessages(await getSupportMessages(session.visitorToken, current.id));
       })
@@ -276,20 +310,33 @@ export const PublicAiChatWidget: React.FC = () => {
     return null;
   }, [messages]);
 
-  /** Gửi optionId về Backend; frontend không tự dựng câu trả lời hoặc gọi AI trực tiếp. */
+  /** Gửi optionId về Backend; phân biệt giữa hành động toggle chủ đề và gửi lựa chọn hoàn tất. */
   const chooseOption = async (option: { id: string; label: string }) => {
     if (!visitorToken || !conversation?.id || loading) return;
     setLoading(true);
+    const isCategoryToggle = option.id.startsWith("CATEGORY_");
     if (option.id !== "REQUEST_AGENT") {
       typingTimerRef.current = window.setTimeout(() => { setBotTyping(true); }, 450);
     }
-    setMessages((current) => [...current, {
-      id: localId(), senderType: "VISITOR", messageType: "TEXT", content: option.label,
-      metadata: null, createdAt: new Date().toISOString(),
-    }]);
+    if (!isCategoryToggle) {
+      setMessages((current) => [...current, {
+        id: localId(), senderType: "VISITOR", messageType: "TEXT", content: option.label,
+        metadata: null, createdAt: new Date().toISOString(),
+      }]);
+    }
     try {
       const response = await sendQuickReply(visitorToken, conversation.id, option.id);
-      setMessages((current) => [...current, response]);
+      setMessages((current) => {
+        if (isCategoryToggle) {
+          const lastIdx = current.map((m) => m.senderType === "BOT" && m.messageType === "QUICK_REPLIES").lastIndexOf(true);
+          if (lastIdx >= 0) {
+            const next = [...current];
+            next[lastIdx] = response;
+            return next;
+          }
+        }
+        return [...current, response];
+      });
       setConversation((current) => current ? {
         ...current,
         status: option.id === "REQUEST_AGENT"
@@ -458,6 +505,23 @@ export const PublicAiChatWidget: React.FC = () => {
     finally { setLoading(false); }
   };
 
+  /** Cho phép visitor tự kết thúc phiên hoặc hủy yêu cầu đang chờ. */
+  const endVisitorConversation = async () => {
+    if (!visitorToken || !conversation?.id || loading) return;
+    setLoading(true);
+    try {
+      const result = isQueued
+        ? await cancelSupportConversation(visitorToken, conversation.id)
+        : await closeVisitorSupportConversation(visitorToken, conversation.id);
+      setConversation(result);
+      setEndConversationOpen(false);
+    } catch (error) {
+      showError(errorMessage(error, "Không thể kết thúc cuộc trò chuyện."));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   /** Hủy yêu cầu đang chờ và cập nhật ngay trạng thái conversation trong widget. */
   const cancelQueuedConversation = async () => {
     if (!visitorToken || !conversation?.id || loading) return;
@@ -578,6 +642,24 @@ export const PublicAiChatWidget: React.FC = () => {
   };
 
   const shownOptions = guidedMetadata ? guidedMetadata.options : options;
+
+  /** Tách danh sách lựa chọn thành danh mục (tags) và nút xác nhận tiếp tục (action). */
+  const { isMultipleMode, topicOptions, actionOption, selectedCount } = useMemo(() => {
+    const isMulti = guidedMetadata?.selectionMode === "MULTIPLE"
+      || shownOptions.some((item) => item.id.startsWith("CATEGORY_") || item.id === "CATEGORY_DONE");
+    if (!isMulti) {
+      return { isMultipleMode: false, topicOptions: [], actionOption: null, selectedCount: 0 };
+    }
+    const action = shownOptions.find((item) => item.id === "CATEGORY_DONE") ?? null;
+    const topics = shownOptions.filter((item) => item.id !== "CATEGORY_DONE");
+    const count = topics.filter((item) => item.label.startsWith("✓ ") || item.label.startsWith("✔ ")).length;
+    return {
+      isMultipleMode: true,
+      topicOptions: topics,
+      actionOption: action,
+      selectedCount: count,
+    };
+  }, [guidedMetadata?.selectionMode, shownOptions]);
   const isQueued = conversation?.status === "QUEUED" || conversation?.status === "ASSIGNED";
   const estimatedWaitMinutes = conversation?.estimatedWaitMinutes ?? null;
   const waitedMinutes = conversation
@@ -599,6 +681,7 @@ export const PublicAiChatWidget: React.FC = () => {
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="icon" disabled={!visitorToken || loading} onClick={() => void openHistory()} className="h-8 w-8 text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground" aria-label="Lịch sử trò chuyện"><History className="h-4 w-4" /></Button>
           <Button variant="ghost" size="sm" disabled={!visitorToken || loading || hasDirectSupportOpen} onClick={() => { setNewConversationOpen(true); }} className="h-8 px-2 text-sm text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"><RotateCcw className="mr-1  h-3.5 w-3.5" /></Button>
+          <Button variant="ghost" size="icon" disabled={!conversation || loading || ["CLOSED", "CANCELLED"].includes(conversation.status)} onClick={() => { setEndConversationOpen(true); }} className="h-8 w-8 text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground" aria-label="Kết thúc cuộc trò chuyện"><CircleStop className="h-4 w-4" /></Button>
           <Button variant="ghost" size="icon" onClick={() => { setIsOpen(false); }} className="h-8 w-8 text-primary-foreground" aria-label="Đóng tư vấn"><X className="h-4 w-4" /></Button>
         </div>
       </div>
@@ -636,9 +719,102 @@ export const PublicAiChatWidget: React.FC = () => {
           </div>
         </div>}
 
-        {conversation?.status === "GUIDED" && shownOptions.length > 0 && <div className="flex flex-wrap gap-2 rounded-xl border bg-card p-3">
-          {shownOptions.map((option) => <Button key={option.id} variant="outline" className="h-auto whitespace-normal py-2 text-left text-xs" disabled={loading} onClick={() => void chooseOption(option)}>{option.label}</Button>)}
-        </div>}
+        {conversation?.status === "GUIDED" && shownOptions.length > 0 && (
+          isMultipleMode ? (
+            <div className="space-y-3 rounded-2xl border border-primary/25 bg-card/95 p-3.5 shadow-sm">
+              <div className="flex items-center justify-between border-b border-border/60 pb-2.5">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                  <Layers className="h-4 w-4 text-primary" />
+                  <span>Chọn chủ đề quan tâm</span>
+                </div>
+                {selectedCount > 0 ? (
+                  <span className="rounded-full bg-primary/15 px-2.5 py-0.5 text-[11px] font-semibold text-primary">
+                    Đã chọn {selectedCount}
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                    Chưa chọn chủ đề nào
+                  </span>
+                )}
+              </div>
+
+              <div className="max-h-52 overflow-y-auto pr-1">
+                <div className="flex flex-wrap gap-1.5">
+                  {topicOptions.map((option) => {
+                    const isSelected = option.label.startsWith("✓ ") || option.label.startsWith("✔ ");
+                    const cleanLabel = option.label.replace(/^[✓✔]\s*/, "");
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        disabled={loading}
+                        onClick={() => void chooseOption(option)}
+                        className={`group inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-all duration-150 active:scale-95 disabled:opacity-50 cursor-pointer ${
+                          isSelected
+                            ? "border border-primary bg-primary/15 text-primary font-semibold shadow-xs hover:bg-primary/20"
+                            : "border border-border/80 bg-muted/30 text-foreground/80 hover:border-primary/40 hover:bg-muted hover:text-foreground"
+                        }`}
+                      >
+                        {isSelected ? (
+                          <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                            <Check className="h-2.5 w-2.5 stroke-[3]" />
+                          </span>
+                        ) : (
+                          <span className="h-3.5 w-3.5 shrink-0 rounded-full border border-muted-foreground/30 group-hover:border-primary/50" />
+                        )}
+                        <span>{cleanLabel}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="border-t border-border/60 pt-2.5">
+                {actionOption ? (
+                  <Button
+                    className="w-full justify-center gap-2 bg-primary py-2.5 text-xs font-semibold text-primary-foreground shadow-md transition-all hover:bg-primary/90 hover:shadow-lg active:scale-[0.99]"
+                    disabled={loading}
+                    onClick={() => void chooseOption(actionOption)}
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    <span>{actionOption.label}</span>
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    className="w-full justify-center py-2.5 text-xs font-medium text-muted-foreground opacity-60 cursor-not-allowed"
+                    disabled
+                  >
+                    Chọn ít nhất 1 chủ đề để tiếp tục
+                  </Button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-2 rounded-xl border bg-card p-3 shadow-xs">
+              {shownOptions.map((option) => {
+                const isSpecial = option.id === "REQUEST_AGENT";
+                return (
+                  <Button
+                    key={option.id}
+                    variant={isSpecial ? "default" : "outline"}
+                    className={`h-auto whitespace-normal py-2 text-left text-xs transition-all ${
+                      isSpecial
+                        ? "w-full justify-center font-semibold bg-emerald-600 hover:bg-emerald-700 text-white"
+                        : "hover:border-primary/50 hover:bg-primary/5"
+                    }`}
+                    disabled={loading}
+                    onClick={() => void chooseOption(option)}
+                  >
+                    {isSpecial && <Headset className="mr-1.5 h-3.5 w-3.5" />}
+                    {option.label}
+                  </Button>
+                );
+              })}
+            </div>
+          )
+        )}
 
         {conversation?.status === "COLLECTING_CONTACT" && !conversation.hasContact && <div className="space-y-2 rounded-xl border bg-card p-3">
           <p className="text-sm font-bold">Kết nối tư vấn viên</p>
@@ -718,5 +894,6 @@ export const PublicAiChatWidget: React.FC = () => {
 
     <ConfirmDialog open={newConversationOpen} onOpenChange={setNewConversationOpen} title="Tạo cuộc trò chuyện mới?" description="Cuộc trò chuyện đang mở sẽ được kết thúc và lịch sử vẫn được lưu lại." confirmText="Tạo mới" variant="warning" loading={loading} onConfirm={createNewConversation} />
     <ConfirmDialog open={cancelConversationOpen} onOpenChange={setCancelConversationOpen} title="Hủy kết nối với tư vấn viên?" description="Yêu cầu sẽ được rút khỏi hàng đợi. Bạn có thể tạo yêu cầu mới bất cứ lúc nào." confirmText="Hủy kết nối" variant="warning" loading={loading} onConfirm={cancelQueuedConversation} />
+    <ConfirmDialog open={endConversationOpen} onOpenChange={setEndConversationOpen} title={isQueued ? "Hủy yêu cầu tư vấn?" : "Kết thúc cuộc trò chuyện?"} description={isQueued ? "Yêu cầu sẽ được rút khỏi hàng đợi và phiên chat được lưu vào lịch sử." : "Cuộc trò chuyện sẽ được đóng và vẫn được lưu trong lịch sử của bạn."} confirmText={isQueued ? "Hủy yêu cầu" : "Kết thúc"} variant="warning" loading={loading} onConfirm={endVisitorConversation} />
   </div>;
 };

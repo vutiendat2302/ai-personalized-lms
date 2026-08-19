@@ -1,4 +1,4 @@
-export type DeliveryMode = "SELF_STUDY" | "GROUP_CLASS" | "ONE_ON_ONE" | "COMBO";
+export type DeliveryMode = "SELF_STUDY" | "GROUP_CLASS" | "ONE_ON_ONE";
 export type CourseLevel = "BEGINNER" | "INTERMEDIATE" | "ADVANCED";
 export type CourseStatus = "DRAFT" | "PENDING" | "ACTIVE" | "REJECTED" | "INACTIVE" | "DELETED";
 export type ClassStatus = "OPEN" | "READY" | "CLOSED";
@@ -40,6 +40,7 @@ export interface CourseExtended {
   categoryName: string;
   description: string;
   coverImage?: string;
+  thumbnailUrl?: string;
   level: CourseLevel;
   status: CourseStatus;
   teachers: TeacherInfo[];
@@ -93,6 +94,7 @@ export interface ClassSessionLog {
   amount?: number;
   actualDurationMin?: number;
   cancellationReason?: string;
+  teacherNotes?: string | null;
   scheduledAt?: string;
 }
 

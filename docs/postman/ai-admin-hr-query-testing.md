@@ -368,3 +368,77 @@ Content-Type: application/json
 Kết quả mong đợi là `202 Accepted`. Backend xóa draft trước khi gửi để chặn replay, kiểm tra draft thuộc đúng Admin đã tạo và ghi audit `AI_NOTIFICATION_DRAFTED` / `AI_NOTIFICATION_SENT`. HR, Teacher và Student không tạo hoặc xác nhận được action này.
 
 Các action khác (duyệt/từ chối, sửa hay xóa dữ liệu) vẫn chưa được implement.
+
+---
+
+## 21. Test phân tích tệp tài liệu đa định dạng (PDF, DOCX, TXT)
+
+Endpoint này tiếp nhận tài liệu đính kèm trực tiếp trong phiên chat để AI trích xuất nội dung và phân tích trong memory (không nạp vĩnh viễn vào Qdrant):
+
+```http
+POST {{baseUrl}}/api/v1/ai/chat/file/stream
+Authorization: Bearer {{adminToken}}
+Accept: text/event-stream
+Content-Type: multipart/form-data
+```
+
+Trong Postman, chọn **Body → form-data**:
+
+| Key | Type | Giá trị |
+|---|---|---|
+| `file` | File | Tệp `.pdf`, `.docx`, `.txt` hoặc ảnh, tối đa 10 MB |
+| `question` | Text | `Tóm tắt các điểm chính trong tài liệu này và giải thích các nội dung quan trọng.` |
+| `module` | Text | `GENERAL` |
+| `route` | Text | `/admin/courses` |
+
+**Kết quả mong đợi:**
+- AI Service trích xuất nội dung văn bản qua extractor phù hợp (`PdfExtractor`, `DocxExtractor`, `TextExtractor`).
+- AI stream câu trả lời tóm tắt chính xác nội dung tài liệu.
+- Định dạng tệp không hợp lệ hoặc vượt quá 10 MB sẽ nhận về lỗi `400 Bad Request`.
+
+---
+
+## 22. Test cơ chế Domain Guardrail & Từ chối nội dung không liên quan (Tiết kiệm Token)
+
+Gửi một hình ảnh hoặc tài liệu hoàn toàn không thuộc phạm vi đào tạo/LMS (ví dụ: ảnh thú cưng, con chó/mèo, meme giải trí, đồ ăn):
+
+```http
+POST {{baseUrl}}/api/v1/ai/chat/file/stream
+Authorization: Bearer {{adminToken}}
+Accept: text/event-stream
+Content-Type: multipart/form-data
+```
+
+Gắn file ảnh một con vật hoặc meme và câu hỏi: `"Ảnh này là gì?"` hoặc để trống.
+
+**Kết quả mong đợi:**
+- AI nhận diện nội dung không thuộc phạm vi LMS/giáo dục/quản trị.
+- AI từ chối súc tích và lịch sự, không phân tích chi tiết nhằm tiết kiệm token:
+  > *"Hình ảnh/tài liệu này không thuộc phạm vi đào tạo hoặc quản trị của hệ thống AILMS. Vui lòng tải lên tài liệu học tập, bài tập, biểu đồ hoặc bảng số liệu liên quan đến hệ thống."*
+
+---
+
+## 23. Test định dạng khối Trích dẫn nguồn tham chiếu (Citations)
+
+Mọi câu hỏi dựa trên tri thức RAG hoặc dữ liệu MySQL Tool Calling phải có khối trích dẫn ở cuối:
+
+```http
+POST {{baseUrl}}/api/v1/ai/chat/stream
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+Accept: text/event-stream
+
+{
+  "question": "Tìm nhân viên có mã EMP001 và cho biết hợp đồng còn hạn không?",
+  "module": "HR",
+  "route": "/admin/contracts"
+}
+```
+
+**Kết quả mong đợi:**
+Ở cuối câu trả lời của AI phải có khối trích dẫn rõ ràng:
+```markdown
+---
+📌 **Nguồn tham chiếu:**
+- [Dữ liệu Hệ thống]: Phân hệ Nhân sự & Hợp đồng, Mã NV: EMP001
+```

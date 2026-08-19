@@ -7,12 +7,39 @@ from app.rag.models import ExtractedDocument, ExtractedSegment
 
 
 class DocxExtractor(BaseExtractor):
-    """Trích xuất DOCX theo đoạn và giữ đường dẫn heading gần nhất."""
+    """
+    Bộ trích xuất văn bản từ tệp Word (.docx) bảo toàn cấu trúc phân cấp (Hierarchical Heading Preservation).
+
+    Cơ chế hoạt động và giữ ngữ cảnh cây đề mục (Heading Breadcrumb):
+    - Đọc tệp Word trực tiếp từ bộ nhớ đệm byte (`BytesIO`) bằng thư viện `python-docx`.
+    - Quét tuần tự qua từng paragraph và phân tích `style.name`.
+    - Khi gặp các đề mục (Heading 1, Heading 2, Heading 3...), bộ trích xuất cập nhật danh sách `headings` theo đúng cấp độ (Level).
+    - Mỗi đoạn văn bản nội dung sau đó được gắn kèm đường dẫn đề mục phân cấp trong metadata (`headingPath`, ví dụ: "Chương 1 > Phần A > Mục 1.1"),
+      giúp mô hình RAG hiểu rõ ngữ cảnh phạm vi của đoạn văn bản đó dù tài liệu rất dài.
+    """
 
     async def extract(
         self, *, content: str | None = None, file_bytes: bytes | None = None
     ) -> ExtractedDocument:
-        """Đọc paragraph DOCX thành các segment có headingPath."""
+        """
+        Phân tích tệp DOCX và chuyển đổi thành danh sách các ExtractedSegment có metadata headingPath.
+
+        Cơ chế:
+        1. Kiểm tra tính hợp lệ của `file_bytes`.
+        2. Duyệt qua tất cả các đoạn văn bản trong tệp docx.
+        3. Cập nhật cây tiêu đề khi gặp style dạng Heading.
+        4. Tạo `ExtractedSegment` cho các đoạn văn bản thông thường.
+
+        Args:
+            content (str | None): Không sử dụng cho tệp DOCX.
+            file_bytes (bytes | None): Dữ liệu nhị phân của tệp .docx.
+
+        Returns:
+            ExtractedDocument: Tài liệu chứa các segment kèm `headingPath`.
+
+        Raises:
+            ValueError: Nếu thiếu `file_bytes` hoặc tệp DOCX không chứa nội dung văn bản.
+        """
         if not file_bytes:
             raise ValueError("DOCX phải có dữ liệu file")
         headings: list[str] = []

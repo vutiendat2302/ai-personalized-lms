@@ -131,6 +131,27 @@ INTERESTS = [
      "Nguyên lý cơ khí, thiết kế và chế tạo máy.", 1),
     ("ROBOTICS_IOT", "Robotics & IoT",
      "Lập trình robot, hệ thống nhúng và Internet vạn vật.", 1),
+
+    # ===================== THẺ CÔNG NGHỆ & CHỨNG CHỈ CHUYÊN SÂU =====================
+    ("PYTHON", "Python", "Lập trình Python cho backend, tự động hóa, dữ liệu và trí tuệ nhân tạo.", 1),
+    ("JAVA_SPRING", "Java & Spring Boot", "Phát triển backend doanh nghiệp với Java, Spring Boot, JPA và REST API.", 1),
+    ("JAVASCRIPT_TYPESCRIPT", "JavaScript & TypeScript", "Phát triển ứng dụng web hiện đại với JavaScript và TypeScript.", 1),
+    ("REACT", "React", "Xây dựng giao diện web với React, quản lý trạng thái và hệ sinh thái frontend.", 1),
+    ("NODEJS", "Node.js", "Phát triển dịch vụ backend và API với Node.js.", 1),
+    ("DOTNET", ".NET", "Phát triển ứng dụng và dịch vụ web với C# và ASP.NET Core.", 1),
+    ("FLUTTER", "Flutter", "Phát triển ứng dụng đa nền tảng bằng Dart và Flutter.", 1),
+    ("SQL_DATA", "SQL & Mô hình dữ liệu", "Truy vấn SQL, thiết kế dữ liệu quan hệ và tối ưu cơ sở dữ liệu.", 1),
+    ("DOCKER_KUBERNETES", "Docker & Kubernetes", "Đóng gói, triển khai và điều phối ứng dụng bằng container.", 1),
+    ("AWS_CLOUD", "AWS Cloud", "Kiến trúc và vận hành hệ thống trên Amazon Web Services.", 1),
+    ("MACHINE_LEARNING", "Machine Learning", "Xây dựng, đánh giá và triển khai mô hình học máy.", 1),
+    ("GENERATIVE_AI", "Generative AI", "Ứng dụng mô hình ngôn ngữ lớn, RAG, prompt engineering và AI agents.", 1),
+    ("DATA_ANALYTICS", "Phân tích dữ liệu", "Làm sạch, trực quan hóa và phân tích dữ liệu phục vụ quyết định.", 1),
+    ("SOFTWARE_TESTING", "Kiểm thử phần mềm", "Kiểm thử chức năng, tự động hóa kiểm thử và đảm bảo chất lượng phần mềm.", 1),
+    ("SYSTEM_DESIGN", "Thiết kế hệ thống", "Kiến trúc phần mềm, khả năng mở rộng và thiết kế hệ thống phân tán.", 1),
+    ("FIGMA", "Figma", "Thiết kế giao diện, prototype và design system bằng Figma.", 1),
+    ("IELTS", "IELTS", "Phát triển bốn kỹ năng và chiến lược luyện thi IELTS.", 1),
+    ("TOEIC", "TOEIC", "Luyện nghe, đọc và kỹ năng làm bài TOEIC.", 1),
+    ("JLPT", "JLPT", "Luyện tiếng Nhật theo các cấp độ JLPT N5 đến N1.", 1),
 ]
 
 
@@ -141,12 +162,15 @@ def get_id_by_code(cursor, code: str):
 
 
 def seed(cursor):
-    """Insert dữ liệu interest nếu chưa tồn tại (idempotent theo `code`)."""
+    """Đồng bộ interest theo code và cập nhật metadata của bản ghi hiện hữu."""
     print("→ Seeding interest...")
     for code, name, description, status in INTERESTS:
         existing_id = get_id_by_code(cursor, code)
         if existing_id:
-            print(f"   [skip] interest {code} đã tồn tại (id={existing_id})")
+            cursor.execute(
+                "UPDATE interest SET name=%s, description=%s, status=%s, updated_at=NOW() WHERE id=%s",
+                (name, description, status, existing_id),
+            )
             continue
         new_id = snowflake.next_id()
         cursor.execute(
@@ -157,3 +181,4 @@ def seed(cursor):
             (new_id, code, name, description, status),
         )
         print(f"   [insert] interest {code} (id={new_id})")
+    print(f"   [completed] interests synchronized: {len(INTERESTS)}")

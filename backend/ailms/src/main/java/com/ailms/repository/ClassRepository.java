@@ -11,6 +11,7 @@ import java.util.Optional;
 @Repository
 public interface ClassRepository extends BaseRepository<ClassEntity, Long> {
     List<ClassEntity> findByCourseEntity_Id(Long courseId);
+    Optional<ClassEntity> findFirstByNameIgnoreCase(String name);
 
     boolean existsByCode(String code);
 

@@ -1,6 +1,10 @@
 package com.ailms.entity.enums;
 
 public enum DegreeTypeEnum {
+    ASSOCIATE,
     BACHELORS,
-    MASTERS
+    ENGINEER,
+    MASTERS,
+    DOCTORATE,
+    CERTIFICATE
 }

@@ -58,6 +58,10 @@ public class LessonEntity extends BaseEntity {
     @Column(name = "duration_min")
     private Integer durationMin;
 
+    /** Thời lượng media thực tế tính theo giây; dùng cho VIDEO/AUDIO. */
+    @Column(name = "duration_sec")
+    private Integer durationSec;
+
     /** Loại xem thử (FREE, LOCKED). */
     @Column(name = "preview_type")
     @Enumerated(EnumType.STRING)

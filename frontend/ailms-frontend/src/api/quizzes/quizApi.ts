@@ -14,17 +14,17 @@ export interface QuizSearchRequest {
 
 export interface QuizQuestionOption {
   id?: string | number;
-  optionText: string;
+  content: string;
   isCorrect: boolean;
-  explanation?: string;
+  orderIndex?: number;
 }
 
 export interface QuizQuestionItem {
   id?: string | number;
-  questionText: string;
-  questionType?: "MULTIPLE_CHOICE" | "SINGLE_CHOICE" | "TRUE_FALSE" | "FILL_BLANK" | "ESSAY";
+  content: string;
+  questionType: "MULTIPLE_CHOICE" | "SINGLE_CHOICE" | "TRUE_FALSE" | "SHORT_ANSWER" | "ESSAY" | "MATCHING";
   points?: number;
-  options?: QuizQuestionOption[];
+  options: QuizQuestionOption[];
   explanation?: string;
 }
 
@@ -70,6 +70,10 @@ export const quizApi = {
   /** Tìm kiếm quiz do chính Teacher/TA đang đăng nhập tạo. */
   searchAuthoredQuizzes: (params?: QuizSearchRequest) =>
     httpClient.get<ApiResponse<PageResponse<QuizResponseItem>>>("/v1/teacher/assessment-library/quizzes/search", { params }),
+
+  /** Lấy quiz chi tiết kèm câu hỏi nếu thuộc người tạo hiện tại. */
+  getAuthoredQuizById: (id: string | number) =>
+    httpClient.get<ApiResponse<QuizResponseItem>>(`/v1/teacher/assessment-library/quizzes/${id}`),
 
   /** Tạo quiz trong thư viện cá nhân của Teacher/TA. */
   createAuthoredQuiz: (data: any) =>
