@@ -5,11 +5,14 @@ import { orderApi } from "@/api/orders/orderApi";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/useToast";
-import { ShoppingCart, ArrowRight, BookOpen, Layers3, Loader2, Package, UserRound, Users } from "lucide-react";
+import { ShoppingCart, ArrowRight, BookOpen, Loader2, Package, UserRound, Users } from "lucide-react";
 import { Trash2 } from "lucide-react";
 import axios from "axios";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+
+
+
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCartStore } from "@/store/useCartStore";
@@ -38,12 +41,12 @@ export const StudentCartPage: React.FC = () => {
 
   useEffect(() => {
     Promise.all([studentApi.getCart(), studentApi.getVouchers()])
-      .then(([items, ownedVouchers]) => {
-        setCartItems(items.map((item) => ({ ...item, isSelected: false })));
-        setVouchers(ownedVouchers);
+      .then(([cartData, voucherData]) => {
+        setCartItems(cartData.map((item) => ({ ...item, isSelected: true })));
+        setVouchers(voucherData);
         void fetchHeaderCart();
       })
-      .catch(() => setLoadError("Không thể tải giỏ hàng và voucher của bạn."))
+      .catch(() => setLoadError("Không thể tải giỏ hàng của bạn."))
       .finally(() => setLoading(false));
   }, [fetchHeaderCart]);
 
@@ -52,10 +55,10 @@ export const StudentCartPage: React.FC = () => {
     return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(val);
   };
 
-  /** Chọn hoặc bỏ chọn một dòng để checkout. */
+  /** Chọn hoặc bỏ chọn một gói học trong giỏ hàng. */
   const toggleSelect = (id: string) => {
-    setCartItems((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, isSelected: !item.isSelected } : item))
+    setCartItems((previous) =>
+      previous.map((item) => (item.id === id ? { ...item, isSelected: !item.isSelected } : item)),
     );
     setCouponApplied(false);
     setDiscountAmount(0);
@@ -65,12 +68,12 @@ export const StudentCartPage: React.FC = () => {
   const handleApplyCoupon = async () => {
     setCouponError("");
     if (!couponCode.trim() || selectedItems.length === 0) {
-      setCouponError("Vui lòng chọn gói học và voucher trước khi áp dụng.");
+      setCouponError("Vui lòng chọn gói học và nhập mã voucher trước khi áp dụng.");
       return;
     }
     try {
       setCouponLoading(true);
-      const res = await studentApi.validateCoupon(couponCode, selectedItems.map((item) => item.coursePackageId));
+      const res = await studentApi.validateCoupon(couponCode.trim(), selectedItems.map((item) => item.coursePackageId));
       setDiscountAmount(res.discountAmount);
       setCouponApplied(res.valid);
       if (res.valid) success(res.message);
@@ -112,11 +115,10 @@ export const StudentCartPage: React.FC = () => {
   const deliveryMeta = (mode: StudentCartItem["deliveryMode"]) => {
     if (mode === "GROUP_CLASS") return { label: "Lớp học nhóm", icon: Users };
     if (mode === "ONE_ON_ONE") return { label: "Kèm riêng 1-1", icon: UserRound };
-    if (mode === "COMBO") return { label: "Gói kết hợp", icon: Layers3 };
     return { label: "Tự học", icon: BookOpen };
   };
 
-  /** Tạo PayPal checkout và cho phép xác nhận lại khi có trùng lịch. */
+  /** Tạo PayPal checkout hoặc hoàn tất đơn hàng miễn phí. */
   const handleCheckout = async (acceptScheduleConflict = false) => {
     if (selectedItems.length === 0) {
       error("Vui lòng chọn ít nhất 1 sản phẩm trong giỏ hàng để thanh toán!");
@@ -135,7 +137,7 @@ export const StudentCartPage: React.FC = () => {
           coursePackageId: item.coursePackageId,
           oneOnOneNeeds: item.oneOnOneNeeds || undefined,
         })),
-        couponApplied ? couponCode : undefined,
+        couponApplied ? couponCode.trim() : undefined,
         acceptScheduleConflict,
       );
       sessionStorage.setItem("ailms_pending_order_id", payment.orderId);
@@ -248,31 +250,83 @@ export const StudentCartPage: React.FC = () => {
           {/* Checkout & Coupon Summary */}
           <div className="md:col-span-4 space-y-4">
             <Card className="bg-card border-border/40 p-5 space-y-4 shadow-xs">
-              <h3 className="text-sm font-bold text-foreground border-b border-border/40 pb-2">Mã giảm giá Coupon</h3>
-              <div className="space-y-2 text-xs">
+              <h3 className="text-sm font-bold text-foreground border-b border-border/40 pb-2 flex items-center justify-between">
+                <span>Mã giảm giá Coupon</span>
+                {couponApplied && (
+                  <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
+                    Đã áp dụng
+                  </span>
+                )}
+              </h3>
+              <div className="space-y-3 text-xs">
+                {/* Input nhập mã trực tiếp */}
                 <div className="flex gap-2">
-                  <Select value={couponCode} onValueChange={(value) => {
-                    setCouponCode(value);
-                    setCouponApplied(false);
-                    setDiscountAmount(0);
-                  }}>
-                    <SelectTrigger className="flex-1 text-xs"><SelectValue placeholder="Chọn voucher của bạn" /></SelectTrigger>
-                    <SelectContent>
-                      {vouchers.map((voucher) => (
-                        <SelectItem key={voucher.id} value={voucher.code} disabled={!voucher.usable}>
-                          {voucher.code} — {voucher.discountType === "PERCENT" ? `${voucher.discountValue}%` : formatVND(voucher.discountValue)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button type="button" onClick={() => void handleApplyCoupon()} disabled={couponLoading || !couponCode.trim() || selectedItems.length === 0} size="sm" className="bg-primary text-primary-foreground text-xs font-bold h-9 px-3 cursor-pointer">
+                  <Input
+                    type="text"
+                    placeholder="Nhập mã voucher..."
+                    value={couponCode}
+                    onChange={(e) => {
+                      setCouponCode(e.target.value.toUpperCase());
+                      setCouponApplied(false);
+                      setDiscountAmount(0);
+                      setCouponError("");
+                    }}
+                    className="h-9 text-xs uppercase font-mono tracking-wider rounded-lg"
+                  />
+                  <Button
+                    type="button"
+                    onClick={() => void handleApplyCoupon()}
+                    disabled={couponLoading || !couponCode.trim() || selectedItems.length === 0}
+                    size="sm"
+                    className="bg-primary text-primary-foreground text-xs font-bold h-9 px-4 shrink-0 cursor-pointer shadow-xs"
+                  >
                     {couponLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Áp dụng"}
                   </Button>
                 </div>
 
+                {/* Danh sách voucher khả dụng trong ví học viên để chọn nhanh */}
+                {vouchers.length > 0 && (
+                  <div className="space-y-1.5 pt-1">
+                    <span className="text-[11px] font-medium text-muted-foreground block">
+                      Voucher trong ví của bạn:
+                    </span>
+                    <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto pr-1">
+                      {vouchers.map((voucher) => (
+                        <button
+                          key={voucher.id}
+                          type="button"
+                          disabled={!voucher.usable}
+                          onClick={() => {
+                            setCouponCode(voucher.code);
+                            setCouponApplied(false);
+                            setDiscountAmount(0);
+                            setCouponError("");
+                          }}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-mono border transition-all cursor-pointer text-left ${
+                            couponCode === voucher.code
+                              ? "bg-primary/10 border-primary text-primary font-bold ring-1 ring-primary/30"
+                              : voucher.usable
+                              ? "bg-muted/40 hover:bg-muted border-border/70 text-foreground"
+                              : "bg-muted/20 border-border/30 text-muted-foreground opacity-50 cursor-not-allowed"
+                          }`}
+                          title={voucher.unavailableReason || (voucher.discountType === "PERCENT" ? `Giảm ${voucher.discountValue}%` : `Giảm ${formatVND(voucher.discountValue)}`)}
+                        >
+                          <span className="font-bold">{voucher.code}</span>
+                          <span className="ml-1 text-[10px] text-muted-foreground">
+                            (-{voucher.discountType === "PERCENT" ? `${voucher.discountValue}%` : formatVND(voucher.discountValue)})
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {couponError && <p className="text-[11px] text-rose-600 dark:text-rose-400 font-semibold">{couponError}</p>}
-                {couponApplied && <p className="text-[11px] text-emerald-600 font-bold">Mã coupon hợp lệ!</p>}
-                {vouchers.length === 0 && <p className="text-[11px] text-muted-foreground">Bạn chưa có voucher khả dụng.</p>}
+                {couponApplied && (
+                  <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold">
+                    Áp dụng mã {couponCode} thành công! {finalAmount === 0 ? "🎉 Đơn hàng được miễn phí 100%." : ""}
+                  </p>
+                )}
               </div>
 
               <div className="pt-3 border-t border-border/40 space-y-2 text-xs">
@@ -297,7 +351,22 @@ export const StudentCartPage: React.FC = () => {
                 disabled={checkoutLoading || selectedItems.length === 0}
                 className="w-full bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold rounded-xl h-10 gap-2 cursor-pointer shadow-md"
               >
-                {checkoutLoading ? <><Loader2 className="h-4 w-4 animate-spin" />Đang tạo thanh toán...</> : <>Tiến hành Thanh Toán<ArrowRight className="h-4 w-4" /></>}
+                {checkoutLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Đang tạo thanh toán...
+                  </>
+                ) : finalAmount === 0 && selectedItems.length > 0 ? (
+                  <>
+                    Đăng ký khóa học ngay (Miễn phí)
+                    <ArrowRight className="h-4 w-4" />
+                  </>
+                ) : (
+                  <>
+                    Tiến hành Thanh Toán
+                    <ArrowRight className="h-4 w-4" />
+                  </>
+                )}
               </Button>
             </Card>
           </div>

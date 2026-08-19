@@ -6,6 +6,7 @@ import {
   getConversations,
   renameConversation as renameConversationApi,
   streamChat,
+  streamChatWithImage,
 } from "@/services/aiChatService";
 
 /** Sinh ID tạm cho message chỉ dùng để render phía frontend. */
@@ -59,8 +60,8 @@ export function useAiChat(route: string, module: string) {
   }, []);
 
   /** Gửi câu hỏi hiện tại và nhận câu trả lời SSE. */
-  const sendMessage = useCallback(async () => {
-    const question = input.trim();
+  const sendMessage = useCallback(async (customText?: string) => {
+    const question = (typeof customText === "string" ? customText : input).trim();
     if (!question || isStreaming) return;
     const userMessage: ChatMessage = {
       id: generateId("msg"), role: "user", content: question,
@@ -85,7 +86,94 @@ export function useAiChat(route: string, module: string) {
       await streamChat(payload, {
         signal: controller.signal,
         onConversationId: setConversationId,
+        onMetadata: (metadata) => {
+          if (metadata?.sources) {
+            setMessages((previous) => previous.map((message) =>
+              message.id === assistantMessage.id
+                ? { ...message, sources: metadata.sources, route: metadata.route }
+                : message
+            ));
+          }
+        },
         onChunk: (chunk) => {
+          pendingBufferRef.current += chunk;
+          if (animFrameRef.current === null) {
+            animFrameRef.current = requestAnimationFrame(() => {
+              animFrameRef.current = null;
+              flushPendingBuffer(assistantMessage.id);
+            });
+          }
+        },
+        onComplete: () => {
+          flushPendingBuffer(assistantMessage.id);
+          setMessages((previous) => previous.map((message) =>
+            message.id === assistantMessage.id ? { ...message, status: "completed" } : message
+          ));
+          void refreshConversations();
+        },
+        onError: (error) => setMessages((previous) => previous.map((message) =>
+          message.id === assistantMessage.id
+            ? { ...message, content: message.content || error.message || "Không thể kết nối AI lúc này.", status: "error" }
+            : message
+        )),
+      });
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError")) {
+        setMessages((previous) => previous.map((message) =>
+          message.id === assistantMessage.id
+            ? { ...message, content: message.content || "Có lỗi kết nối.", status: "error" }
+            : message
+        ));
+      }
+    } finally {
+      setIsStreaming(false);
+      abortControllerRef.current = null;
+    }
+  }, [conversationId, flushPendingBuffer, input, isStreaming, module, refreshConversations, route]);
+
+  /** Gửi câu hỏi kèm tệp tài liệu hoặc hình ảnh để AI phân tích. */
+  const sendFileMessage = useCallback(async (file: File, customText?: string) => {
+    if (!file || isStreaming) return;
+    const question = (typeof customText === "string" ? customText : input).trim();
+    const isImage = file.type.startsWith("image/");
+    const imageUrl = isImage ? URL.createObjectURL(file) : undefined;
+    const userMessage: ChatMessage = {
+      id: generateId("msg"), role: "user",
+      content: question || (isImage ? "Phân tích hình ảnh này" : `Phân tích tài liệu: ${file.name}`),
+      imageUrl,
+      fileName: file.name,
+      fileType: file.type,
+      createdAt: new Date().toISOString(), status: "completed",
+    };
+    const assistantMessage: ChatMessage = {
+      id: generateId("msg"), role: "assistant", content: "",
+      createdAt: new Date().toISOString(), status: "streaming",
+    };
+    setInput("");
+    setMessages((previous) => [...previous, userMessage, assistantMessage]);
+    setIsStreaming(true);
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    try {
+      await streamChatWithImage({
+        image: file,
+        question: question || undefined,
+        conversationId: conversationId || undefined,
+        route,
+        module,
+      }, {
+        signal: controller.signal,
+        onConversationId: setConversationId,
+        onMetadata: (metadata) => {
+          if (metadata?.sources) {
+            setMessages((previous) => previous.map((message) =>
+              message.id === assistantMessage.id
+                ? { ...message, sources: metadata.sources, route: metadata.route }
+                : message
+            ));
+          }
+        },
+        onChunk: (chunk: string) => {
           pendingBufferRef.current += chunk;
           if (animFrameRef.current === null) {
             animFrameRef.current = requestAnimationFrame(() => {
@@ -103,7 +191,7 @@ export function useAiChat(route: string, module: string) {
         },
         onError: () => setMessages((previous) => previous.map((message) =>
           message.id === assistantMessage.id
-            ? { ...message, content: message.content || "Không thể kết nối AI lúc này.", status: "error" }
+            ? { ...message, content: message.content || "Không thể phân tích tệp lúc này.", status: "error" }
             : message
         )),
       });
@@ -111,7 +199,7 @@ export function useAiChat(route: string, module: string) {
       if (!(error instanceof DOMException && error.name === "AbortError")) {
         setMessages((previous) => previous.map((message) =>
           message.id === assistantMessage.id
-            ? { ...message, content: message.content || "Có lỗi kết nối.", status: "error" }
+            ? { ...message, content: message.content || "Có lỗi phân tích tệp.", status: "error" }
             : message
         ));
       }
@@ -120,6 +208,9 @@ export function useAiChat(route: string, module: string) {
       abortControllerRef.current = null;
     }
   }, [conversationId, flushPendingBuffer, input, isStreaming, module, refreshConversations, route]);
+
+  /** Gửi câu hỏi kèm tệp hình ảnh để Gemini Vision phân tích. */
+  const sendImageMessage = sendFileMessage;
 
   /** Dừng stream đang chạy và giữ phần câu trả lời đã nhận. */
   const stopGenerating = useCallback(() => {
@@ -161,7 +252,7 @@ export function useAiChat(route: string, module: string) {
 
   return {
     messages, conversations, input, setInput, isStreaming, isHistoryLoading, historyError,
-    conversationId, sendMessage, stopGenerating, startNewConversation,
+    conversationId, sendMessage, sendImageMessage, sendFileMessage, stopGenerating, startNewConversation,
     openConversation, removeConversation, renameConversation, refreshConversations,
   };
 }

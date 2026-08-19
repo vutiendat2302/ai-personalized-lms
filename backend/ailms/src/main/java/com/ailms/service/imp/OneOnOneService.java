@@ -21,6 +21,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.*;
 
 /** Triển khai state machine 1-1 với khóa pessimistic tại mọi transition tranh chấp. */
@@ -65,6 +67,15 @@ public class OneOnOneService implements IOneOnOneService {
                 .map(this::toResponse).toList();
     }
 
+    /** Lấy các yêu cầu đã được phân công cho đúng người dạy hiện tại. */
+    @Override
+    public List<OneOnOneRequestResponse> getAssignedRequests(Long instructorId) {
+        return requestRepository.findByAssignedInstructorEntity_IdOrderByCreatedAtDesc(instructorId).stream()
+                .filter(item -> item.getStatus() != OneOnOneRequestStatusEnum.CANCELLED
+                        && item.getStatus() != OneOnOneRequestStatusEnum.REMATCHING)
+                .map(this::toResponse).toList();
+    }
+
     /** Khóa yêu cầu để chỉ một giáo viên/trợ giảng có thể nhận thành công. */
     @Override
     @Transactional
@@ -102,10 +113,12 @@ public class OneOnOneService implements IOneOnOneService {
         if (request.getTrialClassEntity() != null || request.getTrialSessionEntity() != null) {
             throw new BusinessException("Yêu cầu đã có lớp hoặc buổi học thử đang hoạt động.");
         }
-        if (!payload.getEndAt().isAfter(payload.getStartAt())) {
+        LocalDateTime startAt = resolveTrialStart(request, payload.getStartAt());
+        LocalDateTime endAt = resolveTrialEnd(startAt, payload.getEndAt());
+        if (!endAt.isAfter(startAt)) {
             throw new BusinessException("Thời gian kết thúc phải sau thời gian bắt đầu.");
         }
-        checkScheduleCollision(instructorId, request.getStudentEntity().getId(), payload.getStartAt(), payload.getEndAt());
+        checkScheduleCollision(instructorId, request.getStudentEntity().getId(), startAt, endAt);
 
         CourseEntity course = getPackage(request).getCourseEntity();
         ClassEntity trialClass = classRepository.save(ClassEntity.builder()
@@ -118,23 +131,24 @@ public class OneOnOneService implements IOneOnOneService {
                 .maxMembers(1)
                 .currentMemberCount(1)
                 .status(BaseStatusEnum.TRIAL)
-                .startDate(payload.getStartAt())
-                .endDate(payload.getEndAt())
+                .startDate(startAt)
+                .endDate(endAt)
                 .description(payload.getNotes())
                 .registrationOpen(false)
                 .allowLateEnrollment(false)
                 .build());
         addTrialMember(trialClass, request.getStudentEntity(), ClassMemberRole.STUDENT);
-        addTrialMember(trialClass, request.getAssignedInstructorEntity(), resolveInstructorRole());
+        addTrialMember(trialClass, request.getAssignedInstructorEntity(),
+                resolveInstructorRole(request.getAssignedInstructorEntity().getId()));
 
-        int durationMin = Math.toIntExact(Duration.between(payload.getStartAt(), payload.getEndAt()).toMinutes());
+        int durationMin = Math.toIntExact(Duration.between(startAt, endAt).toMinutes());
         ClassOnlineEntity session = classOnlineRepository.save(ClassOnlineEntity.builder()
                 .classEntity(trialClass)
                 .teacherEntity(request.getAssignedInstructorEntity())
                 .title("Buổi học thử - " + payload.getClassName())
                 .meetingProvider(payload.getLearningMode())
                 .meetingUrl(payload.getLinkOrLocation())
-                .scheduledAt(payload.getStartAt())
+                .scheduledAt(startAt)
                 .durationMin(durationMin)
                 .status(BaseStatusEnum.ACTIVE)
                 .code(CodeGenerator.generate("BT", classOnlineRepository::existsByCode))
@@ -148,7 +162,7 @@ public class OneOnOneService implements IOneOnOneService {
         request.setStatus(OneOnOneRequestStatusEnum.TRIAL_SCHEDULED);
         OneOnOneRequestEntity saved = requestRepository.save(request);
         notifyUser(request.getStudentEntity(), "Đã có lịch học thử",
-                "Buổi học thử của bạn đã được lên lịch vào " + payload.getStartAt() + ".", requestId);
+                "Buổi học thử của bạn đã được lên lịch vào " + startAt + ".", requestId);
         audit("CREATE_ONE_ON_ONE_TRIAL", saved);
         return toResponse(saved);
     }
@@ -176,8 +190,12 @@ public class OneOnOneService implements IOneOnOneService {
         ClassOnlineEntity session = request.getTrialSessionEntity();
         if (session == null) throw new BusinessException("Không tìm thấy buổi học thử.");
         LocalDateTime endsAt = session.getScheduledAt().plusMinutes(session.getDurationMin());
-        if (LocalDateTime.now().isBefore(endsAt)) {
+        LocalDateTime now = businessNow();
+        if (now.isBefore(endsAt)) {
             throw new BusinessException("Chưa thể hoàn thành nhận xét trước khi buổi thử kết thúc.");
+        }
+        if (now.isAfter(endsAt.plusHours(24))) {
+            throw new BusinessException("Đã quá hạn 24 giờ nhận xét; hệ thống sẽ tìm người dạy khác cho học viên.");
         }
         session.setStatus(BaseStatusEnum.COMPLETED);
         session.setTeacherNotes(payload.getAdditionalNotes());
@@ -187,7 +205,7 @@ public class OneOnOneService implements IOneOnOneService {
         request.setReviewAttitude(payload.getLearningAttitude());
         request.setReviewRecommendedPath(payload.getRecommendedPath());
         request.setReviewNotes(payload.getAdditionalNotes());
-        request.setTrialCompletedAt(LocalDateTime.now());
+        request.setTrialCompletedAt(now);
         request.setStatus(OneOnOneRequestStatusEnum.TRIAL_COMPLETED);
         OneOnOneRequestEntity saved = requestRepository.save(request);
         notifyUser(request.getStudentEntity(), "Buổi học thử đã hoàn thành",
@@ -255,20 +273,138 @@ public class OneOnOneService implements IOneOnOneService {
                 .map(this::toResponse).toList();
     }
 
-    /** HR xác nhận đã kết nối liên hệ, transition duy nhất từ INSTRUCTOR_ACCEPTED. */
+    /** HR xác nhận kết nối và tạo lớp cùng buổi thử trong một transaction. */
     @Override
     @Transactional
-    public OneOnOneRequestResponse markContacted(Long requestId) {
+    public OneOnOneRequestResponse markContacted(Long requestId, OneOnOneTrialClassRequest payload) {
         OneOnOneRequestEntity request = getForUpdate(requestId);
         requireState(request, OneOnOneRequestStatusEnum.INSTRUCTOR_ACCEPTED);
         request.setStatus(OneOnOneRequestStatusEnum.CONTACTED);
         request.setContactedAt(LocalDateTime.now());
+        requestRepository.save(request);
+        OneOnOneRequestResponse scheduled = createTrialClass(
+                request.getAssignedInstructorEntity().getId(), requestId, payload);
+        notificationService.createSystemNotification(request.getStudentEntity(), NotificationTypeEnum.GENERAL,
+                "HR đã kết nối hai bên", "HR đã tạo lớp và lịch học thử cho bạn.",
+                requestId, "/student/schedule");
+        notificationService.createSystemNotification(request.getAssignedInstructorEntity(), NotificationTypeEnum.GENERAL,
+                "HR đã kết nối hai bên", "HR đã tạo lớp học thử với học viên.",
+                requestId, "/teacher/classes/" + scheduled.getTrialClassId());
+        return scheduled;
+    }
+
+    /** HR đổi lịch buổi thử hiện tại sau khi kiểm tra lại trùng lịch hai bên. */
+    @Override
+    @Transactional
+    public OneOnOneRequestResponse rescheduleTrialClass(Long requestId, OneOnOneTrialClassRequest payload) {
+        OneOnOneRequestEntity request = getForUpdate(requestId);
+        requireState(request, OneOnOneRequestStatusEnum.TRIAL_SCHEDULED);
+        if (request.getAssignedInstructorEntity() == null || request.getTrialSessionEntity() == null) {
+            throw new BusinessException("Yêu cầu chưa có buổi học thử để đổi lịch.");
+        }
+        LocalDateTime startAt = resolveTrialStart(request, payload.getStartAt());
+        LocalDateTime endAt = resolveTrialEnd(startAt, payload.getEndAt());
+        if (!endAt.isAfter(startAt)) throw new BusinessException("Thời gian kết thúc phải sau thời gian bắt đầu.");
+        ClassOnlineEntity session = request.getTrialSessionEntity();
+        session.setStatus(BaseStatusEnum.CANCELLED);
+        checkScheduleCollision(request.getAssignedInstructorEntity().getId(), request.getStudentEntity().getId(), startAt, endAt);
+        int durationMin = Math.toIntExact(Duration.between(startAt, endAt).toMinutes());
+        session.setScheduledAt(startAt);
+        session.setDurationMin(durationMin);
+        session.setMeetingProvider(payload.getLearningMode());
+        session.setMeetingUrl(payload.getLinkOrLocation());
+        session.setTeacherNotes(payload.getNotes());
+        session.setStatus(BaseStatusEnum.ACTIVE);
+        classOnlineRepository.save(session);
+        ClassEntity trialClass = request.getTrialClassEntity();
+        if (trialClass != null) {
+            trialClass.setStartDate(startAt);
+            trialClass.setEndDate(endAt);
+            trialClass.setDescription(payload.getNotes());
+            classRepository.save(trialClass);
+        }
+        notifyUser(request.getStudentEntity(), "Lịch học thử đã được đổi", "HR đã cập nhật lịch học thử vào " + startAt + ".", requestId);
+        notifyUser(request.getAssignedInstructorEntity(), "Lịch học thử đã được đổi", "HR đã cập nhật lịch học thử vào " + startAt + ".", requestId);
+        audit("RESCHEDULE_ONE_ON_ONE_TRIAL", request);
+        return toResponse(request);
+    }
+
+    /** Tự động mở lại matching khi giáo viên không nhận xét trong 24 giờ sau trial. */
+    @Override
+    @Transactional
+    public int expireUnreviewedTrials() {
+        LocalDateTime now = LocalDateTime.now();
+        int expired = 0;
+        for (OneOnOneRequestEntity candidate : requestRepository.findByStatusInOrderByCreatedAtDesc(
+                List.of(OneOnOneRequestStatusEnum.TRIAL_SCHEDULED))) {
+            OneOnOneRequestEntity request = getForUpdate(candidate.getId());
+            ClassOnlineEntity session = request.getTrialSessionEntity();
+            if (session == null || session.getScheduledAt() == null || session.getDurationMin() == null
+                    || now.isBefore(session.getScheduledAt().plusMinutes(session.getDurationMin()).plusHours(24))) continue;
+            UserEntity previous = request.getAssignedInstructorEntity();
+            closeCurrentTrialArtifacts(request);
+            if (previous != null && !rejectedInstructorRepository.existsByRequestEntity_IdAndInstructorEntity_Id(request.getId(), previous.getId())) {
+                rejectedInstructorRepository.save(OneOnOneRejectedInstructorEntity.builder().requestEntity(request).instructorEntity(previous).build());
+            }
+            request.setAssignedInstructorEntity(null);
+            request.setTrialClassEntity(null);
+            request.setTrialSessionEntity(null);
+            request.setStatus(OneOnOneRequestStatusEnum.REMATCHING);
+            requestRepository.save(request);
+            notifyUser(request.getStudentEntity(), "Hệ thống đang tìm giáo viên khác", "Giáo viên cũ chưa nhận xét trong 24 giờ, yêu cầu đã được ghép lại.", request.getId());
+            notifyHr("Trial 1-1 quá hạn nhận xét", "Yêu cầu #" + request.getId() + " đã chuyển sang REMATCHING.", request.getId());
+            notifyCandidateUsers(request, eligibleInstructorCandidates(request).stream().map(OneOnOneInstructorCandidateResponse::getInstructorId).toList());
+            audit("EXPIRE_ONE_ON_ONE_TRIAL_REVIEW", request);
+            expired++;
+        }
+        return expired;
+    }
+
+    /** Học viên hủy ghép hiện tại, cập nhật nhu cầu và mở lại hàng đợi matching. */
+    @Override
+    @Transactional
+    public OneOnOneRequestResponse rematch(Long studentId, Long requestId, OneOnOneRematchRequest payload) {
+        OneOnOneRequestEntity request = getForUpdate(requestId);
+        if (!request.getStudentEntity().getId().equals(studentId)) {
+            throw new ForbiddenException("Bạn không sở hữu yêu cầu 1-1 này.");
+        }
+        if (request.getStatus() == OneOnOneRequestStatusEnum.CANCELLED) {
+            throw new BusinessException("Yêu cầu đã hủy không thể ghép lại.");
+        }
+        if (request.getStatus() == OneOnOneRequestStatusEnum.INSTRUCTOR_ACCEPTED
+                || request.getStatus() == OneOnOneRequestStatusEnum.CONTACTED
+                || request.getStatus() == OneOnOneRequestStatusEnum.TRIAL_SCHEDULED) {
+            throw new BusinessException("Chỉ được đổi giáo viên sau khi buổi học thử kết thúc và đã có nhận xét.");
+        }
+        UserEntity previousInstructor = request.getAssignedInstructorEntity();
+        if (previousInstructor != null && !rejectedInstructorRepository
+                .existsByRequestEntity_IdAndInstructorEntity_Id(requestId, previousInstructor.getId())) {
+            rejectedInstructorRepository.save(OneOnOneRejectedInstructorEntity.builder()
+                    .requestEntity(request).instructorEntity(previousInstructor).build());
+        }
+        closeCurrentTrialArtifacts(request);
+        applyUpdatedNeeds(request, payload.getNeeds());
+        request.setAdditionalNotes(appendReason(request.getAdditionalNotes(), payload.getReason().trim()));
+        request.setAssignedInstructorEntity(null);
+        request.setAcceptedAt(null);
+        request.setContactedAt(null);
+        request.setTrialClassEntity(null);
+        request.setTrialSessionEntity(null);
+        request.setTrialCompletedAt(null);
+        request.setStatus(OneOnOneRequestStatusEnum.REMATCHING);
+        clearTrialReview(request);
         OneOnOneRequestEntity saved = requestRepository.save(request);
-        notifyUser(request.getStudentEntity(), "HR đã kết nối hai bên",
-                "HR đã hỗ trợ kết nối bạn với người dạy đã nhận lớp.", requestId);
-        notifyUser(request.getAssignedInstructorEntity(), "HR đã kết nối hai bên",
-                "HR đã hỗ trợ kết nối bạn với học viên.", requestId);
-        audit("MARK_ONE_ON_ONE_CONTACTED", saved);
+        if (previousInstructor != null) {
+            notifyInstructor(previousInstructor, "Học viên yêu cầu đổi người dạy",
+                    "Yêu cầu 1-1 đã được mở lại để tìm người dạy khác.", requestId);
+        }
+        notifyUser(request.getStudentEntity(), "Đã cập nhật nhu cầu học 1-1",
+                "Hệ thống đang tìm người dạy mới theo thông tin bạn vừa cập nhật.", requestId);
+        notifyHr("Học viên yêu cầu ghép lại",
+                "Yêu cầu #" + requestId + " đã cập nhật nhu cầu và chuyển sang REMATCHING.", requestId);
+        notifyCandidateUsers(saved, eligibleInstructorCandidates(saved).stream()
+                .map(OneOnOneInstructorCandidateResponse::getInstructorId).toList());
+        audit("STUDENT_REMATCH_ONE_ON_ONE", saved);
         return toResponse(saved);
     }
 
@@ -382,12 +518,83 @@ public class OneOnOneService implements IOneOnOneService {
                 .build());
     }
 
-    /** Xác định vai trò TEACHER hoặc TA của người đang thao tác. */
-    private ClassMemberRole resolveInstructorRole() {
-        var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
-        boolean isTa = auth != null && auth.getAuthorities().stream()
-                .anyMatch(item -> item.getAuthority().equalsIgnoreCase("ROLE_TA"));
-        return isTa ? ClassMemberRole.TA : ClassMemberRole.TEACHER;
+    /** Xác định vai trò TEACHER hoặc TA còn hiệu lực của người được phân công. */
+    private ClassMemberRole resolveInstructorRole(Long instructorId) {
+        return "Trợ giảng".equals(instructorRoleLabel(instructorId))
+                ? ClassMemberRole.TA : ClassMemberRole.TEACHER;
+    }
+
+    /** Chọn thời điểm mặc định theo khung giờ học viên đã khai báo, cho phép HR ghi đè. */
+    private LocalDateTime resolveTrialStart(OneOnOneRequestEntity request, LocalDateTime requestedStart) {
+        if (requestedStart != null) return requestedStart;
+        LocalTime preferred = LocalTime.of(19, 0);
+        String raw = request.getPreferredTimes();
+        if (raw != null) {
+            java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(\\d{1,2}):(\\d{2})").matcher(raw);
+            if (matcher.find()) preferred = LocalTime.of(Integer.parseInt(matcher.group(1)), Integer.parseInt(matcher.group(2)));
+        }
+        LocalDateTime candidate = LocalDateTime.now().plusDays(1).with(preferred).withSecond(0).withNano(0);
+        return candidate.isAfter(LocalDateTime.now()) ? candidate : candidate.plusDays(1);
+    }
+
+    /** Lấy thời điểm nghiệp vụ theo múi giờ Việt Nam, khớp lịch hiển thị frontend. */
+    private LocalDateTime businessNow() {
+        return LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh"));
+    }
+
+    /** Chọn thời điểm kết thúc mặc định với buổi thử dài 60 phút nếu HR chưa nhập. */
+    private LocalDateTime resolveTrialEnd(LocalDateTime startAt, LocalDateTime requestedEnd) {
+        return requestedEnd != null ? requestedEnd : startAt.plusMinutes(60);
+    }
+
+    /** Hoàn tất buổi thử đã hết giờ để học viên có thể tự xác nhận kết quả. */
+    private void completeElapsedTrial(OneOnOneRequestEntity request) {
+        if (request.getStatus() == OneOnOneRequestStatusEnum.TRIAL_COMPLETED) return;
+        ClassOnlineEntity session = request.getTrialSessionEntity();
+        if (session == null || session.getScheduledAt() == null || session.getDurationMin() == null) {
+            throw new BusinessException("Không tìm thấy lịch học thử hợp lệ.");
+        }
+        if (LocalDateTime.now().isBefore(session.getScheduledAt().plusMinutes(session.getDurationMin()))) {
+            throw new BusinessException("Chỉ có thể xác nhận sau khi buổi học thử kết thúc.");
+        }
+        session.setStatus(BaseStatusEnum.COMPLETED);
+        classOnlineRepository.save(session);
+        request.setTrialCompletedAt(LocalDateTime.now());
+        request.setStatus(OneOnOneRequestStatusEnum.TRIAL_COMPLETED);
+    }
+
+    /** Đóng lớp và buổi thử/chính thức cũ trước khi ghép người dạy khác. */
+    private void closeCurrentTrialArtifacts(OneOnOneRequestEntity request) {
+        if (request.getTrialSessionEntity() != null) {
+            request.getTrialSessionEntity().setStatus(BaseStatusEnum.CANCELLED);
+            classOnlineRepository.save(request.getTrialSessionEntity());
+        }
+        if (request.getTrialClassEntity() != null) {
+            request.getTrialClassEntity().setStatus(BaseStatusEnum.CANCELLED);
+            classRepository.save(request.getTrialClassEntity());
+        }
+    }
+
+    /** Ghi đè các thông tin nhu cầu bằng dữ liệu học viên vừa xác nhận. */
+    private void applyUpdatedNeeds(OneOnOneRequestEntity request, OneOnOneNeedsRequest needs) {
+        request.setAvailablePeriod(needs.getAvailablePeriod());
+        request.setAvailableDays(needs.getAvailableDays());
+        request.setPreferredTimes(needs.getPreferredTimes());
+        request.setCurrentLevel(needs.getCurrentLevel());
+        request.setLearningSituation(needs.getLearningSituation());
+        request.setLearningGoals(needs.getLearningGoals());
+        request.setWeakAreas(needs.getWeakAreas());
+        request.setInstructorPreferences(needs.getInstructorPreferences());
+        request.setAdditionalNotes(needs.getAdditionalNotes());
+    }
+
+    /** Xóa nhận xét của lần học thử cũ khi bắt đầu một vòng matching mới. */
+    private void clearTrialReview(OneOnOneRequestEntity request) {
+        request.setReviewCurrentLevel(null);
+        request.setReviewWeakAreas(null);
+        request.setReviewAttitude(null);
+        request.setReviewRecommendedPath(null);
+        request.setReviewNotes(null);
     }
 
     /** Chặn trùng lịch của cả người dạy và học viên trên các buổi đang hoạt động. */
@@ -549,6 +756,15 @@ public class OneOnOneService implements IOneOnOneService {
                 .assignedInstructorName(assigned != null ? assigned.getFullName() : null)
                 .trialClassId(request.getTrialClassEntity() != null ? request.getTrialClassEntity().getId() : null)
                 .trialSessionId(request.getTrialSessionEntity() != null ? request.getTrialSessionEntity().getId() : null)
+                .trialStartAt(request.getTrialSessionEntity() != null
+                        ? request.getTrialSessionEntity().getScheduledAt() : null)
+                .trialEndAt(request.getTrialSessionEntity() != null
+                        && request.getTrialSessionEntity().getScheduledAt() != null
+                        && request.getTrialSessionEntity().getDurationMin() != null
+                        ? request.getTrialSessionEntity().getScheduledAt()
+                                .plusMinutes(request.getTrialSessionEntity().getDurationMin()) : null)
+                .trialMeetingUrl(request.getTrialSessionEntity() != null
+                        ? request.getTrialSessionEntity().getMeetingUrl() : null)
                 .availablePeriod(request.getAvailablePeriod())
                 .availableDays(request.getAvailableDays())
                 .preferredTimes(request.getPreferredTimes())

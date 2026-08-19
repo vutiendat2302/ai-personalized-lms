@@ -30,6 +30,8 @@ public class LessonProgressResponse {
 
     private Integer attemptCount;
 
+    private String personalNote;
+
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime startedAt;
 

@@ -1,6 +1,10 @@
 package com.ailms.service.imp;
 
 import com.ailms.entity.*;
+import com.ailms.entity.enums.BaseStatusEnum;
+import com.ailms.entity.enums.CourseStatusEnum;
+import com.ailms.entity.enums.QuestionTypeEnum;
+import com.ailms.entity.enums.DeliveryModeEnum;
 import com.ailms.event.AuditLogEvent;
 import com.ailms.exception.BusinessException;
 import com.ailms.exception.ResourceNotFoundException;
@@ -46,6 +50,7 @@ public class AssessmentService implements IAssessmentService {
     private final ICertificateService certificateService;
     private final ApplicationEventPublisher applicationEventPublisher;
     private final ITeacherActivityService teacherActivityService;
+    private final EnrollmentPackageRepository enrollmentPackageRepository;
 
     @Transactional
     @Override
@@ -59,18 +64,15 @@ public class AssessmentService implements IAssessmentService {
         Long courseId = enrollment.getCourseEntity().getId();
 
         // 1. Completed lessons count
-        List<LessonProgressEntity> userProgressList = lessonProgressRepository.findByUserId(userId);
-        long completedLessons = userProgressList.stream()
-                .filter(lp -> lp.getCompletedAt() != null || (lp.getProgressPercent() != null && lp.getProgressPercent() >= 80))
-                .count();
-
-        int totalLessons = 10; // Estimated lessons count
+        long completedLessons = lessonProgressRepository
+                .countByEnrollmentIdAndStatusEquals(enrollmentId, (byte) 1);
+        int totalLessons = lessonRepository.countByCourseSectionEntityCourseEntityId(courseId);
         double progressPercentDouble = totalLessons > 0 ? (double) (completedLessons * 100) / totalLessons : 100.0;
         if (progressPercentDouble > 100.0) progressPercentDouble = 100.0;
         int progressPercent = (int) Math.round(progressPercentDouble);
 
         // 2. Average quiz score (highest per quiz)
-        List<QuizAttemptEntity> userAttempts = quizAttemptRepository.findByUserId(userId);
+        List<QuizAttemptEntity> userAttempts = quizAttemptRepository.findByEnrollmentId(enrollmentId);
         Map<Long, BigDecimal> highestScores = new HashMap<>();
         for (QuizAttemptEntity attempt : userAttempts) {
             if (attempt.getScore() != null) {
@@ -107,13 +109,7 @@ public class AssessmentService implements IAssessmentService {
         courseProgressRepository.save(courseProgress);
 
         // 4. Trigger Certificate evaluation if eligible
-        if (progressPercent >= 80) {
-            try {
-                certificateService.evaluateAndGenerateCertificate(enrollmentId);
-            } catch (Exception e) {
-                log.info("Certificate check evaluation completed for enrollment {}", enrollmentId);
-            }
-        }
+        certificateService.issueIfEligible(enrollmentId);
     }
 
     @Transactional
@@ -124,6 +120,10 @@ public class AssessmentService implements IAssessmentService {
         QuizEntity quiz = quizRepository.findById(quizId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Quiz", quizId));
 
+        if (quiz.getStatus() != BaseStatusEnum.ACTIVE) {
+            throw new BusinessException("Quiz chưa được mở cho học viên.");
+        }
+
         if (quiz.getDueAt() != null && LocalDateTime.now().isAfter(quiz.getDueAt())) {
             throw new BusinessException("Quiz đã hết hạn làm bài.");
         }
@@ -131,6 +131,9 @@ public class AssessmentService implements IAssessmentService {
                 .filter(item -> quiz.getCourseId() != null
                         && item.getCourseEntity().getId().equals(quiz.getCourseId()))
                 .findFirst().orElseThrow(() -> new BusinessException("Bạn chưa ghi danh khóa học của quiz này."));
+        if (enrollment.getCourseEntity().getStatus() != CourseStatusEnum.ACTIVE) {
+            throw new BusinessException("Khóa học của quiz chưa hoạt động.");
+        }
         validateClassMembership(userId, quiz.getClassId());
 
         // Check attempts limit
@@ -167,12 +170,26 @@ public class AssessmentService implements IAssessmentService {
         QuizEntity quiz = quizRepository.findById(attempt.getQuizId())
                 .orElseThrow(() -> ResourceNotFoundException.of("Quiz", attempt.getQuizId()));
 
+        if (quiz.getStatus() != BaseStatusEnum.ACTIVE) {
+            throw new BusinessException("Quiz đã đóng hoặc chưa được mở.");
+        }
+        if (quiz.getTimeLimitMin() != null && attempt.getStartedAt() != null
+                && LocalDateTime.now().isAfter(attempt.getStartedAt().plusMinutes(quiz.getTimeLimitMin()))) {
+            attempt.setStatus((byte) 3);
+            quizAttemptRepository.save(attempt);
+            throw new BusinessException("Đã hết thời gian làm quiz.");
+        }
+
         List<QuestionEntity> questions = questionRepository.findByQuizId(attempt.getQuizId());
         BigDecimal totalScore = BigDecimal.ZERO;
         boolean hasFillInBlank = false;
+        Set<Long> answeredQuestionIds = new HashSet<>();
 
         if (request.getAnswers() != null) {
             for (SubmitQuizAttemptRequest.AnswerRequest ansReq : request.getAnswers()) {
+                if (ansReq.getQuestionId() == null || !answeredQuestionIds.add(ansReq.getQuestionId())) {
+                    throw new BusinessException("Mỗi câu hỏi chỉ được nộp một câu trả lời trong một lượt làm.");
+                }
                 QuestionEntity question = questions.stream()
                         .filter(q -> q.getId().equals(ansReq.getQuestionId()))
                         .findFirst()
@@ -182,17 +199,20 @@ public class AssessmentService implements IAssessmentService {
 
                 boolean isCorrect = false;
                 BigDecimal pointsEarned = BigDecimal.ZERO;
+                boolean requiresManualGrade = false;
 
                 // 10.6 Auto-grading logic
-                if (question.getQuestionType() == 1 || question.getQuestionType() == 2) { // SINGLE_CHOICE or TRUE_FALSE
+                if (question.getQuestionType() == QuestionTypeEnum.SINGLE_CHOICE.getCode()
+                        || question.getQuestionType() == QuestionTypeEnum.TRUE_FALSE.getCode()) {
                     if (ansReq.getSelectedOptionId() != null) {
                         QuestionOptionEntity opt = questionOptionRepository.findById(ansReq.getSelectedOptionId()).orElse(null);
-                        if (opt != null && Boolean.TRUE.equals(opt.getIsCorrect())) {
+                        if (opt != null && question.getId().equals(opt.getQuestionId())
+                                && Boolean.TRUE.equals(opt.getIsCorrect())) {
                             isCorrect = true;
                             pointsEarned = question.getPoints() != null ? question.getPoints() : BigDecimal.ONE;
                         }
                     }
-                } else if (question.getQuestionType() == 3) { // MULTIPLE_CHOICE (all-or-nothing)
+                } else if (question.getQuestionType() == QuestionTypeEnum.MULTIPLE_CHOICE.getCode()) {
                     List<QuestionOptionEntity> allOptions = questionOptionRepository.findByQuestionId(question.getId());
                     List<Long> correctOptIds = allOptions.stream().filter(o -> Boolean.TRUE.equals(o.getIsCorrect())).map(QuestionOptionEntity::getId).toList();
                     List<Long> userSelected = ansReq.getSelectedOptionIds() != null ? ansReq.getSelectedOptionIds() : Collections.emptyList();
@@ -201,8 +221,9 @@ public class AssessmentService implements IAssessmentService {
                         isCorrect = true;
                         pointsEarned = question.getPoints() != null ? question.getPoints() : BigDecimal.ONE;
                     }
-                } else if (question.getQuestionType() == 4) { // FILL_BLANK (manual teacher grade)
+                } else if (question.getQuestionType() == QuestionTypeEnum.SHORT_ANSWER.getCode()) {
                     hasFillInBlank = true;
+                    requiresManualGrade = true;
                 }
 
                 totalScore = totalScore.add(pointsEarned);
@@ -212,7 +233,7 @@ public class AssessmentService implements IAssessmentService {
                         .questionId(question.getId())
                         .selectedOptionId(ansReq.getSelectedOptionId())
                         .answerText(ansReq.getAnswerText())
-                        .isCorrect(hasFillInBlank && question.getQuestionType() == 4 ? null : isCorrect)
+                        .isCorrect(requiresManualGrade ? null : isCorrect)
                         .pointsEarned(pointsEarned)
                         .createdAt(LocalDateTime.now())
                         .build();
@@ -226,15 +247,18 @@ public class AssessmentService implements IAssessmentService {
         if (hasFillInBlank) {
             attempt.setStatus((byte) 1); // SUBMITTED (pending teacher manual grade)
         } else {
-            attempt.setScore(totalScore);
+            BigDecimal normalizedScore = normalizeQuizScore(totalScore, questions);
+            attempt.setScore(normalizedScore);
             BigDecimal passScore = quiz.getPassScore() != null ? quiz.getPassScore() : BigDecimal.valueOf(50);
-            attempt.setIsPassed(totalScore.compareTo(passScore) >= 0);
+            attempt.setIsPassed(normalizedScore.compareTo(passScore) >= 0);
             attempt.setStatus((byte) 2); // GRADED
 
-            recomputeCourseProgress(attempt.getEnrollmentId());
         }
 
         quizAttemptRepository.save(attempt);
+        if (!hasFillInBlank) {
+            recomputeCourseProgress(attempt.getEnrollmentId());
+        }
         teacherActivityService.quizSubmitted(attempt, quiz);
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "SUBMIT_QUIZ_ATTEMPT", "QUIZ_ATTEMPT", attemptId, null, attempt));
     }
@@ -263,6 +287,7 @@ public class AssessmentService implements IAssessmentService {
                 .orElseThrow(() -> ResourceNotFoundException.of("QuizAttempt", attemptId));
 
         List<QuizAnswerEntity> answers = quizAnswerRepository.findByAttemptId(attemptId);
+        List<QuestionEntity> questions = questionRepository.findByQuizId(attempt.getQuizId());
         BigDecimal totalScore = BigDecimal.ZERO;
 
         for (QuizAnswerEntity ans : answers) {
@@ -272,6 +297,14 @@ public class AssessmentService implements IAssessmentService {
 
             if (gradeOpt.isPresent()) {
                 GradeFillInBlankRequest.QuestionGrade grade = gradeOpt.get();
+                QuestionEntity question = questions.stream()
+                        .filter(item -> item.getId().equals(ans.getQuestionId()))
+                        .findFirst().orElseThrow(() -> ResourceNotFoundException.of("Question", ans.getQuestionId()));
+                BigDecimal maximumPoints = question.getPoints() != null ? question.getPoints() : BigDecimal.ONE;
+                if (grade.getPointsEarned() == null || grade.getPointsEarned().compareTo(BigDecimal.ZERO) < 0
+                        || grade.getPointsEarned().compareTo(maximumPoints) > 0) {
+                    throw new BusinessException("Điểm chấm câu hỏi phải nằm trong thang điểm đã cấu hình.");
+                }
                 ans.setIsCorrect(grade.getIsCorrect());
                 ans.setPointsEarned(grade.getPointsEarned());
                 quizAnswerRepository.save(ans);
@@ -285,12 +318,25 @@ public class AssessmentService implements IAssessmentService {
         QuizEntity quiz = quizRepository.findById(attempt.getQuizId()).orElse(null);
         BigDecimal passScore = (quiz != null && quiz.getPassScore() != null) ? quiz.getPassScore() : BigDecimal.valueOf(50);
 
-        attempt.setScore(totalScore);
-        attempt.setIsPassed(totalScore.compareTo(passScore) >= 0);
+        BigDecimal normalizedScore = normalizeQuizScore(totalScore, questions);
+        attempt.setScore(normalizedScore);
+        attempt.setIsPassed(normalizedScore.compareTo(passScore) >= 0);
         attempt.setStatus((byte) 2); // GRADED
 
         quizAttemptRepository.save(attempt);
         recomputeCourseProgress(attempt.getEnrollmentId());
+    }
+
+    /** Chuẩn hóa điểm thô theo tổng trọng số câu hỏi về thang 100. */
+    private BigDecimal normalizeQuizScore(BigDecimal earnedScore, List<QuestionEntity> questions) {
+        BigDecimal maximumScore = questions.stream()
+                .map(question -> question.getPoints() != null ? question.getPoints() : BigDecimal.ONE)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (maximumScore.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessException("Quiz chưa có tổng điểm hợp lệ.");
+        }
+        return earnedScore.multiply(BigDecimal.valueOf(100))
+                .divide(maximumScore, 2, RoundingMode.HALF_UP);
     }
 
     @Transactional
@@ -375,7 +421,13 @@ public class AssessmentService implements IAssessmentService {
                 .build();
 
         SubmissionEntity saved = submissionRepository.save(submission);
-        teacherActivityService.assignmentSubmitted(saved, assignment);
+        var activePackages = enrollmentPackageRepository.findActiveByEnrollment(enrollment.getId(), now);
+        boolean selfStudy = !activePackages.isEmpty() && activePackages.stream()
+                .map(item -> item.getCoursePackageEntity().getDeliveryMode())
+                .allMatch(DeliveryModeEnum.SELF_STUDY::equals);
+        if (!selfStudy) {
+            teacherActivityService.assignmentSubmitted(saved, assignment);
+        }
         return saved.getId();
     }
 

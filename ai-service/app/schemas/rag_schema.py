@@ -4,7 +4,14 @@ from pydantic import BaseModel, Field, model_validator
 
 
 class IngestRequest(BaseModel):
-    """Payload ingest text hoặc file do backend gửi nội bộ."""
+    """
+    Schema yêu cầu nạp tài liệu vào kho tri thức RAG nội bộ (RAG Ingestion Request).
+
+    Cơ chế hoạt động và kiểm định an toàn (Validation Guardrails):
+    - Nhận dữ liệu tài liệu dạng text (`content`) hoặc tệp nhị phân mã hóa Base64 (`fileBase64`).
+    - Kiểm soát nghiêm ngặt `allowedRoles` (phải có dạng 'ROLE_*' hoặc 'ALL') và phân vùng theo `module`, `domain`.
+    - Kiểm tra loại file: PDF, DOCX, hoặc Ảnh (`image/png`, `image/jpeg`).
+    """
 
     source_id: str = Field(alias="sourceId", min_length=1)
     source_type: Literal["text", "pdf", "docx", "image"] = Field(alias="sourceType")
@@ -21,7 +28,7 @@ class IngestRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_source(self) -> "IngestRequest":
-        """Bắt buộc text dùng content và file dùng base64."""
+        """Xác thực tính hợp lệ của nguồn dữ liệu và phân quyền trước khi thực thi Ingestion."""
         if self.source_type == "text" and not self.content:
             raise ValueError("Nguồn text phải có content")
         if self.source_type in {"pdf", "docx", "image"} and not self.file_base64:
@@ -42,7 +49,12 @@ class IngestRequest(BaseModel):
 
 
 class IngestResponse(BaseModel):
-    """Kết quả ingestion đồng bộ."""
+    """
+    Schema kết quả trả về sau khi hoàn thành quá trình nạp tài liệu (Ingestion Result).
+
+    Cơ chế hoạt động:
+    - Báo cáo trạng thái `status` ('ingested'), số lượng phân đoạn đã lưu `chunksCount` và kiểu nguồn `sourceType`.
+    """
 
     status: Literal["ingested"] = "ingested"
     chunks_count: int = Field(alias="chunksCount")
@@ -52,16 +64,30 @@ class IngestResponse(BaseModel):
 
 
 class SearchRequest(BaseModel):
-    """Payload tìm kiếm nội bộ với role thật do backend cung cấp."""
+    """
+    Schema yêu cầu tìm kiếm vector nội bộ kèm phân quyền thực (RAG Internal Search Request).
+
+    Cơ chế hoạt động:
+    - Tiếp nhận câu hỏi `query`, số lượng kết quả `limit`, ngưỡng tương đồng tối thiểu `minScore` (mặc định 0.65),
+      danh sách quyền của người dùng `roles` và các filter nghiệp vụ mở rộng `filters`.
+    """
 
     query: str = Field(min_length=1)
     limit: int = Field(default=5, ge=1, le=20)
+    min_score: float = Field(default=0.65, alias="minScore", ge=0.0, le=1.0)
     roles: list[str] = Field(min_length=1)
     filters: dict[str, str | list[str]] = Field(default_factory=dict)
 
+    model_config = {"populate_by_name": True}
+
 
 class SearchItem(BaseModel):
-    """Một chunk cùng điểm tương đồng và metadata nguồn."""
+    """
+    Schema biểu diễn một phân đoạn tài liệu tìm thấy trong kho tri thức (RAG Search Hit).
+
+    Cơ chế hoạt động:
+    - Chứa điểm tương đồng cosine `score`, nội dung văn bản `text` và metadata chi tiết `metadata`.
+    """
 
     score: float
     text: str

@@ -53,6 +53,7 @@ public class CartService implements ICartService {
 
     private static final String RESOURCE_NAME = "CartItem";
 
+    /** Thêm gói hợp lệ vào giỏ và chặn mua lại quyền tự học đã được bao gồm. */
     @Transactional
     @Override
     public CartItemResponse addToCart(Long userId, Long coursePackageId, OneOnOneNeedsRequest needs) {
@@ -72,6 +73,12 @@ public class CartService implements ICartService {
         }
         if (enrollmentPackageRepository.existsActiveOwnedPackage(userId, coursePackageId, LocalDateTime.now())) {
             throw new BusinessException("Bạn đang sở hữu gói học này.");
+        }
+        if (pkg.getDeliveryMode() == DeliveryModeEnum.SELF_STUDY
+                && enrollmentPackageRepository.existsActiveCourseAccess(
+                userId, pkg.getCourseEntity().getId(), LocalDateTime.now())) {
+            throw new BusinessException(
+                    "Bạn đã có quyền tự học của khóa học này từ gói đang sở hữu, không cần mua thêm gói tự học.");
         }
         if (orderItemRepository.existsActivePendingCheckout(userId, coursePackageId, LocalDateTime.now())) {
             throw new BusinessException("Gói học đang có giao dịch chờ thanh toán.");
@@ -105,7 +112,7 @@ public class CartService implements ICartService {
         return cartMapper.toResponse(saved);
     }
 
-    /** Kiểm tra nhu cầu bắt buộc cho gói 1-1 và COMBO có buổi gia sư. */
+    /** Kiểm tra nhu cầu bắt buộc cho gói 1-1. */
     private void validateNeeds(CoursePackageEntity pkg, OneOnOneNeedsRequest needs) {
         boolean needsTutorRequest = requiresTutorNeeds(pkg);
         if (needsTutorRequest && needs == null) {
@@ -141,19 +148,14 @@ public class CartService implements ICartService {
         }
     }
 
-    /** Xác định package có thành phần lớp nhóm cần kiểm tra lịch và sức chứa. */
+    /** Xác định package lớp nhóm cần kiểm tra lịch và sức chứa. */
     private boolean requiresGroupClass(CoursePackageEntity pkg) {
-        return pkg.getDeliveryMode() == DeliveryModeEnum.GROUP_CLASS
-                || (pkg.getDeliveryMode() == DeliveryModeEnum.COMBO
-                && ((pkg.getMaxGroupSize() != null && pkg.getMaxGroupSize() > 1)
-                || pkg.getClassEntity() != null));
+        return pkg.getDeliveryMode() == DeliveryModeEnum.GROUP_CLASS;
     }
 
     /** Xác định package cần thu thập nhu cầu để tạo yêu cầu tìm gia sư. */
     private boolean requiresTutorNeeds(CoursePackageEntity pkg) {
-        return pkg.getDeliveryMode() == DeliveryModeEnum.ONE_ON_ONE
-                || (pkg.getDeliveryMode() == DeliveryModeEnum.COMBO
-                && pkg.getIncludedTutorSessions() != null && pkg.getIncludedTutorSessions() > 0);
+        return pkg.getDeliveryMode() == DeliveryModeEnum.ONE_ON_ONE;
     }
 
     /** Serialize nhu cầu 1-1 để checkout dùng lại sau khi thanh toán. */
@@ -166,6 +168,7 @@ public class CartService implements ICartService {
         }
     }
 
+    /** Lấy giỏ thật và ẩn các dòng không còn đủ điều kiện mua. */
     @Override
     public List<CartItemResponse> getCart(Long userId) {
         log.info("Getting cart for user {}", userId);
@@ -176,6 +179,9 @@ public class CartService implements ICartService {
                         && courseRepository.isPubliclySellable(item.getCoursePackageEntity().getCourseEntity().getId()))
                 .filter(item -> !enrollmentPackageRepository.existsActiveOwnedPackage(
                         userId, item.getCoursePackageEntity().getId(), now))
+                .filter(item -> item.getCoursePackageEntity().getDeliveryMode() != DeliveryModeEnum.SELF_STUDY
+                        || !enrollmentPackageRepository.existsActiveCourseAccess(
+                        userId, item.getCoursePackageEntity().getCourseEntity().getId(), now))
                 .filter(item -> !orderItemRepository.existsActivePendingCheckout(
                         userId, item.getCoursePackageEntity().getId(), now))
                 .map(cartMapper::toResponse).toList();

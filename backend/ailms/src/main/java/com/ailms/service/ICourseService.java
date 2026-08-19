@@ -62,6 +62,9 @@ public interface ICourseService {
      */
     CourseResponse approveCourse(Long id, CourseApprovalRequest request);
 
+    /** Lấy trực tiếp các khóa học đang chờ duyệt từ cơ sở dữ liệu. */
+    PageResponse<CourseResponse> getPendingApprovalCourses(BaseSearchRequest request);
+
     /**
      * Xóa bản ghi khỏi hệ thống theo ID.
      *

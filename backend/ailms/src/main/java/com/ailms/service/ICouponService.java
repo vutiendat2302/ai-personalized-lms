@@ -69,6 +69,12 @@ public interface ICouponService {
     /** Cấp một coupon cho người dùng, không tạo trùng quyền sở hữu. */
     UserCouponResponse assignToUser(Long couponId, Long userId);
 
+    /** Cấp coupon cho toàn bộ học viên đang hoạt động và bỏ qua quyền đã tồn tại. */
+    int assignToAllStudents(Long couponId);
+
+    /** Cấp voucher cho danh sách học viên được chọn và bỏ qua bản ghi trùng. */
+    int assignToUsers(Long couponId, List<Long> userIds);
+
     /** Lấy các voucher thực sự được cấp cho người dùng. */
     List<UserCouponResponse> getUserCoupons(Long userId);
 

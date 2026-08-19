@@ -111,7 +111,7 @@ Kỳ vọng `200`. Toàn bộ curriculum vẫn xuất hiện, còn khả năng m
 
 ### 1.7 Chi tiết lớp của gói nhóm
 
-Áp dụng cho package `GROUP_CLASS` hoặc `COMBO` có lớp nhóm lấy từ bước 1.3:
+Áp dụng cho package `GROUP_CLASS` lấy từ bước 1.3:
 
 ```http
 GET {{baseUrl}}/v1/course-packages/{{groupClassPackageId}}/class-detail
@@ -256,7 +256,7 @@ Kỳ vọng `200`. Lấy ID của request mới sang `requestId` sau khi capture
 
 ### 4.2 Xác nhận sau buổi thử
 
-Chỉ gọi khi request đang `TRIAL_COMPLETED`.
+Gọi khi request đang `TRIAL_COMPLETED`, hoặc `TRIAL_SCHEDULED` nhưng thời gian kết thúc buổi thử đã qua.
 
 Đồng ý tiếp tục:
 
@@ -282,6 +282,33 @@ Content-Type: application/json
 
 Kỳ vọng `REMATCHING`; lớp thử đóng, không trừ số buổi đã mua, người dạy bị từ chối không nhận lại được cùng request.
 
+### 4.3 Hủy ghép, cập nhật nhu cầu và đổi người dạy
+
+Endpoint dùng được ở mọi trạng thái chưa `CANCELLED`, gồm cả lớp đã `MATCHED`:
+
+```http
+POST {{baseUrl}}/v1/students/one-on-one/requests/{{requestId}}/rematch
+Authorization: Bearer {{studentToken}}
+Content-Type: application/json
+
+{
+  "reason": "Muốn đổi khung giờ và tìm giáo viên khác",
+  "needs": {
+    "availablePeriod": "Tháng 9 đến tháng 12/2026",
+    "availableDays": "Thứ 3, Thứ 5",
+    "preferredTimes": "19:00-20:30",
+    "currentLevel": "Cơ bản",
+    "learningSituation": "Đang học lớp 10",
+    "learningGoals": "Củng cố kiến thức và tăng điểm",
+    "weakAreas": "Bài toán vận dụng",
+    "instructorPreferences": "Giải thích chậm",
+    "additionalNotes": "Ưu tiên học online"
+  }
+}
+```
+
+Kỳ vọng `REMATCHING`; lớp/buổi hiện tại chuyển `CANCELLED`, nhu cầu được cập nhật và người dạy cũ không nhận lại cùng request.
+
 ## 5. API giáo viên/trợ giảng cho 1-1
 
 ### 5.1 Đăng nhập teacher hoặc TA
@@ -306,26 +333,14 @@ Authorization: Bearer {{teacherToken}}
 
 Kỳ vọng `INSTRUCTOR_ACCEPTED`. Ngay sau đó thử cùng request bằng token TA/teacher khác: kỳ vọng `409` hoặc `422`, không thể có hai người nhận.
 
-### 5.4 Tạo lớp và buổi thử
-
-Chỉ HR đã mark contacted và request đang `CONTACTED`:
+### 5.4 Danh sách yêu cầu đã nhận
 
 ```http
-POST {{baseUrl}}/v1/instructors/one-on-one/requests/{{requestId}}/trial-class
+GET {{baseUrl}}/v1/instructors/one-on-one/requests/assigned
 Authorization: Bearer {{teacherToken}}
-Content-Type: application/json
-
-{
-  "className": "Học thử 1-1 Vật lý",
-  "startAt": "2026-09-10T19:00:00",
-  "endAt": "2026-09-10T20:00:00",
-  "learningMode": "ONLINE",
-  "linkOrLocation": "https://meet.google.com/example",
-  "notes": "Chuẩn bị bài kiểm tra đầu vào"
-}
 ```
 
-Kỳ vọng `TRIAL_SCHEDULED`, một lớp `ONE_ON_ONE_TRIAL`, tối đa một học viên và một session `TRIAL`. Gọi lặp lại phải bị chặn.
+Kỳ vọng trả các yêu cầu giáo viên hiện tại đã nhận. Sau khi HR xác nhận, lớp và buổi thử do backend tạo sẽ xuất hiện trong danh sách lớp/lịch của giáo viên.
 
 ### 5.5 Lấy buổi thử duy nhất
 
@@ -371,16 +386,26 @@ Authorization: Bearer {{hrToken}}
 
 Kỳ vọng `200`.
 
-### 6.3 Đánh dấu đã kết nối liên hệ
+### 6.3 Kết nối hai bên và tạo lớp học thử
 
 Chỉ sau khi người dạy đã nhận request:
 
 ```http
 POST {{baseUrl}}/v1/hr/one-on-one/requests/{{requestId}}/mark-contacted
 Authorization: Bearer {{hrToken}}
+Content-Type: application/json
+
+{
+  "className": "Học thử 1-1 Vật lý",
+  "startAt": "2026-09-10T19:00:00",
+  "endAt": "2026-09-10T20:00:00",
+  "learningMode": "GOOGLE_MEET",
+  "linkOrLocation": "https://meet.google.com/example",
+  "notes": "Chuẩn bị bài kiểm tra đầu vào"
+}
 ```
 
-Kỳ vọng `CONTACTED`. HR không tạo lớp thử hoặc phê duyệt lịch thử.
+Kỳ vọng `TRIAL_SCHEDULED`. Backend tạo một lớp `ONE_ON_ONE_TRIAL`, thêm học viên và người dạy, tạo đúng một session `TRIAL`, rồi thông báo cả hai bên trong cùng transaction.
 
 ### 6.4 Từ chối kết nối và gửi lại cho người dạy khác
 
@@ -519,7 +544,7 @@ Content-Type: application/json
 }
 ```
 
-Kỳ vọng order lưu `totalAmount`, `discountAmount`, `finalAmount`, và mỗi item có `discountSnapshot`, `finalPrice`. Nếu lịch GROUP_CLASS/COMBO trùng, backend trả lỗi kèm hướng dẫn gửi `acceptScheduleConflict: true`; frontend phải hỏi xác nhận trước khi gọi lại.
+Kỳ vọng order lưu `totalAmount`, `discountAmount`, `finalAmount`, và mỗi item có `discountSnapshot`, `finalPrice`. Nếu lịch `GROUP_CLASS` trùng, backend trả lỗi kèm hướng dẫn gửi `acceptScheduleConflict: true`; frontend phải hỏi xác nhận trước khi gọi lại.
 
 ### 10.4 Xem chi tiết và tải hóa đơn học viên
 

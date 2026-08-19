@@ -58,6 +58,9 @@ public interface IClassMemberService {
      */
     ClassMemberEntity rejoin(Long classId, Long userId);
 
+    /** Thay giáo viên chính atomically sau khi kiểm tra trùng lịch của người mới. */
+    ClassMemberEntity replaceTeacher(Long classId, Long newTeacherUserId, String reason);
+
     List<ClassMemberResponse> getByUserId(Long userId);
 
     List<ClassMemberResponse> getByClassId(Long classId);

@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -106,13 +107,18 @@ public class MinioFileStorageService implements IFileStorageService {
                             .bucket(bucketName)
                             .object(fileKey)
                             .stream(inputStream, size, -1)
-                            .contentType(contentType)
+                            .contentType(resolveContentType(contentType))
                             .build()
             );
         } catch (Exception e) {
             log.error("Failed to upload stream file to MinIO: {}", fileKey, e);
             throw new FileStorageException("Failed to upload file to storage");
         }
+    }
+
+    /** Dùng MIME type tổng quát khi multipart client không gửi Content-Type của file. */
+    static String resolveContentType(String contentType) {
+        return StringUtils.hasText(contentType) ? contentType : MediaType.APPLICATION_OCTET_STREAM_VALUE;
     }
 
     @Override
@@ -154,8 +160,10 @@ public class MinioFileStorageService implements IFileStorageService {
                     if (isAllowed) {
                         String scheme = request.getHeader("X-Forwarded-Proto");
                         if (!StringUtils.hasText(scheme)) scheme = "http";
-                        if ("https".equalsIgnoreCase(scheme) || hostOnly.contains("ts.net") || hostOnly.contains("taile")) {
-                            targetEndpoint = scheme + "://" + hostOnly;
+                        if ("https".equalsIgnoreCase(scheme) || hostOnly.contains("trycloudflare.com") || hostOnly.contains("ts.net") || hostOnly.contains("taile")) {
+                            targetEndpoint = (hostOnly.contains("trycloudflare.com") || "https".equalsIgnoreCase(scheme))
+                                    ? "https://" + hostOnly
+                                    : scheme + "://" + hostOnly;
                         } else {
                             targetEndpoint = scheme + "://" + hostOnly + ":9000";
                         }

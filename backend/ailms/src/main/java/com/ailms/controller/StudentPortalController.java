@@ -14,9 +14,12 @@ import com.ailms.request.UpdateStudyGoalRequest;
 import com.ailms.request.StudentCouponValidationRequest;
 import com.ailms.request.StudentCartAddRequest;
 import com.ailms.request.OnboardingRequest;
+import com.ailms.request.CreateReviewRequest;
 import com.ailms.response.StudentProfileResponse;
 import com.ailms.response.StudentPersonalizationResponse;
 import com.ailms.response.OrderResponse;
+import com.ailms.response.ReviewResponse;
+import com.ailms.response.CertificateResponse;
 import com.ailms.request.RefundRequest;
 import jakarta.validation.Valid;
 import com.ailms.security.CustomUserDetails;
@@ -24,6 +27,8 @@ import com.ailms.service.IStudentPortalService;
 import com.ailms.service.IOrderService;
 import com.ailms.service.IInvoiceService;
 import com.ailms.service.IAssessmentService;
+import com.ailms.service.IReviewService;
+import com.ailms.service.ICertificateService;
 import com.ailms.request.SubmitAssignmentRequest;
 import com.ailms.request.SubmitQuizAttemptRequest;
 import jakarta.validation.constraints.Max;
@@ -60,6 +65,8 @@ public class StudentPortalController {
     private final IOrderService orderService;
     private final IInvoiceService invoiceService;
     private final IAssessmentService assessmentService;
+    private final IReviewService reviewService;
+    private final ICertificateService certificateService;
 
     /** Hoàn tất onboarding cho học viên hiện tại mà không nhận userId từ client. */
     @PostMapping("/onboarding")
@@ -183,6 +190,23 @@ public class StudentPortalController {
                 studentPortalService.getCourseDetail(currentUser.getUser().getId(), courseId)));
     }
 
+    /** Gửi một đánh giá khóa học và giáo viên bằng danh tính học viên JWT. */
+    @PostMapping("/courses/{courseId}/review")
+    public ResponseEntity<ApiResponse<ReviewResponse>> createCourseReview(
+            @AuthenticationPrincipal CustomUserDetails currentUser, @PathVariable Long courseId,
+            @Valid @RequestBody CreateReviewRequest request) {
+        return ResponseEntity.ok(ApiResponse.of("Gửi đánh giá thành công",
+                reviewService.createReview(currentUser.getUser().getId(), courseId, request)));
+    }
+
+    /** Cấp bù hoặc lấy chứng chỉ của enrollment đã hoàn thành thuộc học viên hiện tại. */
+    @PostMapping("/enrollments/{enrollmentId}/certificate")
+    public ResponseEntity<ApiResponse<CertificateResponse>> issueCertificate(
+            @AuthenticationPrincipal CustomUserDetails currentUser, @PathVariable Long enrollmentId) {
+        return ResponseEntity.ok(ApiResponse.of("Cấp chứng chỉ thành công",
+                certificateService.evaluateAndGenerateForUser(enrollmentId, currentUser.getUser().getId())));
+    }
+
     /** Lấy lịch học trực tuyến sắp tới của học viên. */
     @GetMapping("/schedule")
     public ResponseEntity<ApiResponse<List<StudentPortalItemResponse.ScheduleItem>>> getSchedule(
@@ -239,6 +263,17 @@ public class StudentPortalController {
             @AuthenticationPrincipal CustomUserDetails currentUser) {
         return ResponseEntity.ok(ApiResponse.of("Lấy chứng chỉ thành công",
                 studentPortalService.getCertificates(currentUser.getUser().getId())));
+    }
+
+    /** Tải PDF chứng chỉ đã cấp của chính học viên hiện tại. */
+    @GetMapping(value = "/certificates/{certificateId}/download", produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<byte[]> downloadCertificate(
+            @AuthenticationPrincipal CustomUserDetails currentUser, @PathVariable Long certificateId) {
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=AILMS-certificate-" + certificateId + ".pdf")
+                .contentType(MediaType.APPLICATION_PDF)
+                .body(certificateService.downloadForOwner(certificateId, currentUser.getUser().getId()));
     }
 
     /** Lấy dữ liệu phân tích tiến độ học tập. */

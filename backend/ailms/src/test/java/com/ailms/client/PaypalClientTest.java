@@ -1,6 +1,7 @@
 package com.ailms.client;
 
 import com.ailms.exception.BusinessException;
+import com.ailms.config.PaypalProperties;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -69,5 +70,31 @@ class PaypalClientTest {
 
         assertThrows(BusinessException.class,
                 () -> new PaypalClient(null, null).toCompletedRefundResult(response));
+    }
+
+    /** Báo lỗi nghiệp vụ rõ ràng trước khi gửi PayPal order có amount làm tròn thành 0 USD. */
+    @Test
+    void gatewayAmountRejectsTooSmallVndOrder() {
+        PaypalProperties properties = new PaypalProperties();
+        properties.setCurrency("USD");
+        properties.setVndPerUnit(new BigDecimal("26000"));
+        PaypalClient client = new PaypalClient(properties, null);
+
+        BusinessException exception = assertThrows(
+                BusinessException.class, () -> client.toGatewayAmount(new BigDecimal("123")));
+
+        assertEquals("Giá trị đơn hàng quá thấp để thanh toán PayPal. Tối thiểu 260 VND.",
+                exception.getMessage());
+    }
+
+    /** Quy đổi giá hợp lệ thành amount USD hai chữ số để PayPal chấp nhận. */
+    @Test
+    void gatewayAmountConvertsPayableVndOrder() {
+        PaypalProperties properties = new PaypalProperties();
+        properties.setCurrency("USD");
+        properties.setVndPerUnit(new BigDecimal("26000"));
+        PaypalClient client = new PaypalClient(properties, null);
+
+        assertEquals(new BigDecimal("10.00"), client.toGatewayAmount(new BigDecimal("260000")));
     }
 }

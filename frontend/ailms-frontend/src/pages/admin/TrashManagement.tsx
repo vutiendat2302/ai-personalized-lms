@@ -51,6 +51,7 @@ import {
   FileText
 } from "lucide-react";
 
+/** Tính toán danh sách trang hiển thị trong thanh phân trang */
 const getPageNumbers = (currentPage: number, total: number) => {
   const pages: (number | string)[] = [];
   if (total <= 7) {
@@ -79,6 +80,7 @@ export const TrashManagement: React.FC = () => {
   const [successBanner, setSuccessBanner] = useState("");
   const [errorBanner, setErrorBanner] = useState("");
 
+  /** Hiển thị thông báo banner toast thành công hoặc lỗi */
   const showBanner = (msg: string, isError = false) => {
     if (isError) {
       setErrorBanner(msg);
@@ -138,6 +140,7 @@ export const TrashManagement: React.FC = () => {
     fetchTrashData();
   }, [page, pageSize, debouncedKeyword, filterEntityType, sortDir, filterOverdueOnly]);
 
+  /** Lấy danh sách các bản ghi lưu trữ trong thùng rác */
   const fetchTrashData = async () => {
     setLoading(true);
     try {
@@ -151,7 +154,6 @@ export const TrashManagement: React.FC = () => {
       if (res.data.success) {
         const pageData = res.data.data;
         let items: TrashItemDTO[] = pageData.content || [];
-
 
         if (filterEntityType !== "ALL") {
           items = items.filter(i => (i.entityType || "USER").toUpperCase() === filterEntityType.toUpperCase());
@@ -179,7 +181,7 @@ export const TrashManagement: React.FC = () => {
     }
   };
 
-  // Card Click Event Handlers
+  /** Thao tác nhấp thẻ Tổng số bản ghi để bỏ lọc quá hạn và cuộn đến bảng */
   const handleTotalCardClick = () => {
     setFilterOverdueOnly(false);
     setFilterEntityType("ALL");
@@ -189,6 +191,7 @@ export const TrashManagement: React.FC = () => {
     }, 100);
   };
 
+  /** Thao tác nhấp thẻ Quá hạn để lọc danh sách bản ghi quá 30 ngày */
   const handleOverdueCardClick = () => {
     setFilterOverdueOnly(true);
     setPage(0);
@@ -197,18 +200,19 @@ export const TrashManagement: React.FC = () => {
     }, 100);
   };
 
-  // Checkbox Select Logic
+  /** Tích chọn hoặc bỏ chọn tất cả bản ghi */
   const handleSelectAll = (checked: boolean) => {
     if (checked) setSelectedIds(trashItems.map((item) => String(item.id)));
     else setSelectedIds([]);
   };
 
+  /** Tích chọn hoặc bỏ chọn từng bản ghi đơn lẻ */
   const handleSelectOne = (id: string) => {
     if (selectedIds.includes(id)) setSelectedIds(selectedIds.filter((i) => i !== id));
     else setSelectedIds([...selectedIds, id]);
   };
 
-  // View Detail Handler
+  /** Mở modal xem chi tiết bản ghi bị xóa */
   const handleOpenDetailModal = async (item: TrashItemDTO) => {
     setSelectedDetailItem(item);
     setActiveModal("DETAIL_MODAL");
@@ -222,7 +226,7 @@ export const TrashManagement: React.FC = () => {
     }
   };
 
-  // Child Record Details Inspector Handler
+  /** Mở modal kiểm tra danh sách bản ghi con phụ thuộc */
   const handleOpenChildRecordDetails = async (item: TrashItemDTO) => {
     setSelectedChildItem(item);
     setChildDetailModalOpen(true);
@@ -239,12 +243,13 @@ export const TrashManagement: React.FC = () => {
     }
   };
 
-  // Restore Handlers
+  /** Khởi tạo quá trình khôi phục 1 bản ghi */
   const handleInitiateSingleRestore = (item: TrashItemDTO) => {
     setTargetItem(item);
     setActiveModal("SINGLE_RESTORE");
   };
 
+  /** Xác nhận khôi phục 1 bản ghi về hệ thống */
   const handleConfirmSingleRestore = async () => {
     if (!targetItem) return;
     setLoading(true);
@@ -264,11 +269,11 @@ export const TrashManagement: React.FC = () => {
     }
   };
 
+  /** Xác nhận khôi phục hàng loạt bản ghi đã chọn */
   const handleConfirmBulkRestore = async () => {
     if (selectedIds.length === 0) return;
     setLoading(true);
     try {
-      // API xử lý theo từng loại thực thể nên cần tách lựa chọn trước khi khôi phục.
       const groups = selectedIds.reduce<Record<string, string[]>>((result, id) => {
         const item = trashItems.find(candidate => candidate.id === id);
         const type = (item?.entityType || (filterEntityType === "ALL" ? "USER" : filterEntityType)).toUpperCase();
@@ -295,7 +300,7 @@ export const TrashManagement: React.FC = () => {
     }
   };
 
-  // Hard Delete Handlers with Cascade Warning Notice
+  /** Khởi tạo quá trình xóa vĩnh viễn 1 bản ghi */
   const handleInitiateSingleHardDelete = async (item: TrashItemDTO) => {
     setTargetItem(item);
     setConfirmInput("");
@@ -316,6 +321,7 @@ export const TrashManagement: React.FC = () => {
     setActiveModal("SINGLE_HARD_DELETE");
   };
 
+  /** Xác nhận xóa vĩnh viễn 1 bản ghi khỏi cơ sở dữ liệu */
   const handleConfirmSingleHardDelete = async () => {
     if (!targetItem) return;
     if (confirmInput.trim() !== SINGLE_HARD_DELETE_CONFIRMATION_CODE) {
@@ -344,6 +350,7 @@ export const TrashManagement: React.FC = () => {
     }
   };
 
+  /** Xác nhận xóa vĩnh viễn hàng loạt bản ghi đã chọn */
   const handleConfirmBulkHardDelete = async () => {
     if (confirmInput.trim().toUpperCase() !== "XOACUNG") {
       showBanner("Mã xác nhận không chính xác!", true);
@@ -356,7 +363,6 @@ export const TrashManagement: React.FC = () => {
 
     setLoading(true);
     try {
-      // Tách theo loại thực thể để mỗi yêu cầu xóa dùng đúng nghiệp vụ backend.
       const groups = selectedIds.reduce<Record<string, string[]>>((result, id) => {
         const item = trashItems.find(candidate => candidate.id === id);
         const type = (item?.entityType || (filterEntityType === "ALL" ? "USER" : filterEntityType)).toUpperCase();
@@ -384,22 +390,23 @@ export const TrashManagement: React.FC = () => {
     }
   };
 
+  /** Trả về Badge hiển thị loại đối tượng theo token màu index.css */
   const getEntityBadge = (type: string) => {
     const uppercaseType = type ? type.toUpperCase() : "USER";
     switch (uppercaseType) {
       case "USER":
       case "EMPLOYEE":
-        return <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/20 font-bold gap-1"><Users className="h-3 w-3" /> User</Badge>;
+        return <Badge variant="outline" className="bg-brand-cobalt/10 text-brand-cobalt border-brand-cobalt/20 font-bold gap-1"><Users className="h-3 w-3" /> Tài khoản</Badge>;
       case "COURSE":
-        return <Badge variant="outline" className="bg-purple-500/10 text-purple-600 border-purple-500/20 font-bold gap-1"><BookOpen className="h-3 w-3" /> Khóa học</Badge>;
+        return <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20 font-bold gap-1"><BookOpen className="h-3 w-3" /> Khóa học</Badge>;
       case "DEPARTMENT":
-        return <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/20 font-bold gap-1"><Building2 className="h-3 w-3" /> Phòng ban</Badge>;
+        return <Badge variant="outline" className="bg-chart-1/10 text-chart-1 border-chart-1/20 font-bold gap-1"><Building2 className="h-3 w-3" /> Phòng ban</Badge>;
       case "FILE":
-        return <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 font-bold gap-1"><FileText className="h-3 w-3" /> Tệp tin</Badge>;
+        return <Badge variant="outline" className="bg-success-forest/10 text-success-forest border-success-forest/20 font-bold gap-1"><FileText className="h-3 w-3" /> Tệp tin</Badge>;
       case "SALARY":
-        return <Badge variant="outline" className="bg-indigo-500/10 text-indigo-600 border-indigo-500/20 font-bold">Bảng lương</Badge>;
+        return <Badge variant="outline" className="bg-chart-2/10 text-chart-2 border-chart-2/20 font-bold">Bảng lương</Badge>;
       default:
-        return <Badge variant="outline" className="bg-slate-500/10 text-slate-600 border-slate-500/20 font-bold">{type}</Badge>;
+        return <Badge variant="outline" className="bg-muted text-muted-foreground border-border font-bold">{type}</Badge>;
     }
   };
 
@@ -431,7 +438,7 @@ export const TrashManagement: React.FC = () => {
       )}
 
       {successBanner && (
-        <div className="fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-xl bg-emerald-600 text-white px-4 py-3 shadow-xl animate-in slide-in-from-bottom-5 duration-300">
+        <div className="fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-xl bg-success-forest text-white px-4 py-3 shadow-xl animate-in slide-in-from-bottom-5 duration-300">
           <CheckCircle2 className="h-5 w-5 shrink-0" />
           <span className="text-sm font-semibold">{successBanner}</span>
         </div>
@@ -440,15 +447,9 @@ export const TrashManagement: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 text-xs font-bold text-primary mb-1">
-            <Link to="/dashboard" className="flex items-center gap-1 hover:underline">
-              <ArrowLeft className="h-3 w-3" />
-              <span>Quay lại Dashboard</span>
-            </Link>
-          </div>
           <h1 className="text-2xl font-extrabold tracking-tight text-foreground flex items-center gap-2">
             <Trash2 className="h-6 w-6 text-primary" />
-            <span>Thùng rác hệ thống (Unified Trash)</span>
+            <span>Thùng rác hệ thống</span>
           </h1>
           <p className="text-xs text-muted-foreground mt-0.5">
             Quản lý tập trung các thực thể đã xóa mềm. Khôi phục lại trạng thái ban đầu hoặc dọn dẹp xóa cứng khỏi cơ sở dữ liệu.
@@ -484,26 +485,26 @@ export const TrashManagement: React.FC = () => {
         <Card
           onClick={handleOverdueCardClick}
           className={cn(
-            "border-border shadow-xs bg-card hover:border-red-500/50 transition-all cursor-pointer group",
-            filterOverdueOnly && "border-red-500 bg-red-500/5 dark:bg-red-500/10"
+            "border-border shadow-xs bg-card hover:border-destructive/50 transition-all cursor-pointer group",
+            filterOverdueOnly && "border-destructive bg-destructive/5"
           )}
         >
           <CardContent className="p-4 flex items-center justify-between">
             <div className="space-y-1">
               <div className="flex items-center gap-1.5">
-                <span className="text-xs font-bold text-red-600 dark:text-red-400 uppercase tracking-wider">Quá hạn &gt; 30 ngày</span>
+                <span className="text-xs font-bold text-destructive uppercase tracking-wider">Quá hạn &gt; 30 ngày</span>
                 {filterOverdueOnly && (
-                  <Badge variant="destructive" className="text-[9px] px-1.5 py-0">Đang lọc</Badge>
+                  <Badge variant="destructive" className="text-[9px] px-1.5 py-0 font-bold">Đang lọc</Badge>
                 )}
               </div>
-              <div className="text-2xl font-black text-red-600 dark:text-red-400 group-hover:scale-105 transition-transform origin-left">
+              <div className="text-2xl font-black text-destructive group-hover:scale-105 transition-transform origin-left">
                 {overdueCount} <span className="text-xs font-normal text-muted-foreground">bản ghi</span>
               </div>
               <p className="text-[11px] text-muted-foreground">
                 Click để xem &amp; lọc danh sách quá hạn &gt; 30 ngày
               </p>
             </div>
-            <div className="h-12 w-12 rounded-2xl bg-red-500/10 text-red-600 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
+            <div className="h-12 w-12 rounded-2xl bg-destructive/10 text-destructive flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
               <AlertTriangle className="h-6 w-6" />
             </div>
           </CardContent>
@@ -513,15 +514,15 @@ export const TrashManagement: React.FC = () => {
         <Card className="border-border shadow-xs bg-card">
           <CardContent className="p-4 flex items-center justify-between">
             <div className="space-y-1">
-              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">An toàn để dọn dẹp</span>
-              <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
+              <span className="text-xs font-bold text-success-forest uppercase tracking-wider">An toàn để dọn dẹp</span>
+              <div className="text-2xl font-black text-success-forest">
                 {safeCount} <span className="text-xs font-normal text-muted-foreground">bản ghi</span>
               </div>
               <p className="text-[11px] text-muted-foreground">
                 Bản ghi không chứa dữ liệu con ràng buộc
               </p>
             </div>
-            <div className="h-12 w-12 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0">
+            <div className="h-12 w-12 rounded-2xl bg-success-forest/10 text-success-forest flex items-center justify-center shrink-0">
               <CheckCircle2 className="h-6 w-6" />
             </div>
           </CardContent>
@@ -589,11 +590,11 @@ export const TrashManagement: React.FC = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">Tất cả đối tượng</SelectItem>
-                  <SelectItem value="USER">Tài khoản (User)</SelectItem>
-                  <SelectItem value="COURSE">Khóa học (Course)</SelectItem>
-                  <SelectItem value="DEPARTMENT">Phòng ban (Department)</SelectItem>
-                  <SelectItem value="FILE">Tệp tin (File)</SelectItem>
-                  <SelectItem value="SALARY">Bảng lương (Salary)</SelectItem>
+                  <SelectItem value="USER">Tài khoản</SelectItem>
+                  <SelectItem value="COURSE">Khóa học</SelectItem>
+                  <SelectItem value="DEPARTMENT">Phòng ban</SelectItem>
+                  <SelectItem value="FILE">Tệp tin</SelectItem>
+                  <SelectItem value="SALARY">Bảng lương</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -667,7 +668,7 @@ export const TrashManagement: React.FC = () => {
                     </div>
                   </TableHead>
                   <TableHead className="py-3 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Thời gian lưu</TableHead>
-                  <TableHead className="py-3 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Dữ liệu phụ thuộc (FK)</TableHead>
+                  <TableHead className="py-3 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Dữ liệu phụ thuộc</TableHead>
                   <TableHead className="py-3 px-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground text-center">Thao tác</TableHead>
                 </TableRow>
               </TableHeader>
@@ -705,7 +706,7 @@ export const TrashManagement: React.FC = () => {
                         <TableCell className="py-3 px-3">
                           <div className="flex flex-col">
                             <span className="font-bold text-foreground text-xs">{item.name || "N/A"}</span>
-                            <span className="text-[10px] text-muted-foreground font-mono">{item.email || item.code || `ID: #${item.id}`}</span>
+                            <span className="text-[10px] text-muted-foreground font-mono">{item.email || item.code || `ID: ${item.id}`}</span>
                           </div>
                         </TableCell>
 
@@ -716,7 +717,7 @@ export const TrashManagement: React.FC = () => {
 
                         {/* Thời gian lưu trong rác */}
                         <TableCell className="py-3 px-3">
-                          <Badge variant="outline" className={cn("font-mono text-[10px] font-bold", isOverdue ? "bg-red-500/10 text-red-600 border-red-500/20" : "bg-muted/40 text-muted-foreground border-border/40")}>
+                          <Badge variant="outline" className={cn("font-mono text-[10px] font-bold", isOverdue ? "bg-destructive/10 text-destructive border-destructive/20" : "bg-muted/40 text-muted-foreground border-border/40")}>
                             <Clock className="h-3 w-3 mr-1" />
                             {item.daysInTrash || 0} ngày
                           </Badge>
@@ -728,13 +729,13 @@ export const TrashManagement: React.FC = () => {
                             <Badge
                               onClick={() => handleOpenChildRecordDetails(item)}
                               variant="outline"
-                              className="bg-amber-500/10 text-amber-600 border-amber-500/20 text-[10px] font-bold gap-1 cursor-pointer hover:bg-amber-500/20 transition-colors"
+                              className="bg-chart-1/10 text-chart-1 border-chart-1/20 text-[10px] font-bold gap-1 cursor-pointer hover:bg-chart-1/20 transition-colors"
                               title="Click để xem chi tiết danh sách bản ghi con phụ thuộc"
                             >
-                              <ShieldAlert className="h-3 w-3" /> Có dữ liệu phụ thuộc (Xem chi tiết)
+                              <ShieldAlert className="h-3 w-3" /> Có dữ liệu phụ thuộc
                             </Badge>
                           ) : (
-                            <span className="text-xs text-emerald-600 font-bold flex items-center gap-1">
+                            <span className="text-xs text-success-forest font-bold flex items-center gap-1">
                               <CheckCircle2 className="h-3.5 w-3.5" /> An toàn để xóa
                             </span>
                           )}
@@ -756,7 +757,7 @@ export const TrashManagement: React.FC = () => {
                               onClick={() => handleInitiateSingleRestore(item)}
                               variant="outline"
                               size="sm"
-                              className="h-8 text-xs font-bold gap-1 text-emerald-600 border-emerald-500/30 hover:bg-emerald-500/10 rounded-lg cursor-pointer"
+                              className="h-8 text-xs font-bold gap-1 text-success-forest border-success-forest/30 hover:bg-success-forest/10 rounded-lg cursor-pointer"
                             >
                               <RotateCcw className="h-3.5 w-3.5" /> Khôi phục
                             </Button>
@@ -828,12 +829,12 @@ export const TrashManagement: React.FC = () => {
 
       {/* 1. Detail Modal */}
       <Dialog open={activeModal === "DETAIL_MODAL"} onOpenChange={() => setActiveModal("NONE")}>
-        <DialogContent className="max-w-xl w-full rounded-2xl bg-card p-6 border-border">
+        <DialogContent className="max-w-xl w-full rounded-2xl bg-card p-6 border border-border/40 shadow-xl">
           <DialogHeader className="border-b border-border/40 pb-4">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <Info className="h-6 w-6 text-primary shrink-0" />
-                <DialogTitle className="text-lg font-extrabold tracking-tight">Chi tiết bản ghi Thùng rác</DialogTitle>
+                <DialogTitle className="text-lg font-extrabold tracking-tight text-foreground">Chi tiết bản ghi Thùng rác</DialogTitle>
               </div>
               {selectedDetailItem && getEntityBadge(selectedDetailItem.entityType)}
             </div>
@@ -850,8 +851,8 @@ export const TrashManagement: React.FC = () => {
                   <span className="font-bold text-foreground text-sm">{selectedDetailItem.name || "N/A"}</span>
                 </div>
                 <div>
-                  <span className="text-muted-foreground font-semibold block text-[11px]">Mã định danh (Code / ID):</span>
-                  <span className="font-bold text-primary font-mono text-sm">{selectedDetailItem.code || `#${selectedDetailItem.id}`}</span>
+                  <span className="text-muted-foreground font-semibold block text-[11px]">Mã định danh:</span>
+                  <span className="font-bold text-primary font-mono text-sm">{selectedDetailItem.code || `ID: ${selectedDetailItem.id}`}</span>
                 </div>
                 {selectedDetailItem.email && (
                   <div>
@@ -861,7 +862,7 @@ export const TrashManagement: React.FC = () => {
                 )}
                 <div>
                   <span className="text-muted-foreground font-semibold block text-[11px]">ID thực thể:</span>
-                  <span className="font-mono text-foreground font-semibold">#{selectedDetailItem.id}</span>
+                  <span className="font-mono text-foreground font-semibold">{selectedDetailItem.id}</span>
                 </div>
               </div>
 
@@ -883,16 +884,16 @@ export const TrashManagement: React.FC = () => {
               </div>
 
               {selectedDetailItem.hasChildRecords && selectedDetailItem.childRecordCounts && Object.keys(selectedDetailItem.childRecordCounts).length > 0 && (
-                <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl space-y-2 text-amber-800 dark:text-amber-300">
+                <div className="p-3 bg-chart-1/10 border border-chart-1/20 rounded-xl space-y-2 text-chart-1">
                   <div className="flex items-center justify-between">
                     <span className="font-bold flex items-center gap-1 text-[11px]">
-                      <Database className="h-3.5 w-3.5 text-amber-600" /> Bản ghi phụ thuộc (Foreign Keys):
+                      <Database className="h-3.5 w-3.5 text-chart-1" /> Bản ghi phụ thuộc:
                     </span>
                     <Button
                       size="sm"
                       variant="outline"
                       onClick={() => handleOpenChildRecordDetails(selectedDetailItem)}
-                      className="h-6 text-[10px] font-bold gap-1 border-amber-500/40 text-amber-800 dark:text-amber-300 hover:bg-amber-500/20 cursor-pointer"
+                      className="h-6 text-[10px] font-bold gap-1 border-chart-1/40 text-chart-1 hover:bg-chart-1/20 cursor-pointer"
                     >
                       <Eye className="h-3 w-3" /> Xem danh sách chi tiết các dòng bản ghi
                     </Button>
@@ -908,14 +909,14 @@ export const TrashManagement: React.FC = () => {
           )}
 
           <DialogFooter className="gap-2 pt-2 border-t border-border/40">
-            <Button variant="outline" onClick={() => setActiveModal("NONE")} className="font-bold text-xs">Đóng</Button>
+            <Button variant="outline" onClick={() => setActiveModal("NONE")} className="font-bold text-xs cursor-pointer">Đóng</Button>
             {selectedDetailItem && (
               <>
                 <Button
                   onClick={() => {
                     handleInitiateSingleRestore(selectedDetailItem);
                   }}
-                  className="font-bold text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1"
+                  className="font-bold text-xs bg-success-forest hover:bg-success-forest/90 text-white gap-1 cursor-pointer"
                 >
                   <RotateCcw className="h-3.5 w-3.5" /> Khôi phục bản ghi
                 </Button>
@@ -924,7 +925,7 @@ export const TrashManagement: React.FC = () => {
                     handleInitiateSingleHardDelete(selectedDetailItem);
                   }}
                   variant="destructive"
-                  className="font-bold text-xs gap-1"
+                  className="font-bold text-xs gap-1 cursor-pointer"
                 >
                   <Trash2 className="h-3.5 w-3.5" /> Xóa vĩnh viễn
                 </Button>
@@ -936,11 +937,11 @@ export const TrashManagement: React.FC = () => {
 
       {/* 2. Single Restore Dialog */}
       <Dialog open={activeModal === "SINGLE_RESTORE"} onOpenChange={() => setActiveModal("NONE")}>
-        <DialogContent className="max-w-md w-full rounded-2xl bg-card p-6">
+        <DialogContent className="max-w-md w-full rounded-2xl bg-card p-6 border border-border/40 shadow-xl">
           <DialogHeader>
-            <div className="flex items-center gap-3 text-emerald-600 mb-1">
+            <div className="flex items-center gap-3 text-success-forest mb-1">
               <RotateCcw className="h-7 w-7 shrink-0" />
-              <DialogTitle className="text-lg font-black">Xác nhận khôi phục bản ghi</DialogTitle>
+              <DialogTitle className="text-lg font-black text-foreground">Xác nhận khôi phục bản ghi</DialogTitle>
             </div>
             <DialogDescription className="text-xs text-muted-foreground leading-relaxed mt-1">
               Bạn có chắc chắn muốn khôi phục bản ghi <strong>"{targetItem?.name}"</strong> ({targetItem?.code}) trở lại hệ thống?
@@ -949,50 +950,50 @@ export const TrashManagement: React.FC = () => {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 pt-2">
-            <Button variant="outline" onClick={() => setActiveModal("NONE")} className="font-bold text-xs">Hủy bỏ</Button>
-            <Button onClick={handleConfirmSingleRestore} className="font-bold text-xs bg-emerald-600 hover:bg-emerald-700 text-white">Khôi phục ngay</Button>
+            <Button variant="outline" onClick={() => setActiveModal("NONE")} className="font-bold text-xs cursor-pointer">Hủy bỏ</Button>
+            <Button onClick={handleConfirmSingleRestore} className="font-bold text-xs bg-success-forest hover:bg-success-forest/90 text-white cursor-pointer">Khôi phục ngay</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* 3. Bulk Restore Dialog */}
       <Dialog open={activeModal === "BULK_RESTORE"} onOpenChange={() => setActiveModal("NONE")}>
-        <DialogContent className="max-w-md w-full rounded-2xl bg-card p-6">
+        <DialogContent className="max-w-md w-full rounded-2xl bg-card p-6 border border-border/40 shadow-xl">
           <DialogHeader>
-            <div className="flex items-center gap-3 text-emerald-600 mb-1">
+            <div className="flex items-center gap-3 text-success-forest mb-1">
               <RotateCcw className="h-7 w-7 shrink-0" />
-              <DialogTitle className="text-lg font-black">Xác nhận khôi phục hàng loạt</DialogTitle>
+              <DialogTitle className="text-lg font-black text-foreground">Xác nhận khôi phục hàng loạt</DialogTitle>
             </div>
             <DialogDescription className="text-xs text-muted-foreground leading-relaxed mt-1">
               Bạn đang chuẩn bị khôi phục <strong>{selectedIds.length} bản ghi</strong> đã chọn trở lại hệ thống.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 pt-2">
-            <Button variant="outline" onClick={() => setActiveModal("NONE")} className="font-bold text-xs">Hủy bỏ</Button>
-            <Button onClick={handleConfirmBulkRestore} className="font-bold text-xs bg-emerald-600 hover:bg-emerald-700 text-white">Đồng ý khôi phục ({selectedIds.length})</Button>
+            <Button variant="outline" onClick={() => setActiveModal("NONE")} className="font-bold text-xs cursor-pointer">Hủy bỏ</Button>
+            <Button onClick={handleConfirmBulkRestore} className="font-bold text-xs bg-success-forest hover:bg-success-forest/90 text-white cursor-pointer">Đồng ý khôi phục ({selectedIds.length})</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* 4. Single Hard Delete Strong Confirmation Modal (with Cascade FK Warning) */}
       <Dialog open={activeModal === "SINGLE_HARD_DELETE"} onOpenChange={() => setActiveModal("NONE")}>
-        <DialogContent className="max-w-md w-full rounded-2xl bg-card p-6 border-red-500/30">
+        <DialogContent className="max-w-md w-full rounded-2xl bg-card p-6 border border-destructive/30 shadow-xl">
           <DialogHeader>
-            <div className="flex items-center gap-3 text-red-600 mb-1">
+            <div className="flex items-center gap-3 text-destructive mb-1">
               <Trash2 className="h-8 w-8 shrink-0" />
-              <DialogTitle className="text-lg font-black">Cảnh báo XÓA CỨNG VĨNH VIỄN</DialogTitle>
+              <DialogTitle className="text-lg font-black text-foreground">Cảnh báo xóa vĩnh viễn</DialogTitle>
             </div>
             <DialogDescription className="text-xs text-muted-foreground leading-relaxed mt-1">
               Hành động này sẽ thực thi lệnh <code>DELETE</code> trực tiếp vào CSDL cho bản ghi <strong>"{targetItem?.name}"</strong> ({targetItem?.code}).
-              <strong className="text-red-600 font-bold block mt-1">CẢNH BÁO: Không thể khôi phục dữ liệu sau khi xóa!</strong>
+              <strong className="text-destructive font-bold block mt-1">CẢNH BÁO: Không thể khôi phục dữ liệu sau khi xóa!</strong>
             </DialogDescription>
           </DialogHeader>
 
           {totalFkChildRecords > 0 && (
-            <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl space-y-1.5 text-xs text-amber-800 dark:text-amber-300">
+            <div className="p-3 bg-chart-1/10 border border-chart-1/30 rounded-xl space-y-1.5 text-xs text-chart-1">
               <div className="flex items-center justify-between gap-1.5 font-bold">
                 <div className="flex items-center gap-1.5">
-                  <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                  <AlertTriangle className="h-4 w-4 text-chart-1 shrink-0" />
                   <span>Phát hiện {totalFkChildRecords} bản ghi con phụ thuộc:</span>
                 </div>
                 {targetItem && (
@@ -1018,25 +1019,25 @@ export const TrashManagement: React.FC = () => {
           <div className="space-y-4 my-2">
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-foreground">
-                Nhập mã <code className="bg-muted px-1.5 py-0.5 rounded text-red-600 font-mono">{SINGLE_HARD_DELETE_CONFIRMATION_CODE}</code> để xác nhận:
+                Nhập mã <code className="bg-muted px-1.5 py-0.5 rounded text-destructive font-mono">{SINGLE_HARD_DELETE_CONFIRMATION_CODE}</code> để xác nhận:
               </Label>
               <Input
                 type="text"
                 placeholder={`Nhập ${SINGLE_HARD_DELETE_CONFIRMATION_CODE}...`}
                 value={confirmInput}
                 onChange={(e) => setConfirmInput(e.target.value)}
-                className="h-9 text-xs border border-border/50 font-mono"
+                className="h-9 text-xs border border-border/50 font-mono bg-background text-foreground"
               />
             </div>
 
-            <label className="flex items-center gap-2 cursor-pointer text-xs select-none font-bold text-red-600">
+            <label className="flex items-center gap-2 cursor-pointer text-xs select-none font-bold text-destructive">
               <Checkbox checked={disclaimerChecked} onCheckedChange={(c) => setDisclaimerChecked(!!c)} className="h-4 w-4 rounded" />
               <span>Tôi hiểu và chấp nhận xóa sạch toàn bộ bản ghi này và các bản ghi phụ thuộc.</span>
             </label>
           </div>
 
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setActiveModal("NONE")} className="font-bold text-xs">Hủy bỏ</Button>
+            <Button variant="outline" onClick={() => setActiveModal("NONE")} className="font-bold text-xs cursor-pointer">Hủy bỏ</Button>
             <Button
               disabled={!isSingleHardDeleteValid}
               onClick={handleConfirmSingleHardDelete}
@@ -1051,11 +1052,11 @@ export const TrashManagement: React.FC = () => {
 
       {/* 5. Bulk Hard Delete Strong Confirmation Modal */}
       <Dialog open={activeModal === "BULK_HARD_DELETE"} onOpenChange={() => setActiveModal("NONE")}>
-        <DialogContent className="max-w-md w-full rounded-2xl bg-card p-6">
+        <DialogContent className="max-w-md w-full rounded-2xl bg-card p-6 border border-destructive/30 shadow-xl">
           <DialogHeader>
-            <div className="flex items-center gap-3 text-red-600 mb-1">
+            <div className="flex items-center gap-3 text-destructive mb-1">
               <ShieldAlert className="h-8 w-8 shrink-0" />
-              <DialogTitle className="text-lg font-black">XÁC NHẬN XÓA CỨNG HÀNG LOẠT</DialogTitle>
+              <DialogTitle className="text-lg font-black text-foreground">Xác nhận xóa vĩnh viễn hàng loạt</DialogTitle>
             </div>
             <DialogDescription className="text-xs text-muted-foreground leading-relaxed mt-1">
               Bạn đang chuẩn bị xóa vĩnh viễn <strong>{selectedIds.length} bản ghi</strong> khỏi cơ sở dữ liệu (bao gồm tất cả bản ghi con phụ thuộc).
@@ -1065,25 +1066,25 @@ export const TrashManagement: React.FC = () => {
           <div className="space-y-4 my-2">
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-foreground">
-                Nhập chữ <code className="bg-muted px-1.5 py-0.5 rounded text-red-600 font-mono">XOACUNG</code> để xác nhận:
+                Nhập chữ <code className="bg-muted px-1.5 py-0.5 rounded text-destructive font-mono">XOACUNG</code> để xác nhận:
               </Label>
               <Input
                 type="text"
                 placeholder="Nhập XOACUNG..."
                 value={confirmInput}
                 onChange={(e) => setConfirmInput(e.target.value)}
-                className="h-9 text-xs border border-border/50 font-mono"
+                className="h-9 text-xs border border-border/50 font-mono bg-background text-foreground"
               />
             </div>
 
-            <label className="flex items-center gap-2 cursor-pointer text-xs select-none font-bold text-red-600">
+            <label className="flex items-center gap-2 cursor-pointer text-xs select-none font-bold text-destructive">
               <Checkbox checked={disclaimerChecked} onCheckedChange={(c) => setDisclaimerChecked(!!c)} className="h-4 w-4 rounded" />
               <span>Tôi đồng ý chịu trách nhiệm việc hủy hoàn toàn các dữ liệu này.</span>
             </label>
           </div>
 
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setActiveModal("NONE")} className="font-bold text-xs">Hủy bỏ</Button>
+            <Button variant="outline" onClick={() => setActiveModal("NONE")} className="font-bold text-xs cursor-pointer">Hủy bỏ</Button>
             <Button
               disabled={!isBulkHardDeleteValid}
               onClick={handleConfirmBulkHardDelete}
@@ -1098,14 +1099,14 @@ export const TrashManagement: React.FC = () => {
 
       {/* 6. Child Record Details Inspection Modal */}
       <Dialog open={childDetailModalOpen} onOpenChange={setChildDetailModalOpen}>
-        <DialogContent className="max-w-2xl w-full rounded-2xl bg-card p-6 border-border max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl w-full rounded-2xl bg-card p-6 border border-border/40 max-h-[85vh] overflow-y-auto shadow-xl">
           <DialogHeader className="border-b border-border/40 pb-3">
             <div className="flex items-center gap-2 text-primary">
-              <Database className="h-6 w-6 shrink-0 text-amber-600" />
-              <DialogTitle className="text-lg font-black tracking-tight">Chi tiết các Bản ghi con Phụ thuộc (FK)</DialogTitle>
+              <Database className="h-6 w-6 shrink-0 text-chart-1" />
+              <DialogTitle className="text-lg font-black tracking-tight text-foreground">Chi tiết các bản ghi phụ thuộc</DialogTitle>
             </div>
             <DialogDescription className="text-xs text-muted-foreground mt-1">
-              Bản ghi gốc: <strong>"{selectedChildItem?.name}"</strong> ({selectedChildItem?.code || `#${selectedChildItem?.id}`})
+              Bản ghi gốc: <strong>"{selectedChildItem?.name}"</strong> ({selectedChildItem?.code || `ID: ${selectedChildItem?.id}`})
             </DialogDescription>
           </DialogHeader>
 
@@ -1133,7 +1134,7 @@ export const TrashManagement: React.FC = () => {
                       `{group.tableName}`
                     </span>
                   </div>
-                  <Badge variant="outline" className="font-bold text-[10px] bg-amber-500/10 text-amber-600 border-amber-500/20">
+                  <Badge variant="outline" className="font-bold text-[10px] bg-chart-1/10 text-chart-1 border-chart-1/20">
                     {group.count} bản ghi
                   </Badge>
                 </div>
@@ -1167,7 +1168,7 @@ export const TrashManagement: React.FC = () => {
           </div>
 
           <DialogFooter className="pt-2 border-t border-border/40">
-            <Button variant="outline" onClick={() => setChildDetailModalOpen(false)} className="font-bold text-xs w-full">
+            <Button variant="outline" onClick={() => setChildDetailModalOpen(false)} className="font-bold text-xs w-full cursor-pointer">
               Đóng cửa sổ
             </Button>
           </DialogFooter>

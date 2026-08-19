@@ -12,5 +12,8 @@ import java.util.List;
 public interface QuestionRepository extends BaseRepository<QuestionEntity, Long> {
     List<QuestionEntity> findByQuizId(Long quizId);
 
+    /** Lấy câu hỏi theo đúng thứ tự hiển thị của quiz. */
+    List<QuestionEntity> findByQuizIdOrderByOrderIndexAsc(Long quizId);
+
     void deleteByQuizId(Long quizId);
 }

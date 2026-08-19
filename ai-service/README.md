@@ -133,17 +133,69 @@ sequenceDiagram
 
 ### 2.2 Danh mục Tool Calling An toàn Phân quyền RBAC
 
-Hệ thống cung cấp các Tool nội bộ được kiểm soát quyền chặt chẽ tại Backend Core:
+Hệ thống cung cấp danh mục Tool nghiệp vụ nội bộ toàn diện được kiểm soát quyền chặt chẽ tại Backend Core:
 
-| Tool Name | Vai trò được phép gọi | Phạm vi dữ liệu truy vấn | Quy tắc bảo mật dữ liệu |
+| Nhóm Nghiệp vụ | Tên Tool | Vai trò được phép gọi | Phạm vi dữ liệu truy vấn & Quy tắc bảo mật |
 | :--- | :--- | :--- | :--- |
-| `get_system_overview` | `ROLE_ADMIN`, `ROLE_HR` | Thống kê tổng quan số lượng nhân viên, học viên, hợp đồng | Không lộ thông tin định danh cá nhân |
-| `search_employees` | `ROLE_ADMIN`, `ROLE_HR` | Tìm kiếm nhân sự theo tên, mã nhân viên, phòng ban | Ẩn hoàn toàn mức lương, số CMND/CCCD, SĐT cá nhân |
-| `get_employee_contracts` | `ROLE_ADMIN`, `ROLE_HR` | Tra cứu trạng thái, ngày hiệu lực/hết hạn của hợp đồng | Ẩn chi tiết điều khoản tài chính & file nhị phân |
-| `search_students` | `ROLE_ADMIN`, `ROLE_TEACHER` | Tra cứu hồ sơ học viên theo mã hoặc họ tên | Ẩn địa chỉ cá nhân & thông tin người giám hộ |
-| `get_student_learning_summary` | `ROLE_ADMIN`, `ROLE_TEACHER` | Thống kê tiến độ khóa học, chuỗi học liên tục (streak) | Chỉ trả về chỉ số học tập tổng hợp |
+| **Hệ thống** | `get_system_overview` | `ADMIN`, `HR` | Thống kê số lượng nhân viên, học viên, hợp đồng, phòng ban. |
+| | `list_pending_approvals` | `ADMIN`, `HR` | Liệt kê các yêu cầu phê duyệt đang chờ xử lý. |
+| **Nhân sự & Hợp đồng** | `search_employees` | `ADMIN`, `HR` | Tìm nhân sự theo tên, mã NV, phòng ban (Ẩn lương, CCCD, SĐT). |
+| | `get_employee_contracts` | `ADMIN`, `HR` | Tra cứu trạng thái, ngày hiệu lực/hết hạn hợp đồng. |
+| | `list_expiring_contracts` | `ADMIN`, `HR` | Liệt kê hợp đồng sắp hết hạn trong 30–180 ngày tới. |
+| | `get_hr_operations_summary` | `ADMIN`, `HR` | Thống kê chấm công và đơn xin nghỉ phép trong ngày. |
+| | `analyze_attendance_trend` | `ADMIN`, `HR` | Phân tích xu hướng đi muộn, vắng mặt (tối đa 90 ngày). |
+| | `get_employee_leave_and_attendance_detail` | `ADMIN`, `HR` | Xem chi tiết chấm công & nghỉ phép của 1 nhân viên cụ thể. |
+| | `lock_or_unlock_employee_account` | `ADMIN`, `HR` | Khóa hoặc mở khóa tài khoản nhân viên. |
+| | `check_and_prepare_contract_creation` | `ADMIN`, `HR` | Kiểm tra điều kiện và chuẩn bị tạo/gia hạn hợp đồng. |
+| | `create_or_renew_employee_contract` | `ADMIN`, `HR` | Tạo hoặc gia hạn hợp đồng trực tiếp qua chat. |
+| **Học viên & Học vụ** | `search_students` | `ADMIN`, `TEACHER` | Tra cứu hồ sơ học viên theo mã hoặc họ tên. |
+| | `get_student_learning_summary` | `ADMIN`, `TEACHER` | Thống kê tiến độ khóa học, streak và hoàn thành bài học. |
+| | `get_student_detailed_learning_progress` | `ADMIN`, `TEACHER` | Xem chi tiết tiến độ từng chương, bài học, điểm thi quiz. |
+| | `analyze_learning_progress` | `ADMIN`, `HR` | Phân tích tiến độ học tập toàn hệ thống theo ngưỡng rủi ro. |
+| | `list_students_at_learning_risk` | `ADMIN`, `HR` | Cảnh báo danh sách học viên có nguy cơ bỏ học. |
+| | `lock_or_unlock_student_account` | `ADMIN` | Khóa hoặc mở khóa tài khoản học viên. |
+| **Thương mại & Doanh số** | `get_order_summary` | `ADMIN` | Tổng quan số lượng và doanh thu đơn hàng theo trạng thái. |
+| | `get_sales_kpi_and_order_analytics` | `ADMIN` | Phân tích chuyên sâu KPI bán hàng, tỷ lệ chuyển đổi. |
+| | `query_abandoned_carts_and_retarget` | `ADMIN` | Quét các giỏ hàng bị bỏ quên để lên kế hoạch remarketing. |
+| | `draft_coupon_and_distribute` | `ADMIN` | Soạn thảo mã giảm giá và phát hành cho nhóm học viên mục tiêu. |
+| **Đào tạo & Khóa học** | `get_course_catalog_summary` | `ADMIN` | Tổng quan danh mục khóa học và trạng thái phát hành. |
+| | `get_course_details` | `ALL` | Xem chi tiết thông tin, giá và giảng viên của khóa học. |
+| | `get_course_curriculum` | `ALL` | Xem cấu trúc chương và bài học trong khóa học. |
+| | `get_lesson_summary_and_resources` | `ALL` | Tóm tắt nội dung bài học và tài liệu đính kèm. |
+| **Hành động & Thông báo**| `draft_notification` | `ADMIN` | Soạn thảo thông báo hệ thống gửi học viên/giảng viên. |
 
 ---
+
+### 2.3 Cơ chế Kiểm soát Phạm vi Nghiệp vụ (Domain Guardrail) & Tiết kiệm Token
+
+Để ngăn ngừa lãng phí tài nguyên và chi phí gọi Gemini API, hệ thống kích hoạt bộ lọc nội dung chặt chẽ:
+1. **Phạm vi Nghiệp vụ Hợp lệ:** Chỉ giải đáp và xử lý các vấn đề liên quan đến: Giáo dục, Học tập, Khóa học, Học vụ, Nhân sự, Hợp đồng, Chấm công, Doanh số, Báo cáo số liệu, Đề thi/bài tập, và Vận hành hệ thống LMS.
+2. **Từ chối Tự động Đối với Nội dung Không liên quan:** Khi người dùng gửi hình ảnh hoặc tệp tài liệu hoàn toàn không thuộc phạm vi LMS (ví dụ: ảnh thú cưng, meme giải trí, đồ ăn, ảnh phong cảnh cá nhân, nội dung rác):
+   * AI lập tức từ chối súc tích và lịch sự.
+   * Tuyệt đối không phân tích chuyên sâu hay sinh câu trả lời vô nghĩa nhằm triệt tiêu lãng phí token.
+   * Mẫu phản hồi chuẩn hóa:
+     > *"Hình ảnh/tài liệu này không thuộc phạm vi đào tạo hoặc quản trị của hệ thống AILMS. Vui lòng tải lên tài liệu học tập, bài tập, biểu đồ hoặc bảng số liệu liên quan đến hệ thống."*
+
+---
+
+### 2.4 Quy chuẩn Trích dẫn Nguồn Tham chiếu Bắt buộc (Standard Citations)
+
+Mọi câu trả lời có sử dụng dữ liệu từ RAG hoặc Tool Calling bắt buộc phải có khối trích dẫn ở cuối câu trả lời:
+
+```markdown
+---
+📌 **Nguồn tham chiếu:**
+- [Tài liệu RAG / Quy chế]: <Tên tài liệu / Mẫu quy chế>, <Trang nếu có>
+- [Dữ liệu Hệ thống]: <Phân hệ (Nhân sự / Học vụ / Hợp đồng / Doanh số / Lớp học)>, <Mã đối tượng cụ thể (Mã NV, Số HĐ, Mã HV, Mã ĐH)>
+```
+
+---
+
+### 2.5 Phân tích Đa định dạng Tệp đính kèm trong Chat (Multi-format In-Memory Extraction)
+
+Người dùng có thể đính kèm trực tiếp tệp văn bản hoặc hình ảnh trong hội thoại:
+* **Tài liệu văn bản (`PDF`, `DOCX`, `TXT`):** AI Service tự động trích xuất nội dung văn bản trong memory thông qua `PdfExtractor`, `DocxExtractor`, `TextExtractor` và đưa vào prompt ngữ cảnh mà không cần nạp vĩnh viễn vào vector database.
+* **Hình ảnh (`PNG`, `JPEG`, `WEBP`):** Phân tích trực tiếp qua **Gemini Vision OCR** (bảng điểm, ảnh chụp màn hình biểu đồ, bài tập viết tay).
 
 ## 3. Đường ống RAG Ingestion Pipeline & Multi-Modal Processing
 

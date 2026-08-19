@@ -24,6 +24,8 @@ public interface CourseRepository extends BaseRepository<CourseEntity, Long> {
     boolean existsByLinkIgnoreCase(String link);
     boolean existsByLinkIgnoreCaseAndIdNot(String link, Long id);
 
+    List<CourseEntity> findByNameContainingIgnoreCase(String name);
+
     boolean existsByNameIgnoreCaseAndCategoryEntity_Id(@NotBlank(message = "Course name must not be blank") @Size(max = 100, message = "Course name must not exceed 100 characters") String name, @NotNull(message = "Category ID is required") Long categoryId);
 
     Page<CourseEntity> findByStatus(CourseStatusEnum status, Pageable pageable);

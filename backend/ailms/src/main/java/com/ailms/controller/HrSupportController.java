@@ -36,7 +36,7 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @Validated
-@PreAuthorize("hasAuthority('ROLE_SUPPORT')")
+@PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_SUPPORT')")
 @RequestMapping("${api.prefix}/support")
 public class HrSupportController {
     private final ISupportChatService supportChatService;

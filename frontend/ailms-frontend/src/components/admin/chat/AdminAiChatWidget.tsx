@@ -18,7 +18,7 @@ const resolveChatModule = (pathname: string): string => {
   if (pathname.startsWith("/sales")) return "SALES";
   if (pathname.startsWith("/analytics")) return "REPORTING";
   if (/contracts|employees|students|attendance|salaries|work-schedule|approval|category-teachers/.test(pathname)) return "HR";
-  if (/courses|reviews|classrooms|sessions|quizzes/.test(pathname)) return "TRAINING";
+  if (/courses|reviews|classrooms|sessions|quizzes|learn/.test(pathname)) return "TRAINING";
   return "SYSTEM";
 };
 
@@ -41,6 +41,8 @@ export const AiChatWidget: React.FC = () => {
     isHistoryLoading,
     historyError,
     sendMessage,
+    sendFileMessage,
+    sendImageMessage,
     stopGenerating,
     startNewConversation,
     openConversation,
@@ -139,6 +141,7 @@ export const AiChatWidget: React.FC = () => {
               userName={userName}
               userRole={userRole}
               isStreaming={isStreaming}
+              onSelectPrompt={(prompt) => sendMessage(prompt)}
             />
           )}
 
@@ -148,6 +151,8 @@ export const AiChatWidget: React.FC = () => {
               input={input}
               setInput={setInput}
               onSend={sendMessage}
+              onSendFile={sendFileMessage}
+              onSendImage={sendImageMessage}
               onStop={stopGenerating}
               isStreaming={isStreaming}
             />

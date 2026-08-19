@@ -36,7 +36,20 @@ public interface CourseTeacherRepository extends JpaRepository<CourseTeacherEnti
 
     /** Tổng hợp số khóa học, học viên và rating theo giáo viên bằng GROUP BY. */
     @Query("""
-        SELECT ct.userEntity.id, COUNT(DISTINCT c.id), COALESCE(SUM(c.enrollmentCount), 0), COALESCE(AVG(c.avgRating), 0)
+        SELECT ct.userEntity.id,
+               COUNT(DISTINCT c.id),
+               COALESCE(SUM(c.enrollmentCount), 0),
+               COALESCE((
+                   SELECT AVG(r.rating)
+                   FROM ReviewEntity r
+                   WHERE r.courseId IN (
+                       SELECT ct2.courseEntity.id
+                       FROM CourseTeacherEntity ct2
+                       WHERE ct2.userEntity.id = ct.userEntity.id
+                         AND ct2.status = com.ailms.entity.enums.CourseTeacherStatusEnum.ACTIVE
+                   )
+                   AND r.status = com.ailms.entity.enums.ReviewStatusEnum.ACTIVE
+               ), 0)
         FROM CourseTeacherEntity ct JOIN ct.courseEntity c
         WHERE ct.userEntity.id IN :teacherIds
           AND ct.status = com.ailms.entity.enums.CourseTeacherStatusEnum.ACTIVE

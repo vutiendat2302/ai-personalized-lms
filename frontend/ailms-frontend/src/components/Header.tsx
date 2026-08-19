@@ -844,13 +844,6 @@ export const Header: React.FC = () => {
                         <Shield className="h-4 w-4 text-primary" />
                         <span>Trung tâm phê duyệt</span>
                       </button>
-                      <button
-                        onClick={() => { setDropdownOpen(false); navigate("/analytics"); }}
-                        className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
-                      >
-                        <BarChart className="h-4 w-4 text-primary" />
-                        <span>Báo cáo & Analytics</span>
-                      </button>
         
                       <button
                         onClick={() => { setDropdownOpen(false); navigate("/activity-log"); }}

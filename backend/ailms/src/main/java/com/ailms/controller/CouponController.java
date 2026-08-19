@@ -77,6 +77,21 @@ public class CouponController {
                 "Voucher assigned successfully", couponService.assignToUser(couponId, userId)));
     }
 
+    /** Gửi voucher đến toàn bộ học viên đang hoạt động. */
+    @PostMapping("/{couponId}/students")
+    public ResponseEntity<ApiResponse<Integer>> assignToAllStudents(@PathVariable Long couponId) {
+        return ResponseEntity.ok(ApiResponse.of("Voucher assigned to students successfully",
+                couponService.assignToAllStudents(couponId)));
+    }
+
+    /** Gửi voucher cho nhiều học viên được chọn trong một giao dịch. */
+    @PostMapping("/{couponId}/students/bulk")
+    public ResponseEntity<ApiResponse<Integer>> assignToUsers(
+            @PathVariable Long couponId, @RequestBody List<Long> userIds) {
+        return ResponseEntity.ok(ApiResponse.of("Voucher assigned to selected students successfully",
+                couponService.assignToUsers(couponId, userIds)));
+    }
+
     /** Lấy danh sách voucher đã cấp cho một người dùng phục vụ quản lý. */
     @GetMapping("/users/{userId}")
     public ResponseEntity<ApiResponse<List<UserCouponResponse>>> getUserCoupons(

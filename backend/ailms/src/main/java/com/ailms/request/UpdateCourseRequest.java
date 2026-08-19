@@ -2,7 +2,6 @@ package com.ailms.request;
 
 import com.ailms.entity.enums.CertificateConditionTypeEnum;
 import com.ailms.entity.enums.CourseLevelEnum;
-import com.ailms.entity.enums.CourseStatusEnum;
 import jakarta.persistence.Column;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -37,9 +36,5 @@ public class UpdateCourseRequest {
     private CertificateConditionTypeEnum certificateConditionType;
 
     private Integer certificatePassThreshold;
-
-    private String rejectionReason;
-
-    private CourseStatusEnum status;
 
 }

@@ -54,6 +54,18 @@ public class ReviewEntity extends BaseEntity {
     @Column(name = "comment", columnDefinition = "TEXT")
     private String comment;
 
+    /** ID giáo viên chính được học viên nhận xét trong lượt học này. */
+    @Column(name = "teacher_id")
+    private Long teacherId;
+
+    /** Số sao học viên dành riêng cho giáo viên chính. */
+    @Column(name = "teacher_rating")
+    private Integer teacherRating;
+
+    /** Nội dung nhận xét riêng dành cho giáo viên chính. */
+    @Column(name = "teacher_comment", columnDefinition = "TEXT")
+    private String teacherComment;
+
     /** Trạng thái duyệt bài đánh giá (ACTIVE, INACTIVE, REJECTED). */
     @Column(name = "status", nullable = false)
     @Enumerated(EnumType.STRING)

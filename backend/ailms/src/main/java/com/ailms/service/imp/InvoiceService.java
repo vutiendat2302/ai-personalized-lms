@@ -80,11 +80,17 @@ public class InvoiceService implements IInvoiceService {
         return download(loadInvoiceOrder(orderId), false);
     }
 
-    /** Tải hóa đơn thanh toán đã lưu cho đúng chủ đơn hàng để chống IDOR. */
+    /** Tải hóa đơn thanh toán cho đúng chủ đơn hàng; tự generate nếu chưa có trong MinIO. */
     @Override
+    @Transactional
     public byte[] downloadPaymentForOwner(Long userId, Long orderId) {
         OrderEntity order = loadInvoiceOrder(orderId);
         validateOwner(order, userId);
+        if (order.getPaymentInvoiceKey() == null || !fileStorageService.exists(order.getPaymentInvoiceKey())) {
+            storePaymentInvoice(orderId);
+            order = orderRepository.findById(orderId)
+                    .orElseThrow(() -> ResourceNotFoundException.of("Order", orderId));
+        }
         return download(order, false);
     }
 

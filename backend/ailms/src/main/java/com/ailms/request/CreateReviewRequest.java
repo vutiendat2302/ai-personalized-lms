@@ -18,4 +18,10 @@ public class CreateReviewRequest {
     private Integer rating;
 
     private String comment;
+
+    @Min(value = 1, message = "Teacher rating must be at least 1")
+    @Max(value = 5, message = "Teacher rating cannot exceed 5")
+    private Integer teacherRating;
+
+    private String teacherComment;
 }

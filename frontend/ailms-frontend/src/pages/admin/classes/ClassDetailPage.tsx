@@ -171,18 +171,25 @@ export const ClassDetailPage: React.FC = () => {
       } : { id: "", name: "Chưa phân công", email: "", avatar: "", category: "" };
 
       const now = new Date();
-      const activeTeachingRate = rates
+      const activeRates = rates
         .filter((item: any) => String(item.status || "").toUpperCase() === "ACTIVE")
-        .filter((item: any) => !teacherMember || String(item.employeeId) === String(teacherMember.userId))
+        .filter((item: any) => !item.effectiveFrom || new Date(item.effectiveFrom) <= now)
+        .filter((item: any) => !item.effectiveTo || new Date(item.effectiveTo) >= now);
+      const activeTeachingRate = activeRates
+        .filter((item: any) => String(item.status || "").toUpperCase() === "ACTIVE")
+        .filter((item: any) => item.classId && String(item.classId) === String(row.id)
+          || String(item.className || "").trim().toLowerCase() === String(row.name || "").trim().toLowerCase()
+          || !teacherMember
+          || String(item.employeeId) === String(teacherMember.userId)
+          || !item.employeeId)
         .filter((item: any) => !item.classId || String(item.classId) === String(row.id))
         .filter((item: any) => !item.effectiveFrom || new Date(item.effectiveFrom) <= now)
-        .filter((item: any) => !item.effectiveTo || new Date(item.effectiveTo) >= now)
         .sort((a: any, b: any) => {
           const aClassScore = a.classId && String(a.classId) === String(row.id) ? 1 : 0;
           const bClassScore = b.classId && String(b.classId) === String(row.id) ? 1 : 0;
           if (aClassScore !== bClassScore) return bClassScore - aClassScore;
           return new Date(b.effectiveFrom || 0).getTime() - new Date(a.effectiveFrom || 0).getTime();
-        })[0] || null;
+        })[0] || (activeRates.length === 1 ? activeRates[0] : null);
       setActiveRate(activeTeachingRate);
 
       const dayNameMap: Record<number | string, ClassScheduleSlot["dayOfWeek"]> = {
@@ -284,6 +291,7 @@ export const ClassDetailPage: React.FC = () => {
             paymentStatus: matchedPayment?.status,
             actualDurationMin: matchedPayment?.actualDurationMin,
             cancellationReason: session.cancellationReason,
+            teacherNotes: session.teacherNotes,
             scheduledAt: session.scheduledAt,
           };
         }),
@@ -839,7 +847,7 @@ export const ClassDetailPage: React.FC = () => {
         <TabsContent value="schedule" className="space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="font-bold text-slate-900 text-base">Khung Lịch Học Tuần Cố Định</h3>
-            {isAdminOrHR && (
+            {!isStudentRoute && (
             <Button variant="outline" size="sm" onClick={() => setEditScheduleOpen(true)}>
               <Edit className="w-3.5 h-3.5 mr-1.5" /> Sửa Khung Lịch
             </Button>
@@ -1011,6 +1019,18 @@ export const ClassDetailPage: React.FC = () => {
                       </TableCell>
                       {!isStudentRoute && (
                         <TableCell className="text-right">
+                          {!isAdminOrHR && s.status === "COMPLETED" && !s.teacherNotes && (
+                            <Button variant="outline" size="sm" className="h-8 border-amber-300 text-xs text-amber-700 hover:bg-amber-50"
+                              onClick={() => { void navigate(`/teacher/schedule?sessionId=${s.id}`); }}>
+                              Nhận xét buổi học
+                            </Button>
+                          )}
+                          {!isAdminOrHR && s.status === "COMPLETED" && s.teacherNotes && (
+                            <div className="max-w-[220px] text-left">
+                              <Badge variant="outline" className="border-emerald-300 text-emerald-700">Đã nhận xét</Badge>
+                              <p className="mt-1 line-clamp-2 text-[11px] text-slate-500" title={s.teacherNotes}>{s.teacherNotes}</p>
+                            </div>
+                          )}
                           {s.status === "UPCOMING" && s.scheduledAt
                             && new Date(s.scheduledAt).getTime() - Date.now() >= 60 * 60 * 1000 ? (
                             <Button
@@ -1227,7 +1247,7 @@ export const ClassDetailPage: React.FC = () => {
       )}
 
       {/* Edit Schedule Modal */}
-      {isAdminOrHR && cls && editScheduleOpen && (
+      {!isStudentRoute && cls && editScheduleOpen && (
         <EditScheduleModal
           open={editScheduleOpen}
           onClose={() => setEditScheduleOpen(false)}

@@ -608,26 +608,11 @@ export const StudentOnboardingModal: React.FC<StudentOnboardingModalProps> = ({
                   className="rounded-xl text-xs"
                 />
               </div>
-
-              {/* Date of Birth Input */}
-              <div className="space-y-2 pt-2 border-t border-border/60">
-                <label className="text-sm font-bold text-foreground block">
-                  5. Ngày sinh của bạn (để hệ thống tự động xác định độ tuổi):
-                </label>
-                <Input
-                  type="date"
-                  value={dob ? dob.split("T")[0] : ""}
-                  onChange={(e) => setDob(e.target.value)}
-                  className="rounded-xl text-xs max-w-xs"
-                />
-                <p className="text-[11px] text-muted-foreground">
-                  Backend sẽ tự động xác định độ tuổi (<code className="text-primary font-bold">isMinor</code>) dựa trên ngày sinh để yêu cầu thông tin Phụ huynh nếu bạn dưới 18 tuổi.
-                </p>
-              </div>
             </div>
           )}
 
           {/* STEP 2: GUARDIAN PROFILE (IF UNDER 18) */}
+
           {step === 2 && isUnder18 && (
             <div className="space-y-6 animate-in fade-in slide-in-from-right duration-300">
               <div className="space-y-2">

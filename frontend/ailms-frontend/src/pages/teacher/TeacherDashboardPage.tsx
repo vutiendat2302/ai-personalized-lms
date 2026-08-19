@@ -25,6 +25,7 @@ import { useNavigate } from "react-router-dom";
  */
 export const TeacherDashboardPage: React.FC = () => {
   const navigate = useNavigate();
+  const { error: showError } = useToast();
   const [metrics, setMetrics] = useState<TeacherDashboardMetrics | null>(null);
   const [agenda, setAgenda] = useState<AgendaSessionItem[]>([]);
   const [activities, setActivities] = useState<TeacherActivityItem[]>([]);
@@ -32,13 +33,18 @@ export const TeacherDashboardPage: React.FC = () => {
 
   /** Tải dữ liệu các chỉ số KPI và lịch dạy agenda của giảng viên. */
   useEffect(() => {
-    Promise.all([teacherApi.getDashboardMetrics(), teacherApi.getAgenda(), teacherApi.getLatestActivities()]).then(([m, a, latest]) => {
-      setMetrics(m);
-      setAgenda(a);
-      setActivities(latest);
-      setLoading(false);
-    });
-  }, []);
+    Promise.all([teacherApi.getDashboardMetrics(), teacherApi.getAgenda(), teacherApi.getLatestActivities()])
+      .then(([m, a, latest]) => {
+        setMetrics(m);
+        setAgenda(a);
+        setActivities(latest);
+      })
+      .catch((error) => {
+        console.error("Không thể tải dashboard giảng dạy:", error);
+        showError("Không thể tải dashboard giảng dạy. Vui lòng thử lại.");
+      })
+      .finally(() => setLoading(false));
+  }, [showError]);
 
   /** Định dạng số tiền VND hiển thị thu nhập. */
   const formatVND = (val: number) => {

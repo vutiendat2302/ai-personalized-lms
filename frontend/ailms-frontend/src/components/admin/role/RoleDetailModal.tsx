@@ -85,6 +85,9 @@ export const RoleDetailModal: React.FC<RoleDetailModalProps> = ({
   const [selectedAuditLog, setSelectedAuditLog] = useState<any | null>(null);
   const [auditDetailModalOpen, setAuditDetailModalOpen] = useState(false);
 
+  /**
+   * Mở modal xem chi tiết nhật ký Audit Log
+   */
   const handleOpenAuditLogDetail = (logItem: any) => {
     setSelectedAuditLog(logItem);
     setAuditDetailModalOpen(true);
@@ -152,8 +155,11 @@ export const RoleDetailModal: React.FC<RoleDetailModalProps> = ({
     }
   }, [role, open]);
 
+  /**
+   * Định dạng hiển thị tên/email người tạo hoặc người cập nhật
+   */
   const formatUserDisplay = (userVal?: string | null) => {
-    if (!userVal) return "Hệ thống (System)";
+    if (!userVal) return "Hệ thống";
     const str = String(userVal);
     if (str.includes("@")) return str;
     if (userMap[str]) {
@@ -163,6 +169,9 @@ export const RoleDetailModal: React.FC<RoleDetailModalProps> = ({
     return str;
   };
 
+  /**
+   * Lưu thông tin chung của vai trò (Tên, Mô tả)
+   */
   const handleSaveGeneral = () => {
     if (!role) return;
     if (onUpdateRole) {
@@ -173,6 +182,9 @@ export const RoleDetailModal: React.FC<RoleDetailModalProps> = ({
     if (onPermissionUpdated) onPermissionUpdated();
   };
 
+  /**
+   * Bật/tắt chọn một quyền theo ID
+   */
   const handleTogglePermission = (permId: string) => {
     if (assignedPermIds.includes(permId)) {
       setAssignedPermIds(assignedPermIds.filter(id => id !== permId));
@@ -181,6 +193,9 @@ export const RoleDetailModal: React.FC<RoleDetailModalProps> = ({
     }
   };
 
+  /**
+   * Lưu sự thay đổi danh sách quyền của vai trò (Save Diff)
+   */
   const handleSavePermissionsDiff = async () => {
     if (!role) return;
     const added = assignedPermIds.filter(id => !initialPermIds.includes(id));
@@ -208,10 +223,16 @@ export const RoleDetailModal: React.FC<RoleDetailModalProps> = ({
     }
   };
 
+  /**
+   * Chuẩn bị gỡ một người dùng khỏi vai trò
+   */
   const handleRemoveUserFromRole = (user: UserResponse) => {
     setRemoveUserConfirm(user);
   };
 
+  /**
+   * Xác nhận gỡ người dùng khỏi vai trò
+   */
   const confirmRemoveUserFromRoleAction = async () => {
     if (!removeUserConfirm || !role) return;
     try {
@@ -226,11 +247,17 @@ export const RoleDetailModal: React.FC<RoleDetailModalProps> = ({
     }
   };
 
+  /**
+   * Chuẩn bị gỡ tất cả người dùng khỏi vai trò
+   */
   const handleRemoveAllUsersFromRole = () => {
     if (roleUsers.length === 0) return;
     setRemoveAllUsersConfirm(true);
   };
 
+  /**
+   * Xác nhận gỡ toàn bộ người dùng khỏi vai trò
+   */
   const confirmRemoveAllUsersFromRoleAction = async () => {
     if (!role) return;
     try {
@@ -307,20 +334,20 @@ export const RoleDetailModal: React.FC<RoleDetailModalProps> = ({
                     {role.code}
                   </span>
                   {isSystemRole ? (
-                    <Badge className="bg-purple-600 text-white font-bold text-xs">
-                      Hệ thống (System)
+                    <Badge className="bg-primary text-primary-foreground font-bold text-xs">
+                      Hệ thống
                     </Badge>
                   ) : (
                     <Badge variant="outline" className="font-bold text-xs border-primary text-primary">
-                      Tùy chỉnh (Custom)
+                      Tùy chỉnh
                     </Badge>
                   )}
                 </div>
 
                 <DialogDescription className="text-xs text-muted-foreground mt-1 flex items-center gap-4">
                   <span>Mô tả: <strong className="text-foreground">{role.description || "Không có mô tả"}</strong></span>
-                  <span>Người dùng: <strong className="text-foreground">{roleUsers.length} Users</strong></span>
-                  <span>Permissions: <strong className="text-primary">{assignedPermIds.length} Quyền</strong></span>
+                  <span>Người dùng: <strong className="text-foreground">{roleUsers.length} Người dùng</strong></span>
+                  <span>Quyền: <strong className="text-primary">{assignedPermIds.length} Quyền</strong></span>
                 </DialogDescription>
               </div>
             </div>
@@ -333,7 +360,7 @@ export const RoleDetailModal: React.FC<RoleDetailModalProps> = ({
                 onClick={() => onCloneRole && onCloneRole(role)}
                 className="font-bold text-xs gap-1.5 border-primary/30 text-primary hover:bg-primary/10"
               >
-                <Copy className="h-4 w-4" /> Nhân bản (Clone)
+                <Copy className="h-4 w-4" /> Nhân bản
               </Button>
 
               <Button
@@ -342,9 +369,9 @@ export const RoleDetailModal: React.FC<RoleDetailModalProps> = ({
                 disabled={!canDeleteRole}
                 onClick={() => onDeleteRole && onDeleteRole(String(role.id))}
                 className="font-bold text-xs gap-1.5"
-                title={!canDeleteRole ? "Không thể xóa Role hệ thống hoặc Role đang có User sử dụng" : "Xóa Role này"}
+                title={!canDeleteRole ? "Không thể xóa Vai trò hệ thống hoặc Vai trò đang có Người dùng sử dụng" : "Xóa Vai trò này"}
               >
-                <Trash2 className="h-4 w-4" /> Xóa Role
+                <Trash2 className="h-4 w-4" /> Xóa Vai trò
               </Button>
             </div>
           </div>
@@ -353,10 +380,10 @@ export const RoleDetailModal: React.FC<RoleDetailModalProps> = ({
         {/* 4 TABS NAVIGATION */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0 overflow-hidden">
           <TabsList className="px-6 border-b border-border/30 bg-muted/20 justify-start gap-4 rounded-none h-12">
-            <TabsTrigger value="general" className="font-bold text-xs gap-1.5"><FileText className="h-3.5 w-3.5" /> Tab 1 — Thông tin chung</TabsTrigger>
-            <TabsTrigger value="permissions" className="font-bold text-xs gap-1.5"><KeyRound className="h-3.5 w-3.5" /> Tab 2 — Permissions (Matrix)</TabsTrigger>
-            <TabsTrigger value="users" className="font-bold text-xs gap-1.5"><Users className="h-3.5 w-3.5" /> Tab 3 — Users đang dùng ({roleUsers.length})</TabsTrigger>
-            <TabsTrigger value="audit" className="font-bold text-xs gap-1.5"><History className="h-3.5 w-3.5" /> Tab 4 — Audit Log</TabsTrigger>
+            <TabsTrigger value="general" className="font-bold text-xs gap-1.5"><FileText className="h-3.5 w-3.5" /> Thông tin chung</TabsTrigger>
+            <TabsTrigger value="permissions" className="font-bold text-xs gap-1.5"><KeyRound className="h-3.5 w-3.5" /> Phân quyền</TabsTrigger>
+            <TabsTrigger value="users" className="font-bold text-xs gap-1.5"><Users className="h-3.5 w-3.5" /> Người dùng ({roleUsers.length})</TabsTrigger>
+            <TabsTrigger value="audit" className="font-bold text-xs gap-1.5"><History className="h-3.5 w-3.5" /> Nhật ký thay đổi</TabsTrigger>
           </TabsList>
 
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
@@ -364,14 +391,14 @@ export const RoleDetailModal: React.FC<RoleDetailModalProps> = ({
             {/* TAB 1: THÔNG TIN CHUNG */}
             <TabsContent value="general" className="mt-0 space-y-4">
               <div className="flex items-center justify-between">
-                <h4 className="text-sm font-extrabold text-foreground">Chi tiết thông tin Role</h4>
+                <h4 className="text-sm font-extrabold text-foreground">Chi tiết thông tin Vai trò</h4>
                 {!editingGeneral ? (
                   <Button size="sm" variant="outline" onClick={() => setEditingGeneral(true)} className="gap-1 font-bold text-xs">
                     <Edit2 className="h-3.5 w-3.5" /> Chỉnh sửa
                   </Button>
                 ) : (
                   <div className="flex gap-2">
-                    <Button size="sm" onClick={handleSaveGeneral} className="gap-1 font-bold text-xs bg-emerald-600 text-white">
+                    <Button size="sm" onClick={handleSaveGeneral} className="gap-1 font-bold text-xs bg-success-forest text-white">
                       <Save className="h-3.5 w-3.5" /> Lưu
                     </Button>
                     <Button size="sm" variant="ghost" onClick={() => setEditingGeneral(false)} className="gap-1 text-xs">Hủy</Button>
@@ -381,26 +408,26 @@ export const RoleDetailModal: React.FC<RoleDetailModalProps> = ({
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <Label className="text-xs font-bold text-muted-foreground">ID Hệ thống (ID)</Label>
+                  <Label className="text-xs font-bold text-muted-foreground">ID Hệ thống</Label>
                   <Input value={String(role.id)} disabled className="mt-1 bg-muted/30 font-mono font-bold text-xs text-foreground cursor-not-allowed" />
                 </div>
 
                 <div>
-                  <Label className="text-xs font-bold text-muted-foreground">Mã Role (Code - Cố định)</Label>
+                  <Label className="text-xs font-bold text-muted-foreground">Mã vai trò (cố định)</Label>
                   <Input value={codeInput} disabled className="mt-1 bg-muted/30 font-mono font-bold text-xs text-muted-foreground cursor-not-allowed" />
                   <p className="text-[11px] text-muted-foreground italic mt-0.5">Mã code không thể chỉnh sửa</p>
                 </div>
 
                 <div>
-                  <Label className="text-xs font-bold text-muted-foreground">Loại Role (is_system_role Readonly)</Label>
+                  <Label className="text-xs font-bold text-muted-foreground">Loại vai trò</Label>
                   <div className="mt-1 flex items-center gap-2 h-9 px-3 rounded-md border bg-muted/30">
                     <Checkbox checked={isSystemRole} disabled className="border-border/40" />
-                    <span className="text-xs font-bold">{isSystemRole ? "System Role (Không thể xóa)" : "Custom Role"}</span>
+                    <span className="text-xs font-bold">{isSystemRole ? "Vai trò Hệ thống" : "Vai trò Tùy chỉnh"}</span>
                   </div>
                 </div>
 
                 <div>
-                  <Label className="text-xs font-bold text-muted-foreground">Tên Role</Label>
+                  <Label className="text-xs font-bold text-muted-foreground">Tên vai trò</Label>
                   <Input value={nameInput} onChange={e => setNameInput(e.target.value)} disabled={!editingGeneral} className="mt-1 text-xs font-bold" />
                 </div>
 
@@ -410,22 +437,22 @@ export const RoleDetailModal: React.FC<RoleDetailModalProps> = ({
                 </div>
 
                 <div>
-                  <Label className="text-xs font-bold text-muted-foreground">Created By (Người tạo)</Label>
+                  <Label className="text-xs font-bold text-muted-foreground">Người tạo</Label>
                   <Input value={formatUserDisplay(role.createdBy)} disabled className="mt-1 bg-muted/30 text-xs font-semibold text-foreground" />
                 </div>
 
                 <div>
-                  <Label className="text-xs font-bold text-muted-foreground">Created At (Thời gian tạo)</Label>
+                  <Label className="text-xs font-bold text-muted-foreground">Thời gian tạo</Label>
                   <Input value={formatDateDisplay(role.createdAt)} disabled className="mt-1 bg-muted/30 text-xs font-mono" />
                 </div>
 
                 <div>
-                  <Label className="text-xs font-bold text-muted-foreground">Updated By (Người cập nhật)</Label>
+                  <Label className="text-xs font-bold text-muted-foreground">Người cập nhật</Label>
                   <Input value={formatUserDisplay(role.updatedBy)} disabled className="mt-1 bg-muted/30 text-xs font-semibold text-foreground" />
                 </div>
 
                 <div>
-                  <Label className="text-xs font-bold text-muted-foreground">Updated At (Thời gian cập nhật)</Label>
+                  <Label className="text-xs font-bold text-muted-foreground">Thời gian cập nhật</Label>
                   <Input value={formatDateDisplay(role.updatedAt)} disabled className="mt-1 bg-muted/30 text-xs font-mono" />
                 </div>
               </div>
@@ -438,10 +465,10 @@ export const RoleDetailModal: React.FC<RoleDetailModalProps> = ({
               <div className="p-4 rounded-xl bg-primary/10 border border-primary/20 flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                   <div className="text-xs font-extrabold text-primary uppercase flex items-center gap-2">
-                    <span>Tổng số Permissions được gán</span>
+                    <span>Tổng số quyền được gán</span>
                     {!editingPermissions && (
-                      <Badge variant="outline" className="text-[10px] font-bold border-amber-500/40 text-amber-600 bg-amber-500/10">
-                        Chế độ xem (Readonly)
+                      <Badge variant="outline" className="text-[10px] font-bold border-chart-1/40 text-chart-1 bg-chart-1/10">
+                        Chế độ xem
                       </Badge>
                     )}
                   </div>
@@ -456,7 +483,7 @@ export const RoleDetailModal: React.FC<RoleDetailModalProps> = ({
                   <Input
                     value={permSearchKeyword}
                     onChange={(e) => setPermSearchKeyword(e.target.value)}
-                    placeholder="Tìm kiếm permission theo mã, tên, module..."
+                    placeholder="Tìm kiếm quyền theo mã, tên, module..."
                     className="pl-9 h-9 text-xs rounded-xl bg-background border-primary/30"
                   />
                 </div>
@@ -508,7 +535,7 @@ export const RoleDetailModal: React.FC<RoleDetailModalProps> = ({
                         className="font-bold text-xs gap-1.5 bg-primary text-primary-foreground shrink-0 rounded-xl shadow-xs cursor-pointer"
                       >
                         <Save className="h-4 w-4" />
-                        <span>{savingPerms ? "Đang lưu..." : "Lưu Phân Quyền (Save Diff)"}</span>
+                        <span>{savingPerms ? "Đang lưu..." : "Lưu phân quyền"}</span>
                       </Button>
                     </>
                   )}
@@ -616,8 +643,8 @@ export const RoleDetailModal: React.FC<RoleDetailModalProps> = ({
                                 </div>
 
                                 {/* Dynamic Hover Tooltip Preview displaying Permission Description */}
-                                <div className="absolute left-1/2 -top-10 -translate-x-1/2 hidden group-hover:flex items-center gap-1.5 bg-slate-900 text-white text-[11px] font-medium px-3 py-1.5 rounded-xl shadow-xl z-50 pointer-events-none whitespace-nowrap animate-in fade-in-50 duration-150 border border-slate-700">
-                                  <Info className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                                <div className="absolute left-1/2 -top-10 -translate-x-1/2 hidden group-hover:flex items-center gap-1.5 bg-popover text-popover-foreground text-[11px] font-medium px-3 py-1.5 rounded-xl shadow-xl z-50 pointer-events-none whitespace-nowrap animate-in fade-in-50 duration-150 border border-border">
+                                  <Info className="h-3.5 w-3.5 text-chart-1 shrink-0" />
                                   <span>{p.description || `Quyền ${p.name || p.code} (${p.action} trên ${p.entity})`}</span>
                                 </div>
                               </div>
@@ -646,7 +673,7 @@ export const RoleDetailModal: React.FC<RoleDetailModalProps> = ({
 
                 <div className="flex items-center gap-2">
                   <Badge variant="outline" className="font-mono text-xs font-bold px-3 py-1.5 rounded-xl">
-                    {filteredRoleUsers.length} / {roleUsers.length} Users
+                    {filteredRoleUsers.length} / {roleUsers.length} Người dùng
                   </Badge>
 
                   {roleUsers.length > 0 && (
@@ -654,10 +681,10 @@ export const RoleDetailModal: React.FC<RoleDetailModalProps> = ({
                       size="sm"
                       variant="outline"
                       onClick={handleRemoveAllUsersFromRole}
-                      className="text-xs font-bold text-red-600 hover:bg-red-500/10 border-red-500/30 gap-1.5 rounded-xl cursor-pointer"
+                      className="text-xs font-bold text-destructive hover:bg-destructive/10 border-destructive/30 gap-1.5 rounded-xl cursor-pointer"
                     >
                       <UserX className="h-4 w-4" />
-                      <span>Gỡ tất cả người dùng khỏi Role</span>
+                      <span>Gỡ tất cả người dùng khỏi Vai trò</span>
                     </Button>
                   )}
                 </div>
@@ -669,9 +696,9 @@ export const RoleDetailModal: React.FC<RoleDetailModalProps> = ({
                   <p className="font-bold">
                     {userSearchKeyword.trim()
                       ? `Không tìm thấy người dùng nào phù hợp với "${userSearchKeyword}".`
-                      : "Hiện không có người dùng nào đang được gán Role này."}
+                      : "Hiện không có người dùng nào đang được gán Vai trò này."}
                   </p>
-                  <p className="text-[11px]">Role thừa có thể cân nhắc xóa để dọn dẹp hệ thống.</p>
+                  <p className="text-[11px]">Vai trò thừa có thể cân nhắc xóa để dọn dẹp hệ thống.</p>
                 </Card>
               ) : (
                 <div className="space-y-2 max-h-112.5 overflow-y-auto pr-1">
@@ -691,9 +718,9 @@ export const RoleDetailModal: React.FC<RoleDetailModalProps> = ({
                         size="sm"
                         variant="ghost"
                         onClick={() => handleRemoveUserFromRole(u)}
-                        className="text-xs font-bold text-red-600 hover:bg-red-500/10 gap-1 cursor-pointer"
+                        className="text-xs font-bold text-destructive hover:bg-destructive/10 gap-1 cursor-pointer"
                       >
-                        <UserX className="h-3.5 w-3.5" /> Gỡ khỏi Role
+                        <UserX className="h-3.5 w-3.5" /> Gỡ khỏi Vai trò
                       </Button>
                     </div>
                   ))}
@@ -706,7 +733,7 @@ export const RoleDetailModal: React.FC<RoleDetailModalProps> = ({
               <div className="flex items-center justify-between">
                 <h4 className="text-sm font-extrabold text-foreground flex items-center gap-2">
                   <History className="h-4 w-4 text-primary" />
-                  <span>Lịch sử Thay đổi & Audit Log trên Role {role.name}</span>
+                  <span>Lịch sử thay đổi của vai trò {role.name}</span>
                 </h4>
                 <Badge variant="outline" className="font-mono text-xs font-bold">
                   {auditLogs.length} Bản ghi
@@ -718,7 +745,7 @@ export const RoleDetailModal: React.FC<RoleDetailModalProps> = ({
               ) : auditLogs.length === 0 ? (
                 <Card className="border-border shadow-xs p-8 text-center text-muted-foreground text-xs space-y-2">
                   <Clock className="h-10 w-10 mx-auto text-muted-foreground/40" />
-                  <p className="font-bold">Chưa có nhật ký Audit Log nào ghi nhận cho Role này.</p>
+                  <p className="font-bold">Chưa có nhật ký thay đổi nào cho Vai trò này.</p>
                 </Card>
               ) : (
                 <div className="space-y-3 max-h-112.5 overflow-y-auto pr-1">
@@ -736,13 +763,13 @@ export const RoleDetailModal: React.FC<RoleDetailModalProps> = ({
                           <div className="font-extrabold text-foreground flex items-center gap-2">
                             <span>Thao tác: <strong className="text-primary">{
                               log.action === "UPDATE_PERMISSIONS" ? "Cập nhật danh sách Quyền" :
-                              log.action === "UNASSIGN_ALL_PERMISSIONS" ? "Gỡ tất cả Quyền khỏi Role" :
-                              log.action === "UNASSIGN_PERMISSION" ? "Gỡ Quyền khỏi Role" :
-                              log.action === "ASSIGN_PERMISSION" ? "Gán Quyền vào Role" :
-                              log.action === "REMOVE_USER_ROLE" ? "Gỡ Người dùng khỏi Role" :
-                              log.action === "REMOVE_ALL_USERS" ? "Gỡ tất cả Người dùng khỏi Role" :
-                              log.action === "CREATE" ? "Khởi tạo Role" :
-                              log.action === "UPDATE" ? "Cập nhật Thông tin Role" :
+                              log.action === "UNASSIGN_ALL_PERMISSIONS" ? "Gỡ tất cả Quyền khỏi Vai trò" :
+                              log.action === "UNASSIGN_PERMISSION" ? "Gỡ Quyền khỏi Vai trò" :
+                              log.action === "ASSIGN_PERMISSION" ? "Gán Quyền vào Vai trò" :
+                              log.action === "REMOVE_USER_ROLE" ? "Gỡ Người dùng khỏi Vai trò" :
+                              log.action === "REMOVE_ALL_USERS" ? "Gỡ tất cả Người dùng khỏi Vai trò" :
+                              log.action === "CREATE" ? "Khởi tạo Vai trò" :
+                              log.action === "UPDATE" ? "Cập nhật Thông tin Vai trò" :
                               (log.action || "THAY ĐỔI")
                             }</strong></span>
                             <Badge variant="outline" className="text-[10px] font-mono">
@@ -764,8 +791,8 @@ export const RoleDetailModal: React.FC<RoleDetailModalProps> = ({
 
                         {(log.oldValue || log.newValue) && (
                           <div className="mt-2 p-2 rounded-lg bg-muted/30 border border-border/20 text-[11px] font-mono space-y-1 overflow-x-auto">
-                            {log.oldValue && <div className="text-red-500/90 truncate">Old: {log.oldValue}</div>}
-                            {log.newValue && <div className="text-emerald-600 font-bold truncate">New: {log.newValue}</div>}
+                            {log.oldValue && <div className="text-destructive/90 truncate">Giá trị cũ: {log.oldValue}</div>}
+                            {log.newValue && <div className="text-success-forest font-bold truncate">Giá trị mới: {log.newValue}</div>}
                           </div>
                         )}
                       </div>

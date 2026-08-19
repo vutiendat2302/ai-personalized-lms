@@ -13,6 +13,7 @@ import com.ailms.response.TeacherWorkspaceResponse;
 import com.ailms.service.IAssessmentService;
 import com.ailms.service.ILeaveRequestService;
 import com.ailms.service.IClassSessionManagementService;
+import com.ailms.service.IApprovalRequestService;
 import com.ailms.service.IOneOnOneService;
 import com.ailms.service.INotificationService;
 import com.ailms.service.ITeacherWorkspaceService;
@@ -66,6 +67,9 @@ public class TeacherWorkspaceService implements ITeacherWorkspaceService {
     private final INotificationService notificationService;
     private final IClassSessionManagementService classSessionManagementService;
     private final com.ailms.service.ITeacherActivityService teacherActivityService;
+    private final UserRoleRepository userRoleRepository;
+    private final OneOnOneRequestRepository oneOnOneRequestRepository;
+    private final IApprovalRequestService approvalRequestService;
 
     /** Tổng hợp dashboard trong cùng một transaction đọc để giữ số liệu nhất quán. */
     @Override
@@ -90,7 +94,8 @@ public class TeacherWorkspaceService implements ITeacherWorkspaceService {
                 .map(TeachingSessionPaymentEntity::getAmount).filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         Double rating = scope.courseIds().isEmpty() ? 0D
-                : reviewRepository.getAverageRatingByCourseIdsAndStatus(scope.courseIds(), ReviewStatusEnum.ACTIVE);
+                : Optional.ofNullable(reviewRepository.getAverageRatingByCourseIdsAndStatus(
+                        scope.courseIds(), ReviewStatusEnum.ACTIVE)).orElse(0D);
         long minSeconds = reviewable.stream().mapToLong(item -> reviewSecondsLeft(item, now)).min().orElse(0L);
 
         return TeacherWorkspaceResponse.Metrics.builder()
@@ -326,6 +331,38 @@ public class TeacherWorkspaceService implements ITeacherWorkspaceService {
         return toWorkRequest(approvalRequestRepository.save(entity));
     }
 
+    /** Giữ nguyên phân công khi gửi yêu cầu và chỉ cho phép rời lớp trước mốc hoàn thành 30%. */
+    @Override
+    @Transactional
+    public TeacherWorkspaceResponse.WorkRequest createClassWithdrawal(
+            Long userId, TeacherWorkspaceRequest.ClassWithdrawalCreate request) {
+        ClassMemberEntity member = requireManagedClass(userId, request.getClassId());
+        List<ClassOnlineEntity> sessions = classOnlineRepository.findByClassEntity_Id(request.getClassId()).stream()
+                .filter(item -> item.getStatus() != BaseStatusEnum.CANCELLED
+                        && item.getStatus() != BaseStatusEnum.DELETED
+                        && item.getStatus() != BaseStatusEnum.DELETE)
+                .toList();
+        long completed = sessions.stream().filter(item -> item.getStatus() == BaseStatusEnum.COMPLETED).count();
+        if (!sessions.isEmpty() && completed * 10 >= sessions.size() * 3L) {
+            throw new BusinessException("Chỉ được xin nghỉ lớp khi số buổi đã hoàn thành dưới 30% tổng số buổi.");
+        }
+        String targetType = "CLASS_TEACHER_LEAVE_REQUEST";
+        if (approvalRequestRepository.existsByTargetTypeAndTargetIdAndCreatedByAndStatus(
+                targetType, request.getClassId(), userId, ApprovalStatusEnum.PENDING)) {
+            throw new BusinessException("Bạn đã có yêu cầu xin nghỉ lớp này đang chờ duyệt.");
+        }
+        ApprovalRequestEntity saved = approvalRequestRepository.save(ApprovalRequestEntity.builder()
+                .targetType(targetType).targetId(request.getClassId())
+                .requestReason(request.getReason().trim())
+                .comment("role=" + member.getRoleInClass())
+                .status(ApprovalStatusEnum.PENDING).createdBy(userId).build());
+        userRoleRepository.findHrUsers().forEach(hr -> notificationService.createSystemNotification(
+                hr, NotificationTypeEnum.GENERAL, "Có giáo viên xin nghỉ lớp",
+                "Yêu cầu nghỉ phụ trách lớp " + member.getClassEntity().getName() + " đang chờ xử lý.",
+                saved.getId(), "/admin/approval-center"));
+        return toWorkRequest(saved);
+    }
+
     /** Tạo đơn nghỉ qua service HR hiện hữu nhưng luôn ép employeeId bằng JWT. */
     @Override
     @Transactional
@@ -340,6 +377,17 @@ public class TeacherWorkspaceService implements ITeacherWorkspaceService {
     @Override
     public List<TeacherWorkspaceResponse.LeaveRequestItem> getLeaves(Long userId) {
         return leaveRequestService.getByEmployeeId(userId).stream().map(this::toLeave).toList();
+    }
+
+    /** Xác minh ownership trước khi chuyển đơn nghỉ sang trạng thái hủy. */
+    @Override
+    @Transactional
+    public void cancelLeave(Long userId, Long leaveRequestId) {
+        var leave = leaveRequestService.getById(leaveRequestId);
+        if (!Objects.equals(userId, leave.getEmployeeId())) {
+            throw new ForbiddenException("Bạn không có quyền hủy đơn nghỉ của người khác.");
+        }
+        leaveRequestService.cancel(leaveRequestId);
     }
 
     /** Kiểm tra chuyên môn ACTIVE của teacher/TA. */
@@ -403,7 +451,9 @@ public class TeacherWorkspaceService implements ITeacherWorkspaceService {
 
     /** Lấy thu nhập thật từ bảng teaching_session_payment của employee hiện tại. */
     @Override
+    @Transactional
     public List<TeacherWorkspaceResponse.EarningItem> getEarnings(Long userId) {
+        repairMissingReviewedPayments(userId);
         return paymentRepository.findByEmployee_UserId(userId).stream()
                 .sorted(Comparator.comparing((TeachingSessionPaymentEntity item) -> item.getClassOnline() != null
                         ? item.getClassOnline().getScheduledAt() : null, Comparator.nullsLast(Comparator.reverseOrder())))
@@ -417,17 +467,37 @@ public class TeacherWorkspaceService implements ITeacherWorkspaceService {
                         .totalAmount(item.getAmount()).status(enumName(item.getStatus())).build()).toList();
     }
 
+    /** Bù payment bị thiếu cho buổi chính thức đã kết thúc và đã có nhận xét. */
+    private void repairMissingReviewedPayments(Long userId) {
+        Scope scope = scope(userId);
+        scope.classIds().stream().flatMap(classId -> classOnlineRepository.findByClassEntity_Id(classId).stream())
+                .filter(session -> session.getTeacherEntity() != null && userId.equals(session.getTeacherEntity().getId()))
+                .filter(session -> session.getSessionKind() != SessionKindEnum.TRIAL && Boolean.TRUE.equals(session.getPayable()))
+                .filter(session -> !isBlank(session.getTeacherNotes()) && isCompleted(session, LocalDateTime.now()))
+                .filter(session -> paymentRepository.findByClassOnlineIdAndEmployee_UserId(session.getId(), userId).isEmpty())
+                .forEach(session -> createDraftPaymentIfPossible(userId, session, session.getDurationMin()));
+    }
+
     /** Tạo scope gồm membership lớp và course assignment ACTIVE. */
     private Scope scope(Long userId) {
         List<ClassMemberEntity> classes = classMemberRepository.findById_UserId(userId).stream()
+                .filter(Objects::nonNull)
                 .filter(item -> item.getStatus() == ClassMemberStatusEnum.ACTIVE)
+                .filter(item -> item.getClassEntity() != null && item.getClassEntity().getId() != null)
                 .filter(item -> item.getRoleInClass() == ClassMemberRole.TEACHER || item.getRoleInClass() == ClassMemberRole.TA).toList();
         LinkedHashSet<Long> courseIds = classes.stream().map(ClassMemberEntity::getClassEntity)
                 .filter(Objects::nonNull).map(ClassEntity::getCourseEntity).filter(Objects::nonNull)
                 .map(CourseEntity::getId).collect(Collectors.toCollection(LinkedHashSet::new));
         courseTeacherRepository.findByUserEntity_IdAndStatus(userId, CourseTeacherStatusEnum.ACTIVE).stream()
-                .map(item -> item.getCourseEntity().getId()).forEach(courseIds::add);
-        return new Scope(classes, classes.stream().map(item -> item.getClassEntity().getId()).distinct().toList(), List.copyOf(courseIds));
+                .filter(Objects::nonNull)
+                .map(CourseTeacherEntity::getCourseEntity)
+                .filter(Objects::nonNull)
+                .map(CourseEntity::getId)
+                .filter(Objects::nonNull)
+                .forEach(courseIds::add);
+        List<Long> classIds = classes.stream().map(ClassMemberEntity::getClassEntity)
+                .map(ClassEntity::getId).filter(Objects::nonNull).distinct().toList();
+        return new Scope(classes, classIds, List.copyOf(courseIds));
     }
 
     /** Truy vấn session an toàn khi teacher chưa được gán lớp. */
@@ -508,24 +578,38 @@ public class TeacherWorkspaceService implements ITeacherWorkspaceService {
     private void createDraftPaymentIfPossible(Long userId, ClassOnlineEntity session, Integer actualDurationMin) {
         if (!Boolean.TRUE.equals(session.getPayable()) || session.getSessionKind() == SessionKindEnum.TRIAL
                 || paymentRepository.findByClassOnlineIdAndEmployee_UserId(session.getId(), userId).isPresent()) return;
-        EmployeeEntity employee = employeeRepository.findById(userId).orElse(null);
+        EmployeeEntity employee = employeeRepository.findByUserEntity_Id(userId).orElse(null);
         if (employee == null || session.getScheduledAt() == null) return;
-        TeachingRateEntity rate = teachingRateRepository.findByEmployeeEntity_UserId(userId).stream()
+        List<TeachingRateEntity> activeRates = teachingRateRepository.findByEmployeeEntity_UserId(userId).stream()
                 .filter(item -> item.getStatus() == BaseStatusEnum.ACTIVE)
+                .filter(item -> item.getEffectiveTo() == null || !item.getEffectiveTo().isBefore(session.getScheduledAt()))
+                .toList();
+        TeachingRateEntity rate = activeRates.stream()
                 .filter(item -> item.getClassEntity() != null
                         && item.getClassEntity().getId().equals(session.getClassEntity().getId()))
-                .filter(item -> item.getEffectiveFrom() == null || !item.getEffectiveFrom().isAfter(session.getScheduledAt()))
-                .filter(item -> item.getEffectiveTo() == null || !item.getEffectiveTo().isBefore(session.getScheduledAt()))
                 .max(Comparator.comparing(item -> item.getEffectiveFrom() != null
-                        ? item.getEffectiveFrom() : LocalDateTime.MIN)).orElse(null);
+                        ? item.getEffectiveFrom() : LocalDateTime.MIN))
+                .orElseGet(() -> activeRates.size() == 1 ? activeRates.getFirst() : null);
         if (rate == null || rate.getRate() == null) return;
         int duration = actualDurationMin != null && actualDurationMin > 0
                 ? actualDurationMin : value(session.getDurationMin(), 60);
         BigDecimal amount = rate.getRate().multiply(BigDecimal.valueOf(duration))
                 .divide(BigDecimal.valueOf(60), 2, RoundingMode.HALF_UP);
-        paymentRepository.save(TeachingSessionPaymentEntity.builder().classOnline(session).employee(employee)
+        TeachingSessionPaymentEntity saved = paymentRepository.save(TeachingSessionPaymentEntity.builder().classOnline(session).employee(employee)
                 .teachingRate(rate).rateApplied(rate.getRate()).actualDurationMin(duration).amount(amount)
-                .status(SessionPaymentStatusEnum.DRAFT).description("Tạo tự động sau khi gửi nhận xét buổi học").build());
+                .status(SessionPaymentStatusEnum.PENDING).description("Chờ HR/Admin duyệt sau khi giáo viên gửi nhận xét").build());
+        approvalRequestService.createRequest("TEACHING_PAYMENT", saved.getId(), 1, resolvePaymentApproverId());
+    }
+
+    /** Chọn một HR/Admin đang hoạt động để nhận yêu cầu duyệt thù lao. */
+    private Long resolvePaymentApproverId() {
+        return userRoleRepository.findAll().stream()
+                .filter(item -> item.getRoleEntity() != null && item.getRoleEntity().getCode() != null)
+                .filter(item -> Set.of("HR", "ROLE_HR", "ADMIN", "ROLE_ADMIN")
+                        .contains(item.getRoleEntity().getCode().toUpperCase()))
+                .map(UserRoleEntity::getUserEntity).filter(Objects::nonNull)
+                .map(UserEntity::getId).findFirst()
+                .orElseThrow(() -> new BusinessException("Không tìm thấy HR/Admin để duyệt thù lao buổi dạy."));
     }
 
     /** Xác minh user là TEACHER/TA ACTIVE của lớp. */
@@ -566,8 +650,10 @@ public class TeacherWorkspaceService implements ITeacherWorkspaceService {
     private long countAtRiskStudents(Scope scope) {
         if (scope.classIds().isEmpty() || scope.courseIds().isEmpty()) return 0;
         List<ClassMemberEntity> students = classMemberRepository.findById_ClassIdInAndStatus(scope.classIds(), ClassMemberStatusEnum.ACTIVE).stream()
+                .filter(Objects::nonNull)
                 .filter(item -> item.getRoleInClass() == ClassMemberRole.STUDENT).toList();
-        List<Long> userIds = students.stream().map(item -> item.getUserEntity().getId()).distinct().toList();
+        List<Long> userIds = students.stream().map(ClassMemberEntity::getUserEntity)
+                .filter(Objects::nonNull).map(UserEntity::getId).filter(Objects::nonNull).distinct().toList();
         if (userIds.isEmpty()) return 0;
         return courseProgressRepository.findByUserIdInAndCourseIdIn(userIds, scope.courseIds()).stream()
                 .filter(this::isAtRisk).map(CourseProgressEntity::getUserId).distinct().count();
@@ -604,7 +690,9 @@ public class TeacherWorkspaceService implements ITeacherWorkspaceService {
                 .dateStr(session.getScheduledAt().toLocalDate().toString()).dayOfWeek(session.getScheduledAt().getDayOfWeek().getValue() - 1)
                 .roomUrl(session.getMeetingUrl()).status(status)
                 .secondsLeftToReview("UNREVIEWED".equals(status) ? reviewSecondsLeft(session, now) : null)
-                .reviewNote(session.getTeacherNotes()).build();
+                .reviewNote(session.getTeacherNotes())
+                .trialRequestId(oneOnOneRequestRepository.findByTrialSessionEntity_Id(session.getId())
+                        .map(item -> String.valueOf(item.getId())).orElse(null)).build();
     }
 
     /** Xác định lifecycle hiển thị độc lập với BaseStatus lưu trữ. */
@@ -612,6 +700,10 @@ public class TeacherWorkspaceService implements ITeacherWorkspaceService {
         if (Set.of(BaseStatusEnum.INACTIVE, BaseStatusEnum.CANCELLED, BaseStatusEnum.DELETE, BaseStatusEnum.DELETED)
                 .contains(session.getStatus())) return "CANCELLED";
         if (!isCompleted(session, now)) return "SCHEDULED";
+        OneOnOneRequestEntity trialRequest = oneOnOneRequestRepository.findByTrialSessionEntity_Id(session.getId()).orElse(null);
+        if (trialRequest != null && trialRequest.getStatus() == OneOnOneRequestStatusEnum.TRIAL_SCHEDULED) {
+            return "UNREVIEWED";
+        }
         return isBlank(session.getTeacherNotes()) ? "UNREVIEWED" : "REVIEWED";
     }
 

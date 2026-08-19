@@ -25,13 +25,20 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /** Điều phối chat landing không đăng nhập bằng catalog thật và không lưu thông tin cá nhân. */
 @Service
-@RequiredArgsConstructor
 public class PublicAiChatService {
-    @Qualifier("aiServiceStreamingClient")
     private final AiServiceClient aiServiceClient;
     private final CourseRepository courseRepository;
     private final CoursePackageRepository coursePackageRepository;
     private final ConcurrentHashMap<String, Window> rateWindows = new ConcurrentHashMap<>();
+
+    public PublicAiChatService(
+            @Qualifier("aiServiceStreamingClient") AiServiceClient aiServiceClient,
+            CourseRepository courseRepository,
+            CoursePackageRepository coursePackageRepository) {
+        this.aiServiceClient = aiServiceClient;
+        this.courseRepository = courseRepository;
+        this.coursePackageRepository = coursePackageRepository;
+    }
 
     /** Gửi câu hỏi kèm catalog công khai hiện tại tới AI Service qua client nội bộ. */
     public Flux<String> stream(PublicAiChatRequest request, String conversationId) {
@@ -50,6 +57,7 @@ public class PublicAiChatService {
                         + "Chỉ trả lời về khóa học, danh mục, giáo viên, giá, gói học và việc học. "
                         + "Chỉ dùng CATALOG HIỆN TẠI TỪ BACKEND; không bịa tên, giá, link hoặc trạng thái. "
                         + "Nếu không có dữ liệu phù hợp, nói rõ chưa có dữ liệu. Với câu hỏi ngoài phạm vi, từ chối ngắn gọn.")
+                .retrievalMode("NEVER")
                 .build();
         return aiServiceClient.chatStream(internal);
     }

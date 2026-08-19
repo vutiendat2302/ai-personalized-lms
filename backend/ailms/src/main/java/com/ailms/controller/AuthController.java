@@ -78,6 +78,21 @@ public class AuthController {
                 .body(ApiResponse.of("Làm mới token thành công", jwtResponse));
     }
 
+    /** Xóa refresh token cookie khi người dùng đăng xuất khỏi trình duyệt. */
+    @PostMapping("/logout")
+    public ResponseEntity<ApiResponse<Void>> logout() {
+        ResponseCookie expiredCookie = ResponseCookie.from("refresh_token", "")
+                .httpOnly(true)
+                .secure(cookieSecure)
+                .path("/")
+                .sameSite(cookieSameSite)
+                .maxAge(0)
+                .build();
+        return ResponseEntity.ok()
+                .header(HttpHeaders.SET_COOKIE, expiredCookie.toString())
+                .body(ApiResponse.message("Đăng xuất thành công"));
+    }
+
 
     /**
      * Controller test luồng đăng ký + xác thực OTP qua email (Redis).

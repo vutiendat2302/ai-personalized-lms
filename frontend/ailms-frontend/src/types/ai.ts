@@ -4,6 +4,18 @@ export type MessageStatus = "sending" | "streaming" | "completed" | "error";
 
 export type UserSystemRole = "ADMIN" | "HR" | "TA" | "TEACHER" | "STUDENT";
 
+export interface ChatSource {
+  sourceId: string;
+  title?: string;
+  sourceType?: string;
+  chunkId: string;
+  score?: number;
+  courseId?: string;
+  lessonId?: string;
+  sectionId?: string;
+  pageNumber?: number;
+}
+
 export interface ChatMessage {
   id: string;
   role: MessageRole;
@@ -11,6 +23,11 @@ export interface ChatMessage {
   createdAt: string;
   status?: MessageStatus;
   feedback?: "THUMBS_UP" | "THUMBS_DOWN" | null;
+  imageUrl?: string;
+  fileName?: string;
+  fileType?: string;
+  sources?: ChatSource[];
+  route?: string;
 }
 
 export interface AiChatRequestPayload {
@@ -19,6 +36,7 @@ export interface AiChatRequestPayload {
   systemInstruction?: string;
   module?: string;
   route?: string;
+  retrievalMode?: "AUTO" | "ALWAYS" | "NEVER";
 }
 
 export interface AiConversation {

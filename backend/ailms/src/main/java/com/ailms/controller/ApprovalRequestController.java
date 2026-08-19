@@ -15,6 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -33,7 +34,9 @@ public class ApprovalRequestController {
     private final ApprovalRequestRepository approvalRequestRepository;
     private final CourseRepository courseRepository;
 
+    /** Tạo yêu cầu phê duyệt cho người dùng đã đăng nhập. */
     @PostMapping("/request")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<ApprovalRequestEntity>> createRequest(
             @Valid @RequestBody CreateApprovalRequestPayload payload) {
         ApprovalRequestEntity request = approvalRequestService.createRequest(
@@ -45,7 +48,9 @@ public class ApprovalRequestController {
         return ResponseEntity.ok(ApiResponse.of("Approval request created successfully", request));
     }
 
+    /** Chỉ HR/Admin được quyết định phê duyệt. */
     @PostMapping("/{id}/approve")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_HR')")
     public ResponseEntity<ApiResponse<ApprovalRequestEntity>> approve(
             @PathVariable Long id,
             @RequestBody(required = false) ApproveRejectPayload payload) {
@@ -54,7 +59,9 @@ public class ApprovalRequestController {
         return ResponseEntity.ok(ApiResponse.of("Request approved successfully", request));
     }
 
+    /** Chỉ HR/Admin được từ chối yêu cầu. */
     @PostMapping("/{id}/reject")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_HR')")
     public ResponseEntity<ApiResponse<ApprovalRequestEntity>> reject(
             @PathVariable Long id,
             @Valid @RequestBody ApproveRejectPayload payload) {
@@ -62,19 +69,25 @@ public class ApprovalRequestController {
         return ResponseEntity.ok(ApiResponse.of("Request rejected successfully", request));
     }
 
+    /** Người đã đăng nhập được hủy yêu cầu của chính mình theo kiểm tra service. */
     @PostMapping("/{id}/cancel")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<Void>> cancel(@PathVariable Long id) {
         approvalRequestService.cancel(id);
         return ResponseEntity.ok(ApiResponse.of("Request cancelled successfully", null));
     }
 
+    /** Chỉ HR/Admin được xóa lịch sử đã duyệt. */
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_HR')")
     public ResponseEntity<ApiResponse<Void>> deleteApproved(@PathVariable Long id) {
         approvalRequestService.deleteApprovedRequest(id);
         return ResponseEntity.ok(ApiResponse.of("Approved request history deleted successfully", null));
     }
 
+    /** Lấy hàng đợi xử lý theo quyền hiện tại. */
     @GetMapping("/pending")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<List<ApprovalRequestEntity>>> getPendingRequests() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth != null && auth.isAuthenticated() && auth.getPrincipal() instanceof CustomUserDetails userDetails) {
@@ -85,7 +98,9 @@ public class ApprovalRequestController {
         return ResponseEntity.status(401).build();
     }
 
+    /** Lấy yêu cầu đã tạo và được giao của người dùng hiện tại. */
     @GetMapping("/mine")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponse<Map<String, List<Map<String, Object>>>>> getMine() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth != null && auth.isAuthenticated() && auth.getPrincipal() instanceof CustomUserDetails userDetails) {
@@ -106,7 +121,9 @@ public class ApprovalRequestController {
         return ResponseEntity.status(401).build();
     }
 
+    /** Tổng hợp số lượng yêu cầu cho HR/Admin. */
     @GetMapping("/summary")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_HR')")
     public ResponseEntity<ApiResponse<Map<String, Long>>> getSummary() {
         Map<String, Long> summary = Map.of(
                 "pending", approvalRequestRepository.countByStatus(ApprovalStatusEnum.PENDING)
@@ -117,7 +134,9 @@ public class ApprovalRequestController {
         return ResponseEntity.ok(ApiResponse.of("Approval summary retrieved successfully", summary));
     }
 
+    /** Chỉ HR/Admin được xem yêu cầu của người dùng khác. */
     @GetMapping("/user/{userId}")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_HR')")
     public ResponseEntity<ApiResponse<Map<String, List<Map<String, Object>>>>> getByUser(
             @PathVariable Long userId) {
         Map<String, List<Map<String, Object>>> result = Map.of(

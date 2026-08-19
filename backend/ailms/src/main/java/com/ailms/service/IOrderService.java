@@ -92,4 +92,16 @@ public interface IOrderService {
      * Quét và tự động hủy các đơn hàng chưa thanh toán đã quá hạn.
      */
     void cancelExpiredOrders();
+
+    /**
+     * Hoàn thành đơn hàng PENDING bằng Admin mà không qua PayPal;
+     * chỉ dùng trong môi trường dev/seed — tạo transaction giả, gọi provisionOrder thật.
+     */
+    OrderResponse adminCompleteOrder(Long orderId);
+
+    /**
+     * Overload cho phép truyền backdateAt để seed script đặt ngày mua khác nhau;
+     * khi backdateAt null thì dùng LocalDateTime.now().
+     */
+    OrderResponse adminCompleteOrder(Long orderId, java.time.LocalDateTime backdateAt);
 }

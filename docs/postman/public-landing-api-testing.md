@@ -56,4 +56,4 @@ Response trả header `X-Conversation-Id` và các event SSE từ Backend/AI Ser
 
 ## Header search
 
-Header tiếp tục gọi `GET /search/suggestions?keyword=...`. Backend ưu tiên index Meilisearch `courses`, chỉ trả khóa học ACTIVE có package ACTIVE, và fallback MySQL nếu Meilisearch unavailable. Cấu hình: `MEILISEARCH_URL`, `MEILISEARCH_API_KEY`, `MEILISEARCH_ENABLED`. `COMBO` không còn được đưa vào `deliveryModes` của card landing; package COMBO không bị xóa khỏi database hay các luồng checkout hiện có.
+Header tiếp tục gọi `GET /search/suggestions?keyword=...`. Backend ưu tiên index Meilisearch `courses`, chỉ trả khóa học ACTIVE có package ACTIVE, và fallback MySQL nếu Meilisearch unavailable. Cấu hình: `MEILISEARCH_URL`, `MEILISEARCH_API_KEY`, `MEILISEARCH_ENABLED`. `deliveryModes` của card landing chỉ trả `SELF_STUDY`, `GROUP_CLASS`, `ONE_ON_ONE`.

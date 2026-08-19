@@ -22,4 +22,8 @@ public class AiServiceChatRequest {
     private String toolAccessToken;
     private String imageBase64;
     private String imageMimeType;
+    private String fileBase64;
+    private String fileMimeType;
+    private String fileName;
+    private String retrievalMode;
 }

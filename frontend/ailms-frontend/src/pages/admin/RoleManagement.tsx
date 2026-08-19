@@ -90,7 +90,15 @@ import type { RoleResponse } from "@/types/admin";
 import { RoleDetailModal } from "@/components/admin/role/RoleDetailModal";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
-const ROLE_COLORS = ["#2563eb", "#7c3aed", "#db2777", "#ea580c", "#059669", "#d97706", "#4f46e5"];
+const ROLE_COLORS = [
+  "var(--primary)",
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
+  "var(--brand-cobalt)"
+];
 
 const getPageNumbers = (currentPage: number, total: number) => {
   const pages: (number | string)[] = [];
@@ -233,15 +241,17 @@ export const RoleManagement: React.FC = () => {
   const [cloneSourceRole, setCloneSourceRole] = useState<RoleResponse | null>(null);
   const [cloneSubmitting, setCloneSubmitting] = useState(false);
 
-  // --- Zod Schemas ---
+  /**
+   * Zod Validation Schemas cho form tạo/sửa/nhân bản vai trò
+   */
   const roleSchema = z.object({
-    name: z.string().min(1, "Tên Role không được để trống").max(100, "Tối đa 100 ký tự"),
+    name: z.string().min(1, "Tên Vai trò không được để trống").max(100, "Tối đa 100 ký tự"),
     description: z.string().max(255, "Tối đa 255 ký tự").optional(),
   });
   type RoleFormValues = z.infer<typeof roleSchema>;
 
   const cloneSchema = z.object({
-    name: z.string().min(1, "Tên Role mới không được để trống").max(100, "Tối đa 100 ký tự"),
+    name: z.string().min(1, "Tên Vai trò mới không được để trống").max(100, "Tối đa 100 ký tự"),
     description: z.string().max(255, "Tối đa 255 ký tự").optional(),
   });
   type CloneFormValues = z.infer<typeof cloneSchema>;
@@ -256,18 +266,27 @@ export const RoleManagement: React.FC = () => {
     defaultValues: { name: "", description: "" },
   });
 
+  /**
+   * Mở modal tạo vai trò mới
+   */
   const handleOpenCreateModal = () => {
     setEditingRole(null);
     roleForm.reset({ name: "", description: "" });
     setRoleFormModalOpen(true);
   };
 
+  /**
+   * Đóng modal form vai trò
+   */
   const handleCloseRoleFormModal = () => {
     setRoleFormModalOpen(false);
     setEditingRole(null);
     roleForm.reset({ name: "", description: "" });
   };
 
+  /**
+   * Mở modal chỉnh sửa vai trò
+   */
   const handleOpenEditModal = (role: RoleResponse) => {
     setEditingRole(role);
     roleForm.reset({
@@ -277,6 +296,9 @@ export const RoleManagement: React.FC = () => {
     setRoleFormModalOpen(true);
   };
 
+  /**
+   * Xử lý lưu vai trò (Tạo mới hoặc Cập nhật)
+   */
   const handleSaveRole = async (values: RoleFormValues) => {
     setFormSubmitting(true);
     try {
@@ -285,7 +307,7 @@ export const RoleManagement: React.FC = () => {
           name: values.name.trim(),
           description: (values.description ?? "").trim(),
         });
-        showBanner("Cập nhật Role thành công!");
+        showBanner("Cập nhật Vai trò thành công!");
         fetchRoles();
       } else {
         const res = await roleApi.createRole({
@@ -300,11 +322,11 @@ export const RoleManagement: React.FC = () => {
             setNewlyCreatedId(String(newRole.id));
             setRoles(prev => [newRole, ...prev.filter(r => String(r.id) !== String(newRole.id))]);
             setTotalElements(prev => prev + 1);
-            showBanner(`Tạo mới Role ${newRole.name || newRole.code} thành công!`);
+            showBanner(`Tạo mới Vai trò ${newRole.name || newRole.code} thành công!`);
             setTimeout(() => setNewlyCreatedId(null), 3500);
           } else {
             setActionBanner({
-              message: `Đã tạo Role "${newRole.name || newRole.code}" thành công.`,
+              message: `Đã tạo Vai trò "${newRole.name || newRole.code}" thành công.`,
               actionText: "Xem bản ghi này",
               onAction: () => {
                 handleResetFilters();
@@ -324,7 +346,7 @@ export const RoleManagement: React.FC = () => {
       handleCloseRoleFormModal();
       fetchOverviewStats();
     } catch (err: any) {
-      showBanner(err?.response?.data?.message || err.message || "Lỗi lưu Role", true);
+      showBanner(err?.response?.data?.message || err.message || "Lỗi lưu Vai trò", true);
     } finally {
       setFormSubmitting(false);
     }
@@ -377,7 +399,7 @@ export const RoleManagement: React.FC = () => {
         setUserDistData(Object.entries(userDistRes).map(([name, value]) => ({ name, value: Number(value) })));
       }
     } catch (err: any) {
-      console.error("Lỗi lấy thống kê Role:", err);
+      console.error("Lỗi lấy thống kê Vai trò:", err);
     } finally {
       setStatsLoading(false);
     }
@@ -492,7 +514,7 @@ export const RoleManagement: React.FC = () => {
         setTotalElements(0);
       }
     } catch (err: any) {
-      showBanner(err.message || "Lỗi tải danh sách Role", true);
+      showBanner(err.message || "Lỗi tải danh sách Vai trò", true);
       setRoles([]);
       setTotalPages(1);
       setTotalElements(0);
@@ -501,12 +523,18 @@ export const RoleManagement: React.FC = () => {
     }
   };
 
+  /**
+   * Xử lý gửi form tìm kiếm
+   */
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setPage(0);
     fetchRoles();
   };
 
+  /**
+   * Đặt lại bộ lọc và ô tìm kiếm về mặc định
+   */
   const handleResetFilters = () => {
     setSearchKeyword("");
     setFilterIsSystem("ALL");
@@ -544,12 +572,18 @@ export const RoleManagement: React.FC = () => {
     setPage(0);
   };
 
+  /**
+   * Lấy thông tin thứ tự và chiều sắp xếp của trường
+   */
   const getSortRuleInfo = (field: string) => {
     const idx = sortRules.findIndex(r => r.field === field);
     if (idx === -1) return null;
     return { priority: idx + 1, dir: sortRules[idx].dir };
   };
 
+  /**
+   * Render icon sắp xếp cho cột trong bảng
+   */
   const renderSortIcon = (field: string) => {
     const info = getSortRuleInfo(field);
     if (!info) return <ArrowUpDown className="h-3.5 w-3.5 opacity-40 group-hover:opacity-100" />;
@@ -561,50 +595,68 @@ export const RoleManagement: React.FC = () => {
     );
   };
 
+  /**
+   * Chọn/bỏ chọn tất cả vai trò trên trang
+   */
   const handleSelectAllRoles = (checked: boolean) => {
     if (checked) setSelectedRoleIds(roles.map(r => String(r.id)));
     else setSelectedRoleIds([]);
   };
 
+  /**
+   * Chọn/bỏ chọn từng vai trò theo ID
+   */
   const handleSelectRole = (id: string) => {
     if (selectedRoleIds.includes(id)) setSelectedRoleIds(selectedRoleIds.filter(i => i !== id));
     else setSelectedRoleIds([...selectedRoleIds, id]);
   };
 
+  /**
+   * Mở modal chi tiết vai trò
+   */
   const handleOpenDetailModal = (role: RoleResponse) => {
     setSelectedRoleForDetail(role);
     setDetailModalOpen(true);
   };
 
+  /**
+   * Mở modal nhân bản (clone) vai trò
+   */
   const handleCloneRole = (roleToClone: RoleResponse) => {
     setCloneSourceRole(roleToClone);
     cloneForm.reset({
       name: `${roleToClone.name} (Copy)`,
-      description: `Sao chép từ Role ${roleToClone.code}`,
+      description: `Sao chép từ Vai trò ${roleToClone.code}`,
     });
     setCloneModalOpen(true);
   };
 
+  /**
+   * Đóng modal nhân bản vai trò
+   */
   const handleCloseCloneModal = () => {
     setCloneModalOpen(false);
     setCloneSourceRole(null);
     cloneForm.reset({ name: "", description: "" });
   };
 
+  /**
+   * Gửi request nhân bản vai trò
+   */
   const handleSubmitClone = async (values: CloneFormValues) => {
     if (!cloneSourceRole) return;
     setCloneSubmitting(true);
     try {
       await roleApi.cloneRole(String(cloneSourceRole.id), {
         name: values.name.trim(),
-        description: (values.description ?? "").trim() || `Sao chép từ Role ${cloneSourceRole.code}`,
+        description: (values.description ?? "").trim() || `Sao chép từ Vai trò ${cloneSourceRole.code}`,
       });
-      showBanner(`Đã nhân bản Role "${values.name.trim()}" thành công!`);
+      showBanner(`Đã nhân bản Vai trò "${values.name.trim()}" thành công!`);
       handleCloseCloneModal();
       fetchRoles();
       fetchOverviewStats();
     } catch (err: any) {
-      showBanner(err?.response?.data?.message || err.message || "Lỗi sao chép Role", true);
+      showBanner(err?.response?.data?.message || err.message || "Lỗi sao chép Vai trò", true);
     } finally {
       setCloneSubmitting(false);
     }
@@ -613,38 +665,50 @@ export const RoleManagement: React.FC = () => {
   const [confirmDeleteRoleId, setConfirmDeleteRoleId] = useState<string | null>(null);
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
 
+  /**
+   * Chuẩn bị xóa một vai trò theo ID
+   */
   const handleDeleteRole = (roleId: string) => {
     setConfirmDeleteRoleId(roleId);
   };
 
+  /**
+   * Xác nhận và thực hiện xóa vai trò
+   */
   const confirmDeleteRole = async () => {
     if (!confirmDeleteRoleId) return;
     try {
       await roleApi.deleteRole(confirmDeleteRoleId);
-      showBanner("Xóa Role thành công!");
+      showBanner("Xóa Vai trò thành công!");
       if (detailModalOpen) setDetailModalOpen(false);
       fetchRoles();
       fetchOverviewStats();
     } catch (err: any) {
-      showBanner(err.message || "Không thể xóa Role này (Role hệ thống hoặc đang có User sử dụng)", true);
+      showBanner(err.message || "Không thể xóa Vai trò này (Vai trò hệ thống hoặc đang có Người dùng sử dụng)", true);
     } finally {
       setConfirmDeleteRoleId(null);
     }
   };
 
+  /**
+   * Chuẩn bị xóa hàng loạt các vai trò đã chọn
+   */
   const handleBulkDeleteRoles = () => {
     setConfirmBulkDelete(true);
   };
 
+  /**
+   * Xác nhận và thực hiện xóa hàng loạt vai trò
+   */
   const confirmBulkDeleteRoles = async () => {
     try {
       await roleApi.bulkDeleteRoles(selectedRoleIds);
-      showBanner("Đã xóa hàng loạt role chọn thành công!");
+      showBanner("Đã xóa hàng loạt vai trò đã chọn thành công!");
       setSelectedRoleIds([]);
       fetchRoles();
       fetchOverviewStats();
     } catch (err: any) {
-      showBanner(err?.response?.data?.message || err.message || "Lỗi xóa hàng loạt role", true);
+      showBanner(err?.response?.data?.message || err.message || "Lỗi xóa hàng loạt vai trò", true);
     } finally {
       setConfirmBulkDelete(false);
     }
@@ -655,14 +719,14 @@ export const RoleManagement: React.FC = () => {
       
       {/* Toast Banners */}
       {actionBanner && (
-        <div className="fixed bottom-6 right-6 z-9999 flex items-center gap-3 rounded-2xl bg-emerald-600 text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
-          <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-100" />
+        <div className="fixed bottom-6 right-6 z-9999 flex items-center gap-3 rounded-2xl bg-success-forest text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
+          <CheckCircle2 className="h-5 w-5 shrink-0 text-white/80" />
           <div className="flex items-center gap-3 flex-wrap text-sm font-semibold">
             <span>{actionBanner.message}</span>
             {actionBanner.actionText && actionBanner.onAction && (
               <button
                 onClick={actionBanner.onAction}
-                className="underline font-bold text-amber-200 hover:text-white transition-colors cursor-pointer bg-white/20 px-2.5 py-1 rounded-xl text-xs flex items-center gap-1 shadow-xs"
+                className="underline font-bold text-chart-1 hover:text-white transition-colors cursor-pointer bg-white/20 px-2.5 py-1 rounded-xl text-xs flex items-center gap-1 shadow-xs"
               >
                 <span>[{actionBanner.actionText}]</span>
               </button>
@@ -671,14 +735,14 @@ export const RoleManagement: React.FC = () => {
         </div>
       )}
       {successBanner && (
-        <div className="fixed bottom-6 right-6 z-9999 flex items-center gap-3 rounded-2xl bg-emerald-600 text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
+        <div className="fixed bottom-6 right-6 z-9999 flex items-center gap-3 rounded-2xl bg-success-forest text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
           <CheckCircle2 className="h-5 w-5 shrink-0" />
           <span className="text-sm font-semibold">{successBanner}</span>
         </div>
       )}
 
       {errorBanner && (
-        <div className="fixed bottom-6 right-6 z-9999 flex items-center gap-3 rounded-2xl bg-red-600 text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
+        <div className="fixed bottom-6 right-6 z-9999 flex items-center gap-3 rounded-2xl bg-destructive text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
           <AlertCircle className="h-5 w-5 shrink-0" />
           <span className="text-sm font-semibold">{errorBanner}</span>
         </div>
@@ -687,17 +751,11 @@ export const RoleManagement: React.FC = () => {
       {/* Page Title Header (Exact UserManagement typography) */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-border/30 pb-4">
         <div>
-          <div className="flex items-center gap-2 text-sm font-semibold text-primary mb-1">
-            <Link to="/dashboard" className="flex items-center gap-1 hover:underline">
-              <ArrowLeft className="h-3.5 w-3.5" />
-              <span>Quay lại Tổng quan</span>
-            </Link>
-          </div>
           <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-foreground flex items-center gap-3 mt-2">
             <div className="p-2.5 rounded-2xl bg-primary/10 text-primary">
               <Shield className="h-7 w-7" />
             </div>
-            <span>Quản lý Role (Vai trò hệ thống)</span>
+            <span>Quản lý vai trò</span>
           </h1>
         </div>
 
@@ -724,7 +782,7 @@ export const RoleManagement: React.FC = () => {
               }`}
             >
               <BarChart3 className="h-4 w-4" />
-              <span>Thống kê & Phân tích (3.8.1)</span>
+              <span>Thống kê & Phân tích</span>
             </button>
 
             <button
@@ -736,7 +794,7 @@ export const RoleManagement: React.FC = () => {
               }`}
             >
               <Shield className="h-4 w-4" />
-              <span>Danh sách Role (3.8.3)</span>
+              <span>Danh sách vai trò</span>
             </button>
           </div>
         </div>
@@ -752,7 +810,7 @@ export const RoleManagement: React.FC = () => {
             onClick={() => {
               handleResetFilters();
               scrollToSection("management");
-              showBanner("Đã hiển thị danh sách tất cả Role!");
+              showBanner("Đã hiển thị danh sách tất cả Vai trò!");
             }}
             className="border-border shadow-xs bg-card overflow-hidden relative cursor-pointer hover:border-primary/50 transition-all"
           >
@@ -761,11 +819,11 @@ export const RoleManagement: React.FC = () => {
             </div>
             <CardHeader className="pb-2">
               <CardDescription className="text-xs font-semibold text-muted-foreground uppercase">
-                Tổng số Role
+                Tổng số vai trò
               </CardDescription>
               <CardTitle className="text-3xl font-extrabold text-foreground flex items-center gap-2 mt-1">
                 <span className="text-primary">{statsLoading ? "..." : totalRoles}</span>
-                <span className="text-xs font-semibold text-primary bg-primary/10 px-2.5 py-0.5 rounded-full">Roles</span>
+                <span className="text-xs font-semibold text-primary bg-primary/10 px-2.5 py-0.5 rounded-full">Vai trò</span>
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-0"><p className="text-xs text-muted-foreground">Tổng các vai trò định nghĩa trong hệ thống &rarr;</p></CardContent>
@@ -778,23 +836,23 @@ export const RoleManagement: React.FC = () => {
               setFilterIsSystem("TRUE");
               setPage(0);
               scrollToSection("management");
-              showBanner("Đã lọc danh sách Role Hệ thống (System)!");
+              showBanner("Đã lọc danh sách Vai trò Hệ thống!");
             }}
-            className="border-border shadow-xs bg-card overflow-hidden relative cursor-pointer hover:border-purple-500/50 transition-all"
+            className="border-border shadow-xs bg-card overflow-hidden relative cursor-pointer hover:border-primary/50 transition-all"
           >
-            <div className="absolute top-0 right-0 p-4 opacity-10 text-purple-600">
+            <div className="absolute top-0 right-0 p-4 opacity-10 text-primary">
               <Layers className="h-20 w-20" />
             </div>
             <CardHeader className="pb-2">
               <CardDescription className="text-xs font-semibold text-muted-foreground uppercase">
-                Role Hệ thống / Tùy chỉnh
+                Vai trò hệ thống / Tùy chỉnh
               </CardDescription>
               <CardTitle className="text-2xl font-extrabold text-foreground flex items-center gap-2 mt-1">
-                <span className="text-purple-600">{systemRoles} System</span>
-                <span className="text-muted-foreground text-sm font-normal">/ {customRoles} Custom</span>
+                <span className="text-primary">{systemRoles} Hệ thống </span>
+                <span className="text-muted-foreground text-sm font-normal">/ {customRoles} Tùy chỉnh</span>
               </CardTitle>
             </CardHeader>
-            <CardContent className="pt-0"><p className="text-xs text-muted-foreground">Role System cố định không cho phép xóa &rarr;</p></CardContent>
+            <CardContent className="pt-0"><p className="text-xs text-muted-foreground">Vai trò hệ thống cố định không cho phép xóa &rarr;</p></CardContent>
           </Card>
 
           {/* Card 4: KPI Warning Card (Số Role không có User đang dùng) */}
@@ -803,21 +861,21 @@ export const RoleManagement: React.FC = () => {
               setFilterHasUsers("FALSE");
               setPage(0);
               scrollToSection("management");
-              showBanner("Đã lọc danh sách Role không có User nào đang dùng!");
+              showBanner("Đã lọc danh sách Vai trò không có Người dùng nào đang dùng!");
             }}
-            className="border-2 border-amber-500/40 bg-linear-to-br from-amber-500/10 via-card to-card shadow-xs cursor-pointer hover:border-amber-500 hover:shadow-md hover:scale-[1.005] transition-all group flex flex-col justify-between"
+            className="border-2 border-chart-1/40 bg-linear-to-br from-chart-1/10 via-card to-card shadow-xs cursor-pointer hover:border-chart-1 hover:shadow-md hover:scale-[1.005] transition-all group flex flex-col justify-between"
           >
             <CardHeader className="pb-2">
-              <CardDescription className="text-xs font-extrabold text-amber-600 uppercase flex items-center justify-between">
-                <span className="flex items-center gap-1"><ShieldAlert className="h-4 w-4" /> Role Không Có User</span>
-                <span className="px-2 py-0.5 rounded-full bg-amber-600 text-white text-[10px] font-black">CẢNH BÁO</span>
+              <CardDescription className="text-xs font-extrabold text-chart-1 uppercase flex items-center justify-between">
+                <span className="flex items-center gap-1"><ShieldAlert className="h-4 w-4" /> Vai trò chưa dùng </span>
+                <span className="px-2 py-0.5 rounded-full bg-chart-1 text-white text-[10px] font-black">CẢNH BÁO</span>
               </CardDescription>
-              <CardTitle className="text-3xl font-extrabold text-amber-600 flex items-center gap-2 mt-1">
+              <CardTitle className="text-3xl font-extrabold text-chart-1 flex items-center gap-2 mt-1">
                 <span>{unusedRoles}</span>
-                <span className="text-xs font-semibold text-amber-600 bg-amber-500/10 px-2 py-0.5 rounded-full">Role thừa</span>
+                <span className="text-xs font-semibold text-chart-1 bg-chart-1/10 px-2 py-0.5 rounded-full">Vai trò chưa dùng</span>
               </CardTitle>
             </CardHeader>
-            <CardContent className="pt-0"><p className="text-xs text-muted-foreground">Gợi ý dọn dẹp các role không có user đang dùng &rarr;</p></CardContent>
+            <CardContent className="pt-0"><p className="text-xs text-muted-foreground">Gợi ý dọn dẹp các vai trò không có người dùng đang dùng &rarr;</p></CardContent>
           </Card>
 
           {/* Card 5: KPI Warning Card (Số Role rỗng chưa có Permission) */}
@@ -826,21 +884,21 @@ export const RoleManagement: React.FC = () => {
               setFilterHasPermissions("FALSE");
               setPage(0);
               scrollToSection("management");
-              showBanner("Đã lọc danh sách Role rỗng chưa được gán quyền!");
+              showBanner("Đã lọc danh sách Vai trò rỗng chưa được gán quyền!");
             }}
-            className="border-2 border-red-500/40 bg-linear-to-br from-red-500/10 via-card to-card shadow-xs cursor-pointer hover:border-red-500 hover:shadow-md hover:scale-[1.005] transition-all group flex flex-col justify-between"
+            className="border-2 border-destructive/40 bg-linear-to-br from-destructive/10 via-card to-card shadow-xs cursor-pointer hover:border-destructive hover:shadow-md hover:scale-[1.005] transition-all group flex flex-col justify-between"
           >
             <CardHeader className="pb-2">
-              <CardDescription className="text-xs font-extrabold text-red-600 uppercase flex items-center justify-between">
-                <span className="flex items-center gap-1"><AlertCircle className="h-4 w-4" /> Role Rỗng (No Perm)</span>
-                <span className="px-2 py-0.5 rounded-full bg-red-600 text-white text-[10px] font-black">CẢNH BÁO</span>
+              <CardDescription className="text-xs font-extrabold text-destructive uppercase flex items-center justify-between">
+                <span className="flex items-center gap-1"><AlertCircle className="h-4 w-4" /> Vai trò Rỗng (Chưa gán Quyền)</span>
+                <span className="px-2 py-0.5 rounded-full bg-destructive text-white text-[10px] font-black">CẢNH BÁO</span>
               </CardDescription>
-              <CardTitle className="text-3xl font-extrabold text-red-600 flex items-center gap-2 mt-1">
+              <CardTitle className="text-3xl font-extrabold text-destructive flex items-center gap-2 mt-1">
                 <span>{emptyRoles}</span>
-                <span className="text-xs font-semibold text-red-600 bg-red-500/10 px-2 py-0.5 rounded-full">Role rỗng</span>
+                <span className="text-xs font-semibold text-destructive bg-destructive/10 px-2 py-0.5 rounded-full">Vai trò rỗng</span>
               </CardTitle>
             </CardHeader>
-            <CardContent className="pt-0"><p className="text-xs text-muted-foreground">Role rỗng gán cho user sẽ vô nghĩa, cần gán quyền &rarr;</p></CardContent>
+            <CardContent className="pt-0"><p className="text-xs text-muted-foreground">Vai trò rỗng gán cho người dùng sẽ vô nghĩa, cần gán quyền &rarr;</p></CardContent>
           </Card>
         </div>
 
@@ -851,20 +909,20 @@ export const RoleManagement: React.FC = () => {
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
                 <BarChart3 className="h-4 w-4 text-primary" />
-                <span>1. So sánh Số lượng Permissions Giữa Các Role</span>
+                <span>1. So sánh Số lượng Quyền Giữa Các Vai trò</span>
               </CardTitle>
-              <CardDescription className="text-xs">Giúp phát hiện role bị "phình" quyền bất thường trong hệ thống</CardDescription>
+              <CardDescription className="text-xs">Giúp phát hiện vai trò bị "phình" quyền bất thường trong hệ thống</CardDescription>
             </CardHeader>
             <CardContent className="min-h-55 flex items-center justify-center">
               {statsLoading ? (
                 <div className="flex items-center justify-center gap-2 text-muted-foreground py-10">
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                  <span className="text-xs">Đang tải thống kê permission...</span>
+                  <span className="text-xs">Đang tải thống kê quyền...</span>
                 </div>
               ) : permissionDistData.length === 0 ? (
                 <div className="flex flex-col items-center justify-center text-muted-foreground text-xs py-10 gap-2">
                   <BarChart3 className="h-8 w-8 opacity-40" />
-                  <span>Không có dữ liệu thống kê permission</span>
+                  <span>Không có dữ liệu thống kê quyền</span>
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height={200}>
@@ -872,8 +930,8 @@ export const RoleManagement: React.FC = () => {
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="name" style={{ fontSize: "11px" }} />
                     <YAxis style={{ fontSize: "11px" }} />
-                    <Tooltip formatter={(v: any) => [`${v} Permissions`, "Số lượng quyền"]} />
-                    <Bar dataKey="value" radius={[6, 6, 0, 0]} fill="#2563eb">
+                    <Tooltip formatter={(v: any) => [`${v} Quyền`, "Số lượng quyền"]} />
+                    <Bar dataKey="value" radius={[6, 6, 0, 0]} fill="var(--primary)">
                       {permissionDistData.map((_, idx) => <Cell key={idx} fill={ROLE_COLORS[idx % ROLE_COLORS.length]} />)}
                     </Bar>
                   </BarChart>
@@ -886,21 +944,21 @@ export const RoleManagement: React.FC = () => {
           <Card className="lg:col-span-6 border-border shadow-xs bg-card">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                <Users className="h-4 w-4 text-emerald-600" />
-                <span>2. Phân bổ Số lượng Users Theo Từng Role</span>
+                <Users className="h-4 w-4 text-success-forest" />
+                <span>2. Phân bổ Số lượng Người dùng Theo Từng Vai trò</span>
               </CardTitle>
               <CardDescription className="text-xs">Thống kê số lượng tài khoản người dùng gắn với từng vai trò</CardDescription>
             </CardHeader>
             <CardContent className="min-h-55 flex items-center justify-center">
               {statsLoading ? (
                 <div className="flex items-center justify-center gap-2 text-muted-foreground py-10">
-                  <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
-                  <span className="text-xs">Đang tải thống kê user...</span>
+                  <Loader2 className="h-6 w-6 animate-spin text-success-forest" />
+                  <span className="text-xs">Đang tải thống kê người dùng...</span>
                 </div>
               ) : userDistData.length === 0 ? (
                 <div className="flex flex-col items-center justify-center text-muted-foreground text-xs py-10 gap-2">
                   <Users className="h-8 w-8 opacity-40" />
-                  <span>Không có dữ liệu thống kê user</span>
+                  <span>Không có dữ liệu thống kê người dùng</span>
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height={200}>
@@ -908,9 +966,9 @@ export const RoleManagement: React.FC = () => {
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="name" style={{ fontSize: "11px" }} />
                     <YAxis style={{ fontSize: "11px" }} />
-                    <Tooltip formatter={(v: any) => [`${v} Users`, "Số người dùng"]} />
-                    <Bar dataKey="value" radius={[6, 6, 0, 0]} fill="#059669">
-                      {userDistData.map((_, idx) => <Cell key={idx} fill={ROLE_COLORS[(idx + 2) % ROLE_COLORS.length]} />)}
+                    <Tooltip formatter={(v: any) => [`${v} Người dùng`, "Số người dùng"]} />
+                    <Bar dataKey="value" radius={[6, 6, 0, 0]} fill="var(--chart-2)">
+                      {userDistData.map((_, idx) => <Cell key={idx} fill={ROLE_COLORS[(idx + 1) % ROLE_COLORS.length]} />)}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
@@ -928,16 +986,16 @@ export const RoleManagement: React.FC = () => {
           <CardHeader className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 pb-4 border-b border-border/30 bg-card">
             <div>
               <CardTitle className="text-xl font-semibold tracking-tight font-heading flex items-center gap-2">
-                <span>Danh sách Role trong Hệ thống</span>
+                <span>Danh sách Vai trò trong Hệ thống</span>
               </CardTitle>
               <CardDescription className="text-sm text-muted-foreground mt-0.5">
-                Tìm kiếm, lọc loại role system/custom, phân quyền ma trận và quản lý người dùng gán role.
+                Tìm kiếm, lọc loại vai trò hệ thống/tùy chỉnh, phân quyền ma trận và quản lý người dùng gán vai trò.
               </CardDescription>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
               <Button onClick={handleOpenCreateModal} size="sm" className="h-9 gap-1.5 font-semibold bg-primary text-primary-foreground cursor-pointer">
-                <Plus className="h-4 w-4" /> <span>Thêm Role mới</span>
+                <Plus className="h-4 w-4" /> <span>Thêm Vai trò mới</span>
               </Button>
             </div>
           </CardHeader>
@@ -951,7 +1009,7 @@ export const RoleManagement: React.FC = () => {
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
                 <Input
                   type="text"
-                  placeholder="Tên role, code role..."
+                  placeholder="Tên vai trò, mã vai trò..."
                   value={searchKeyword}
                   onChange={(e) => setSearchKeyword(e.target.value)}
                   className="pl-8 h-9 text-sm border border-border/30 bg-background rounded-lg focus-visible:ring-2 focus-visible:ring-primary/20 placeholder:opacity-50"
@@ -961,26 +1019,26 @@ export const RoleManagement: React.FC = () => {
 
             {/* Is System Role Select */}
             <div className="flex flex-col gap-1 w-37.5 shrink-0">
-              <Label className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Loại Role</Label>
+              <Label className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Loại Vai trò</Label>
               <Select value={filterIsSystem} onValueChange={setFilterIsSystem}>
                 <SelectTrigger className="h-9 text-sm border border-border/30 bg-background rounded-lg w-full"><SelectValue placeholder="Tất cả" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">Tất cả loại</SelectItem>
-                  <SelectItem value="TRUE">System Role</SelectItem>
-                  <SelectItem value="FALSE">Custom Role</SelectItem>
+                  <SelectItem value="TRUE">Vai trò Hệ thống</SelectItem>
+                  <SelectItem value="FALSE">Vai trò Tùy chỉnh</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             {/* Has Users Select */}
             <div className="flex flex-col gap-1 w-40 shrink-0">
-              <Label className="text-xs font-semibold text-muted-foreground whitespace-nowrap">User đang dùng</Label>
+              <Label className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Người dùng</Label>
               <Select value={filterHasUsers} onValueChange={setFilterHasUsers}>
                 <SelectTrigger className="h-9 text-sm border border-border/30 bg-background rounded-lg w-full"><SelectValue placeholder="Tất cả" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">Tất cả</SelectItem>
-                  <SelectItem value="TRUE">Đang có User dùng</SelectItem>
-                  <SelectItem value="FALSE">Không có User (Chưa dùng)</SelectItem>
+                  <SelectItem value="TRUE">Đang có Người dùng</SelectItem>
+                  <SelectItem value="FALSE">Không có Người dùng (Chưa dùng)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -992,8 +1050,8 @@ export const RoleManagement: React.FC = () => {
                 <SelectTrigger className="h-9 text-sm border border-border/30 bg-background rounded-lg w-full"><SelectValue placeholder="Tất cả" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">Tất cả trạng thái</SelectItem>
-                  <SelectItem value="TRUE">Đã gán Quyền (&gt; 0 Perm)</SelectItem>
-                  <SelectItem value="FALSE">Role rỗng (0 Permission)</SelectItem>
+                  <SelectItem value="TRUE">Đã gán Quyền</SelectItem>
+                  <SelectItem value="FALSE">Vai trò rỗng</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1040,7 +1098,7 @@ export const RoleManagement: React.FC = () => {
             <div className="flex items-center justify-between gap-3 px-4 py-2.5 bg-primary/10 border-b border-primary/20 text-xs animate-in fade-in-50 duration-200">
               <div className="flex items-center gap-2 font-bold text-primary">
                 <CheckCircle2 className="h-4 w-4" />
-                <span>Đã chọn {selectedRoleIds.length} Role</span>
+                <span>Đã chọn {selectedRoleIds.length} Vai trò</span>
               </div>
               <div className="flex items-center gap-2">
                 <Button
@@ -1083,7 +1141,7 @@ export const RoleManagement: React.FC = () => {
                   {/* Code Header */}
                   <TableHead className="cursor-pointer pb-4 select-none text-sm font-semibold uppercase tracking-wider group" onClick={() => handleSort("code")}>
                     <div className="flex items-center gap-1.5 pl-2">
-                      <span className={getSortRuleInfo("code") ? "text-primary font-bold" : "text-muted-foreground"}>Mã Role</span>
+                      <span className={getSortRuleInfo("code") ? "text-primary font-bold" : "text-muted-foreground"}>Mã Vai trò</span>
                       {renderSortIcon("code")}
                     </div>
                   </TableHead>
@@ -1091,7 +1149,7 @@ export const RoleManagement: React.FC = () => {
                   {/* Name Header */}
                   <TableHead className="cursor-pointer pb-4 select-none text-sm font-semibold uppercase tracking-wider group" onClick={() => handleSort("name")}>
                     <div className="flex items-center gap-1.5 pl-2">
-                      <span className={getSortRuleInfo("name") ? "text-primary font-bold" : "text-muted-foreground"}>Tên Role</span>
+                      <span className={getSortRuleInfo("name") ? "text-primary font-bold" : "text-muted-foreground"}>Tên Vai trò</span>
                       {renderSortIcon("name")}
                     </div>
                   </TableHead>
@@ -1099,17 +1157,17 @@ export const RoleManagement: React.FC = () => {
                   {/* Badge Loại Header */}
                   <TableHead className="pb-4 text-center text-sm font-semibold uppercase tracking-wider">
                     <div className="flex items-center justify-center gap-1.5">
-                      <span className="text-muted-foreground">Loại Role</span>
+                      <span className="text-muted-foreground">Loại Vai trò</span>
                       <Popover>
                         <PopoverTrigger nativeButton={true} render={<Button variant="ghost" size="icon" className="h-5 w-5 p-0 hover:bg-muted"><Filter className={`h-3.5 w-3.5 ${filterIsSystem !== "ALL" ? "text-primary font-bold" : "text-muted-foreground"}`} /></Button>} />
                         <PopoverContent className="w-48 p-2 text-xs bg-popover border border-border shadow-xl rounded-xl">
-                          <div className="font-bold mb-2 pb-1 border-b border-border/40 text-foreground">Lọc loại Role</div>
+                          <div className="font-bold mb-2 pb-1 border-b border-border/40 text-foreground">Lọc loại Vai trò</div>
                           <Select value={filterIsSystem} onValueChange={setFilterIsSystem}>
                             <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Tất cả" /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="ALL">Tất cả loại</SelectItem>
-                              <SelectItem value="TRUE">System Role</SelectItem>
-                              <SelectItem value="FALSE">Custom Role</SelectItem>
+                              <SelectItem value="TRUE">Vai trò Hệ thống</SelectItem>
+                              <SelectItem value="FALSE">Vai trò Tùy chỉnh</SelectItem>
                             </SelectContent>
                           </Select>
                         </PopoverContent>
@@ -1120,7 +1178,7 @@ export const RoleManagement: React.FC = () => {
                   {/* Số Permission Header */}
                   <TableHead className="cursor-pointer pb-4 select-none text-sm font-semibold uppercase tracking-wider text-center group" onClick={() => handleSort("permissionCount")}>
                     <div className="flex items-center gap-1.5 justify-center">
-                      <span className={getSortRuleInfo("permissionCount") ? "text-primary font-bold" : "text-muted-foreground"}>Permissions</span>
+                      <span className={getSortRuleInfo("permissionCount") ? "text-primary font-bold" : "text-muted-foreground"}>Quyền</span>
                       {renderSortIcon("permissionCount")}
                     </div>
                   </TableHead>
@@ -1128,7 +1186,7 @@ export const RoleManagement: React.FC = () => {
                   {/* Số User Header */}
                   <TableHead className="cursor-pointer pb-4 select-none text-sm font-semibold uppercase tracking-wider text-center group" onClick={() => handleSort("userCount")}>
                     <div className="flex items-center gap-1.5 justify-center">
-                      <span className={getSortRuleInfo("userCount") ? "text-primary font-bold" : "text-muted-foreground"}>Users dùng</span>
+                      <span className={getSortRuleInfo("userCount") ? "text-primary font-bold" : "text-muted-foreground"}>Người dùng</span>
                       {renderSortIcon("userCount")}
                     </div>
                   </TableHead>
@@ -1142,7 +1200,7 @@ export const RoleManagement: React.FC = () => {
                   </TableHead>
 
                   {/* Actions Header */}
-                  <TableHead className="text-sm text-center pb-4 font-semibold text-muted-foreground uppercase tracking-wider">Actions</TableHead>
+                  <TableHead className="text-sm text-center pb-4 font-semibold text-muted-foreground uppercase tracking-wider">Thao tác</TableHead>
                 </TableRow>
               </TableHeader>
 
@@ -1150,7 +1208,7 @@ export const RoleManagement: React.FC = () => {
                 {roles.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={8} className="py-12 text-center text-muted-foreground text-sm">
-                      Không tìm thấy Role nào phù hợp với điều kiện lọc.
+                      Không tìm thấy Vai trò nào phù hợp với điều kiện lọc.
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -1166,7 +1224,7 @@ export const RoleManagement: React.FC = () => {
                         className={cn(
                           "transition-all duration-700 border-border/30",
                           isNewlyCreated
-                            ? "bg-emerald-500/20 dark:bg-emerald-950/40 border-l-4 border-l-emerald-500 font-semibold shadow-xs"
+                            ? "bg-success-forest/20 dark:bg-success-forest/40 border-l-4 border-l-success-forest font-semibold shadow-xs"
                             : "hover:bg-foreground/10"
                         )}
                       >
@@ -1191,9 +1249,9 @@ export const RoleManagement: React.FC = () => {
 
                         <TableCell className="text-center">
                           {isSystemRole ? (
-                            <Badge className="bg-purple-600 text-white font-bold text-xs">System</Badge>
+                            <Badge className="bg-primary text-primary-foreground font-bold text-xs">Hệ thống</Badge>
                           ) : (
-                            <Badge variant="outline" className="font-bold text-xs border-primary text-primary">Custom</Badge>
+                            <Badge variant="outline" className="font-bold text-xs border-primary text-primary">Tùy chỉnh</Badge>
                           )}
                         </TableCell>
 
@@ -1204,8 +1262,8 @@ export const RoleManagement: React.FC = () => {
                         </TableCell>
 
                         <TableCell className="text-center font-mono font-bold text-xs">
-                          <span className={`px-2.5 py-0.5 rounded-full ${hasUsers ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" : "bg-amber-500/10 text-amber-600 border border-amber-500/20"}`}>
-                            {role.userCount || 0} Users
+                          <span className={`px-2.5 py-0.5 rounded-full ${hasUsers ? "bg-success-forest/10 text-success-forest border border-success-forest/20" : "bg-chart-1/10 text-chart-1 border border-chart-1/20"}`}>
+                            {role.userCount || 0} Người dùng
                           </span>
                         </TableCell>
 
@@ -1220,11 +1278,11 @@ export const RoleManagement: React.FC = () => {
                               <Eye className="h-4 w-4" />
                             </Button>
 
-                            <Button onClick={() => handleOpenEditModal(role)} variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:bg-blue-500/10 cursor-pointer" title="Sửa Role">
+                            <Button onClick={() => handleOpenEditModal(role)} variant="ghost" size="icon" className="h-8 w-8 text-brand-cobalt hover:bg-brand-cobalt/10 cursor-pointer" title="Sửa Vai trò">
                               <Edit className="h-4 w-4" />
                             </Button>
 
-                            <Button onClick={() => handleCloneRole(role)} variant="ghost" size="icon" className="h-8 w-8 text-purple-600 hover:bg-purple-500/10 cursor-pointer" title="Nhân bản Role (Clone)">
+                            <Button onClick={() => handleCloneRole(role)} variant="ghost" size="icon" className="h-8 w-8 text-primary hover:bg-primary/10 cursor-pointer" title="Nhân bản Vai trò">
                               <Copy className="h-4 w-4" />
                             </Button>
 
@@ -1233,8 +1291,8 @@ export const RoleManagement: React.FC = () => {
                               disabled={!canDelete}
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 text-red-600 hover:bg-red-500/10 disabled:opacity-30 cursor-pointer"
-                              title={!canDelete ? "Không thể xóa Role hệ thống hoặc Role đang có User sử dụng" : "Xóa Role"}
+                              className="h-8 w-8 text-destructive hover:bg-destructive/10 disabled:opacity-30 cursor-pointer"
+                              title={!canDelete ? "Không thể xóa Vai trò hệ thống hoặc Vai trò đang có Người dùng sử dụng" : "Xóa Vai trò"}
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -1340,10 +1398,10 @@ export const RoleManagement: React.FC = () => {
         <DialogContent className="max-w-md w-[90vw] p-6 rounded-2xl bg-card border border-border/40 shadow-2xl">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold text-foreground">
-              {editingRole ? "Sửa Role Hệ Thống" : "Thêm Role Mới"}
+              {editingRole ? "Sửa Vai trò Hệ thống" : "Thêm Vai trò Mới"}
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              {editingRole ? "Cập nhật thông tin hiển thị và mô tả của Role." : "Nhập tên vai trò và mô tả. Mã code sẽ được hệ thống tự động sinh."}
+              {editingRole ? "Cập nhật thông tin hiển thị và mô tả của Vai trò." : "Nhập tên vai trò và mô tả. Mã code sẽ được hệ thống tự động sinh."}
             </DialogDescription>
           </DialogHeader>
 
@@ -1355,7 +1413,7 @@ export const RoleManagement: React.FC = () => {
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-xs font-semibold text-muted-foreground">Tên Role (Name) *</FormLabel>
+                    <FormLabel className="text-xs font-semibold text-muted-foreground">Tên Vai trò *</FormLabel>
                     <FormControl>
                       <Input
                         placeholder="VD: Quản lý học tập, Trợ giảng"
@@ -1369,7 +1427,7 @@ export const RoleManagement: React.FC = () => {
               />
 
               <div className="space-y-1">
-                <Label className="text-xs font-semibold text-muted-foreground">Mã Code Duy Nhất (Code - Readonly)</Label>
+                <Label className="text-xs font-semibold text-muted-foreground">Mã Code Duy nhất (Readonly)</Label>
                 <Input
                   placeholder={editingRole ? (editingRole.code ?? "") : "Tự động sinh (VD: ROLE-2607-A1B2C3)"}
                   value={editingRole ? (editingRole.code ?? "") : ""}
@@ -1389,7 +1447,7 @@ export const RoleManagement: React.FC = () => {
                     <FormLabel className="text-xs font-semibold text-muted-foreground">Mô tả chức năng</FormLabel>
                     <FormControl>
                       <Input
-                        placeholder="Mô tả mục đích sử dụng của Role..."
+                        placeholder="Mô tả mục đích sử dụng của Vai trò..."
                         className="h-9 text-sm border-border/30"
                         {...field}
                       />
@@ -1405,7 +1463,7 @@ export const RoleManagement: React.FC = () => {
                 </Button>
                 <Button type="submit" size="sm" disabled={formSubmitting} className="bg-primary text-primary-foreground font-semibold cursor-pointer">
                   {formSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-                  {editingRole ? "Lưu thay đổi" : "Tạo Role"}
+                  {editingRole ? "Lưu thay đổi" : "Tạo Vai trò"}
                 </Button>
               </DialogFooter>
             </form>
@@ -1419,10 +1477,10 @@ export const RoleManagement: React.FC = () => {
           <DialogHeader>
             <DialogTitle className="text-xl font-bold text-foreground flex items-center gap-2">
               <Copy className="h-5 w-5 text-primary" />
-              Nhân bản Role
+              Nhân bản Vai trò
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Tạo bản sao của Role{" "}
+              Tạo bản sao của Vai trò{" "}
               <strong className="text-foreground font-mono">
                 {cloneSourceRole?.code}
               </strong>{" "}
@@ -1439,7 +1497,7 @@ export const RoleManagement: React.FC = () => {
               <div>
                 <div className="font-extrabold text-foreground">{cloneSourceRole.name}</div>
                 <div className="text-muted-foreground font-mono text-[11px]">
-                  {cloneSourceRole.code} &bull; {cloneSourceRole.permissionCount ?? 0} Quyền &bull; {cloneSourceRole.userCount ?? 0} Users
+                  {cloneSourceRole.code} &bull; {cloneSourceRole.permissionCount ?? 0} Quyền &bull; {cloneSourceRole.userCount ?? 0} Người dùng
                 </div>
               </div>
             </div>
@@ -1453,7 +1511,7 @@ export const RoleManagement: React.FC = () => {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="text-xs font-semibold text-muted-foreground">
-                      Tên Role mới <span className="text-red-500">*</span>
+                      Tên Vai trò mới <span className="text-destructive">*</span>
                     </FormLabel>
                     <FormControl>
                       <Input
@@ -1476,7 +1534,7 @@ export const RoleManagement: React.FC = () => {
                     <FormLabel className="text-xs font-semibold text-muted-foreground">Mô tả chức năng</FormLabel>
                     <FormControl>
                       <Input
-                        placeholder="Mô tả mục đích sử dụng của Role mới..."
+                        placeholder="Mô tả mục đích sử dụng của Vai trò mới..."
                         className="h-9 text-sm border-border/30"
                         {...field}
                       />
@@ -1486,9 +1544,9 @@ export const RoleManagement: React.FC = () => {
                 )}
               />
 
-              <div className="px-3 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-700 font-medium flex items-start gap-2">
+              <div className="px-3 py-2.5 rounded-xl bg-chart-1/10 border border-chart-1/20 text-[11px] text-chart-1 font-medium flex items-start gap-2">
                 <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                <span>Role mới sẽ kế thừa toàn bộ danh sách Quyền từ Role gốc. Mã Code sẽ được hệ thống tự động sinh.</span>
+                <span>Vai trò mới sẽ kế thừa toàn bộ danh sách Quyền từ Vai trò gốc. Mã Code sẽ được hệ thống tự động sinh.</span>
               </div>
 
               <DialogFooter className="pt-1">

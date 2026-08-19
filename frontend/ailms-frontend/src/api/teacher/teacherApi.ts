@@ -43,6 +43,13 @@ export interface TeacherClassCard {
   status: "ACTIVE" | "COMPLETED";
 }
 
+export interface TeacherOneOnOneRequest {
+  id: string;
+  status: string;
+  trialClassId?: string | null;
+  trialSessionId?: string | null;
+}
+
 export interface ClassStudentDetail {
   id: string;
   studentId: string;
@@ -75,6 +82,7 @@ export interface OnlineClassSession {
   secondsLeftToReview?: number;
   attendanceData?: { studentId: string; status: "PRESENT" | "ABSENT" | "LATE" }[];
   reviewNote?: string;
+  trialRequestId?: string | null;
 }
 
 export interface TeacherCourseItem {
@@ -163,6 +171,17 @@ export interface LeaveRequestRecord {
   createdAt: string;
 }
 
+export interface TeacherWorkRequest {
+  id: string;
+  type: string;
+  targetId: string;
+  reason: string;
+  status: "PENDING" | "CONFIRMED" | "REJECTED" | "CANCELLED";
+  decisionComment?: string;
+  createdAt: string;
+  decidedAt?: string;
+}
+
 export interface TeacherActivityItem {
   id: string;
   type: "CLASS_STUDENT_JOINED" | "ASSIGNMENT_SUBMITTED" | "QUIZ_SUBMITTED" | "TEACHING_SESSION_COMPLETED" | "SESSION_REVIEWED";
@@ -181,7 +200,7 @@ export const teacherApi = {
 
   getAgenda: async (): Promise<AgendaSessionItem[]> => {
     const res = await httpClient.get<ApiResponse<AgendaSessionItem[]>>("/v1/teacher/dashboard/agenda");
-    return res.data.data || [];
+    return res.data.data;
   },
 
   getLatestActivities: async (): Promise<TeacherActivityItem[]> => {
@@ -194,18 +213,38 @@ export const teacherApi = {
     return res.data.data || [];
   },
 
+  /** Lấy các yêu cầu 1-1 được giao để mở đúng buổi học thử cần nhận xét. */
+  getAssignedOneOnOneRequests: async (): Promise<TeacherOneOnOneRequest[]> => {
+    const res = await httpClient.get<ApiResponse<TeacherOneOnOneRequest[]>>("/v1/instructors/one-on-one/requests/assigned");
+    return res.data.data || [];
+  },
+
   getClassStudents: async (classId: string): Promise<ClassStudentDetail[]> => {
     const res = await httpClient.get<ApiResponse<ClassStudentDetail[]>>(`/v1/teacher/classes/${classId}/students`);
     return res.data.data || [];
   },
 
-  getOnlineSessions: async (): Promise<OnlineClassSession[]> => {
-    const res = await httpClient.get<ApiResponse<OnlineClassSession[]>>("/v1/teacher/sessions/online");
-    return res.data.data || [];
+  /** Lấy lịch dạy thật trong đúng khoảng ngày đang hiển thị. */
+  getOnlineSessions: async (from?: string, to?: string): Promise<OnlineClassSession[]> => {
+    const res = await httpClient.get<ApiResponse<OnlineClassSession[]>>("/v1/teacher/sessions/online", {
+      params: { from, to },
+    });
+    return res.data.data;
   },
 
   submitSessionReview: async (sessionId: string, _attendanceData: any, note: string): Promise<boolean> => {
     await httpClient.post(`/v1/teacher/sessions/${sessionId}/review`, { note });
+    return true;
+  },
+  /** Gửi nhận xét chuyên biệt cho buổi học thử 1-1 trong cửa sổ 24 giờ. */
+  submitOneOnOneTrialReview: async (requestId: string, note: string): Promise<boolean> => {
+    await httpClient.post(`/v1/instructors/one-on-one/requests/${requestId}/trial-review`, {
+      currentLevel: "Đã tham gia buổi học thử",
+      weakAreas: "Cần tiếp tục đánh giá trong các buổi học chính thức",
+      learningAttitude: "Tích cực tham gia",
+      recommendedPath: "Tiếp tục lộ trình đã đăng ký",
+      additionalNotes: note,
+    });
     return true;
   },
   getCourses: async (): Promise<TeacherCourseItem[]> => {
@@ -297,7 +336,22 @@ export const teacherApi = {
   },
 
   cancelLeaveRequest: async (id: string): Promise<boolean> => {
-    await httpClient.post(`/v1/leave-requests/${id}/cancel`);
+    await httpClient.post(`/v1/teacher/leave-requests/${id}/cancel`);
     return true;
+  },
+
+  /** Lấy lịch sử yêu cầu đổi/rời lớp của chính người dạy. */
+  getWorkRequests: async (): Promise<TeacherWorkRequest[]> => {
+    const res = await httpClient.get<ApiResponse<TeacherWorkRequest[]>>("/v1/teacher/requests");
+    return res.data.data || [];
+  },
+
+  /** Gửi yêu cầu rời lớp, backend chịu trách nhiệm kiểm tra ngưỡng số buổi 30%. */
+  createClassWithdrawalRequest: async (classId: string, reason: string): Promise<TeacherWorkRequest> => {
+    const res = await httpClient.post<ApiResponse<TeacherWorkRequest>>("/v1/teacher/requests/class-withdrawal", {
+      classId,
+      reason,
+    });
+    return res.data.data;
   },
 };

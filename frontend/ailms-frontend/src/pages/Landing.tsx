@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Link, useNavigate, useLocation, Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { courseApi } from "@/api/courses/courseApi";
 import { reviewApi } from "@/api/reviews/reviewApi";
@@ -21,10 +21,11 @@ import {
   Award
   ,CalendarDays
 } from "lucide-react";
-import { CourseScrollContainer } from "@/components/courses/CourseScrollContainer";
 import { publicCatalogApi, type PublicTeacher } from "@/api/public/publicCatalogApi";
+import { CourseScrollContainer } from "@/components/courses/CourseScrollContainer";
 import type { PageResponse } from "@/types/base";
 import { formatCourseLevel } from "@/utils/searchUtils";
+import { resolveAvatarUrl } from "@/utils/avatarUrl";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 interface LandingCourse {
@@ -32,6 +33,8 @@ interface LandingCourse {
   name: string;
   image?: string | null;
   thumbnailUrl?: string | null;
+  coverImage?: string | null;
+  imageUrl?: string | null;
   categoryName?: string | null;
   level?: string | null;
   createdAt?: string | null;
@@ -39,6 +42,7 @@ interface LandingCourse {
   enrollmentCount?: number | null;
   suggestedPrice?: number | null;
 }
+
 
 interface LandingReview {
   id: string;
@@ -685,7 +689,7 @@ export const Landing: React.FC = () => {
                   ) : currentCourses.length > 0 ? (
                     <CourseScrollContainer
                       itemCount={currentCourses.length}
-                      onScroll={(e) => { handleScroll(e, tabVal as "popular" | "trending" | "new"); }}
+                      onScroll={(e: React.UIEvent<HTMLDivElement>) => { handleScroll(e, tabVal as "popular" | "trending" | "new"); }}
                       /* 
                        * Cấu hình căn lề responsive:
                        * - Khi có ít hơn 3 thẻ khóa học: mobile dùng justify-start để người dùng cuộn mượt từ góc trái qua,
@@ -702,9 +706,9 @@ export const Landing: React.FC = () => {
                           className="flex-none w-65 sm:w-72.5 snap-start flex flex-col bg-card rounded-2xl border border-border/70 shadow-sm hover:shadow-lg hover:border-primary/40 hover:-translate-y-1.5 cursor-pointer overflow-hidden group transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-primary/50"
                         >
                           <div className="relative aspect-video overflow-hidden bg-muted">
-                            {course.image || course.thumbnailUrl ? (
+                            {course.thumbnailUrl || course.image || course.coverImage || course.imageUrl ? (
                               <img
-                                src={course.image ?? course.thumbnailUrl ?? undefined}
+                                src={resolveAvatarUrl(course.thumbnailUrl || course.image || course.coverImage || course.imageUrl)}
                                 alt={course.name}
                                 className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300"
                               />

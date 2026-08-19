@@ -20,7 +20,7 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({ quiz, onSave }) => {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [timeLimitMin, setTimeLimitMin] = useState(15);
-  const [passScore, setPassScore] = useState(8.0);
+  const [passScore, setPassScore] = useState(70);
   const [maxAttempts, setMaxAttempts] = useState(3);
   const [shuffleQuestions, setShuffleQuestions] = useState(true);
   const [questions, setQuestions] = useState<QuestionItem[]>([]);
@@ -31,23 +31,13 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({ quiz, onSave }) => {
       setTitle(quiz.title || "");
       setDescription(quiz.description || "");
       setTimeLimitMin(quiz.timeLimitMin || 15);
-      setPassScore(quiz.passScore || 8.0);
+      setPassScore(quiz.passScore ?? 70);
       setMaxAttempts(quiz.maxAttempts || 3);
       setShuffleQuestions(quiz.shuffleQuestions !== false);
-      if ((quiz as any).questions && Array.isArray((quiz as any).questions) && (quiz as any).questions.length > 0) {
-        setQuestions((quiz as any).questions);
-      } else if (quiz.description && quiz.description.trim().startsWith("[")) {
-        try {
-          const parsed = JSON.parse(quiz.description);
-          if (Array.isArray(parsed)) {
-            setQuestions(parsed);
-          }
-        } catch {
-          // Keep description fallback
-        }
-      } else {
-        setQuestions([]);
-      }
+      setQuestions(Array.isArray(quiz.questions) ? quiz.questions.map((question) => ({
+        ...question,
+        options: question.options.map((option) => ({ ...option, isCorrect: Boolean(option.isCorrect) })),
+      })) : []);
     }
   }, [quiz]);
 
@@ -63,9 +53,7 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({ quiz, onSave }) => {
     e.preventDefault();
     onSave(quiz.id, {
       title,
-      description: questions.length > 0
-        ? JSON.stringify(questions)
-        : (quiz.description && quiz.description.trim().startsWith("[") ? quiz.description : description),
+      description,
       timeLimitMin,
       passScore,
       maxAttempts,
@@ -136,7 +124,7 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({ quiz, onSave }) => {
         <div className="space-y-1">
           <Label className="text-xs font-bold">Mô tả / Hướng dẫn làm bài</Label>
           <Textarea
-            value={description.startsWith("[") ? "" : description}
+            value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={2}
             className="text-xs"
@@ -160,13 +148,13 @@ export const QuizBuilder: React.FC<QuizBuilderProps> = ({ quiz, onSave }) => {
           </div>
 
           <div className="space-y-1">
-            <Label className="text-xs font-bold">Điểm đạt tối thiểu (Thang điểm 10)</Label>
+            <Label className="text-xs font-bold">Điểm đạt tối thiểu (Thang điểm 100)</Label>
             <div className="relative">
               <Input
                 type="number"
-                step="0.5"
+                step="1"
                 min={0}
-                max={10}
+                max={100}
                 value={passScore}
                 onChange={(e) => setPassScore(parseFloat(e.target.value) || 0)}
                 className="h-9 pl-8 text-sm"

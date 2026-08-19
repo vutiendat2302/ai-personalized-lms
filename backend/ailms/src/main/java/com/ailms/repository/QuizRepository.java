@@ -12,6 +12,9 @@ import com.ailms.entity.enums.BaseStatusEnum;
 
 @Repository
 public interface QuizRepository extends BaseRepository<QuizEntity, Long> {
+    /** Kiểm tra mã quiz tự sinh đã tồn tại hay chưa. */
+    boolean existsByCode(String code);
+
     List<QuizEntity> findByLessonId(Long lessonId);
 
     List<QuizEntity> findByCourseId(Long courseId);

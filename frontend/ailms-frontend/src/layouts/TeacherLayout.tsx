@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, type ReactNode } from "react";
 import { Outlet, Link, useLocation } from "react-router-dom";
 import {
   GraduationCap,
@@ -8,15 +8,13 @@ import {
   BookOpen,
   ClipboardList,
   FileCheck,
-  Clock,
-  TrendingUp,
   DollarSign,
-  CalendarOff,
   ChevronRight,
   Menu,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { AiChatWidget } from "@/components/admin/chat/AdminAiChatWidget";
+import { Button } from "@/components/ui/button";
 
 interface NavSection {
   title: string;
@@ -25,14 +23,13 @@ interface NavSection {
     path: string;
     icon: React.ComponentType<{ className?: string }>;
     requiresTeacher?: boolean; // if true, hide for TA position
-    badgeCount?: number;
   }[];
 }
 
 /**
  * Component Layout chung định hình Sidebar và Content cho phân hệ Giảng viên & Trợ giảng.
  */
-export const TeacherLayout: React.FC = () => {
+export const TeacherLayout: React.FC<{ children?: ReactNode }> = ({ children }) => {
   const location = useLocation();
   const { auth } = useAuth();
   const { user } = auth;
@@ -52,14 +49,8 @@ export const TeacherLayout: React.FC = () => {
 
   // Determine if current user position is purely TA (without TEACHER or ADMIN role)
   const isTA = Boolean(
-    user?.roles?.some((r: any) => {
-      const roleStr = (typeof r === "object" ? (r?.code || r?.name || "") : String(r)).toUpperCase().replace("ROLE_", "");
-      return roleStr === "TA";
-    }) &&
-    !user?.roles?.some((r: any) => {
-      const roleStr = (typeof r === "object" ? (r?.code || r?.name || "") : String(r)).toUpperCase().replace("ROLE_", "");
-      return roleStr === "TEACHER" || roleStr === "ADMIN" || roleStr === "HR";
-    })
+    user?.roles.includes("TA")
+    && !user.roles.some((role) => role === "TEACHER" || role === "ADMIN" || role === "HR"),
   );
 
   const navSections: NavSection[] = [
@@ -70,22 +61,20 @@ export const TeacherLayout: React.FC = () => {
         { label: "Quản lý Khóa học", path: "/teacher/courses", icon: BookOpen, requiresTeacher: true },
         { label: "Quản lý Bài tập & Bài thi", path: "/teacher/assessments", icon: FileCheck, requiresTeacher: true },
         { label: "Lớp học đảm nhận", path: "/teacher/classes", icon: Users },
-        { label: "Lịch dạy Online", path: "/teacher/schedule", icon: Calendar, badgeCount: 1 },
-        { label: "Lớp gợi ý nhận lớp", path: "/teacher/suggested-classes", icon: Sparkles, badgeCount: 4 },
+        { label: "Lịch dạy Online", path: "/teacher/schedule", icon: Calendar },
+        { label: "Lớp gợi ý nhận lớp", path: "/teacher/suggested-classes", icon: Sparkles },
       ],
     },
     {
       title: "ĐÁNH GIÁ HỌC VIÊN",
       items: [
-        { label: "Chấm bài & Đánh giá", path: "/teacher/grading", icon: ClipboardList, badgeCount: 8 },
-        { label: "Điểm danh lớp", path: "/teacher/attendance", icon: Clock },
+        { label: "Chấm bài & Đánh giá", path: "/teacher/grading", icon: ClipboardList },
       ],
     },
     {
       title: "THU NHẬP & NHÂN SỰ",
       items: [
         { label: "Thu nhập & Buổi dạy", path: "/teacher/earnings", icon: DollarSign },
-        { label: "Đơn nghỉ / Báo bận", path: "/teacher/leave-requests", icon: CalendarOff },
       ],
     },
   ];
@@ -115,23 +104,26 @@ export const TeacherLayout: React.FC = () => {
               </div>
             )}
 
-            <button
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
               onClick={toggleCollapse}
-              className="p-2 rounded-lg bg-background/80 hover:bg-primary/40 hover:text-primary text-primary transition-all duration-200 shadow-xs flex items-center justify-center cursor-pointer"
+              className="bg-background/80 text-primary shadow-xs hover:bg-primary/40 hover:text-primary"
               title={isCollapsed ? "Mở rộng thanh menu" : "Thu gọn thanh menu"}
             >
               <Menu className="h-4.5 w-4.5" />
-            </button>
+            </Button>
           </div>
 
           {/* Navigation Links */}
           <nav className="flex-1 overflow-y-auto p-2.5 space-y-5 scrollbar-thin">
-            {navSections.map((group, idx) => {
+            {navSections.map((group) => {
               const visibleItems = group.items.filter((item) => !(item.requiresTeacher && isTA));
               if (visibleItems.length === 0) return null;
 
               return (
-                <div key={idx} className="space-y-1.5">
+                <div key={group.title} className="space-y-1.5">
                   {!isCollapsed && (
                     <h4 className="px-3 text-[10px] font-black uppercase tracking-wider text-muted-foreground/70 truncate">
                       {group.title}
@@ -164,15 +156,7 @@ export const TeacherLayout: React.FC = () => {
                             {!isCollapsed && <span className="truncate">{item.label}</span>}
                           </div>
 
-                          {!isCollapsed && (
-                            isActive ? (
-                              <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-80" />
-                            ) : item.badgeCount && item.badgeCount > 0 ? (
-                              <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black bg-primary/10 text-primary">
-                                {item.badgeCount}
-                              </span>
-                            ) : null
-                          )}
+                          {!isCollapsed && isActive && <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-80" />}
                         </Link>
                       );
                     })}
@@ -186,7 +170,7 @@ export const TeacherLayout: React.FC = () => {
 
       {/* Main Content */}
       <main className="flex-1 p-6 md:p-8 w-full min-w-0 overflow-x-clip bg-background">
-        <Outlet />
+        {children ?? <Outlet />}
       </main>
       <AiChatWidget />
     </div>

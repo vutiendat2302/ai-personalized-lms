@@ -238,7 +238,7 @@ export const SalesOrderListPage: React.FC = () => {
                 onChange={(e) => setHasCoupon(e.target.value)}
                 className="h-8 w-full text-xs bg-card border border-border/60 rounded-md px-2 text-foreground"
               >
-                <option value="ALL">Tất cả (Có hoặc không)</option>
+                <option value="ALL">Tất cả</option>
                 <option value="YES">Có áp dụng Coupon</option>
                 <option value="NO">Không dùng Coupon</option>
               </select>

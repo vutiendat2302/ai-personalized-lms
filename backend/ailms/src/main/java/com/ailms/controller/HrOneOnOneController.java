@@ -3,6 +3,7 @@ package com.ailms.controller;
 import com.ailms.request.OneOnOneActionRequest;
 import com.ailms.request.OneOnOneConnectionRejectRequest;
 import com.ailms.request.OneOnOneNotifyInstructorsRequest;
+import com.ailms.request.OneOnOneTrialClassRequest;
 import com.ailms.response.ApiResponse;
 import com.ailms.response.OneOnOneInstructorCandidateResponse;
 import com.ailms.response.OneOnOneRequestResponse;
@@ -31,11 +32,23 @@ public class HrOneOnOneController {
                 "HR one-on-one requests retrieved successfully", oneOnOneService.getHrRequests()));
     }
 
-    /** Đánh dấu HR đã kết nối học viên với người dạy. */
+    /** Xác nhận kết nối và tạo luôn lớp cùng buổi học thử. */
     @PostMapping("/{requestId}/mark-contacted")
-    public ResponseEntity<ApiResponse<OneOnOneRequestResponse>> markContacted(@PathVariable Long requestId) {
+    public ResponseEntity<ApiResponse<OneOnOneRequestResponse>> markContacted(
+            @PathVariable Long requestId,
+            @Valid @RequestBody OneOnOneTrialClassRequest request) {
         return ResponseEntity.ok(ApiResponse.of(
-                "One-on-one request marked as contacted", oneOnOneService.markContacted(requestId)));
+                "One-on-one connection and trial scheduled",
+                oneOnOneService.markContacted(requestId, request)));
+    }
+
+    /** HR đổi lịch học thử và vẫn giữ nguyên giáo viên đã kết nối. */
+    @PutMapping("/{requestId}/trial-class")
+    public ResponseEntity<ApiResponse<OneOnOneRequestResponse>> rescheduleTrialClass(
+            @PathVariable Long requestId,
+            @Valid @RequestBody OneOnOneTrialClassRequest request) {
+        return ResponseEntity.ok(ApiResponse.of(
+                "One-on-one trial rescheduled", oneOnOneService.rescheduleTrialClass(requestId, request)));
     }
 
     /** Từ chối kết nối hiện tại và mở lại yêu cầu cho người dạy khác. */

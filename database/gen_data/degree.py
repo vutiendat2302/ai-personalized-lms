@@ -1,99 +1,86 @@
-"""
-degree.py
---------------
-Seed dữ liệu cho bảng `degree`.
-- Tự động lấy tất cả category_id đang có trong DB và gán ngẫu nhiên.
-- Dữ liệu thực tế, đa dạng các trường Đại học.
-"""
+"""Master data văn bằng và chứng chỉ chuyên môn dùng cho hồ sơ nhân sự."""
 
-import random
 from snowflake_id import snowflake
 
-# Dữ liệu thực tế, phong phú hơn.
-DEGREES = [
-    # Nhóm miền Bắc & Hà Nội
-    {"uni": "Đại học Bách Khoa Hà Nội (HUST)", "logo": "hust_logo.png", "title": "Cử nhân Khoa học Máy tính", "type": "BACHELORS", "dur": "4 Năm", "img": "hust_cs.jpg"},
-    {"uni": "Đại học Bách Khoa Hà Nội (HUST)", "logo": "hust_logo.png", "title": "Thạc sĩ Khoa học Dữ liệu", "type": "MASTERS", "dur": "2 Năm", "img": "hust_ds_master.jpg"},
-    {"uni": "Đại học Khoa học Tự nhiên, ĐHQGHN", "logo": "hus_logo.png", "title": "Cử nhân Toán học và Khoa học Máy tính", "type": "BACHELORS", "dur": "4 Năm", "img": "hus_math_cs.jpg"},
-    {"uni": "Đại học Công nghệ, ĐHQGHN", "logo": "uet_logo.png", "title": "Cử nhân Kỹ thuật Máy tính", "type": "BACHELORS", "dur": "4 Năm", "img": "uet_ce.jpg"},
-    {"uni": "Đại học Ngoại thương (FTU)", "logo": "ftu_logo.png", "title": "Cử nhân Kinh tế Đối ngoại", "type": "BACHELORS", "dur": "4 Năm", "img": "ftu_eco.jpg"},
-    {"uni": "Đại học Ngoại thương (FTU)", "logo": "ftu_logo.png", "title": "Thạc sĩ Quản trị Kinh doanh (MBA)", "type": "MASTERS", "dur": "1.5 Năm", "img": "ftu_mba.jpg"},
-    {"uni": "Đại học Kinh tế Quốc dân (NEU)", "logo": "neu_logo.png", "title": "Cử nhân Tài chính Ngân hàng", "type": "BACHELORS", "dur": "4 Năm", "img": "neu_finance.jpg"},
-    {"uni": "Đại học Hà Nội (HANU)", "logo": "hanu_logo.png", "title": "Cử nhân Ngôn ngữ Anh", "type": "BACHELORS", "dur": "4 Năm", "img": "hanu_eng.jpg"},
-    {"uni": "Đại học FPT", "logo": "fpt_logo.png", "title": "Cử nhân Kỹ thuật Phần mềm", "type": "BACHELORS", "dur": "3.5 Năm", "img": "fpt_se.jpg"},
-    {"uni": "Đại học FPT", "logo": "fpt_logo.png", "title": "Cử nhân Thiết kế Đồ họa", "type": "BACHELORS", "dur": "3.5 Năm", "img": "fpt_design.jpg"},
-    {"uni": "VinUni", "logo": "vinuni_logo.png", "title": "Cử nhân Khoa học Máy tính", "type": "BACHELORS", "dur": "4 Năm", "img": "vinuni_cs.jpg"},
-    
-    # Nhóm miền Nam
-    {"uni": "RMIT University Vietnam", "logo": "rmit_logo.png", "title": "Cử nhân Truyền thông số", "type": "BACHELORS", "dur": "3 Năm", "img": "rmit_media.jpg"},
-    {"uni": "RMIT University Vietnam", "logo": "rmit_logo.png", "title": "Cử nhân Kinh doanh Quốc tế", "type": "BACHELORS", "dur": "3 Năm", "img": "rmit_business.jpg"},
-    {"uni": "ĐH Khoa học Tự nhiên, ĐHQG-HCM", "logo": "hcmus_logo.png", "title": "Cử nhân Trí tuệ Nhân tạo", "type": "BACHELORS", "dur": "4 Năm", "img": "hcmus_ai.jpg"},
-    {"uni": "Đại học Bách Khoa, ĐHQG-HCM", "logo": "hcmut_logo.png", "title": "Kỹ sư Cơ điện tử", "type": "BACHELORS", "dur": "4.5 Năm", "img": "hcmut_mechatronics.jpg"},
-    {"uni": "Đại học Kinh tế TP.HCM (UEH)", "logo": "ueh_logo.png", "title": "Cử nhân Marketing", "type": "BACHELORS", "dur": "3.5 Năm", "img": "ueh_marketing.jpg"},
 
-    # Nhóm Quốc tế
-    {"uni": "National University of Singapore (NUS)", "logo": "nus_logo.png", "title": "Master of Computing", "type": "MASTERS", "dur": "1.5 Năm", "img": "nus_computing.jpg"},
-    {"uni": "Nanyang Technological University (NTU)", "logo": "ntu_logo.png", "title": "Bachelor of Data Science", "type": "BACHELORS", "dur": "4 Năm", "img": "ntu_ds.jpg"},
-    {"uni": "Stanford University", "logo": "stanford_logo.png", "title": "Master of Computer Science", "type": "MASTERS", "dur": "2 Năm", "img": "stanford_cs.jpg"},
-    {"uni": "MIT", "logo": "mit_logo.png", "title": "Master of Business Analytics", "type": "MASTERS", "dur": "1.5 Năm", "img": "mit_analytics.jpg"},
+QUALIFICATIONS = [
+    {"category": "Kỹ thuật phần mềm", "issuer": "Đại học Bách khoa Hà Nội", "title": "Kỹ sư Công nghệ Thông tin", "type": "ENGINEER", "duration": "5 năm"},
+    {"category": "Khoa học dữ liệu & AI", "issuer": "Đại học Công nghệ - ĐHQGHN", "title": "Cử nhân Khoa học Máy tính", "type": "BACHELORS", "duration": "4 năm"},
+    {"category": "Khoa học dữ liệu & AI", "issuer": "Đại học Khoa học Tự nhiên - ĐHQG-HCM", "title": "Cử nhân Trí tuệ Nhân tạo", "type": "BACHELORS", "duration": "4 năm"},
+    {"category": "Khoa học dữ liệu & AI", "issuer": "Đại học Bách khoa Hà Nội", "title": "Thạc sĩ Khoa học Dữ liệu", "type": "MASTERS", "duration": "2 năm"},
+    {"category": "Kỹ thuật phần mềm", "issuer": "Đại học Công nghệ - ĐHQGHN", "title": "Thạc sĩ Kỹ thuật Phần mềm", "type": "MASTERS", "duration": "2 năm"},
+    {"category": "Khoa học dữ liệu & AI", "issuer": "Đại học Quốc gia Hà Nội", "title": "Tiến sĩ Khoa học Máy tính", "type": "DOCTORATE", "duration": "3-4 năm"},
+    {"category": "Thiết kế UI/UX", "issuer": "Đại học Mỹ thuật Công nghiệp", "title": "Cử nhân Thiết kế Đồ họa", "type": "BACHELORS", "duration": "4 năm"},
+    {"category": "Marketing số", "issuer": "Đại học Kinh tế Quốc dân", "title": "Cử nhân Marketing", "type": "BACHELORS", "duration": "4 năm"},
+    {"category": "Kinh doanh & Khởi nghiệp", "issuer": "Đại học Ngoại thương", "title": "Thạc sĩ Quản trị Kinh doanh", "type": "MASTERS", "duration": "1.5-2 năm"},
+    {"category": "Tiếng Anh luyện thi", "issuer": "Đại học Hà Nội", "title": "Cử nhân Ngôn ngữ Anh", "type": "BACHELORS", "duration": "4 năm"},
+    {"category": "Tài chính & Đầu tư", "issuer": "Đại học Kinh tế TP.HCM", "title": "Cử nhân Tài chính - Ngân hàng", "type": "BACHELORS", "duration": "4 năm"},
+    {"category": "Quản trị nhân sự", "issuer": "Đại học Kinh tế Quốc dân", "title": "Cử nhân Quản trị Nhân lực", "type": "BACHELORS", "duration": "4 năm"},
+    {"category": "DevOps & Cloud", "issuer": "Amazon Web Services", "title": "AWS Certified Solutions Architect - Associate", "type": "CERTIFICATE", "duration": "Hiệu lực 3 năm"},
+    {"category": "DevOps & Cloud", "issuer": "Microsoft", "title": "Microsoft Certified: Azure Administrator Associate", "type": "CERTIFICATE", "duration": "Gia hạn hằng năm"},
+    {"category": "DevOps & Cloud", "issuer": "Google Cloud", "title": "Professional Cloud Architect", "type": "CERTIFICATE", "duration": "Hiệu lực 2 năm"},
+    {"category": "DevOps & Cloud", "issuer": "Cloud Native Computing Foundation", "title": "Certified Kubernetes Administrator (CKA)", "type": "CERTIFICATE", "duration": "Hiệu lực 2 năm"},
+    {"category": "Quản trị dự án", "issuer": "Project Management Institute", "title": "Project Management Professional (PMP)", "type": "CERTIFICATE", "duration": "Chu kỳ duy trì 3 năm"},
+    {"category": "Quản trị dự án", "issuer": "Scrum.org", "title": "Professional Scrum Master I (PSM I)", "type": "CERTIFICATE", "duration": "Không thời hạn"},
+    {"category": "An toàn thông tin", "issuer": "ISC2", "title": "Certified Information Systems Security Professional (CISSP)", "type": "CERTIFICATE", "duration": "Chu kỳ duy trì 3 năm"},
+    {"category": "An toàn thông tin", "issuer": "CompTIA", "title": "CompTIA Security+", "type": "CERTIFICATE", "duration": "Hiệu lực 3 năm"},
+    {"category": "Tiếng Anh luyện thi", "issuer": "IELTS Partners", "title": "IELTS Academic 8.0", "type": "CERTIFICATE", "duration": "Khuyến nghị 2 năm"},
+    {"category": "Tiếng Anh luyện thi", "issuer": "ETS", "title": "TOEIC Listening & Reading 900+", "type": "CERTIFICATE", "duration": "Khuyến nghị 2 năm"},
+    {"category": "Tiếng Nhật", "issuer": "Japan Foundation / JEES", "title": "Japanese-Language Proficiency Test N1", "type": "CERTIFICATE", "duration": "Không thời hạn"},
+    {"category": "Thiết kế UI/UX", "issuer": "Google", "title": "Google UX Design Professional Certificate", "type": "CERTIFICATE", "duration": "Chứng chỉ nghề nghiệp"},
 ]
 
-def get_all_category_ids(cursor):
-    """Lấy danh sách tất cả category_id đang có trong DB."""
-    cursor.execute("SELECT id FROM category")
-    rows = cursor.fetchall()
-    return [row["id"] for row in rows] if rows else []
 
-def get_degree_id(cursor, university_name: str, title: str):
-    """Kiểm tra xem bằng cấp này đã được seed chưa để tránh duplicate."""
+def get_category_map(cursor):
+    """Tải category name -> ID để gán qualification xác định, không random."""
+    cursor.execute("SELECT id, name FROM category")
+    return {row["name"]: row["id"] for row in cursor.fetchall()}
+
+
+def get_degree_id(cursor, issuer, title):
+    """Tìm qualification theo tổ chức cấp và tên văn bằng."""
     cursor.execute(
-        "SELECT id FROM degree WHERE university_name = %s AND title = %s LIMIT 1", 
-        (university_name, title)
+        "SELECT id FROM degree WHERE university_name=%s AND title=%s LIMIT 1",
+        (issuer, title),
     )
     row = cursor.fetchone()
     return row["id"] if row else None
 
-def seed(cursor):
-    """Insert dữ liệu degree."""
-    print("→ Seeding degrees...")
-    
-    category_ids = get_all_category_ids(cursor)
-    if not category_ids:
-        print("   [error] Không có category nào trong DB! Vui lòng seed bảng category trước.")
-        return
 
-    count = 0
-    for d in DEGREES:
-        existing_id = get_degree_id(cursor, d["uni"], d["title"])
+def validate_catalog():
+    """Kiểm tra không trùng qualification và mọi loại đều thuộc enum mở rộng."""
+    keys = [(item["issuer"], item["title"]) for item in QUALIFICATIONS]
+    allowed_types = {"ASSOCIATE", "BACHELORS", "ENGINEER", "MASTERS", "DOCTORATE", "CERTIFICATE"}
+    if len(keys) != len(set(keys)):
+        raise ValueError("Qualification bị trùng trong master catalog.")
+    if any(item["type"] not in allowed_types for item in QUALIFICATIONS):
+        raise ValueError("Qualification dùng type chưa được hỗ trợ.")
+
+
+def seed(cursor):
+    """Đồng bộ qualification theo natural key với category rõ ràng và không dùng ảnh giả."""
+    validate_catalog()
+    print("→ Seeding qualifications...")
+    categories = get_category_map(cursor)
+    for item in QUALIFICATIONS:
+        category_id = categories.get(item["category"])
+        if category_id is None:
+            raise ValueError(f"Không tìm thấy category cho qualification: {item['category']}")
+        existing_id = get_degree_id(cursor, item["issuer"], item["title"])
+        values = (category_id, item["issuer"], item["title"], item["type"], item["duration"])
         if existing_id:
-            print(f"   [skip] Bằng cấp '{d['title']}' tại '{d['uni']}' đã tồn tại.")
-            continue
-        
-        # Chọn ngẫu nhiên 1 category_id đang có thật trong DB
-        random_category_id = random.choice(category_ids)
-        new_id = snowflake.next_id()
-        
-        cursor.execute(
-            """
-            INSERT INTO degree (
-                id, category_id, university_name, university_logo, title, 
-                type, duration, image, status, created_at, updated_at
+            cursor.execute(
+                """UPDATE degree SET category_id=%s, university_name=%s, title=%s, type=%s,
+                   duration=%s, university_logo=NULL, image=NULL, status='ACTIVE', updated_at=NOW()
+                   WHERE id=%s""",
+                (*values, existing_id),
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
-            """,
-            (
-                new_id, 
-                random_category_id, 
-                d["uni"], 
-                d["logo"], 
-                d["title"], 
-                d["type"], 
-                d["dur"], 
-                d["img"], 
-                "ACTIVE"
-            ),
+            continue
+        cursor.execute(
+            """INSERT INTO degree
+               (id, category_id, university_name, university_logo, title, type, duration,
+                image, status, created_at, updated_at)
+               VALUES (%s, %s, %s, NULL, %s, %s, %s, NULL, 'ACTIVE', NOW(), NOW())""",
+            (snowflake.next_id(), *values),
         )
-        count += 1
-        print(f"   [insert] {d['title']} - {d['uni']} (id={new_id})")
-        
-    print(f"   Đã thêm mới {count} degrees.")
+    print(f"   [completed] qualifications synchronized: {len(QUALIFICATIONS)}")

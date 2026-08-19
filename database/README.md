@@ -146,7 +146,7 @@ mindmap
 
 ## 📜 4. Danh mục Bản ghi Migration Tuần tự (Versioned Migrations)
 
-Toàn bộ các thay đổi cấu trúc bảng được lưu trữ dưới dạng các tệp SQL Migration có phiên bản tuần tự từ `v1` đến `v22` trong thư mục `database/`:
+Toàn bộ các thay đổi cấu trúc bảng được lưu trữ dưới dạng các tệp SQL Migration có phiên bản tuần tự từ `v1` đến `v28` trong thư mục `database/`:
 
 | Phiên bản | Tên tệp Migration | Mục đích & Thay đổi chính |
 | :---: | :--- | :--- |
@@ -172,30 +172,43 @@ Toàn bộ các thay đổi cấu trúc bảng được lưu trữ dưới dạn
 | `v20` | `v20_move_support_policy_to_file_metadata.sql` | Chuyển đổi tài liệu chính sách sang quản lý qua `file_metadata` và lưu trên MinIO S3. |
 | `v21` | `v21_add_support_contact_name.sql` | Bổ sung họ tên và email định danh khách vãng lai trong hàng đợi tư vấn viên. |
 | `v22` | `v22_expand_file_usage_type_for_policy.sql` | Mở rộng enum `usage_type` trong `file_metadata` hỗ trợ lưu trữ tệp quy chế (`POLICY`). |
+| `v23` | `v23_remove_combo_delivery_mode.sql` | Chuẩn hóa dữ liệu gói học về ba hình thức `SELF_STUDY`, `GROUP_CLASS`, `ONE_ON_ONE`. |
+| `v24` | `v24_expand_degree_qualification_types.sql` | Mở rộng danh mục bằng cấp với kỹ sư, tiến sĩ và chứng chỉ nghề nghiệp quốc tế. |
+| `v25` | `v25_add_course_thumbnail_file_usage.sql` | Bổ sung `COURSE_THUMBNAIL` để quản lý ảnh khóa học qua MinIO và `file_metadata`. |
+| `v26` | `v26_add_lesson_media_duration_seconds.sql` | Bổ sung `lesson.duration_sec` để lưu thời lượng VIDEO/AUDIO thật, tách khỏi thời lượng học ước tính `duration_min`. |
+| `v27` | `v27_coupon_multiple_courses_distribution.sql` | Cho phép coupon áp dụng nhiều khóa học và lưu phạm vi phát voucher cho toàn bộ hoặc học viên được chọn. |
+| `v28` | `v28_add_teacher_feedback_to_review.sql` | Lưu điểm và nhận xét giáo viên chính cùng đánh giá khóa học đã hoàn thành. |
 
 ---
 
 ## 🛠 5. Động cơ Sinh Dữ liệu Phát triển (`database/gen_data/`)
 
+Bộ dữ liệu báo cáo dùng một entrypoint duy nhất là `gen_data/main.py`. Có thể dry-run riêng master data trước khi chạy toàn bộ pipeline:
+
+```bash
+cd database/gen_data
+python main.py --phase static --dry-run
+python main.py
+```
+
+Hướng dẫn cấu hình, migration và xử lý lỗi được mô tả tại [`gen_data/README.md`](gen_data/README.md). Danh mục master data và quy tắc asset nằm tại [`gen_data/master-data.md`](gen_data/master-data.md).
+
 Thư mục `database/gen_data/` chứa bộ script Python chuyên dụng để sinh dữ liệu mẫu giả lập toàn diện môi trường doanh nghiệp thực tế.
 
 ```mermaid
 flowchart LR
-    Start["python database/gen_data/main.py"] --> AuthSeed["1. Department, Roles & Permissions"]
-    AuthSeed --> UserSeed["2. Users, Employees & Contracts"]
-    UserSeed --> StudentSeed["3. Student Profiles, Goals & Interests"]
-    StudentSeed --> CourseSeed["4. Categories, Courses, Sections & Lessons"]
-    CourseSeed --> ClassSeed["5. Classes, Online Sessions & Attendance"]
-    ClassSeed --> CommerceSeed["6. Packages, Orders, Coupons & Payroll"]
-    CommerceSeed --> Complete["Database Seeded Successfully!"]
+    Start["python database/gen_data/main.py"] --> Static["1. Master data"]
+    Static --> Identity["2. User, profile và MinIO"]
+    Identity --> Course["3. Khóa học qua Backend API"]
+    Course --> Complete["Final report dataset ready"]
 ```
 
 ### Cách chạy Generator nạp dữ liệu mẫu:
 ```bash
 cd database/gen_data
 
-# Cài đặt thư viện kết nối MySQL
-pip install -r requirements.txt
+# Cài dependencies trong virtual environment
+python3 -m pip install -r requirements.txt
 
 # Thực thi sinh toàn bộ dữ liệu mẫu theo thứ tự phụ thuộc
 python main.py

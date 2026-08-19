@@ -125,7 +125,7 @@ export const PermissionDetailModal: React.FC<PermissionDetailModalProps> = ({
   }, [permission, open]);
 
   const formatUserDisplay = (userVal?: string | null) => {
-    if (!userVal) return "System (Hệ thống)";
+    if (!userVal) return "Hệ thống";
     const str = String(userVal);
     if (str.includes("@")) return str;
     if (userMap[str]) {
@@ -209,19 +209,19 @@ export const PermissionDetailModal: React.FC<PermissionDetailModalProps> = ({
                   {permission.code}
                 </span>
                 {!isOrphan ? (
-                  <Badge className="bg-emerald-600 text-white font-bold text-xs">
-                    Đang được gán ({roles.length} Roles)
+                  <Badge className="bg-success-forest text-white font-bold text-xs">
+                    Đang được gán ({roles.length} Vai trò)
                   </Badge>
                 ) : (
                   <Badge variant="destructive" className="font-bold text-xs">
-                    Cảnh báo: Permission Mồ côi (No Role)
+                    Cảnh báo: Quyền chưa gán Vai trò
                   </Badge>
                 )}
               </div>
 
               <DialogDescription className="text-xs text-muted-foreground mt-1 flex items-center gap-4">
-                <span>Entity: <strong className="text-foreground font-mono uppercase">{permission.entity}</strong></span>
-                <span>Action: <strong className="text-primary font-mono uppercase">{permission.action}</strong></span>
+                <span>Thành phần: <strong className="text-foreground font-mono uppercase">{permission.entity}</strong></span>
+                <span>Thao tác: <strong className="text-primary font-mono uppercase">{permission.action}</strong></span>
               </DialogDescription>
             </div>
           </div>
@@ -234,24 +234,24 @@ export const PermissionDetailModal: React.FC<PermissionDetailModalProps> = ({
           <Card className="border-border shadow-xs">
             <CardHeader className="py-3 bg-muted/20 border-b border-border/30">
               <CardTitle className="text-xs font-extrabold text-foreground flex items-center gap-1.5 uppercase">
-                <Layers className="h-4 w-4 text-primary" /> Thông tin Kỹ thuật (Technical Spec)
+                <Layers className="h-4 w-4 text-primary" /> Thông tin chi tiết quyền
               </CardTitle>
             </CardHeader>
             <CardContent className="p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs">
               <div>
-                <span className="text-muted-foreground font-bold block">ID Hệ thống (ID):</span>
+                <span className="text-muted-foreground font-bold block">ID Hệ thống:</span>
                 <span className="font-mono font-bold text-foreground text-sm">{permission.id}</span>
               </div>
               <div>
-                <span className="text-muted-foreground font-bold block">Thực thể (Entity):</span>
+                <span className="text-muted-foreground font-bold block">Thành phần:</span>
                 <span className="font-mono font-extrabold text-foreground text-sm uppercase">{permission.entity}</span>
               </div>
               <div>
-                <span className="text-muted-foreground font-bold block">Hành động (Action):</span>
+                <span className="text-muted-foreground font-bold block">Thao tác:</span>
                 <span className="font-mono font-extrabold text-primary text-sm uppercase">{permission.action}</span>
               </div>
               <div>
-                <span className="text-muted-foreground font-bold block">Mã Code Duy Nhất:</span>
+                <span className="text-muted-foreground font-bold block">Mã quyền duy nhất:</span>
                 <span className="font-mono font-bold text-foreground">{permission.code}</span>
               </div>
               <div>
@@ -281,25 +281,25 @@ export const PermissionDetailModal: React.FC<PermissionDetailModalProps> = ({
           <Card className="border-border shadow-xs">
             <CardHeader className="py-3 bg-muted/20 border-b border-border/30 flex flex-row items-center justify-between gap-2 flex-wrap">
               <CardTitle className="text-xs font-extrabold text-foreground flex items-center gap-1.5 uppercase">
-                <Shield className="h-4 w-4 text-purple-600" /> Danh sách Roles đang gán Quyền này ({roles.length})
+                <Shield className="h-4 w-4 text-primary" /> Danh sách vai trò đang gán Quyền này ({roles.length})
               </CardTitle>
 
               <div className="flex items-center gap-2">
                 {showAssignSelect ? (
                   <div className="flex items-center gap-2">
                     {assigningRole ? (
-                      <div className="flex items-center gap-1 text-xs text-purple-600 font-semibold px-2 py-1">
+                      <div className="flex items-center gap-1 text-xs text-primary font-semibold px-2 py-1">
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         <span>Đang gán...</span>
                       </div>
                     ) : (
                       <Select value={selectedAssignRoleId} onValueChange={(val) => { setSelectedAssignRoleId(val); handleAssignRole(val); }}>
                         <SelectTrigger className="h-8 w-52 text-xs font-semibold bg-background border-border">
-                          <SelectValue placeholder="-- Chọn Role muốn gán --" />
+                          <SelectValue placeholder="-- Chọn vai trò muốn gán --" />
                         </SelectTrigger>
                         <SelectContent>
                           {availableRoles.length === 0 ? (
-                            <SelectItem value="_empty" disabled>Tất cả Roles đã được gán</SelectItem>
+                            <SelectItem value="_empty" disabled>Tất cả vai trò đã được gán</SelectItem>
                           ) : (
                             availableRoles.map(r => (
                               <SelectItem key={r.id} value={String(r.id)}>
@@ -319,9 +319,9 @@ export const PermissionDetailModal: React.FC<PermissionDetailModalProps> = ({
                     onClick={() => setShowAssignSelect(true)}
                     size="sm"
                     variant="outline"
-                    className="h-8 text-xs font-semibold gap-1.5 text-purple-600 border-purple-600/30 hover:bg-purple-600/10 cursor-pointer rounded-xl"
+                    className="h-8 text-xs font-semibold gap-1.5 text-brand-cobalt border-brand-cobalt/30 hover:bg-brand-cobalt/10 cursor-pointer rounded-xl"
                   >
-                    <Plus className="h-3.5 w-3.5" /> Gán Role mới
+                    <Plus className="h-3.5 w-3.5" /> Gán vai trò mới
                   </Button>
                 )}
               </div>
@@ -334,8 +334,8 @@ export const PermissionDetailModal: React.FC<PermissionDetailModalProps> = ({
                 </div>
               ) : roles.length === 0 ? (
                 <div className="p-6 text-center text-muted-foreground text-xs space-y-1">
-                  <AlertCircle className="h-8 w-8 mx-auto text-amber-500" />
-                  <p className="font-bold text-amber-600">Permission Mồ côi (Orphan Permission)</p>
+                  <AlertCircle className="h-8 w-8 mx-auto text-chart-1" />
+                  <p className="font-bold text-chart-1">Quyền chưa gán Vai trò</p>
                   <p>Quyền này chưa được gán cho bất kỳ vai trò nào trong hệ thống.</p>
                 </div>
               ) : (
@@ -343,7 +343,7 @@ export const PermissionDetailModal: React.FC<PermissionDetailModalProps> = ({
                   {roles.map(r => (
                     <div key={r.id} className="p-3.5 flex items-center justify-between text-xs hover:bg-muted/20 transition-colors">
                       <div className="flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-full bg-purple-600/10 text-purple-600 font-bold flex items-center justify-center border border-purple-600/20">
+                        <div className="h-8 w-8 rounded-full bg-primary/10 text-primary font-bold flex items-center justify-center border border-primary/20">
                           {r.name ? r.name.charAt(0).toUpperCase() : "R"}
                         </div>
                         <div>
@@ -351,28 +351,28 @@ export const PermissionDetailModal: React.FC<PermissionDetailModalProps> = ({
                             <span>{r.name}</span>
                             <span className="font-mono text-[10px] px-2 py-0.5 rounded bg-muted font-bold text-muted-foreground">{r.code}</span>
                           </div>
-                          <div className="text-[11px] text-muted-foreground">{r.description || "System Role"}</div>
+                          <div className="text-[11px] text-muted-foreground">{r.description || "Vai trò Hệ thống"}</div>
                         </div>
                       </div>
 
                       <div className="flex items-center gap-3">
                         <Badge variant={r.isSystem ? "default" : "outline"} className="font-bold text-[10px]">
-                          {r.isSystem ? "System" : "Custom"}
+                          {r.isSystem ? "Hệ thống" : "Tùy chỉnh"}
                         </Badge>
                         <Button
                           onClick={() => handleRemoveRole(String(r.id), r.name)}
                           disabled={removingRoleId === String(r.id)}
                           variant="ghost"
                           size="sm"
-                          className="h-8 text-xs text-red-600 hover:bg-red-500/10 gap-1 font-semibold"
-                          title="Xóa Quyền này khỏi Role"
+                          className="h-8 text-xs text-destructive hover:bg-destructive/10 gap-1 font-semibold"
+                          title="Xóa Quyền này khỏi Vai trò"
                         >
                           {removingRoleId === String(r.id) ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
                           ) : (
                             <Trash2 className="h-3.5 w-3.5" />
                           )}
-                          <span>Gỡ Role</span>
+                          <span>Gỡ vai trò</span>
                         </Button>
                       </div>
                     </div>
@@ -386,19 +386,19 @@ export const PermissionDetailModal: React.FC<PermissionDetailModalProps> = ({
           <Card className="border-border shadow-xs">
             <CardHeader className="py-3 bg-muted/20 border-b border-border/30">
               <CardTitle className="text-xs font-extrabold text-foreground flex items-center gap-1.5 uppercase">
-                <History className="h-4 w-4 text-emerald-600" /> Audit Log Lịch Sử Thao Tác
+                <History className="h-4 w-4 text-success-forest" /> Lịch sử thay đổi
               </CardTitle>
             </CardHeader>
             <CardContent className="p-4 space-y-3 text-xs">
               {loadingLogs ? (
                 <div className="flex items-center justify-center gap-2 text-muted-foreground py-4">
-                  <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
+                  <Loader2 className="h-4 w-4 animate-spin text-success-forest" />
                   <span>Đang tải lịch sử thao tác...</span>
                 </div>
               ) : auditLogs.length === 0 ? (
                 <div className="flex flex-col items-center justify-center gap-1 py-4 text-muted-foreground">
                   <Clock className="h-6 w-6 opacity-40 text-primary" />
-                  <p>Khởi tạo Permission mã <strong className="text-foreground">{permission.code}</strong> qua hệ thống Migration Seed.</p>
+                  <p>Khởi tạo Quyền mã <strong className="text-foreground">{permission.code}</strong> qua hệ thống Migration Seed.</p>
                 </div>
               ) : (
                 <div className="space-y-2.5">
@@ -414,7 +414,7 @@ export const PermissionDetailModal: React.FC<PermissionDetailModalProps> = ({
                           <span className="text-[11px] text-muted-foreground font-mono">{logItem.occurredAt ? formatDateDisplay(logItem.occurredAt) : "N/A"}</span>
                         </div>
                         <div className="text-muted-foreground text-[11px] flex items-center gap-2">
-                          <span>Thực hiện bởi: <strong className="text-foreground">{logItem.userFullName || logItem.userEmail || "System"}</strong></span>
+                          <span>Thực hiện bởi: <strong className="text-foreground">{logItem.userFullName || logItem.userEmail || "Hệ thống"}</strong></span>
                           {logItem.ipAddress && <span>(IP: {logItem.ipAddress})</span>}
                         </div>
                       </div>
@@ -435,8 +435,8 @@ export const PermissionDetailModal: React.FC<PermissionDetailModalProps> = ({
       <ConfirmDialog
         open={Boolean(removeConfirmRole)}
         onOpenChange={(open) => { if (!open) setRemoveConfirmRole(null); }}
-        title="Xác nhận gỡ Quyền khỏi Role"
-        description={`Bạn có chắc chắn muốn gỡ quyền "${permission.name}" khỏi Role "${removeConfirmRole?.name}"?`}
+        title="Xác nhận gỡ Quyền khỏi Vai trò"
+        description={`Bạn có chắc chắn muốn gỡ quyền "${permission.name}" khỏi Vai trò "${removeConfirmRole?.name}"?`}
         confirmText="Gỡ ngay"
         cancelText="Hủy bỏ"
         onConfirm={confirmRemoveRoleAction}

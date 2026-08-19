@@ -27,8 +27,7 @@ export const AdminLayout: React.FC = () => {
         "/admin/activity-log",
         "/admin/trash",
         "/admin/files",
-        "/sales",
-        "/analytics"
+        "/sales"
       ];
       if (adminOnlyPaths.some(p => path === p || path.startsWith(p + "/"))) {
         navigate("/admin/employees", { replace: true });

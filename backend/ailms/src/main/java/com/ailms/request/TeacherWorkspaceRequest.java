@@ -82,4 +82,13 @@ public final class TeacherWorkspaceRequest {
         @NotBlank @Size(max = 1000)
         private String reason;
     }
+
+    /** Yêu cầu rời một lớp đang phụ trách và chờ HR/Admin phê duyệt. */
+    @Data @Builder @NoArgsConstructor @AllArgsConstructor
+    public static class ClassWithdrawalCreate {
+        @NotNull
+        private Long classId;
+        @NotBlank @Size(max = 1000)
+        private String reason;
+    }
 }

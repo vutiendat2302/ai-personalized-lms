@@ -2,7 +2,7 @@
 course_package.py
 ------------------
 Seed dữ liệu cho bảng `course_package` (Gói học).
-Tạo các gói học thực tế cho từng khóa học (Gói Tự Học, Gói Lớp Online, Gói Hybrid, Gói Kèm 1-1).
+Tạo các gói học thực tế cho từng khóa học (Gói Tự Học, Gói Lớp Online, Gói Kèm 1-1).
 """
 
 import random
@@ -30,15 +30,6 @@ PACKAGE_TEMPLATES = [
         "included_tutor_sessions": 4,
         "max_group_size": 25,
         "description": "Học trực tuyến qua video conference 2 buổi/tuần với giảng viên, giải đáp thắc mắc trực tiếp.",
-    },
-    {
-        "name": "Gói Lớp Hybrid 2026",
-        "delivery_mode": "COMBO",
-        "price_factor": 0.9,
-        "duration_days": 180,
-        "included_tutor_sessions": 8,
-        "max_group_size": 15,
-        "description": "Kết hợp tự học video linh hoạt + 1 buổi review trực tuyến hàng tuần + chữa bài 1-1.",
     },
     {
         "name": "Gói Kèm 1-1 Chuyên Sâu Pro",
@@ -93,8 +84,7 @@ def _backfill_package_data(cursor):
         SELECT id, course_id, delivery_mode, status
         FROM course_package
         WHERE class_id IS NULL
-          AND (delivery_mode='GROUP_CLASS'
-               OR (delivery_mode='COMBO' AND COALESCE(max_group_size, 0) > 1))
+          AND delivery_mode='GROUP_CLASS'
         ORDER BY created_at, id
         """
     )
@@ -120,11 +110,6 @@ def _backfill_package_data(cursor):
                 (available_class["id"], package["id"]),
             )
             repaired_count += 1
-        elif package["delivery_mode"] == "COMBO":
-            cursor.execute(
-                "UPDATE course_package SET max_group_size=NULL, updated_at=NOW() WHERE id=%s",
-                (package["id"],),
-            )
         elif package["status"] == "ACTIVE":
             cursor.execute(
                 "UPDATE course_package SET status='INACTIVE', updated_at=NOW() WHERE id=%s",
@@ -175,7 +160,7 @@ def seed(cursor):
         ]
         class_backed_templates = [
             tpl for tpl in PACKAGE_TEMPLATES
-            if tpl["delivery_mode"] in ("GROUP_CLASS", "COMBO")
+            if tpl["delivery_mode"] == "GROUP_CLASS"
         ]
         chosen_templates = random.sample(independent_templates, k=len(independent_templates))
         if class_id is not None:
@@ -200,7 +185,7 @@ def seed(cursor):
                     pkg_id,
                     package_code,
                     course_id,
-                    class_id if tpl["delivery_mode"] in ("GROUP_CLASS", "COMBO") else None,
+                    class_id if tpl["delivery_mode"] == "GROUP_CLASS" else None,
                     f"{tpl['name']} - {course_name[:30]}",
                     tpl["description"],
                     tpl["delivery_mode"],

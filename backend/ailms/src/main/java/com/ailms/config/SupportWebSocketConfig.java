@@ -73,19 +73,20 @@ public class SupportWebSocketConfig implements WebSocketMessageBrokerConfigurer 
             return message;
         }
 
-        /** Chỉ cho tài khoản SUPPORT subscribe kênh thông báo tin nhắn chung. */
+        /** Chỉ cho tài khoản ADMIN hoặc SUPPORT subscribe kênh thông báo tin nhắn chung. */
         private boolean isSupportNotification(String destination, Principal principal) {
             if (!"/user/queue/support-notifications".equals(destination)
                     || !(principal instanceof Authentication authentication)) {
                 return false;
             }
-            if (authentication.getAuthorities().stream().noneMatch(item -> "ROLE_SUPPORT".equals(item.getAuthority()))) {
-                throw new IllegalArgumentException("Only SUPPORT can subscribe support notifications");
+            if (authentication.getAuthorities().stream().noneMatch(item ->
+                    "ROLE_ADMIN".equals(item.getAuthority()) || "ROLE_SUPPORT".equals(item.getAuthority()))) {
+                throw new IllegalArgumentException("Only ADMIN or SUPPORT can subscribe support notifications");
             }
             return true;
         }
 
-        /** Xác thực SUPPORT bằng JWT hoặc visitor bằng token cấp từ public API. */
+        /** Xác thực ADMIN/SUPPORT bằng JWT hoặc visitor bằng token cấp từ public API. */
         private void authenticate(StompHeaderAccessor accessor) {
             String visitorToken = accessor.getFirstNativeHeader("X-Visitor-Token");
             if (StringUtils.hasText(visitorToken)) {
@@ -101,8 +102,9 @@ public class SupportWebSocketConfig implements WebSocketMessageBrokerConfigurer 
             String jwt = authorization.substring(7);
             if (!jwtUtils.validateJwtToken(jwt)) throw new IllegalArgumentException("Invalid realtime JWT");
             CustomUserDetails user = (CustomUserDetails) userDetailsService.loadUserByUsername(jwtUtils.getUserNameFromJwtToken(jwt));
-            if (user.getAuthorities().stream().noneMatch(item -> "ROLE_SUPPORT".equals(item.getAuthority()))) {
-                throw new IllegalArgumentException("Only SUPPORT can connect support socket");
+            if (user.getAuthorities().stream().noneMatch(item ->
+                    "ROLE_ADMIN".equals(item.getAuthority()) || "ROLE_SUPPORT".equals(item.getAuthority()))) {
+                throw new IllegalArgumentException("Only ADMIN or SUPPORT can connect support socket");
             }
             accessor.setUser(new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities()));
         }

@@ -1,36 +1,20 @@
-"""
-seed_departments.py
---------------------
-Seed dữ liệu cho bảng `departments` (chưa phân cấp bậc).
-"""
+"""Master data cơ cấu tổ chức chuẩn của AILMS."""
 
 from snowflake_id import snowflake
 
 DEPARTMENTS = [
-    {"code": "ACADEMIC", "name": "Phòng Đào tạo",
-     "description": "Quản lý chương trình đào tạo, kế hoạch giảng dạy và học vụ.",
-     "status": "ACTIVE"},
-    {"code": "IT", "name": "Phòng Công nghệ thông tin",
-     "description": "Quản trị hệ thống, hạ tầng CNTT và hỗ trợ kỹ thuật.",
-     "status": "ACTIVE"},
-    {"code": "HR", "name": "Phòng Nhân sự",
-     "description": "Quản lý tuyển dụng, hồ sơ nhân sự và chính sách nhân viên.",
-     "status": "ACTIVE"},
-    {"code": "FINANCE", "name": "Phòng Tài chính - Kế toán",
-     "description": "Quản lý học phí, lương và các khoản thu chi.",
-     "status": "ACTIVE"},
-    {"code": "STUDENT_AFF", "name": "Phòng Công tác Sinh viên",
-     "description": "Hỗ trợ đời sống, sinh hoạt và kỷ luật sinh viên.",
-     "status": "ACTIVE"},
-    {"code": "LIBRARY", "name": "Thư viện",
-     "description": "Quản lý tài nguyên học liệu, sách và phòng đọc.",
-     "status": "ACTIVE"},
-    {"code": "MARKETING", "name": "Phòng Truyền thông - Tuyển sinh",
-     "description": "Truyền thông thương hiệu và tư vấn tuyển sinh.",
-     "status": "ACTIVE"},
-    {"code": "FACILITY", "name": "Phòng Quản trị - Cơ sở vật chất",
-     "description": "Quản lý phòng học, trang thiết bị và tài sản.",
-     "status": "INACTIVE"},
+    {"code": "ACADEMIC", "name": "Phòng Đào tạo & Học vụ", "description": "Quản trị chương trình, kế hoạch đào tạo, lịch học và chất lượng học vụ.", "status": "ACTIVE"},
+    {"code": "CONTENT", "name": "Trung tâm Phát triển Học liệu", "description": "Thiết kế chương trình, sản xuất và chuẩn hóa nội dung học tập số.", "status": "ACTIVE"},
+    {"code": "QUALITY", "name": "Phòng Đảm bảo Chất lượng", "description": "Kiểm định nội dung, đánh giá giảng dạy và cải tiến chất lượng đào tạo.", "status": "ACTIVE"},
+    {"code": "STUDENT_SUCCESS", "name": "Trung tâm Thành công Học viên", "description": "Tư vấn lộ trình, theo dõi tiến độ và hỗ trợ trải nghiệm học viên.", "status": "ACTIVE"},
+    {"code": "HR", "name": "Phòng Nhân sự", "description": "Tuyển dụng, hồ sơ nhân sự, hợp đồng, chấm công và phát triển đội ngũ.", "status": "ACTIVE"},
+    {"code": "FINANCE", "name": "Phòng Tài chính - Kế toán", "description": "Quản trị doanh thu, học phí, hoàn tiền, công nợ, lương và báo cáo tài chính.", "status": "ACTIVE"},
+    {"code": "SALES", "name": "Phòng Kinh doanh", "description": "Quản lý danh mục bán, đơn hàng, chương trình ưu đãi và hiệu quả kinh doanh.", "status": "ACTIVE"},
+    {"code": "MARKETING", "name": "Phòng Marketing & Truyền thông", "description": "Phát triển thương hiệu, nội dung truyền thông và thu hút học viên tiềm năng.", "status": "ACTIVE"},
+    {"code": "IT", "name": "Phòng Công nghệ Thông tin", "description": "Phát triển sản phẩm, vận hành nền tảng, dữ liệu, bảo mật và hỗ trợ kỹ thuật.", "status": "ACTIVE"},
+    {"code": "SUPPORT", "name": "Trung tâm Hỗ trợ Khách hàng", "description": "Tiếp nhận, phân loại và xử lý yêu cầu hỗ trợ trước và sau đăng ký.", "status": "ACTIVE"},
+    {"code": "OPERATIONS", "name": "Phòng Vận hành Đào tạo", "description": "Điều phối lớp, phân công giáo viên, quản lý lịch và xử lý sự cố vận hành.", "status": "ACTIVE"},
+    {"code": "FACILITY", "name": "Phòng Hành chính - Cơ sở vật chất", "description": "Quản lý hành chính, tài sản, trang thiết bị và điều kiện làm việc.", "status": "ACTIVE"},
 ]
 
 
@@ -41,12 +25,17 @@ def get_id_by_code(cursor, code: str):
 
 
 def seed(cursor):
-    """Insert dữ liệu department nếu chưa tồn tại (idempotent theo `code`)."""
+    """Đồng bộ department theo code, cập nhật mô tả mà không đổi ID hiện hữu."""
     print("→ Seeding departments...")
     for d in DEPARTMENTS:
         existing_id = get_id_by_code(cursor, d["code"])
         if existing_id:
-            print(f"   [skip] department {d['code']} đã tồn tại (id={existing_id})")
+            cursor.execute(
+                """UPDATE department SET name=%s, description=%s, status=%s, updated_at=NOW()
+                   WHERE id=%s""",
+                (d["name"], d["description"], d["status"], existing_id),
+            )
+            print(f"   [update] department {d['code']} (id={existing_id})")
             continue
         new_id = snowflake.next_id()
         cursor.execute(

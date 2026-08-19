@@ -14,7 +14,39 @@ export interface QuizResponseDTO {
   maxAttempts?: number;
   shuffleQuestions?: boolean;
   status?: string;
-  questions?: any[];
+  questions?: QuizQuestionDTO[];
+}
+
+export type QuizQuestionType = "SINGLE_CHOICE" | "TRUE_FALSE" | "MULTIPLE_CHOICE" | "SHORT_ANSWER" | "ESSAY" | "MATCHING";
+
+export interface QuizQuestionOptionDTO {
+  id?: string;
+  content: string;
+  isCorrect?: boolean | null;
+  orderIndex?: number;
+}
+
+export interface QuizQuestionDTO {
+  id: string;
+  content: string;
+  questionType: QuizQuestionType;
+  points: number;
+  orderIndex?: number;
+  explanation?: string;
+  options: QuizQuestionOptionDTO[];
+}
+
+export interface QuizUpsertRequest {
+  lessonId?: string | null;
+  courseId?: string | null;
+  sectionId?: string | null;
+  title: string;
+  description?: string;
+  timeLimitMin?: number;
+  passScore?: number;
+  maxAttempts?: number;
+  shuffleQuestions?: boolean;
+  questions?: QuizQuestionDTO[];
 }
 
 export interface AssignmentResponseDTO {
@@ -46,6 +78,7 @@ export interface LessonCurriculumItem {
   contentUrl?: string;
   description?: string;
   durationMin?: number;
+  durationSec?: number;
   duration?: number;
   orderIndex: number;
   previewType?: string;
@@ -56,6 +89,7 @@ export interface LessonCurriculumItem {
   completed?: boolean;
   progressPercent?: number;
   lastPositionSec?: number;
+  personalNote?: string;
   preview?: boolean;
   accessible?: boolean;
   locked?: boolean;
@@ -83,6 +117,7 @@ export interface CourseCurriculumResponse {
   totalDurationMin?: number;
   enrollmentId?: string;
   staffPreviewAccess?: boolean;
+  deliveryMode?: "SELF_STUDY" | "GROUP_CLASS" | "ONE_ON_ONE";
 }
 
 export interface SubmissionResponseDTO {
@@ -154,12 +189,12 @@ export const courseAuthoringApi = {
     return res.data;
   },
 
-  createQuiz: async (data: any) => {
+  createQuiz: async (data: QuizUpsertRequest) => {
     const res = await httpClient.post<ApiResponse<any>>("/v1/authoring/quizzes", data);
     return res.data.data;
   },
 
-  updateQuiz: async (quizId: string, data: any) => {
+  updateQuiz: async (quizId: string, data: QuizUpsertRequest) => {
     const res = await httpClient.put<ApiResponse<any>>(`/v1/authoring/quizzes/${quizId}`, data);
     return res.data.data;
   },

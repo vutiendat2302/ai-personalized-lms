@@ -75,15 +75,15 @@ import {
 } from "recharts";
 
 const USAGE_COLORS: Record<string, string> = {
-  CONTRACT: "#3b82f6",
-  AVATAR: "#ec4899",
-  QUIZ_ATTACHMENT: "#f59e0b",
-  ASSIGNMENT: "#6366f1",
-  ASSIGNMENT_SUBMISSION: "#8b5cf6",
+  CONTRACT: "#4274d9",
+  AVATAR: "#293681",
+  QUIZ_ATTACHMENT: "#6366f1",
+  ASSIGNMENT: "#2b5748",
+  ASSIGNMENT_SUBMISSION: "#4274d9",
   LESSON_RESOURCE: "#14b8a6",
-  LESSON_VIDEO: "#a855f7",
+  LESSON_VIDEO: "#293681",
   COURSE_LESSON: "#06b6d4",
-  POLICY: "#f43f5e",
+  POLICY: "#2b5748",
   OTHER: "#6b7280",
 };
 
@@ -129,6 +129,7 @@ export const FileManagement: React.FC = () => {
     setJumpPageInput(String((filters.page || 0) + 1));
   }, [filters.page]);
 
+  /** Tính toán danh sách trang hiển thị trong thanh phân trang */
   const getPageNumbers = (current: number, total: number) => {
     const pages: (number | string)[] = [];
     if (total <= 5) {
@@ -157,6 +158,7 @@ export const FileManagement: React.FC = () => {
   const [bannerMsg, setBannerMsg] = useState<{ text: string; isError?: boolean } | null>(null);
   const [bulkLoading, setBulkLoading] = useState(false);
 
+  /** Lấy dữ liệu tổng quan thống kê dung lượng và trạng thái tệp tin */
   const fetchSummaryData = async () => {
     try {
       setLoadingSummary(true);
@@ -172,6 +174,7 @@ export const FileManagement: React.FC = () => {
     }
   };
 
+  /** Lấy danh sách tệp tin phân trang theo bộ lọc */
   const fetchFilesList = async () => {
     try {
       setLoadingFiles(true);
@@ -193,15 +196,18 @@ export const FileManagement: React.FC = () => {
     fetchFilesList();
   }, [filters]);
 
+  /** Hiển thị thông báo banner toast thành công hoặc lỗi */
   const showBanner = (text: string, isError = false) => {
     setBannerMsg({ text, isError });
     setTimeout(() => setBannerMsg(null), 4000);
   };
 
+  /** Đặt lại tất cả bộ lọc tìm kiếm về mặc định */
   const handleResetFilters = () => {
     setFilters(DEFAULT_FILTERS);
   };
 
+  /** Đảo chiều sắp xếp theo ngày tải lên */
   const toggleSortCreatedDate = () => {
     setFilters((prev) => {
       const isCurrentCreatedAt = prev.sortBy === "createdAt";
@@ -215,21 +221,23 @@ export const FileManagement: React.FC = () => {
     });
   };
 
+  /** Thực hiện quy trình quét phát hiện tệp mồ côi */
   const handleRescanOrphaned = async () => {
     try {
       setLoadingRescan(true);
-      showBanner("Đang thực hiện quét file mồ côi...");
+      showBanner("Đang thực hiện quét tệp mồ côi...");
       const count = await fileAdminApi.rescanOrphaned();
-      showBanner(`Quét xong! Phát hiện ${count} file mồ côi.`);
+      showBanner(`Quét xong! Phát hiện ${count} tệp mồ côi.`);
       fetchSummaryData();
       fetchFilesList();
     } catch (err: any) {
-      showBanner(err?.response?.data?.message || "Không thể quét file mồ côi", true);
+      showBanner(err?.response?.data?.message || "Không thể quét tệp mồ côi", true);
     } finally {
       setLoadingRescan(false);
     }
   };
 
+  /** Xuất báo cáo danh sách tệp tin ra tệp CSV */
   const handleExportCsv = async () => {
     try {
       setLoadingExport(true);
@@ -250,6 +258,7 @@ export const FileManagement: React.FC = () => {
     }
   };
 
+  /** Tích chọn hoặc bỏ chọn tất cả tệp tin trong bảng */
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
       setSelectedIds(files.map((f) => f.id));
@@ -258,7 +267,8 @@ export const FileManagement: React.FC = () => {
     }
   };
 
-  const handleSelectOne = (id: string , checked: boolean) => {
+  /** Tích chọn từng tệp tin đơn lẻ */
+  const handleSelectOne = (id: string, checked: boolean) => {
     if (checked) {
       setSelectedIds((prev) => [...prev, id]);
     } else {
@@ -266,38 +276,41 @@ export const FileManagement: React.FC = () => {
     }
   };
 
+  /** Thực hiện lưu trữ hàng loạt tệp tin đã chọn */
   const executeBulkArchive = async () => {
     if (selectedIds.length === 0) return;
     try {
       setBulkLoading(true);
       await fileAdminApi.bulkArchive({ fileIds: selectedIds });
-      showBanner(`Đã chuyển trạng thái ARCHIVED cho ${selectedIds.length} file.`);
+      showBanner(`Đã chuyển trạng thái lưu trữ cho ${selectedIds.length} tệp tin.`);
       setSelectedIds([]);
       fetchSummaryData();
       fetchFilesList();
     } catch (err: any) {
-      showBanner(err?.response?.data?.message || "Lỗi archive hàng loạt", true);
+      showBanner(err?.response?.data?.message || "Lỗi lưu trữ hàng loạt", true);
     } finally {
       setBulkLoading(false);
     }
   };
 
+  /** Thực hiện xóa mềm hàng loạt tệp tin đã chọn */
   const executeBulkDelete = async () => {
     if (selectedIds.length === 0) return;
     try {
       setBulkLoading(true);
       await fileAdminApi.bulkDelete({ fileIds: selectedIds });
-      showBanner(`Đã xoá mềm thành công ${selectedIds.length} file vào Thùng rác.`);
+      showBanner(`Đã xóa mềm thành công ${selectedIds.length} tệp tin.`);
       setSelectedIds([]);
       fetchSummaryData();
       fetchFilesList();
     } catch (err: any) {
-      showBanner(err?.response?.data?.message || "Lỗi xoá mềm hàng loạt", true);
+      showBanner(err?.response?.data?.message || "Lỗi xóa mềm hàng loạt", true);
     } finally {
       setBulkLoading(false);
     }
   };
 
+  /** Thực hiện xóa vĩnh viễn hàng loạt tệp tin đã chọn */
   const executeBulkPurge = async () => {
     if (selectedIds.length === 0) return;
 
@@ -307,7 +320,7 @@ export const FileManagement: React.FC = () => {
 
     if (nonDeleted.length > 0) {
       showBanner(
-        `Chỉ có thể xoá vĩnh viễn các file đã ở trạng thái DELETED (Đã xoá mềm). Có ${nonDeleted.length} file chưa xoá mềm.`,
+        `Chỉ có thể xóa vĩnh viễn các tệp tin đã ở trạng thái đã xóa mềm. Có ${nonDeleted.length} tệp tin chưa xóa mềm.`,
         true
       );
       return;
@@ -316,12 +329,12 @@ export const FileManagement: React.FC = () => {
     try {
       setBulkLoading(true);
       await fileAdminApi.bulkPurge({ fileIds: selectedIds });
-      showBanner(`Đã xoá vĩnh viễn ${selectedIds.length} file khỏi MinIO và Database.`);
+      showBanner(`Đã xóa vĩnh viễn ${selectedIds.length} tệp tin khỏi hệ thống.`);
       setSelectedIds([]);
       fetchSummaryData();
       fetchFilesList();
     } catch (err: any) {
-      showBanner(err?.response?.data?.message || "Lỗi xoá vĩnh viễn hàng loạt", true);
+      showBanner(err?.response?.data?.message || "Lỗi xóa vĩnh viễn hàng loạt", true);
     } finally {
       setBulkLoading(false);
     }
@@ -357,39 +370,40 @@ export const FileManagement: React.FC = () => {
   /** Kiểm tra Backend có phát sinh upload trong khoảng xu hướng hay không. */
   const hasUploadTrendData = lineData.some((item) => item.sizeMB > 0 || item.count > 0);
 
+  /** Trả về Icon tương ứng với định dạng tệp tin theo token màu index.css */
   const renderFileIcon = (type: FileTypeEnum) => {
     switch (type) {
       case "IMAGE":
-        return <FileImage className="h-4 w-4 text-blue-500 shrink-0" />;
+        return <FileImage className="h-4 w-4 text-brand-cobalt shrink-0" />;
       case "VIDEO":
-        return <FileVideo className="h-4 w-4 text-purple-500 shrink-0" />;
+        return <FileVideo className="h-4 w-4 text-primary shrink-0" />;
       case "AUDIO":
-        return <FileAudio className="h-4 w-4 text-emerald-500 shrink-0" />;
+        return <FileAudio className="h-4 w-4 text-success-forest shrink-0" />;
       case "DOCUMENT":
-        return <FileText className="h-4 w-4 text-amber-500 shrink-0" />;
+        return <FileText className="h-4 w-4 text-brand-cobalt shrink-0" />;
       default:
-        return <FileCode className="h-4 w-4 text-gray-500 shrink-0" />;
+        return <FileCode className="h-4 w-4 text-muted-foreground shrink-0" />;
     }
   };
 
   const totalPages = Math.ceil(totalElements / (filters.size || 10));
 
   return (
-    <div className="p-6 space-y-6 w-full">
+    <div className="p-6 space-y-6 w-full animate-in fade-in-50 duration-300">
       {/* Header Banner Notification */}
       {bannerMsg && (
         <div
           className={`p-4 rounded-xl border flex items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2 duration-200 ${
             bannerMsg.isError
-              ? "bg-red-500/10 border-red-500/30 text-red-700 dark:text-red-300"
-              : "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300"
+              ? "bg-destructive/10 border-destructive/30 text-destructive"
+              : "bg-success-forest/10 border-success-forest/30 text-success-forest"
           }`}
         >
           <div className="flex items-center gap-2.5">
             {bannerMsg.isError ? <ShieldAlert className="h-5 w-5 shrink-0" /> : <CheckCircle2 className="h-5 w-5 shrink-0" />}
             <span className="text-xs font-semibold">{bannerMsg.text}</span>
           </div>
-          <button onClick={() => setBannerMsg(null)} className="text-xs opacity-70 hover:opacity-100 font-bold">
+          <button onClick={() => setBannerMsg(null)} className="text-xs opacity-70 hover:opacity-100 font-bold cursor-pointer">
             ✕
           </button>
         </div>
@@ -398,21 +412,21 @@ export const FileManagement: React.FC = () => {
       {/* Header Section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl md:text-2xl font-black tracking-tight text-foreground uppercase">
-            QUẢN LÝ FILE HỆ THỐNG
+          <h1 className="text-xl md:text-2xl font-extrabold tracking-tight text-foreground">
+            Quản lý tệp tin hệ thống
           </h1>
           <p className="text-xs text-muted-foreground mt-1">
-            Theo dõi tổng thể dung lượng, tự động quét phát hiện file mồ côi và quản lý dọn dẹp dữ liệu lưu trữ MinIO.
+            Theo dõi tổng thể dung lượng, tự động quét phát hiện tệp mồ côi và quản lý dọn dẹp dữ liệu lưu trữ MinIO.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             variant="outline"
             size="sm"
             onClick={fetchSummaryData}
             disabled={loadingSummary}
-            className="text-xs gap-1.5 rounded-xl border-border/80"
+            className="text-xs gap-1.5 rounded-xl border-border/80 cursor-pointer"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${loadingSummary ? "animate-spin" : ""}`} /> Làm mới
           </Button>
@@ -422,20 +436,20 @@ export const FileManagement: React.FC = () => {
             size="sm"
             onClick={handleRescanOrphaned}
             disabled={loadingRescan}
-            className="text-xs gap-1.5 rounded-xl border-amber-500/40 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/20"
+            className="text-xs gap-1.5 rounded-xl border-brand-cobalt/40 text-brand-cobalt hover:bg-brand-cobalt/10 cursor-pointer"
           >
             {loadingRescan ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
               <AlertTriangle className="h-3.5 w-3.5" />
             )}
-            Quét file mồ côi
+            Quét tệp mồ côi
           </Button>
 
           <Button
             size="sm"
             onClick={() => setUploadModalOpen(true)}
-            className="text-xs gap-1.5 rounded-xl shadow-xs bg-primary text-primary-foreground hover:bg-primary/90"
+            className="text-xs gap-1.5 rounded-xl shadow-xs bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer"
           >
             <UploadCloud className="h-3.5 w-3.5" /> Tải tệp tin lên
           </Button>
@@ -445,7 +459,7 @@ export const FileManagement: React.FC = () => {
             size="sm"
             onClick={handleExportCsv}
             disabled={loadingExport}
-            className="text-xs gap-1.5 rounded-xl shadow-xs"
+            className="text-xs gap-1.5 rounded-xl shadow-xs cursor-pointer"
           >
             {loadingExport ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -462,7 +476,7 @@ export const FileManagement: React.FC = () => {
         <Card className="p-4 rounded-xl border border-border/60 bg-card shadow-2xs hover:border-border transition-all">
           <div className="flex items-center justify-between text-muted-foreground mb-2">
             <span className="text-[11px] font-medium">Tổng dung lượng</span>
-            <HardDrive className="h-4 w-4 text-blue-500" />
+            <HardDrive className="h-4 w-4 text-brand-cobalt" />
           </div>
           {loadingSummary ? (
             <div className="space-y-1.5 py-1">
@@ -475,7 +489,7 @@ export const FileManagement: React.FC = () => {
                 {summary ? formatBytes(summary.totalSizeBytes) : "Chưa có dữ liệu"}
               </div>
               <span className="text-[10px] text-muted-foreground/80 mt-1 block">
-                {summaryError ? "Không thể tải dữ liệu" : "Toàn bộ file Active"}
+                {summaryError ? "Không thể tải dữ liệu" : "Toàn bộ tệp tin hoạt động"}
               </span>
             </>
           )}
@@ -483,8 +497,8 @@ export const FileManagement: React.FC = () => {
 
         <Card className="p-4 rounded-xl border border-border/60 bg-card shadow-2xs hover:border-border transition-all">
           <div className="flex items-center justify-between text-muted-foreground mb-2">
-            <span className="text-[11px] font-medium">Tổng số file</span>
-            <Files className="h-4 w-4 text-purple-500" />
+            <span className="text-[11px] font-medium">Tổng số tệp tin</span>
+            <Files className="h-4 w-4 text-primary" />
           </div>
           {loadingSummary ? (
             <div className="space-y-1.5 py-1">
@@ -496,28 +510,28 @@ export const FileManagement: React.FC = () => {
               <div className="text-lg md:text-xl font-bold text-foreground">
                 {summary ? summary.totalFiles.toLocaleString() : "Chưa có dữ liệu"}
               </div>
-              <span className="text-[10px] text-muted-foreground/80 mt-1 block">Tập tin trong hệ thống</span>
+              <span className="text-[10px] text-muted-foreground/80 mt-1 block">Tệp tin trong hệ thống</span>
             </>
           )}
         </Card>
 
-        <Card className="p-4 rounded-xl border border-amber-500/40 bg-amber-500/10 text-amber-900 dark:text-amber-200 dark:bg-amber-950/40 shadow-xs hover:border-amber-500 transition-all">
+        <Card className="p-4 rounded-xl border border-chart-1/40 bg-chart-1/10 text-chart-1 shadow-xs hover:border-chart-1 transition-all">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-bold text-amber-700 dark:text-amber-300">File mồ côi</span>
-            <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 animate-pulse" />
+            <span className="text-[11px] font-bold text-chart-1">Tệp mồ côi</span>
+            <AlertTriangle className="h-4 w-4 text-chart-1 animate-pulse" />
           </div>
           {loadingSummary ? (
             <div className="space-y-1.5 py-1">
-              <Skeleton className="h-6 w-16 rounded-lg bg-amber-500/20" />
-              <Skeleton className="h-3 w-28 rounded-md bg-amber-500/20" />
+              <Skeleton className="h-6 w-16 rounded-lg bg-chart-1/20" />
+              <Skeleton className="h-3 w-28 rounded-md bg-chart-1/20" />
             </div>
           ) : (
             <>
-              <div className="text-lg md:text-xl font-black text-amber-800 dark:text-amber-200">
+              <div className="text-lg md:text-xl font-black text-chart-1">
                 {summary ? summary.orphanedFilesCount.toLocaleString() : "Chưa có dữ liệu"}
               </div>
-              <span className="text-[10px] text-amber-700/80 dark:text-amber-400 mt-1 block font-medium">
-                Không còn entity tham chiếu
+              <span className="text-[10px] text-chart-1/80 mt-1 block font-medium">
+                Chưa liên kết tham chiếu
               </span>
             </>
           )}
@@ -526,7 +540,7 @@ export const FileManagement: React.FC = () => {
         <Card className="p-4 rounded-xl border border-border/60 bg-card shadow-2xs hover:border-border transition-all">
           <div className="flex items-center justify-between text-muted-foreground mb-2">
             <span className="text-[11px] font-medium">Tải lên tháng này</span>
-            <Calendar className="h-4 w-4 text-emerald-500" />
+            <Calendar className="h-4 w-4 text-success-forest" />
           </div>
           {loadingSummary ? (
             <div className="space-y-1.5 py-1">
@@ -538,15 +552,15 @@ export const FileManagement: React.FC = () => {
               <div className="text-lg md:text-xl font-bold text-foreground">
                 {summary ? summary.uploadedThisMonth.toLocaleString() : "Chưa có dữ liệu"}
               </div>
-              <span className="text-[10px] text-muted-foreground/80 mt-1 block">Tập tin mới trong tháng</span>
+              <span className="text-[10px] text-muted-foreground/80 mt-1 block">Tệp tin mới trong tháng</span>
             </>
           )}
         </Card>
 
         <Card className="p-4 rounded-xl border border-border/60 bg-card shadow-2xs hover:border-border transition-all">
           <div className="flex items-center justify-between text-muted-foreground mb-2">
-            <span className="text-[11px] font-medium">Archive / Xoá mềm</span>
-            <Archive className="h-4 w-4 text-gray-500" />
+            <span className="text-[11px] font-medium">Lưu trữ / Đã xóa</span>
+            <Archive className="h-4 w-4 text-muted-foreground" />
           </div>
           {loadingSummary ? (
             <div className="space-y-1.5 py-1">
@@ -558,7 +572,7 @@ export const FileManagement: React.FC = () => {
               <div className="text-lg md:text-xl font-bold text-foreground">
                 {summary ? summary.archivedOrDeletedCount.toLocaleString() : "Chưa có dữ liệu"}
               </div>
-              <span className="text-[10px] text-muted-foreground/80 mt-1 block">ARCHIVED / DELETED</span>
+              <span className="text-[10px] text-muted-foreground/80 mt-1 block">Đã lưu trữ / Đã xóa</span>
             </>
           )}
         </Card>
@@ -567,11 +581,11 @@ export const FileManagement: React.FC = () => {
       {/* Khu vực 2: Charts */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Left: Donut Chart Dung lượng theo Module */}
-        <div className="p-5 rounded-2xl border border-border/60 bg-card space-y-4">
+        <div className="p-5 rounded-2xl border border-border/60 bg-card space-y-4 shadow-xs">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <PieChartIcon className="h-4 w-4 text-primary" /> Tỷ lệ dung lượng theo module
+                <PieChartIcon className="h-4 w-4 text-primary" /> Tỷ lệ dung lượng theo mục đích
               </h3>
             </div>
             {loadingSummary ? (
@@ -639,10 +653,10 @@ export const FileManagement: React.FC = () => {
         </div>
 
         {/* Right: Line Chart */}
-        <div className="p-5 rounded-2xl border border-border/60 bg-card space-y-4">
+        <div className="p-5 rounded-2xl border border-border/60 bg-card space-y-4 shadow-xs">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-              <TrendingUp className="h-4 w-4 text-emerald-500" /> Xu hướng dung lượng tải lên (12 tháng)
+              <TrendingUp className="h-4 w-4 text-success-forest" /> Xu hướng dung lượng tải lên
             </h3>
             <span className="text-[11px] text-muted-foreground font-semibold">Tính theo MB</span>
           </div>
@@ -655,8 +669,8 @@ export const FileManagement: React.FC = () => {
                 <AreaChart data={lineData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorSize" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                      <stop offset="5%" stopColor="#293681" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#293681" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(150,150,150,0.15)" />
@@ -669,7 +683,7 @@ export const FileManagement: React.FC = () => {
                   <Area
                     type="monotone"
                     dataKey="sizeMB"
-                    stroke="#10b981"
+                    stroke="#293681"
                     strokeWidth={2}
                     fillOpacity={1}
                     fill="url(#colorSize)"
@@ -684,7 +698,7 @@ export const FileManagement: React.FC = () => {
           </div>
 
           <div className="pt-2 border-t border-border/40 text-[11px] text-muted-foreground text-center">
-            Thống kê xu hướng dung lượng tải lên hàng tháng nhằm hỗ trợ dự báo nhu cầu dung lượng lưu trữ MinIO.
+            Thống kê xu hướng dung lượng tải lên hàng tháng hỗ trợ dự báo nhu cầu lưu trữ.
           </div>
         </div>
       </div>
@@ -699,14 +713,14 @@ export const FileManagement: React.FC = () => {
               onClick={() => setFilters((prev) => ({ ...prev, status: "ACTIVE", page: 0 }))}
               className={`px-3.5 py-2 text-xs font-bold rounded-t-xl border-b-2 transition-all flex items-center gap-1.5 cursor-pointer ${
                 filters.status === "ACTIVE"
-                  ? "border-emerald-500 text-emerald-600 dark:text-emerald-400 bg-card shadow-xs"
+                  ? "border-success-forest text-success-forest bg-card shadow-xs"
                   : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40"
               }`}
             >
-              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-              Tệp Hoạt Động
+              <CheckCircle2 className="h-3.5 w-3.5 text-success-forest" />
+              Tệp hoạt động
               {summary?.activeFiles !== undefined && (
-                <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0 h-4 bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0 h-4 bg-success-forest/10 text-success-forest border border-success-forest/20">
                   {summary.activeFiles}
                 </Badge>
               )}
@@ -717,12 +731,12 @@ export const FileManagement: React.FC = () => {
               onClick={() => setFilters((prev) => ({ ...prev, status: "ARCHIVED", page: 0 }))}
               className={`px-3.5 py-2 text-xs font-bold rounded-t-xl border-b-2 transition-all flex items-center gap-1.5 cursor-pointer ${
                 filters.status === "ARCHIVED"
-                  ? "border-amber-500 text-amber-600 dark:text-amber-400 bg-card shadow-xs"
+                  ? "border-brand-cobalt text-brand-cobalt bg-card shadow-xs"
                   : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40"
               }`}
             >
-              <Archive className="h-3.5 w-3.5 text-amber-500" />
-              Đã Lưu Trữ (Archived)
+              <Archive className="h-3.5 w-3.5 text-brand-cobalt" />
+              Đã lưu trữ
             </button>
 
             <button
@@ -730,14 +744,14 @@ export const FileManagement: React.FC = () => {
               onClick={() => setFilters((prev) => ({ ...prev, status: "DELETED", page: 0 }))}
               className={`px-3.5 py-2 text-xs font-bold rounded-t-xl border-b-2 transition-all flex items-center gap-1.5 cursor-pointer ${
                 filters.status === "DELETED"
-                  ? "border-red-500 text-red-600 dark:text-red-400 bg-card shadow-xs"
+                  ? "border-destructive text-destructive bg-card shadow-xs"
                   : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40"
               }`}
             >
-              <Trash2 className="h-3.5 w-3.5 text-red-500" />
-              Thùng Rác (Xoá Mềm)
+              <Trash2 className="h-3.5 w-3.5 text-destructive" />
+              Thùng rác
               {summary?.deletedFiles !== undefined && (
-                <Badge variant="destructive" className="ml-1 text-[10px] px-1.5 py-0 h-4 bg-red-500/10 text-red-600 border border-red-500/20">
+                <Badge variant="destructive" className="ml-1 text-[10px] px-1.5 py-0 h-4 bg-destructive/10 text-destructive border border-destructive/20 font-bold">
                   {summary.deletedFiles}
                 </Badge>
               )}
@@ -752,22 +766,22 @@ export const FileManagement: React.FC = () => {
                   : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40"
               }`}
             >
-              Tất Cả File
+              Tất cả tệp tin
             </button>
           </div>
         </div>
 
-        {/* Thanh Filter Chuẩn Shadcn UI & DatePickerInput */}
+        {/* Thanh Filter */}
         <div className="p-4 border-b border-border/60 space-y-3 bg-muted/10">
           <div className="flex flex-wrap items-center gap-2.5">
             {/* Search Input */}
             <div className="relative min-w-[200px] flex-1">
-              <Search className="h-4 w-4 absolute left-3 top-2.5 text-muted-foreground" />
+              <Search className="h-4 w-4 absolute left-3 top-2.5 text-muted-foreground pointer-events-none" />
               <Input
-                placeholder="Tìm theo tên file gốc..."
+                placeholder="Tìm theo tên tệp tin gốc..."
                 value={filters.keyword || ""}
                 onChange={(e) => setFilters((prev) => ({ ...prev, keyword: e.target.value, page: 0 }))}
-                className="pl-9 h-9 text-xs rounded-xl border-border/80"
+                className="pl-9 h-9 text-xs rounded-xl border-border/80 bg-background text-foreground"
               />
             </div>
 
@@ -776,17 +790,17 @@ export const FileManagement: React.FC = () => {
               value={filters.usageType as string}
               onValueChange={(val) => setFilters((prev) => ({ ...prev, usageType: val as any, page: 0 }))}
             >
-              <SelectTrigger className="h-9 w-[130px] text-xs rounded-xl border-border/80">
-                <SelectValue placeholder="Module" />
+              <SelectTrigger className="h-9 w-[140px] text-xs rounded-xl border-border/80 bg-background text-foreground">
+                <SelectValue placeholder="Mục đích" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="ALL">Tất cả Module</SelectItem>
+                <SelectItem value="ALL">Tất cả mục đích</SelectItem>
                 <SelectItem value="CONTRACT">Hợp đồng</SelectItem>
-                <SelectItem value="AVATAR">Avatar</SelectItem>
-                <SelectItem value="QUIZ_ATTACHMENT">Quiz</SelectItem>
-                <SelectItem value="ASSIGNMENT">Assignment</SelectItem>
+                <SelectItem value="AVATAR">Ảnh đại diện</SelectItem>
+                <SelectItem value="QUIZ_ATTACHMENT">Bài trắc nghiệm</SelectItem>
+                <SelectItem value="ASSIGNMENT">Bài tập</SelectItem>
                 <SelectItem value="ASSIGNMENT_SUBMISSION">Bài nộp bài tập</SelectItem>
-                <SelectItem value="LESSON_RESOURCE">Bài học</SelectItem>
+                <SelectItem value="LESSON_RESOURCE">Tài liệu bài học</SelectItem>
                 <SelectItem value="LESSON_VIDEO">Video bài học</SelectItem>
                 <SelectItem value="COURSE_LESSON">Bài học khóa học</SelectItem>
                 <SelectItem value="POLICY">Chính sách</SelectItem>
@@ -799,15 +813,15 @@ export const FileManagement: React.FC = () => {
               value={filters.fileType as string}
               onValueChange={(val) => setFilters((prev) => ({ ...prev, fileType: val as any, page: 0 }))}
             >
-              <SelectTrigger className="h-9 w-[130px] text-xs rounded-xl border-border/80">
-                <SelectValue placeholder="Loại File" />
+              <SelectTrigger className="h-9 w-[130px] text-xs rounded-xl border-border/80 bg-background text-foreground">
+                <SelectValue placeholder="Loại tệp tin" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="ALL">Tất cả loại file</SelectItem>
-                <SelectItem value="DOCUMENT">Document / PDF</SelectItem>
+                <SelectItem value="ALL">Tất cả loại tệp</SelectItem>
+                <SelectItem value="DOCUMENT">Tài liệu PDF</SelectItem>
                 <SelectItem value="IMAGE">Hình ảnh</SelectItem>
                 <SelectItem value="VIDEO">Video</SelectItem>
-                <SelectItem value="AUDIO">Audio</SelectItem>
+                <SelectItem value="AUDIO">Âm thanh</SelectItem>
                 <SelectItem value="OTHER">Khác</SelectItem>
               </SelectContent>
             </Select>
@@ -817,14 +831,14 @@ export const FileManagement: React.FC = () => {
               value={filters.status as string}
               onValueChange={(val) => setFilters((prev) => ({ ...prev, status: val as any, page: 0 }))}
             >
-              <SelectTrigger className="h-9 w-[140px] text-xs rounded-xl border-border/80">
+              <SelectTrigger className="h-9 w-[140px] text-xs rounded-xl border-border/80 bg-background text-foreground">
                 <SelectValue placeholder="Trạng thái" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">Tất cả trạng thái</SelectItem>
-                <SelectItem value="ACTIVE">ACTIVE (Hoạt động)</SelectItem>
-                <SelectItem value="ARCHIVED">ARCHIVED (Lưu trữ)</SelectItem>
-                <SelectItem value="DELETED">DELETED (Đã xoá mềm)</SelectItem>
+                <SelectItem value="ACTIVE">Hoạt động</SelectItem>
+                <SelectItem value="ARCHIVED">Lưu trữ</SelectItem>
+                <SelectItem value="DELETED">Đã xóa</SelectItem>
               </SelectContent>
             </Select>
 
@@ -839,17 +853,17 @@ export const FileManagement: React.FC = () => {
                 }))
               }
             >
-              <SelectTrigger className="h-9 w-[130px] text-xs rounded-xl border-border/80">
+              <SelectTrigger className="h-9 w-[140px] text-xs rounded-xl border-border/80 bg-background text-foreground">
                 <SelectValue placeholder="Tham chiếu" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">Tất cả tham chiếu</SelectItem>
                 <SelectItem value="false">Đang sử dụng</SelectItem>
-                <SelectItem value="true">File Mồ côi</SelectItem>
+                <SelectItem value="true">Chưa liên kết</SelectItem>
               </SelectContent>
             </Select>
 
-            {/* Date Range Filter dùng DatePickerInput chuẩn dd/mm/yyyy */}
+            {/* Date Range Filter */}
             <div className="w-[140px]">
               <DatePickerInput
                 value={filters.startDate || ""}
@@ -874,12 +888,12 @@ export const FileManagement: React.FC = () => {
                 setFilters((prev) => ({ ...prev, sortBy: sb, sortDir: sd as any, page: 0 }));
               }}
             >
-              <SelectTrigger className="h-9 w-[150px] text-xs rounded-xl border-border/80">
+              <SelectTrigger className="h-9 w-[150px] text-xs rounded-xl border-border/80 bg-background text-foreground">
                 <SelectValue placeholder="Sắp xếp" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="createdAt:DESC">Mới nhất (Ngày tải)</SelectItem>
-                <SelectItem value="createdAt:ASC">Cũ nhất (Ngày tải)</SelectItem>
+                <SelectItem value="createdAt:DESC">Mới nhất</SelectItem>
+                <SelectItem value="createdAt:ASC">Cũ nhất</SelectItem>
                 <SelectItem value="fileSize:DESC">Dung lượng giảm dần</SelectItem>
                 <SelectItem value="fileSize:ASC">Dung lượng tăng dần</SelectItem>
                 <SelectItem value="originalName:ASC">Tên tệp (A-Z)</SelectItem>
@@ -891,28 +905,28 @@ export const FileManagement: React.FC = () => {
               variant="outline"
               size="sm"
               onClick={handleResetFilters}
-              className="h-9 text-xs gap-1.5 rounded-xl border-border/80"
+              className="h-9 text-xs gap-1.5 rounded-xl border-border/80 cursor-pointer"
               title="Đặt lại tất cả bộ lọc"
             >
-              <RotateCcw className="h-3.5 w-3.5" /> Reset
+              <RotateCcw className="h-3.5 w-3.5" /> Đặt lại
             </Button>
           </div>
         </div>
 
         {/* Thanh Floating Bulk Action */}
         {selectedIds.length > 0 && (
-          <div className="px-4 py-3 bg-amber-500/10 border-b border-amber-500/30 flex items-center justify-between animate-in fade-in duration-200">
+          <div className="px-4 py-3 bg-primary/10 border-b border-primary/20 flex items-center justify-between animate-in fade-in duration-200 text-xs">
             <div className="flex items-center gap-3">
-              <span className="text-xs font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
-                <CheckCircle2 className="h-4 w-4 text-amber-600" />
-                Đã chọn <span className="underline">{selectedIds.length}</span> file
+              <span className="font-bold text-primary flex items-center gap-1.5">
+                <CheckCircle2 className="h-4 w-4" />
+                Đã chọn <span className="underline">{selectedIds.length}</span> tệp tin
               </span>
 
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setSelectedIds([])}
-                className="h-7 text-[11px] gap-1 text-amber-700 hover:text-amber-900 hover:bg-amber-500/20 rounded-lg font-bold"
+                className="h-7 text-[11px] gap-1 text-primary hover:bg-primary/20 rounded-lg font-bold cursor-pointer"
                 title="Bỏ chọn tất cả"
               >
                 <X className="h-3.5 w-3.5" /> Bỏ chọn tất cả
@@ -925,10 +939,10 @@ export const FileManagement: React.FC = () => {
                 size="sm"
                 onClick={() => setConfirmBulkArchiveOpen(true)}
                 disabled={bulkLoading}
-                className="text-xs gap-1 h-8 rounded-lg border-blue-500/30 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/20"
+                className="text-xs gap-1 h-8 rounded-lg border-brand-cobalt/30 text-brand-cobalt hover:bg-brand-cobalt/10 cursor-pointer"
               >
                 {bulkLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Archive className="h-3.5 w-3.5" />}
-                Archive đã chọn
+                Lưu trữ đã chọn
               </Button>
 
               <Button
@@ -936,10 +950,10 @@ export const FileManagement: React.FC = () => {
                 size="sm"
                 onClick={() => setConfirmBulkDeleteOpen(true)}
                 disabled={bulkLoading}
-                className="text-xs gap-1 h-8 rounded-lg border-red-500/30 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20"
+                className="text-xs gap-1 h-8 rounded-lg border-destructive/30 text-destructive hover:bg-destructive/10 cursor-pointer"
               >
                 {bulkLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                Soft-delete (Xoá mềm file mồ côi)
+                Xóa mềm tệp tin
               </Button>
 
               <Button
@@ -947,10 +961,10 @@ export const FileManagement: React.FC = () => {
                 size="sm"
                 onClick={() => setConfirmBulkPurgeOpen(true)}
                 disabled={bulkLoading}
-                className="text-xs gap-1 h-8 rounded-lg bg-red-700 hover:bg-red-800"
+                className="text-xs gap-1 h-8 rounded-lg cursor-pointer"
               >
                 {bulkLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                Purge (Xoá vĩnh viễn MinIO)
+                Xóa vĩnh viễn
               </Button>
             </div>
           </div>
@@ -967,9 +981,9 @@ export const FileManagement: React.FC = () => {
                     onCheckedChange={handleSelectAll}
                   />
                 </TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground">Tên file gốc</TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground">Module</TableHead>
-                <TableHead className="text-xs font-semibold text-muted-foreground">Loại file</TableHead>
+                <TableHead className="text-xs font-semibold text-muted-foreground">Tên tệp tin gốc</TableHead>
+                <TableHead className="text-xs font-semibold text-muted-foreground">Mục đích</TableHead>
+                <TableHead className="text-xs font-semibold text-muted-foreground">Loại tệp tin</TableHead>
                 <TableHead className="text-xs font-semibold text-muted-foreground">Kích thước</TableHead>
                 <TableHead className="text-xs font-semibold text-muted-foreground">Người tải</TableHead>
                 <TableHead
@@ -1019,7 +1033,7 @@ export const FileManagement: React.FC = () => {
               ) : files.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={9} className="h-32 text-center text-xs text-muted-foreground italic">
-                    Không tìm thấy file phù hợp với bộ lọc hiện tại.
+                    Không tìm thấy tệp tin phù hợp với bộ lọc hiện tại.
                   </TableCell>
                 </TableRow>
               ) : (
@@ -1069,7 +1083,7 @@ export const FileManagement: React.FC = () => {
                             )}
                           </div>
                         ) : file.createdBy ? (
-                          `User #${file.createdBy}`
+                          `ID: ${file.createdBy}`
                         ) : (
                           "N/A"
                         )}
@@ -1081,12 +1095,12 @@ export const FileManagement: React.FC = () => {
 
                       <TableCell>
                         {isOrphan ? (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-500/10 text-red-600 border border-red-500/20">
-                            Mồ côi
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-destructive/10 text-destructive border border-destructive/20">
+                            Chưa liên kết
                           </span>
                         ) : (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
-                            Đang dùng
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-success-forest/10 text-success-forest border border-success-forest/20">
+                            Đang sử dụng
                           </span>
                         )}
                       </TableCell>
@@ -1100,7 +1114,7 @@ export const FileManagement: React.FC = () => {
           </Table>
         </div>
 
-        {/* Table Footer & Pagination Form đồng bộ 100% với Quản lý Role */}
+        {/* Table Footer & Pagination Form */}
         <div className="px-5 py-3 border-t border-border/40 bg-card flex flex-col md:flex-row items-center justify-between gap-4 text-xs font-medium">
           <div className="text-muted-foreground">
             Hiển thị <span className="font-semibold text-foreground">{files.length === 0 ? 0 : (filters.page || 0) * (filters.size || 10) + 1}</span> đến{" "}
@@ -1193,30 +1207,30 @@ export const FileManagement: React.FC = () => {
       <ConfirmDialog
         open={confirmBulkArchiveOpen}
         onOpenChange={setConfirmBulkArchiveOpen}
-        title="Xác nhận Archive hàng loạt"
-        description={`Bạn có chắc chắn muốn chuyển trạng thái ARCHIVED cho ${selectedIds.length} file đã chọn?`}
+        title="Xác nhận lưu trữ hàng loạt"
+        description={`Bạn có chắc chắn muốn chuyển trạng thái lưu trữ cho ${selectedIds.length} tệp tin đã chọn?`}
         variant="warning"
-        confirmText="Archive"
+        confirmText="Lưu trữ"
         onConfirm={executeBulkArchive}
       />
 
       <ConfirmDialog
         open={confirmBulkDeleteOpen}
         onOpenChange={setConfirmBulkDeleteOpen}
-        title="Xác nhận Xoá Mềm hàng loạt"
-        description={`Xác nhận xoá mềm ${selectedIds.length} file mồ côi đã chọn? Các file sẽ được chuyển sang trạng thái DELETED.`}
+        title="Xác nhận xóa mềm hàng loạt"
+        description={`Xác nhận xóa mềm ${selectedIds.length} tệp tin đã chọn? Các tệp tin sẽ được chuyển sang trạng thái đã xóa.`}
         variant="destructive"
-        confirmText="Xoá mềm"
+        confirmText="Xóa mềm"
         onConfirm={executeBulkDelete}
       />
 
       <ConfirmDialog
         open={confirmBulkPurgeOpen}
         onOpenChange={setConfirmBulkPurgeOpen}
-        title="CẢNH BÁO XOÁ VĨNH VIỄN HÀNG LOẠT"
-        description={`Hành động này sẽ XOÁ VĨNH VIỄN ${selectedIds.length} file khỏi MinIO và Database. Dữ liệu không thể phục hồi!`}
+        title="Cảnh báo xóa vĩnh viễn hàng loạt"
+        description={`Hành động này sẽ xóa vĩnh viễn ${selectedIds.length} tệp tin khỏi hệ thống lưu trữ và cơ sở dữ liệu. Dữ liệu không thể phục hồi!`}
         variant="destructive"
-        confirmText="Xoá vĩnh viễn"
+        confirmText="Xóa vĩnh viễn"
         onConfirm={executeBulkPurge}
       />
 

@@ -15,6 +15,9 @@ public interface ICourseAuthoringService {
      */
     CourseCurriculumResponse getCurriculum(Long courseId);
 
+    /** Lấy curriculum phục vụ học tập nhưng không làm lộ đáp án đúng của quiz. */
+    CourseCurriculumResponse getLearningCurriculum(Long courseId);
+
     /**
      * Thêm chương học mới vào khóa học.
      */

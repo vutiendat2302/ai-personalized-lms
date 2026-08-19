@@ -11,8 +11,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/useToast";
 
@@ -38,10 +40,29 @@ const errorMessage = (cause: unknown, fallback: string) => axios.isAxiosError<{ 
   ? (cause.response?.data.message ?? fallback)
   : fallback;
 
+/** Đổi thời gian ISO từ backend sang giá trị datetime-local của trình duyệt. */
+const toDatetimeLocal = (value?: string | null) => value ? value.slice(0, 16) : "";
+
+/** Tạo lịch mặc định ngày mai theo khung giờ học viên đã đăng ký. */
+const defaultTrialTimes = (preferredTimes?: string | null) => {
+  const match = preferredTimes?.match(/(?:^|\D)([01]?\d|2[0-3]):([0-5]\d)/);
+  const date = new Date();
+  date.setDate(date.getDate() + 1);
+  date.setHours(match ? Number(match[1]) : 19, match ? Number(match[2]) : 0, 0, 0);
+  const startAt = new Date(date);
+  date.setMinutes(date.getMinutes() + 60);
+  const format = (item: Date) => {
+    const pad = (number: number) => String(number).padStart(2, "0");
+    return `${item.getFullYear()}-${pad(item.getMonth() + 1)}-${pad(item.getDate())}T${pad(item.getHours())}:${pad(item.getMinutes())}`;
+  };
+  return { startAt: format(startAt), endAt: format(date) };
+};
+
 /** Hiển thị riêng hàng đợi HR phê duyệt và phân phối kết nối học 1-1. */
 export function OneOnOneConnectionApprovalTab({ requests, loading, onRequestUpdated }: OneOnOneConnectionApprovalTabProps) {
   const { success, error } = useToast();
   const [approveTarget, setApproveTarget] = useState<HrOneOnOneRequestResponse | null>(null);
+  const [rescheduleTarget, setRescheduleTarget] = useState<HrOneOnOneRequestResponse | null>(null);
   const [rejectTarget, setRejectTarget] = useState<HrOneOnOneRequestResponse | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [distributionTarget, setDistributionTarget] = useState<HrOneOnOneRequestResponse | null>(null);
@@ -49,20 +70,52 @@ export function OneOnOneConnectionApprovalTab({ requests, loading, onRequestUpda
   const [selectedInstructorIds, setSelectedInstructorIds] = useState<string[]>([]);
   const [candidateLoading, setCandidateLoading] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [trialForm, setTrialForm] = useState({
+    className: "", startAt: "", endAt: "", learningMode: "GOOGLE_MEET", linkOrLocation: "", notes: "",
+  });
 
-  /** Phê duyệt kết nối để người dạy được quyền tạo lớp và lịch học thử. */
+  /** Phê duyệt kết nối và yêu cầu backend tạo lớp cùng buổi học thử. */
   const approveConnection = async () => {
     if (!approveTarget) return;
+    if (!trialForm.className.trim()) {
+      error("Vui lòng nhập tên lớp học thử.");
+      return;
+    }
     setBusy(true);
     try {
-      const response = await hrApi.markOneOnOneContacted(approveTarget.id);
+      const response = await hrApi.markOneOnOneContacted(approveTarget.id, {
+        ...trialForm,
+        className: trialForm.className.trim(),
+        linkOrLocation: trialForm.linkOrLocation.trim() || undefined,
+        notes: trialForm.notes.trim() || undefined,
+      });
       onRequestUpdated(response.data.data);
-      success("Đã phê duyệt kết nối học viên và người dạy.");
+      setApproveTarget(null);
+      success("Đã kết nối hai bên và tạo lớp, buổi học thử.");
     } catch (cause) {
       error(errorMessage(cause, "Không thể phê duyệt kết nối hai bên."));
     } finally {
       setBusy(false);
     }
+  };
+
+  /** Cập nhật lịch thử hiện tại theo yêu cầu mới của HR. */
+  const rescheduleTrial = async () => {
+    if (!rescheduleTarget || !trialForm.className.trim()) return;
+    setBusy(true);
+    try {
+      const response = await hrApi.rescheduleOneOnOneTrial(rescheduleTarget.id, {
+        ...trialForm,
+        className: trialForm.className.trim(),
+        linkOrLocation: trialForm.linkOrLocation.trim() || undefined,
+        notes: trialForm.notes.trim() || undefined,
+      });
+      onRequestUpdated(response.data.data);
+      setRescheduleTarget(null);
+      success("Đã đổi lịch học thử và thông báo cho hai bên.");
+    } catch (cause) {
+      error(errorMessage(cause, "Không thể đổi lịch học thử."));
+    } finally { setBusy(false); }
   };
 
   /** Từ chối kết nối hiện tại và trả yêu cầu về hàng đợi tìm người dạy khác. */
@@ -178,10 +231,31 @@ export function OneOnOneConnectionApprovalTab({ requests, loading, onRequestUpda
                     }}>
                       <XCircle className="mr-2 h-4 w-4" />Từ chối kết nối
                     </Button>
-                    <Button size="sm" onClick={() => { setApproveTarget(request); }}>
+                    <Button size="sm" onClick={() => {
+                    setApproveTarget(request);
+                      const defaults = defaultTrialTimes(request.preferredTimes);
+                      setTrialForm({
+                        className: `Lớp thử 1-1 - ${request.courseName}`,
+                        startAt: defaults.startAt, endAt: defaults.endAt, learningMode: "GOOGLE_MEET", linkOrLocation: "", notes: "",
+                      });
+                    }}>
                       <CheckCircle2 className="mr-2 h-4 w-4" />Phê duyệt kết nối
                     </Button>
                   </>
+                )}
+                {request.status === "TRIAL_SCHEDULED" && (
+                  <Button size="sm" variant="outline" onClick={() => {
+                    const defaults = defaultTrialTimes(request.preferredTimes);
+                    setRescheduleTarget(request);
+                    setTrialForm({
+                      className: `Lớp thử 1-1 - ${request.courseName}`,
+                      startAt: toDatetimeLocal(request.trialStartAt) || defaults.startAt,
+                      endAt: toDatetimeLocal(request.trialEndAt) || defaults.endAt,
+                      learningMode: "GOOGLE_MEET", linkOrLocation: "", notes: "",
+                    });
+                  }}>
+                    Đổi lịch học thử
+                  </Button>
                 )}
               </div>
             </div>
@@ -189,16 +263,25 @@ export function OneOnOneConnectionApprovalTab({ requests, loading, onRequestUpda
         </CardContent>
       </Card>
 
-      <ConfirmDialog
-        open={Boolean(approveTarget)}
-        onOpenChange={(open) => { if (!open) setApproveTarget(null); }}
-        title="Phê duyệt kết nối"
-        description={`Xác nhận kết nối ${approveTarget?.studentName ?? "học viên"} với ${approveTarget?.assignedInstructorName ?? "người dạy"}? Sau bước này người dạy có thể tạo lớp học thử.`}
-        confirmText="Phê duyệt kết nối"
-        variant="default"
-        loading={busy}
-        onConfirm={approveConnection}
-      />
+      <Dialog open={Boolean(approveTarget) || Boolean(rescheduleTarget)} onOpenChange={(open) => { if (!open && !busy) { setApproveTarget(null); setRescheduleTarget(null); } }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{rescheduleTarget ? "Đổi lịch buổi học thử" : "Kết nối và tạo buổi học thử"}</DialogTitle>
+            <DialogDescription>
+              Tạo lớp thử cho {approveTarget?.studentName ?? "học viên"} và {approveTarget?.assignedInstructorName ?? "người dạy"}. Hai bên sẽ thấy lịch ngay sau khi xác nhận.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5 sm:col-span-2"><Label>Tên lớp thử *</Label><Input value={trialForm.className} onChange={(event) => { setTrialForm((value) => ({ ...value, className: event.target.value })); }} placeholder="Lớp thử 1-1..." /></div>
+            <div className="space-y-1.5"><Label>Bắt đầu</Label><Input type="datetime-local" value={trialForm.startAt} onChange={(event) => { setTrialForm((value) => ({ ...value, startAt: event.target.value })); }} /><p className="text-xs text-muted-foreground">Mặc định theo khung giờ học viên yêu cầu.</p></div>
+            <div className="space-y-1.5"><Label>Kết thúc</Label><Input type="datetime-local" value={trialForm.endAt} onChange={(event) => { setTrialForm((value) => ({ ...value, endAt: event.target.value })); }} /></div>
+            <div className="space-y-1.5 sm:col-span-2"><Label>Hình thức học *</Label><Select value={trialForm.learningMode} onValueChange={(learningMode) => { setTrialForm((value) => ({ ...value, learningMode })); }}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="GOOGLE_MEET">Google Meet</SelectItem><SelectItem value="ZOOM">Zoom</SelectItem><SelectItem value="OFFLINE">Học trực tiếp</SelectItem></SelectContent></Select></div>
+            <div className="space-y-1.5 sm:col-span-2"><Label>Link hoặc địa điểm</Label><Input value={trialForm.linkOrLocation} onChange={(event) => { setTrialForm((value) => ({ ...value, linkOrLocation: event.target.value })); }} /></div>
+            <div className="space-y-1.5 sm:col-span-2"><Label>Ghi chú</Label><Textarea value={trialForm.notes} onChange={(event) => { setTrialForm((value) => ({ ...value, notes: event.target.value })); }} rows={3} /></div>
+          </div>
+          <DialogFooter><Button variant="outline" onClick={() => { setApproveTarget(null); setRescheduleTarget(null); }} disabled={busy}>Hủy</Button><Button onClick={() => { void (rescheduleTarget ? rescheduleTrial() : approveConnection()); }} disabled={busy}>{busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}{rescheduleTarget ? "Lưu lịch mới" : "Tạo lớp và lịch thử"}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={Boolean(rejectTarget)} onOpenChange={(open) => {
         if (!open && !busy) {

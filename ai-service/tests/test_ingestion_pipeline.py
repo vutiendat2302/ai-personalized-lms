@@ -49,6 +49,19 @@ class StubVectorStore(BaseVectorStore):
         """Không cần search trong test ingestion."""
         return []
 
+    async def get_payload_field(
+        self, collection: str, key: str, values: list[str], field: str
+    ) -> dict[str, Any]:
+        """Lấy giá trị trường payload giả lập từ các record đã lưu."""
+        result: dict[str, Any] = {}
+        for r in self.records:
+            source_val = r.payload.get(key)
+            field_val = r.payload.get(field)
+            if source_val is not None and str(source_val) in values and field_val is not None:
+                result[str(source_val)] = field_val
+        return result
+
+
 
 @pytest.mark.asyncio
 async def test_pipeline_replaces_source_vectors() -> None:

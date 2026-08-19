@@ -1,116 +1,102 @@
-"""
-seed_user_roles.py
--------------------
-Seed dữ liệu cho bảng `user_role`.
-- CỐ ĐỊNH DATA 100%: Chạy lại không bị sinh thêm role, không bị đổi role.
-- Không gán role ADMIN.
-- Tỉ lệ role: 5% HR, 20% TEACHER, 30% TA, 45% STUDENT.
-"""
+"""Đồng bộ một role chính cho từng tài khoản thuộc bộ dữ liệu báo cáo."""
 
-import random
-from datetime import datetime, timedelta
 from snowflake_id import snowflake
 
-# --- KHÓA SEED ĐỂ LUÔN PHÂN BỔ ROLE CỐ ĐỊNH KHÔNG ĐỔI ---
-random.seed(42)
-# --------------------------------------------------------
+from identity_dataset import PEOPLE
 
 
-def get_all_users(cursor):
-    """Lấy danh sách tất cả user từ bảng user."""
-    cursor.execute("SELECT id, username FROM user")
-    return cursor.fetchall()
-
-
-def get_roles_map(cursor):
-    """Lấy dictionary mapping code -> id của các role."""
-    cursor.execute("SELECT id, code FROM role")
-    rows = cursor.fetchall()
-    return {row["code"]: row["id"] for row in rows}
-
-
-def check_user_has_any_role(cursor, user_id: int):
-    """
-    LỚP BẢO VỆ: Chỉ cần user ĐÃ CÓ BẤT KỲ ROLE NÀO là bỏ qua ngay.
-    Tránh trường hợp 1 user bị gán nhiều role khi chạy lại script.
-    """
+def get_role_ids(cursor) -> dict[str, int]:
+    """Lấy ID của toàn bộ role bắt buộc theo code."""
+    required_codes = {person["role"] for person in PEOPLE}
+    placeholders = ",".join(["%s"] * len(required_codes))
     cursor.execute(
-        "SELECT id, role_id FROM user_role WHERE user_id = %s",
-        (user_id,),
+        f"SELECT id, code FROM role WHERE code IN ({placeholders})",
+        tuple(sorted(required_codes)),
     )
-    row = cursor.fetchone()
-    return row if row else None
+    role_ids = {row["code"]: row["id"] for row in cursor.fetchall()}
+    missing = required_codes - role_ids.keys()
+    if missing:
+        raise ValueError(f"Thiếu role master data: {sorted(missing)}")
+    return role_ids
 
 
-def seed(cursor):
-    print("→ Seeding user_roles...")
-
-    users = get_all_users(cursor)
-    if not users:
-        print("   [warning] Bảng `user` trống! Hãy chạy seed_users trước.")
-        return
-
-    roles_map = get_roles_map(cursor)
-
-    required_roles = ["ADMIN", "HR", "TEACHER", "TA", "STUDENT"]
-    for r_code in required_roles:
-        if r_code not in roles_map:
-            print(f"   [error] Không tìm thấy role {r_code} trong bảng role!")
-            return
-
-    # Lấy ID của role ADMIN làm assigned_by
-    admin_id = roles_map["ADMIN"]
-
-    # Sắp xếp user theo ID trước khi shuffle để đảm bảo kết quả shuffle
-    # lần nào chạy cũng ra ĐÚNG 1 THỨ TỰ DUY NHẤT
-    user_list = sorted(list(users), key=lambda x: x["id"])
-    random.shuffle(user_list)
-    total_users = len(user_list)
-
-    # Tính toán số lượng theo tỉ lệ
-    hr_count = int(total_users * 0.05)
-    teacher_count = int(total_users * 0.20)
-    ta_count = int(total_users * 0.30)
-    student_count = total_users - (hr_count + teacher_count + ta_count)
-
-    role_distribution = (
-        [roles_map["HR"]] * hr_count
-        + [roles_map["TEACHER"]] * teacher_count
-        + [roles_map["TA"]] * ta_count
-        + [roles_map["STUDENT"]] * student_count
+def get_dataset_users(cursor) -> dict[str, int]:
+    """Lấy user ID thật theo danh sách username cố định của dataset."""
+    usernames = tuple(person["username"] for person in PEOPLE)
+    placeholders = ",".join(["%s"] * len(usernames))
+    cursor.execute(
+        f"SELECT id, username FROM user WHERE username IN ({placeholders})",
+        usernames,
     )
+    users = {row["username"]: row["id"] for row in cursor.fetchall()}
+    missing = set(usernames) - users.keys()
+    if missing:
+        raise ValueError(f"Thiếu user trước khi gán role: {sorted(missing)}")
+    return users
 
-    for idx, u in enumerate(user_list):
-        user_id = u["id"]
-        username = u["username"]
-        target_role_id = role_distribution[idx]
 
-        # Check: Nếu user đã được gán role (bất kể role gì) thì skip luôn
-        existing_role = check_user_has_any_role(cursor, user_id)
-        if existing_role:
-            print(f"   [skip] User {username:<25} đã có role rồi (id={existing_role['id']})")
-            continue
-
-        # Random thời gian gán trong vòng 30 ngày qua
-        days_ago = random.randint(0, 30)
-        hours_ago = random.randint(0, 23)
-        minutes_ago = random.randint(0, 59)
-        assigned_at = datetime.now() - timedelta(
-            days=days_ago, hours=hours_ago, minutes=minutes_ago
-        )
-
-        new_id = snowflake.next_id()
-
+def synchronize_role(cursor, user_id: int, role_id: int, admin_user_id: int, assigned_at) -> bool:
+    """Giữ đúng một role chính và cập nhật audit gán role cho user seed."""
+    cursor.execute("DELETE FROM user_role WHERE user_id=%s AND role_id<>%s", (user_id, role_id))
+    cursor.execute(
+        "SELECT id FROM user_role WHERE user_id=%s AND role_id=%s ORDER BY id",
+        (user_id, role_id),
+    )
+    existing_rows = cursor.fetchall()
+    if existing_rows:
+        existing = existing_rows[0]
+        duplicate_ids = tuple(row["id"] for row in existing_rows[1:])
+        if duplicate_ids:
+            placeholders = ",".join(["%s"] * len(duplicate_ids))
+            cursor.execute(f"DELETE FROM user_role WHERE id IN ({placeholders})", duplicate_ids)
         cursor.execute(
             """
-            INSERT INTO user_role (
-                id, user_id, role_id, assigned_by, assigned_at, 
-                expired_at, scope_type, scope_id, created_at, updated_at
-            )
-            VALUES (%s, %s, %s, %s, %s, NULL, NULL, NULL, NOW(), NOW())
+            UPDATE user_role
+            SET assigned_by=%s, assigned_at=%s, expired_at=NULL,
+                scope_type=NULL, scope_id=NULL, updated_at=%s
+            WHERE id=%s
             """,
-            (new_id, user_id, target_role_id, admin_id, assigned_at),
+            (admin_user_id, assigned_at, assigned_at, existing["id"]),
         )
+        return False
 
-        role_name = [code for code, r_id in roles_map.items() if r_id == target_role_id][0]
-        print(f"   [insert] Gán role {role_name:<7} cho user {username:<25} (id={new_id})")
+    cursor.execute(
+        """
+        INSERT INTO user_role (
+            id, user_id, role_id, assigned_by, assigned_at, expired_at,
+            scope_type, scope_id, created_by, updated_by, created_at, updated_at
+        ) VALUES (%s, %s, %s, %s, %s, NULL, NULL, NULL, %s, NULL, %s, %s)
+        """,
+        (
+            snowflake.next_id(),
+            user_id,
+            role_id,
+            admin_user_id,
+            assigned_at,
+            admin_user_id,
+            assigned_at,
+            assigned_at,
+        ),
+    )
+    return True
+
+
+def seed(cursor) -> None:
+    """Gán role xác định và dùng đúng admin user ID cho assigned_by."""
+    print("→ Seeding final-report user roles...")
+    role_ids = get_role_ids(cursor)
+    users = get_dataset_users(cursor)
+    admin_user_id = users["admin.report"]
+    inserted = 0
+    synchronized = 0
+    for person in PEOPLE:
+        was_inserted = synchronize_role(
+            cursor,
+            users[person["username"]],
+            role_ids[person["role"]],
+            admin_user_id,
+            person["created_at"],
+        )
+        inserted += int(was_inserted)
+        synchronized += int(not was_inserted)
+    print(f"   [completed] user_role: inserted={inserted}, synchronized={synchronized}")

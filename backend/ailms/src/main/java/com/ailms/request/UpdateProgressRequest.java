@@ -1,5 +1,6 @@
 package com.ailms.request;
 
+import jakarta.validation.constraints.Size;
 import lombok.*;
 
 /**
@@ -23,4 +24,8 @@ public class UpdateProgressRequest {
 
     /** Đánh dấu hoàn thành bài học thủ công (dành cho TEXT/PDF). */
     private Boolean markCompleted;
+
+    /** Nội dung ghi chú cá nhân cần lưu cho bài học. */
+    @Size(max = 10000, message = "Ghi chú cá nhân không được vượt quá 10000 ký tự.")
+    private String personalNote;
 }

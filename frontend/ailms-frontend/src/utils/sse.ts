@@ -2,6 +2,7 @@ export interface SSEReaderOptions {
   onChunk: (chunk: string) => void;
   onComplete?: () => void;
   onError?: (error: Error) => void;
+  onMetadata?: (metadata: { route?: string; grounding?: string; sources?: any[] }) => void;
   signal?: AbortSignal;
 }
 
@@ -12,10 +13,16 @@ export async function readSSE(
   response: Response,
   options: SSEReaderOptions
 ): Promise<void> {
-  const { onChunk, onComplete, onError, signal } = options;
+  const { onChunk, onComplete, onError, onMetadata, signal } = options;
 
   if (!response.ok || !response.body) {
-    const err = new Error(`HTTP Error: ${response.status} ${response.statusText}`);
+    let detail = "";
+    try {
+      detail = (await response.clone().text()).trim().slice(0, 240);
+    } catch {
+      // Ignore unreadable error body and keep the HTTP status.
+    }
+    const err = new Error(detail || `HTTP Error: ${response.status} ${response.statusText}`);
     onError?.(err);
     throw err;
   }
@@ -39,21 +46,57 @@ export async function readSSE(
       }
 
       buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n\n");
-      buffer = lines.pop() || "";
+      const blocks = buffer.split("\n\n");
+      buffer = blocks.pop() || "";
 
-      for (const rawEvent of lines) {
-        if (!rawEvent.startsWith("data:")) continue;
-        const data = rawEvent.replace(/^data:\s*/, "");
+      for (const block of blocks) {
+        const trimmed = block.trim();
+        if (!trimmed) continue;
 
-        if (data === "[DONE]") {
-          onComplete?.();
-          return;
+        if (trimmed.startsWith("event: metadata")) {
+          const match = trimmed.match(/data:\s*(.+)$/m);
+          if (match) {
+            try {
+              const meta = JSON.parse(match[1]);
+              onMetadata?.(meta);
+            } catch {
+              // Ignore metadata parse error
+            }
+          }
+          continue;
         }
 
-        const chunk = data.replace(/\\n/g, "\n");
-        if (chunk) {
-          onChunk(chunk);
+        const lines = trimmed.split("\n");
+        for (const line of lines) {
+          if (!line.startsWith("data:")) continue;
+          const data = line.replace(/^data:\s*/, "");
+
+          if (data === "[DONE]") {
+            onComplete?.();
+            return;
+          }
+
+          const chunk = data.replace(/\\n/g, "\n");
+          if (chunk) {
+            // Backend proxy có thể chuyển event metadata của AI Service thành data chunk.
+            // Giữ metadata cho UI nhưng không render JSON kỹ thuật vào câu trả lời.
+            try {
+              const metadata = JSON.parse(chunk) as {
+                route?: string;
+                grounding?: string;
+                sources?: any[];
+              };
+              if (metadata && typeof metadata === "object"
+                && ("route" in metadata || "grounding" in metadata || "sources" in metadata)
+                && !("answer" in metadata)) {
+                onMetadata?.(metadata);
+                continue;
+              }
+            } catch {
+              // Đây là text trả lời bình thường, tiếp tục render.
+            }
+            onChunk(chunk);
+          }
         }
       }
     }

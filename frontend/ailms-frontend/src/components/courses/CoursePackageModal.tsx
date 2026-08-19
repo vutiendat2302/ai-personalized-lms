@@ -83,7 +83,6 @@ const packageTypeLabel = (type: CourseDetailPackage["deliveryMode"]) => ({
   SELF_STUDY: "Tự học",
   GROUP_CLASS: "Lớp học nhóm",
   ONE_ON_ONE: "Học 1-1",
-  COMBO: "Gói kết hợp",
 })[type];
 
 /** Đổi chỉ số ngày backend thành nhãn lịch học tiếng Việt. */
@@ -97,12 +96,10 @@ const toNeedsPayload = ({ scheduleSlots, ...values }: NeedsForm): OneOnOneNeedsP
 });
 
 /** Xác định package có phần lớp nhóm và phải hiển thị lịch trước khi mua. */
-const requiresGroupClass = (item: CourseDetailPackage) => item.deliveryMode === "GROUP_CLASS"
-  || (item.deliveryMode === "COMBO" && ((item.maxGroupSize ?? 0) > 1 || item.classDetail != null));
+const requiresGroupClass = (item: CourseDetailPackage) => item.deliveryMode === "GROUP_CLASS";
 
 /** Xác định package có quyền lợi gia sư và phải thu thập nhu cầu học tập. */
-const requiresTutorNeeds = (item: CourseDetailPackage) => item.deliveryMode === "ONE_ON_ONE"
-  || (item.deliveryMode === "COMBO" && (item.includedTutorSessions ?? 0) > 0);
+const requiresTutorNeeds = (item: CourseDetailPackage) => item.deliveryMode === "ONE_ON_ONE";
 
 /** Hiển thị chọn package, chi tiết lớp và form nhu cầu dùng chung cho checkout/thêm giỏ. */
 export function CoursePackageModal({
@@ -282,7 +279,7 @@ export function CoursePackageModal({
                   <p>Trợ giảng: {selectedPackage.classDetail.teachingAssistants.length > 0 ? selectedPackage.classDetail.teachingAssistants.map((item) => item.fullName).join(", ") : "Chưa phân công"}</p>
                   <p><CalendarDays className="mr-1 inline h-4 w-4" />{selectedPackage.classDetail.startDate ?? "Chưa có ngày bắt đầu"} – {selectedPackage.classDetail.endDate ?? "Chưa có ngày kết thúc"}</p>
                   <p>Múi giờ: {selectedPackage.classDetail.timeZone}</p>
-                  <p>Hình thức: {selectedPackage.deliveryMode === "COMBO" ? "Gói kết hợp có lớp nhóm" : packageTypeLabel(selectedPackage.classDetail.deliveryMode)}</p>
+                  <p>Hình thức: {packageTypeLabel(selectedPackage.classDetail.deliveryMode)}</p>
                   <p><Users className="mr-1 inline h-4 w-4" />{selectedPackage.classDetail.currentStudents}/{selectedPackage.classDetail.maxMembers}, còn {selectedPackage.classDetail.remainingSlots} chỗ</p>
                   <p>Trạng thái lớp: {selectedPackage.classDetail.status}</p>
                   <p>Nhận học viên: {selectedPackage.classDetail.registrationOpen && selectedPackage.classDetail.purchasable ? "Còn nhận" : "Ngừng nhận"}</p>

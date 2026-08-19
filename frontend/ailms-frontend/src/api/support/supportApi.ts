@@ -54,10 +54,35 @@ const TOKEN_KEY = "ailms.support.visitorToken";
 /** Lấy visitor token đã lưu, không lưu nội dung conversation trong localStorage. */
 export const getVisitorToken = (): string | null => localStorage.getItem(TOKEN_KEY);
 
+/** Xóa visitor token hỏng để lần mở chat sau tạo session mới. */
+export const clearVisitorToken = (): void => localStorage.removeItem(TOKEN_KEY);
+
+/** Trích xuất mã HTTP status từ response hoặc payload lỗi của API. */
+const extractErrorStatus = (error: unknown): number | undefined => {
+  if (typeof error !== "object" || error === null) return undefined;
+  if ("status" in error && typeof (error as { status?: unknown }).status === "number") {
+    return (error as { status: number }).status;
+  }
+  if ("response" in error) {
+    const response = (error as { response?: { status?: number } }).response;
+    return response?.status;
+  }
+  return undefined;
+};
+
 /** Khởi tạo visitor session khi browser chưa có token. */
 export async function ensureVisitor(): Promise<VisitorSession> {
   const existing = getVisitorToken();
-  if (existing) return { visitorId: "", visitorToken: existing, conversationId: "" };
+  if (existing) {
+    try {
+      const current = await getCurrentConversation(existing);
+      return { visitorId: "", visitorToken: existing, conversationId: current.id };
+    } catch (error: unknown) {
+      const status = extractErrorStatus(error);
+      if (status !== 400 && status !== 404) throw error;
+      clearVisitorToken();
+    }
+  }
   const response = await httpClient.post<ApiResponse<VisitorSession>>("/v1/public/support/visitors");
   const session = response.data.data;
   localStorage.setItem(TOKEN_KEY, session.visitorToken);

@@ -19,10 +19,11 @@ export interface StudentDashboardMetrics {
   }[];
 }
 
-export type DeliveryMode = "SELF_STUDY" | "GROUP_CLASS" | "ONE_ON_ONE" | "COMBO";
+export type DeliveryMode = "SELF_STUDY" | "GROUP_CLASS" | "ONE_ON_ONE";
 
 export interface StudentCourseCard {
   id: string;
+  enrollmentId: string;
   title: string;
   courseCode?: string;
   courseLink?: string;
@@ -30,12 +31,37 @@ export interface StudentCourseCard {
   level?: string;
   categoryName: string;
   coverImage?: string;
+  thumbnailUrl?: string;
+  image?: string;
   deliveryMode: DeliveryMode;
   progressPercent: number;
   expiresAt?: string;
   expired: boolean;
   status: "ACTIVE" | "COMPLETED" | "EXPIRED";
   lastAccessedAt: string;
+  teacherId?: string;
+  teacherName?: string;
+  teacherAvatarUrl?: string;
+  reviewId?: string;
+  courseRating?: number;
+  courseComment?: string;
+  teacherRating?: number;
+  teacherComment?: string;
+  certificateId?: string;
+  certificateCode?: string;
+  certificateStatus?: "ISSUED" | "REVOKED";
+}
+
+export interface StudentCourseReview {
+  id: string;
+  courseId: string;
+  rating: number;
+  comment?: string;
+  teacherId?: string;
+  teacherName?: string;
+  teacherAvatarUrl?: string;
+  teacherRating?: number;
+  teacherComment?: string;
 }
 
 export interface StudentCourseDetail {
@@ -181,6 +207,19 @@ export interface StudentOneOnOneRequest {
   status: OneOnOneRequestStatus;
   assignedInstructorName?: string | null;
   trialClassId?: string | null;
+  trialSessionId?: string | null;
+  trialStartAt?: string | null;
+  trialEndAt?: string | null;
+  trialMeetingUrl?: string | null;
+  availablePeriod?: string | null;
+  availableDays?: string | null;
+  preferredTimes?: string | null;
+  currentLevel?: string | null;
+  learningSituation?: string | null;
+  learningGoals?: string | null;
+  weakAreas?: string | null;
+  instructorPreferences?: string | null;
+  additionalNotes?: string | null;
   createdAt: string;
 }
 
@@ -214,6 +253,7 @@ export interface StudentOrderItem {
   finalAmount: number;
   couponCode?: string;
   status: "PENDING" | "PAID" | "CANCELLED" | "EXPIRED" | "REFUNDED";
+  refundRequestStatus?: "PENDING" | "CONFIRMED" | "REJECTED" | "CANCELLED" | null;
   createdAt: string;
   expiredAt?: string;
   eligibleForRefund?: boolean;
@@ -227,6 +267,8 @@ export interface StudentVoucher {
   discountValue: number;
   applicableCourseId?: string;
   applicableCourseName?: string;
+  applicableCourseNames?: string[];
+  applicableCourseIds?: string[];
   validFrom?: string;
   validTo?: string;
   status: "AVAILABLE" | "RESERVED" | "USED" | "EXPIRED";
@@ -271,6 +313,29 @@ export const studentApi = {
   getCourseDetail: async (id: string): Promise<StudentCourseDetail> =>
     getData(await httpClient.get<ApiResponse<StudentCourseDetail>>(`/v1/student/courses/${id}`)),
 
+  /** Gửi đánh giá khóa học và giáo viên cho khóa học đã hoàn thành. */
+  createCourseReview: async (courseId: string, payload: {
+    rating: number;
+    comment?: string;
+    teacherRating?: number;
+    teacherComment?: string;
+  }): Promise<StudentCourseReview> =>
+    getData(await httpClient.post<ApiResponse<StudentCourseReview>>(`/v1/student/courses/${courseId}/review`, payload)),
+
+  /** Cấp bù hoặc lấy chứng chỉ của enrollment thuộc học viên hiện tại. */
+  issueCertificate: async (enrollmentId: string): Promise<StudentCertificateCard> =>
+    getData(await httpClient.post<ApiResponse<StudentCertificateCard>>(
+      `/v1/student/enrollments/${enrollmentId}/certificate`,
+    )),
+
+  /** Tải file PDF chứng chỉ qua API có kiểm tra chủ sở hữu. */
+  downloadCertificate: async (certificateId: string): Promise<Blob> => {
+    const response = await httpClient.get<Blob>(`/v1/student/certificates/${certificateId}/download`, {
+      responseType: "blob",
+    });
+    return response.data;
+  },
+
   /** Lấy các lớp mà tài khoản hiện tại là học viên ACTIVE. */
   getClasses: async (): Promise<StudentClassCard[]> =>
     getData(await httpClient.get<ApiResponse<StudentClassCard[]>>("/v1/classes/enrolled/me")),
@@ -282,6 +347,22 @@ export const studentApi = {
   getOneOnOneRequests: async (): Promise<StudentOneOnOneRequest[]> =>
     getData(await httpClient.get<ApiResponse<StudentOneOnOneRequest[]>>("/v1/students/one-on-one/requests")),
 
+  /** Học viên xác nhận tiếp tục hoặc từ chối người dạy sau buổi thử. */
+  submitOneOnOneTrialResult: async (requestId: string, continueLearning: boolean): Promise<StudentOneOnOneRequest> =>
+    getData(await httpClient.post<ApiResponse<StudentOneOnOneRequest>>(
+      `/v1/students/one-on-one/requests/${requestId}/trial-result`, { continueLearning },
+    )),
+
+  /** Hủy vòng ghép hiện tại, cập nhật nhu cầu và tìm người dạy khác. */
+  rematchOneOnOne: async (
+    requestId: string,
+    reason: string,
+    needs: import("@/api/orders/orderApi").OneOnOneNeedsPayload,
+  ): Promise<StudentOneOnOneRequest> =>
+    getData(await httpClient.post<ApiResponse<StudentOneOnOneRequest>>(
+      `/v1/students/one-on-one/requests/${requestId}/rematch`, { reason, needs },
+    )),
+
   getAssignments: async (): Promise<StudentAssignmentItem[]> =>
     getData(await httpClient.get<ApiResponse<StudentAssignmentItem[]>>("/v1/student/assignments")),
 
@@ -290,21 +371,21 @@ export const studentApi = {
 
   /** Bắt đầu một lượt làm quiz của học viên hiện tại. */
   startQuizAttempt: async (quizId: string): Promise<string> =>
-    String(getData(await httpClient.post<ApiResponse<string>>(`/v1/student/quizzes/${quizId}/attempts`))),
+    getData(await httpClient.post<ApiResponse<string>>(`/v1/student/quizzes/${quizId}/attempts`)),
 
   /** Gửi câu trả lời quiz để backend chấm và cập nhật tiến độ. */
-  submitQuizAttempt: async (attemptId: string, answers: Array<{
+  submitQuizAttempt: async (attemptId: string, answers: {
     questionId: string;
     selectedOptionId?: string;
     selectedOptionIds?: string[];
     answerText?: string;
-  }>): Promise<void> => {
+  }[]): Promise<void> => {
     await httpClient.post(`/v1/student/quiz-attempts/${attemptId}/submit`, { answers });
   },
 
   /** Nộp nội dung hoặc tệp bài tập bằng danh tính từ JWT. */
   submitAssignment: async (assignmentId: string, payload: { contentText?: string; fileUrl?: string }): Promise<string> =>
-    String(getData(await httpClient.post<ApiResponse<string>>(`/v1/student/assignments/${assignmentId}/submissions`, payload))),
+    getData(await httpClient.post<ApiResponse<string>>(`/v1/student/assignments/${assignmentId}/submissions`, payload)),
 
   getCertificates: async (): Promise<StudentCertificateCard[]> =>
     getData(await httpClient.get<ApiResponse<StudentCertificateCard[]>>("/v1/student/certificates")),
@@ -367,7 +448,7 @@ export const studentApi = {
     getData(await httpClient.get<ApiResponse<import("@/api/orders/orderApi").OrderResponse>>(`/v1/student/orders/${orderId}`)),
 
   downloadInvoice: async (orderId: string): Promise<Blob> =>
-    (await httpClient.get(`/v1/student/orders/${orderId}/invoice.pdf`, { responseType: "blob" })).data,
+    (await httpClient.get<Blob>(`/v1/student/orders/${orderId}/invoice.pdf`, { responseType: "blob" })).data,
 
   requestRefund: async (orderId: string, reason: string): Promise<boolean> => {
     await httpClient.post(`/v1/student/orders/${orderId}/refund`, { reason });
@@ -400,7 +481,7 @@ export const studentApi = {
 
 export interface StudentActivityHistoryItem {
   id: string;
-  historyType: "LEARNING" | "SYSTEM" | string;
+  historyType: string;
   action: string;
   entityType?: string | null;
   entityId?: string | null;
