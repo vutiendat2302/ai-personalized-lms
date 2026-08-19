@@ -185,7 +185,11 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, cla
       .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
       .replace(/\*(.*?)\*/g, "<em>$1</em>")
       .replace(/~~(.*?)~~/g, "<del>$1</del>")
-      .replace(/`(.*?)`/g, "<code class='bg-muted px-1.5 py-0.5 rounded font-mono text-xs text-primary'>$1</code>");
+      .replace(/`(.*?)`/g, "<code class='bg-muted px-1.5 py-0.5 rounded font-mono text-xs text-primary'>$1</code>")
+      .replace(
+        /\[(.*?)\]\((.*?)\)/g,
+        "<a href='$2' class='font-semibold text-primary underline underline-offset-2 hover:opacity-80 cursor-pointer transition-opacity'>$1</a>"
+      );
 
     return <span dangerouslySetInnerHTML={{ __html: formatted }} />;
   };

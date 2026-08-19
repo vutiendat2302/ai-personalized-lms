@@ -13,6 +13,7 @@ import { courseApi } from "@/api/courses/courseApi";
 import type { CategoryResponse } from "@/types/admin";
 import { useAuth } from "@/hooks/useAuth";
 import { formatCourseLevel } from "@/utils/searchUtils";
+import { resolveAvatarUrl } from "@/utils/avatarUrl";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
@@ -375,8 +376,9 @@ export const StudentDashboardPage: React.FC = () => {
       {/* ==========================================
           [SECTION 2] Continue Learning (Course đang học dở)
           ========================================== */}
-      <section className="w-full bg-[#e8f5f0] dark:bg-emerald-950/20 py-10 border-b border-emerald-100 dark:border-emerald-900/30">
-        <div className="max-w-6xl mx-auto px-6 space-y-4">
+      <section className="w-full bg-[#e8f5f0] dark:bg-emerald-950/20 py-6 md:py-8 border-b border-emerald-100 dark:border-emerald-900/30">
+        <div className="max-w-6xl mx-auto px-6 space-y-3">
+
           
           {activeCourse ? (
             <>
@@ -403,60 +405,61 @@ export const StudentDashboardPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Card bài học */}
-              <div className="grid grid-cols-1 md:grid-cols-2 rounded-2xl overflow-hidden shadow-md bg-white dark:bg-card border border-emerald-100 dark:border-emerald-900/40">
-                {/* Nửa trái */}
-                <div className="p-6 md:p-8 flex flex-col justify-between space-y-4">
-                  <div className="space-y-2">
-                    <span className="text-xs font-extrabold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider block">
+              {/* Card bài học - Compact Layout */}
+              <div className="grid grid-cols-1 md:grid-cols-12 rounded-xl overflow-hidden shadow-xs bg-white dark:bg-card border border-emerald-100 dark:border-emerald-900/40 md:h-[160px]">
+                {/* Nửa trái (Thông tin bài học) */}
+                <div className="md:col-span-7 lg:col-span-8 p-5 flex flex-col justify-between space-y-2">
+                  <div className="space-y-1">
+                    <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider block">
                       Bài học tiếp theo:
                     </span>
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-foreground line-clamp-2">
+                    <h3 className="text-base md:text-lg font-bold text-gray-900 dark:text-foreground line-clamp-1">
                       {nextLessonTitle || activeCourse.title}
                     </h3>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 font-medium line-clamp-1">
                       Danh mục: {activeCourse.categoryName || "Khóa học AILMS"}
                     </p>
                   </div>
 
-                  <button
+                  <Button
                     onClick={() => navigate(`/student/courses/${activeCourse.id}`)}
-                    className="bg-indigo-700 hover:bg-indigo-800 text-white px-6 py-3 rounded-xl font-medium shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer w-fit"
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 h-9 rounded-lg font-medium text-xs shadow-xs transition-all flex items-center justify-center gap-1.5 w-fit cursor-pointer"
                   >
                     <span>Tiếp tục bài học</span>
-                    <ArrowRight className="h-4 w-4" />
-                  </button>
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Button>
                 </div>
 
-                {/* Nửa phải: Ảnh thumbnail bài học */}
-                <div className="relative min-h-[220px] bg-muted overflow-hidden">
+                {/* Nửa phải: Ảnh thumbnail bài học (Cố định tỷ lệ, không bị kéo giãn) */}
+                <div className="md:col-span-5 lg:col-span-4 relative h-36 md:h-full bg-muted overflow-hidden">
                   {activeCourse.coverImage ? (
                     <img
-                      src={activeCourse.coverImage}
+                      src={resolveAvatarUrl(activeCourse.coverImage)}
                       alt={activeCourse.title}
-                      className="object-cover w-full h-full min-h-[220px]"
+                      className="absolute inset-0 w-full h-full object-cover"
                     />
                   ) : (
-                    <div className="w-full h-full min-h-[220px] bg-gradient-to-br from-emerald-500/20 to-indigo-500/20 flex items-center justify-center">
-                      <BookOpen className="h-12 w-12 text-emerald-600/40" />
+                    <div className="w-full h-full bg-gradient-to-br from-emerald-500/20 to-indigo-500/20 flex items-center justify-center">
+                      <BookOpen className="h-8 w-8 text-emerald-600/40" />
                     </div>
                   )}
                 </div>
+
               </div>
             </>
-          ) : (
-            <div className="bg-white dark:bg-card rounded-2xl p-8 text-center space-y-3 border border-emerald-100 dark:border-border/40 shadow-sm">
-              <BookOpen className="h-10 w-10 text-emerald-600 mx-auto" />
-              <h3 className="text-lg font-bold text-foreground">Bạn chưa tham gia khóa học nào</h3>
+        ) : (
+            <div className="bg-white dark:bg-card rounded-xl p-6 text-center space-y-3 border border-emerald-100 dark:border-border/40 shadow-xs">
+              <BookOpen className="h-8 w-8 text-emerald-600 mx-auto" />
+              <h3 className="text-base font-bold text-foreground">Bạn chưa tham gia khóa học nào</h3>
               <p className="text-xs text-muted-foreground max-w-md mx-auto">
                 Hãy bắt đầu hành trình học tập bằng cách chọn khóa học ưa thích trong Danh mục sản phẩm!
               </p>
-              <button
+              <Button
                 onClick={() => navigate("/student/catalog")}
-                className="bg-indigo-700 hover:bg-indigo-800 text-white px-6 py-2.5 rounded-xl font-medium text-xs shadow-sm transition-all cursor-pointer"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 h-9 rounded-lg font-medium text-xs shadow-xs transition-all cursor-pointer"
               >
                 Khám phá khóa học ngay
-              </button>
+              </Button>
             </div>
           )}
 
@@ -496,9 +499,9 @@ export const StudentDashboardPage: React.FC = () => {
                   className="flex flex-col bg-card rounded-2xl border border-border/70 shadow-sm hover:shadow-lg hover:border-primary/40 hover:-translate-y-1.5 cursor-pointer overflow-hidden group transition-all duration-300"
                 >
                   <div className="relative aspect-video overflow-hidden bg-muted">
-                    {course.thumbnailUrl ? (
+                    {course.thumbnailUrl || course.image || course.coverImage || course.imageUrl ? (
                       <img
-                        src={course.thumbnailUrl}
+                        src={resolveAvatarUrl(course.thumbnailUrl || course.image || course.coverImage || course.imageUrl)}
                         alt={course.title}
                         className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300"
                       />
@@ -657,9 +660,9 @@ export const StudentDashboardPage: React.FC = () => {
                           className="flex-none w-65 sm:w-72.5 snap-start flex flex-col bg-card rounded-2xl border border-border/70 shadow-sm hover:shadow-lg hover:border-primary/40 hover:-translate-y-1.5 cursor-pointer overflow-hidden group transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-primary/50"
                         >
                           <div className="relative aspect-video overflow-hidden bg-muted">
-                            {course.image ? (
+                            {course.thumbnailUrl || course.image || course.coverImage || course.imageUrl ? (
                               <img
-                                src={course.image}
+                                src={resolveAvatarUrl(course.thumbnailUrl || course.image || course.coverImage || course.imageUrl)}
                                 alt={course.name || course.title}
                                 className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300"
                               />

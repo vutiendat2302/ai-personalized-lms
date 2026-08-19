@@ -41,6 +41,7 @@ import com.ailms.repository.ApprovalRequestRepository;
 import com.ailms.repository.EmployeeContractRepository;
 import com.ailms.repository.EmployeeRepository;
 import com.ailms.repository.EnrollmentRepository;
+import com.ailms.repository.EnrollmentPackageRepository;
 import com.ailms.repository.LeaveRequestRepository;
 import com.ailms.repository.LessonRepository;
 import com.ailms.repository.LessonResourceRepository;
@@ -101,6 +102,7 @@ public class ManagementAiContextService {
     private final QuizRepository quizRepository;
     private final StudentProfileRepository studentProfileRepository;
     private final EnrollmentRepository enrollmentRepository;
+    private final EnrollmentPackageRepository enrollmentPackageRepository;
     private final CourseProgressRepository courseProgressRepository;
     private final DepartmentRepository departmentRepository;
     private final ApplicationEventPublisher applicationEventPublisher;
@@ -675,14 +677,37 @@ public class ManagementAiContextService {
             );
         }
 
-        List<CourseProgressEntity> progressList = courseProgressRepository.findByUserId(userId);
-        List<Map<String, Object>> progressSummaries = new ArrayList<>();
+        List<Long> activeCourseIds = enrollmentPackageRepository.findActiveCourseIdsByUser(
+                userId, LocalDateTime.now());
+        List<CourseProgressEntity> progressList = courseProgressRepository.findByUserId(userId).stream()
+                .filter(progress -> activeCourseIds.contains(progress.getCourseId()))
+                .toList();
+        Map<Long, Map<String, Object>> progressByCourse = new LinkedHashMap<>();
         for (CourseProgressEntity progress : progressList) {
             CourseEntity course = courseRepository.findById(progress.getCourseId()).orElse(null);
             Map<String, Object> item = progressSummary(progress);
             item.put("courseName", course != null ? course.getName() : "Khóa học #" + progress.getCourseId());
-            progressSummaries.add(item);
+            progressByCourse.put(progress.getCourseId(), item);
         }
+        for (EnrollmentEntity enrollment : enrollmentRepository.findByUserEntity_Id(userId).stream()
+                .filter(enrollment -> activeCourseIds.contains(enrollment.getCourseEntity().getId()))
+                .toList()) {
+            Long courseId = enrollment.getCourseEntity().getId();
+            if (!progressByCourse.containsKey(courseId)) {
+                Map<String, Object> enrollmentSummary = new LinkedHashMap<>();
+                enrollmentSummary.put("courseId", String.valueOf(courseId));
+                enrollmentSummary.put("courseName", enrollment.getCourseEntity().getName());
+                enrollmentSummary.put("progressPercent", 0);
+                enrollmentSummary.put("completedLessons", 0);
+                enrollmentSummary.put("totalLessons",
+                        lessonRepository.countByCourseSectionEntityCourseEntityId(courseId));
+                if (enrollment.getStatus() != null) {
+                    enrollmentSummary.put("status", enrollment.getStatus());
+                }
+                progressByCourse.put(courseId, enrollmentSummary);
+            }
+        }
+        List<Map<String, Object>> progressSummaries = new ArrayList<>(progressByCourse.values());
 
         return Map.of(
                 "userId", String.valueOf(userId),

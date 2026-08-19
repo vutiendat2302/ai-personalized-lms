@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { QuizResponseDTO } from "@/api/courses/courseAuthoringApi";
 import { studentApi } from "@/api/student/studentApi";
 import type { QuestionItem } from "@/components/admin/course-builder/QuestionBuilderManager";
+import { MathRenderer } from "@/components/common/MathRenderer";
 import { useToast } from "@/hooks/useToast";
 import { AlertCircle, Award, CheckCircle, Clock, HelpCircle, Loader2, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +15,25 @@ interface LearningQuizPlayerProps {
 }
 
 type AnswerValue = string | string[] | Record<string, string>;
+
+interface QuizTextProps {
+  content: string;
+}
+
+/** Hiển thị văn bản quiz và render công thức LaTeX inline bằng KaTeX. */
+const QuizText = ({ content }: QuizTextProps) => {
+  const parts = content.split(/(\$\$[\s\S]*?\$\$|\$[^$\n]+\$|\\\([\s\S]*?\\\))/g);
+  return (
+    <>
+      {parts.map((part, index) => {
+        const isMath = /^(\$\$[\s\S]*\$\$|\$[^$\n]+\$|\\\([\s\S]*\\\))$/.test(part);
+        return isMath
+          ? <MathRenderer key={`${part}-${String(index)}`} math={part} displayMode={false} />
+          : <span key={`${part}-${String(index)}`}>{part}</span>;
+      })}
+    </>
+  );
+};
 
 /** Làm quiz trong không gian học bằng attempt backend; preview quản trị không ghi dữ liệu. */
 export const LearningQuizPlayer = ({ quiz, onComplete, persistAttempt = false }: LearningQuizPlayerProps) => {
@@ -217,20 +237,20 @@ export const LearningQuizPlayer = ({ quiz, onComplete, persistAttempt = false }:
           {questions.map((question, questionIndex) => (
             <div key={question.id} className="space-y-4 rounded-2xl border bg-muted/20 p-5">
               <div className="flex items-start justify-between gap-3">
-                <h3 className="text-sm font-semibold">Câu {questionIndex + 1}: {question.content}</h3>
+                <h3 className="text-sm font-semibold">Câu {questionIndex + 1}: <QuizText content={question.content} /></h3>
                 {question.points != null && <Badge variant="outline">{question.points} điểm</Badge>}
               </div>
               {(question.questionType === "SINGLE_CHOICE" || question.questionType === "TRUE_FALSE") && (
                 <div className="space-y-2">{question.options.map((option, optionIndex) => {
                   const optionId = option.id ?? String(optionIndex);
-                  return <label key={optionId} className="flex cursor-pointer items-center gap-3 rounded-xl border bg-background p-3 text-sm"><input type="radio" name={question.id} checked={answers[question.id] === optionId} onChange={() => setAnswer(question.id, optionId)} />{option.content}</label>;
+                  return <label key={optionId} className="flex cursor-pointer items-center gap-3 rounded-xl border bg-background p-3 text-sm"><input type="radio" name={question.id} checked={answers[question.id] === optionId} onChange={() => setAnswer(question.id, optionId)} /><QuizText content={option.content} /></label>;
                 })}</div>
               )}
               {question.questionType === "MULTIPLE_CHOICE" && (
                 <div className="space-y-2">{question.options.map((option, optionIndex) => {
                   const optionId = option.id ?? String(optionIndex);
                   const selected = Array.isArray(answers[question.id]) && (answers[question.id] as string[]).includes(optionId);
-                  return <label key={optionId} className="flex cursor-pointer items-center gap-3 rounded-xl border bg-background p-3 text-sm"><input type="checkbox" checked={selected} onChange={() => toggleMultipleAnswer(question.id, optionId)} />{option.content}</label>;
+                  return <label key={optionId} className="flex cursor-pointer items-center gap-3 rounded-xl border bg-background p-3 text-sm"><input type="checkbox" checked={selected} onChange={() => toggleMultipleAnswer(question.id, optionId)} /><QuizText content={option.content} /></label>;
                 })}</div>
               )}
               {(question.questionType === "SHORT_ANSWER" || question.questionType === "ESSAY") && <textarea rows={question.questionType === "ESSAY" ? 6 : 2} value={typeof answers[question.id] === "string" ? answers[question.id] as string : ""} onChange={(event) => setAnswer(question.id, event.target.value)} className="w-full rounded-xl border bg-background p-3 text-sm" placeholder="Nhập câu trả lời" />}

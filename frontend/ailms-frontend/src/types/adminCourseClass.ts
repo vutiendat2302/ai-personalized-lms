@@ -40,6 +40,7 @@ export interface CourseExtended {
   categoryName: string;
   description: string;
   coverImage?: string;
+  thumbnailUrl?: string;
   level: CourseLevel;
   status: CourseStatus;
   teachers: TeacherInfo[];

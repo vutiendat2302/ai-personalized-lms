@@ -25,6 +25,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.LinkedHashSet;
+import java.util.Optional;
+
 
 @Service
 @RequiredArgsConstructor
@@ -194,19 +196,64 @@ public class CouponService implements ICouponService {
         return assignedCount;
     }
 
-    /** Lấy danh sách voucher được cấp và tính trạng thái khả dụng tại thời điểm đọc. */
+    /** Lấy danh sách voucher được cấp và tự động đồng bộ voucher toàn hệ thống cho học viên. */
     @Override
+    @Transactional
     public List<UserCouponResponse> getUserCoupons(Long userId) {
+        syncGlobalCouponsForUser(userId);
         return userCouponRepository.findByUserEntity_IdOrderByCreatedAtDesc(userId).stream()
                 .map(this::mapUserCoupon).toList();
     }
 
+    /** Tự động đồng bộ các coupon toàn hệ thống ALL_STUDENTS còn hoạt động cho học viên. */
+    private void syncGlobalCouponsForUser(Long userId) {
+        List<CouponEntity> globalCoupons = couponRepository.findAll().stream()
+                .filter(c -> c.getStatus() == CouponStatusEnum.ACTIVE
+                        && c.getDistributionScope() == CouponDistributionScopeEnum.ALL_STUDENTS)
+                .toList();
+        for (CouponEntity global : globalCoupons) {
+            if (!userCouponRepository.existsByUserEntity_IdAndCouponEntity_Id(userId, global.getId())) {
+                UserEntity student = userRepository.findById(userId).orElse(null);
+                if (student != null) {
+                    userCouponRepository.save(UserCouponEntity.builder()
+                            .userEntity(student)
+                            .couponEntity(global)
+                            .status(UserCouponStatusEnum.AVAILABLE)
+                            .build());
+                }
+            }
+        }
+    }
+
     /** Kiểm tra voucher thuộc đúng học viên, còn hạn và áp dụng được cho ít nhất một khóa học. */
     @Override
+    @Transactional
     public UserCouponResponse validateUserCoupon(Long userId, String code, List<Long> courseIds) {
-        UserCouponEntity owned = userCouponRepository.findByUserEntity_IdOrderByCreatedAtDesc(userId).stream()
-                .filter(item -> item.getCouponEntity().getCode().equalsIgnoreCase(code))
-                .findFirst().orElseThrow(() -> new BusinessException("Voucher không thuộc tài khoản của bạn."));
+        if (code == null || code.isBlank()) {
+            throw new BusinessException("Mã voucher không được để trống.");
+        }
+        String cleanCode = code.trim();
+        Optional<UserCouponEntity> ownedOpt = userCouponRepository.findByUserEntity_IdOrderByCreatedAtDesc(userId).stream()
+                .filter(item -> item.getCouponEntity().getCode().equalsIgnoreCase(cleanCode))
+                .findFirst();
+        UserCouponEntity owned;
+        if (ownedOpt.isPresent()) {
+            owned = ownedOpt.get();
+        } else {
+            CouponEntity globalCoupon = couponRepository.findByCode(cleanCode)
+                    .orElseThrow(() -> new BusinessException("Mã voucher không tồn tại."));
+            if (globalCoupon.getDistributionScope() == CouponDistributionScopeEnum.ALL_STUDENTS) {
+                UserEntity student = userRepository.findById(userId)
+                        .orElseThrow(() -> ResourceNotFoundException.of("User", userId));
+                owned = userCouponRepository.save(UserCouponEntity.builder()
+                        .userEntity(student)
+                        .couponEntity(globalCoupon)
+                        .status(UserCouponStatusEnum.AVAILABLE)
+                        .build());
+            } else {
+                throw new BusinessException("Voucher không thuộc tài khoản của bạn.");
+            }
+        }
         UserCouponResponse response = mapUserCoupon(owned);
         if (!response.isUsable()) throw new BusinessException(response.getUnavailableReason());
         if (response.getApplicableCourseIds() != null && !response.getApplicableCourseIds().isEmpty()
@@ -215,6 +262,7 @@ public class CouponService implements ICouponService {
         }
         return response;
     }
+
 
     /** Chuyển quyền voucher sang DTO và giải thích lý do không thể sử dụng. */
     private UserCouponResponse mapUserCoupon(UserCouponEntity owned) {

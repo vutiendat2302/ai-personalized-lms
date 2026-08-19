@@ -24,7 +24,19 @@ export const resolveAvatarUrl = (value?: string | null): string | undefined => {
 };
 
 const AVATAR_KEYS = new Set([
-  "avatar", "avatarUrl", "studentAvatar", "teacherAvatar", "userAvatar", "authorAvatar",
+  "avatar",
+  "avatarUrl",
+  "studentAvatar",
+  "teacherAvatar",
+  "userAvatar",
+  "authorAvatar",
+  "thumbnailUrl",
+  "thumbnail",
+  "image",
+  "coverImage",
+  "bannerUrl",
+  "courseAvatar",
+  "imageUrl",
 ]);
 
 /** Chuẩn hóa đệ quy các trường avatar ngay tại biên HTTP để mọi danh sách dùng cùng hợp đồng. */

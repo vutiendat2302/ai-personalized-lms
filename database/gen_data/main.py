@@ -65,9 +65,16 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--phase",
-        choices=("all", "static", "identity", "course-content"),
+        choices=(
+            "all", "static", "identity", "course-content",
+            "learner-lifecycle", "commerce", "class-lifecycle",
+            "learning-progress", "reviews", "validate",
+        ),
         default="all",
-        help="Mặc định 'all'; dùng lựa chọn khác để chạy lại riêng một giai đoạn",
+        help=(
+            "Mặc định 'all'; dùng lựa chọn khác để chạy lại riêng một giai đoạn. "
+            "'learner-lifecycle' chạy toàn bộ các bước mua hàng, lớp học, tiến độ và đánh giá."
+        ),
     )
     parser.add_argument(
         "--dry-run",
@@ -201,9 +208,66 @@ def run_course_content() -> None:
     """Sinh khóa học, lesson, quiz, assignment và resource qua Backend API."""
     from course_content_api import seed_course_content
 
-    print("\n=== Giai đoạn 3/3: Nội dung khóa học qua Backend ===")
+    print("\n=== Giai đoạn 3/5: Nội dung khóa học qua Backend ===")
     seed_course_content()
     print("✅ Đã đồng bộ bộ khóa học theo workflow nháp, duyệt và kích hoạt")
+
+
+def run_commerce() -> None:
+    """Sinh dữ liệu mua hàng: checkout PayPal Sandbox → capture → Order PAID → Enrollment."""
+    from commerce_api import seed_commerce
+
+    print("\n=== Giai đoạn 4a/5: Mua hàng và thanh toán PayPal ===")
+    seed_commerce()
+    print("✅ Đã hoàn tất chu trình mua hàng cho các student")
+
+
+def run_class_lifecycle() -> None:
+    """Sinh lớp học nhóm và hoàn tất quy trình ghép giáo viên 1-1."""
+    from class_lifecycle_api import seed_class_lifecycle
+
+    print("\n=== Giai đoạn 4b/5: Lớp học và quy trình 1-1 ===")
+    seed_class_lifecycle()
+    print("✅ Đã tạo lớp nhóm và xử lý matching 1-1")
+
+
+def run_learning_progress() -> None:
+    """Hoàn thành 100% curriculum cho tất cả enrollment qua Backend API."""
+    from learning_progress_api import seed_learning_progress
+
+    print("\n=== Giai đoạn 4c/5: Hoàn thành bài học ===")
+    seed_learning_progress()
+    print("✅ Đã hoàn thành curriculum cho tất cả enrollment")
+
+
+def run_reviews() -> None:
+    """Sinh đánh giá khóa học và giáo viên sau khi enrollment đạt 100%."""
+    from review_api import seed_reviews
+
+    print("\n=== Giai đoạn 5/5: Đánh giá khóa học và giáo viên ===")
+    seed_reviews()
+    print("✅ Đã sinh đánh giá cho các enrollment hoàn thành")
+
+
+def run_validate() -> None:
+    """Chạy kiểm toán dữ liệu và xuất báo cáo chất lượng pipeline."""
+    from lifecycle_validation import run_validation
+
+    print("\n=== Validation: Kiểm toán chất lượng dữ liệu ===")
+    result = run_validation()
+    if result.get("failed", 0) > 0:
+        print(f"⚠️  {result['failed']} kiểm tra FAIL. Xem chi tiết ở trên.")
+    else:
+        print("✅ Toàn bộ kiểm tra PASS")
+
+
+def run_learner_lifecycle() -> None:
+    """Chạy toàn bộ pipeline learner-lifecycle: commerce → class → learning → reviews → validate."""
+    run_commerce()
+    run_class_lifecycle()
+    run_learning_progress()
+    run_reviews()
+    run_validate()
 
 
 def main() -> None:
@@ -215,6 +279,18 @@ def main() -> None:
         run_identity()
     if args.phase in {"all", "course-content"}:
         run_course_content()
+    if args.phase in {"all", "learner-lifecycle"}:
+        run_learner_lifecycle()
+    if args.phase == "commerce":
+        run_commerce()
+    if args.phase == "class-lifecycle":
+        run_class_lifecycle()
+    if args.phase == "learning-progress":
+        run_learning_progress()
+    if args.phase == "reviews":
+        run_reviews()
+    if args.phase == "validate":
+        run_validate()
     print("\n✅ Pipeline gen_data hoàn tất")
 
 

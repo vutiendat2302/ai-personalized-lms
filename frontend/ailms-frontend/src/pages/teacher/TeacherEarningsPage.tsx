@@ -45,10 +45,10 @@ export const TeacherEarningsPage: React.FC = () => {
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
           <DollarSign className="h-6 w-6 text-primary" />
-          Thu nhập & Buổi dạy (Teaching Session Payments)
+          Thu nhập & Buổi dạy
         </h1>
         <p className="text-xs text-muted-foreground mt-1">
-          Theo dõi minh bạch trạng thái thù lao theo từng buổi dạy (Draft → Pending → Confirmed → Paid).
+          Theo dõi minh bạch trạng thái thù lao theo từng buổi dạy.
         </p>
       </div>
 

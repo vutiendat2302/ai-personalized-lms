@@ -2988,3 +2988,25 @@ WAITING_INSTRUCTOR -> INSTRUCTOR_ACCEPTED -> CONTACTED
 | HR | `GET /api/v1/hr/one-on-one/requests`, `POST .../{id}/mark-contacted`, `reject-connection`, `notify-instructors`, `cancel`, `refund`; `GET .../{id}/instructor-candidates` |
 
 Accept và mọi state transition dùng row lock. Khi HR phê duyệt kết nối, request đi qua `CONTACTED` và backend tạo ngay lớp cùng buổi thử trong một transaction, sau đó trả `TRIAL_SCHEDULED` và thông báo cả hai bên. HR cũng có thể từ chối người vừa nhận: người này được ghi vào danh sách không nhận lại, request quay về `REMATCHING`, học viên/người bị từ chối nhận thông báo và hệ thống gửi lại cho Teacher/TA ACTIVE khác cùng danh mục. Ở `WAITING_INSTRUCTOR`/`REMATCHING`, HR có thể lấy danh sách ứng viên hợp lệ và gửi thông báo tới một tập người dạy tùy chọn. Lớp thử có `classKind=ONE_ON_ONE_TRIAL`, buổi thử có `sessionKind=TRIAL`, `countsTowardPackage=false`, `payable=false`. Sau khi buổi thử kết thúc, học viên có thể đồng ý để cùng lớp chuyển thành `ONE_ON_ONE/ACTIVE`, hoặc gửi `/rematch` ở bất kỳ trạng thái chưa hủy để cập nhật nhu cầu, đóng lớp/buổi hiện tại, chặn người dạy cũ và tìm người mới.
+
+---
+
+## 18. Phân hệ AI Gateway & Trợ lý Thông minh (AI Copilot Streaming)
+
+### 18.1 Nguyên lý Bảo mật Zero-Trust & Gateway tập trung
+- **Cổng kết nối AI duy nhất:** Mọi yêu cầu gọi AI từ ứng dụng đều đi qua `backend/ailms` (Gateway) và kết nối tới `ai-service` bằng `AiServiceClient` kèm header bí mật nội bộ `X-Internal-Token`.
+- **HMAC Tool Access Token:** Khi Gemini thực hiện Tool Calling gọi ngược về Backend để lấy dữ liệu nghiệp vụ (`POST /api/v1/ai/internal/tools`), Backend xác thực chữ ký HMAC `toolAccessToken` (hết hạn 5 phút) để đảm bảo AI chỉ được truy xuất dữ liệu thuộc phạm vi quyền hạn (RBAC) của người dùng hiện tại.
+- **Lọc dữ liệu nhạy cảm (Data Redaction):** Trước khi trả dữ liệu cho AI sinh câu trả lời, Backend tự động lọc bỏ các trường PII nhạy cảm: mức lương chi tiết, số CCCD/CMND, mật khẩu, số điện thoại cá nhân.
+
+### 18.2 API Chat Streaming & Xử lý Tệp Đính Kèm
+- `POST /api/v1/ai/chat/stream`: Stream token phản hồi theo chuẩn Server-Sent Events (SSE).
+- `POST /api/v1/ai/chat/file/stream`: Nhận tệp đính kèm (Ảnh `PNG/JPEG/WEBP` hoặc Tài liệu `PDF/DOCX/TXT` tối đa 10 MB) kèm câu hỏi để AI phân tích trực tiếp trong phiên chat.
+- `GET /api/v1/ai/conversations`: Phân trang lịch sử chat theo `ownerId` và phân vùng `scope` (`ADMIN_COPILOT`, `EMPLOYEE_COPILOT`, `STUDENT_ASSISTANT`).
+- `PATCH /api/v1/ai/conversations/{id}/title`: Đổi tiêu đề phiên hội thoại.
+- `DELETE /api/v1/ai/conversations/{id}`: Xóa phiên chat.
+- `PUT /api/v1/ai/messages/{messageId}/feedback`: Ghi nhận đánh giá phản hồi (`THUMBS_UP`, `THUMBS_DOWN`).
+- `POST /api/v1/public/ai/chat/stream`: Stream tư vấn công khai trên Landing page có rate limit theo IP.
+
+### 18.3 Cơ chế Tool Calling & Đồng bộ Tri thức RAG
+- `ManagementAiContextService` cung cấp hơn 20 tool nghiệp vụ nội bộ (Nhân sự, Hợp đồng, Chấm công, Học viên, Doanh số, Khóa học).
+- `ManagementKnowledgeSyncService` & `ContractKnowledgeChangedListener`: Tự động đồng bộ các quy chế, mẫu hợp đồng sang `ai-service` để lưu trữ vector trên Qdrant (`management_knowledge`).

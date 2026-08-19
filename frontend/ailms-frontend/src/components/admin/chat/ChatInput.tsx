@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from "react";
-import { Send, Square, Image as ImageIcon, X } from "lucide-react";
+import { Send, Square, Paperclip, FileText, X } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 
@@ -7,6 +7,7 @@ interface ChatInputProps {
   input: string;
   setInput: (value: string) => void;
   onSend: () => void;
+  onSendFile?: (file: File) => void;
   onSendImage?: (file: File) => void;
   onStop: () => void;
   isStreaming: boolean;
@@ -16,14 +17,15 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   input,
   setInput,
   onSend,
+  onSendFile,
   onSendImage,
   onStop,
   isStreaming,
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [selectedImage, setSelectedImage] = useState<File | null>(null);
-  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
   // Auto resize textarea height based on content
   useEffect(() => {
@@ -35,14 +37,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   // Clean up preview url
   useEffect(() => {
-    if (selectedImage) {
-      const url = URL.createObjectURL(selectedImage);
-      setImagePreviewUrl(url);
+    if (selectedFile && selectedFile.type.startsWith("image/")) {
+      const url = URL.createObjectURL(selectedFile);
+      setPreviewUrl(url);
       return () => URL.revokeObjectURL(url);
     } else {
-      setImagePreviewUrl(null);
+      setPreviewUrl(null);
     }
-  }, [selectedImage]);
+  }, [selectedFile]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -53,8 +55,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file && file.type.startsWith("image/")) {
-      setSelectedImage(file);
+    if (file) {
+      setSelectedFile(file);
     }
     e.target.value = "";
   };
@@ -63,11 +65,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const items = e.clipboardData?.items;
     if (!items) return;
     for (let i = 0; i < items.length; i++) {
-      if (items[i].type.startsWith("image/")) {
+      if (items[i].kind === "file") {
         const file = items[i].getAsFile();
         if (file) {
           e.preventDefault();
-          setSelectedImage(file);
+          setSelectedFile(file);
           break;
         }
       }
@@ -76,66 +78,82 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   const handleSubmit = () => {
     if (isStreaming) return;
-    if (selectedImage && onSendImage) {
-      onSendImage(selectedImage);
-      setSelectedImage(null);
+    const fileHandler = onSendFile || onSendImage;
+    if (selectedFile && fileHandler) {
+      fileHandler(selectedFile);
+      setSelectedFile(null);
     } else if (input.trim()) {
       onSend();
     }
   };
 
-  const clearImage = () => {
-    setSelectedImage(null);
+  const clearFile = () => {
+    setSelectedFile(null);
+  };
+
+  const isImage = selectedFile?.type.startsWith("image/");
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
   return (
     <div className="bg-card border-t border-border/60 p-2.5 space-y-2">
-      {/* Image Preview Thumbnail */}
-      {imagePreviewUrl && (
-        <div className="flex items-center gap-2 p-1.5 bg-muted/40 rounded-xl border border-border/60 w-fit max-w-full">
+      {/* File Preview Thumbnail / File Badge */}
+      {selectedFile && (
+        <div className="flex items-center gap-2.5 p-1.5 bg-muted/40 rounded-xl border border-border/60 w-fit max-w-full">
           <div className="relative group">
-            <img
-              src={imagePreviewUrl}
-              alt="Ảnh đính kèm"
-              className="h-14 w-14 object-cover rounded-lg border border-border/80 shadow-2xs"
-            />
+            {isImage && previewUrl ? (
+              <img
+                src={previewUrl}
+                alt="Ảnh đính kèm"
+                className="h-12 w-12 object-cover rounded-lg border border-border/80 shadow-2xs"
+              />
+            ) : (
+              <div className="h-12 w-12 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shadow-2xs">
+                <FileText className="h-6 w-6" />
+              </div>
+            )}
             <button
               type="button"
-              onClick={clearImage}
+              onClick={clearFile}
               className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
-              title="Xóa ảnh"
+              title="Xóa tệp đính kèm"
             >
               <X className="h-3 w-3" />
             </button>
           </div>
-          <div className="text-[11px] pr-2 text-muted-foreground truncate max-w-[180px]">
-            <p className="font-medium text-foreground truncate">{selectedImage?.name}</p>
-            <p className="text-[10px]">Gemini Vision OCR sẵn sàng</p>
+          <div className="text-[11px] pr-2 text-muted-foreground truncate max-w-[200px]">
+            <p className="font-medium text-foreground truncate">{selectedFile.name}</p>
+            <p className="text-[10px] text-muted-foreground/80">
+              {formatFileSize(selectedFile.size)} • {isImage ? "Gemini Vision OCR" : "AI Doc Parser"}
+            </p>
           </div>
         </div>
       )}
 
       <div className="flex items-end gap-1.5">
-        {/* Hidden File Input for Images */}
+        {/* Hidden File Input for Images and Docs */}
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/png,image/jpeg,image/jpg,image/webp"
+          accept="image/png,image/jpeg,image/jpg,image/webp,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
           className="hidden"
           onChange={handleFileChange}
         />
 
-        {/* Upload Image Button */}
+        {/* Upload File/Image Button */}
         <Button
           type="button"
           variant="ghost"
           size="icon-sm"
           onClick={() => fileInputRef.current?.click()}
           disabled={isStreaming}
-          title="Tải lên ảnh bài tập, sơ đồ hoặc đề thi"
+          title="Đính kèm tài liệu (PDF, Word, TXT) hoặc hình ảnh"
           className="rounded-xl h-[38px] w-[38px] shrink-0 text-muted-foreground hover:text-primary hover:bg-primary/10"
         >
-          <ImageIcon className="h-4 w-4" />
+          <Paperclip className="h-4 w-4" />
         </Button>
 
         <Textarea
@@ -145,8 +163,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
           placeholder={
-            selectedImage
-              ? "Nhập câu hỏi về hình ảnh này (hoặc Enter để gửi)..."
+            selectedFile
+              ? `Hỏi AI về tệp ${selectedFile.name} (Enter để gửi)...`
               : "Nhập câu hỏi cho AI (Shift + Enter để xuống dòng, dán ảnh Ctrl+V)..."
           }
           rows={1}
@@ -170,7 +188,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             variant="default"
             size="icon-sm"
             onClick={handleSubmit}
-            disabled={!input.trim() && !selectedImage}
+            disabled={!input.trim() && !selectedFile}
             title="Gửi câu hỏi"
             className="rounded-xl h-[38px] w-[38px] shrink-0 shadow-xs"
           >

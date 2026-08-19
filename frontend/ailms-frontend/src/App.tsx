@@ -16,7 +16,6 @@ import { RoleManagement } from "./pages/admin/RoleManagement";
 import { PermissionManagement } from "./pages/admin/PermissionManagement";
 import { OrderManagement } from "./pages/admin/OrderManagement";
 import { CouponManagement } from "./pages/admin/CouponManagement";
-import { HRManagement } from "./pages/admin/HRManagement";
 import { TrashManagement } from "./pages/admin/TrashManagement";
 import { ApprovalCenterPage } from "./pages/admin/ApprovalCenterPage";
 import { CategoryTeacherAssignPage } from "./pages/admin/CategoryTeacherAssignPage";
@@ -256,7 +255,6 @@ function App() {
                 <Route path="/admin/students" element={<StudentManagement />} />
                 <Route path="/admin/employees" element={<EmployeeManagement />} />
                 <Route path="/admin/pending-requests" element={<ApprovalCenterPage />} />
-                <Route path="/admin/hr" element={<HRManagement />} />
                 <Route path="/admin/approval-center" element={<ApprovalCenterPage />} />
                 <Route path="/admin/department" element={<DepartmentManagement />} />
                 <Route path="/admin/contracts" element={<ContractManagement />} />

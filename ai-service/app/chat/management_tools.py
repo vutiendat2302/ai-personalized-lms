@@ -10,12 +10,40 @@ logger = logging.getLogger(__name__)
 
 
 class ManagementToolClient:
-    """Gọi internal tool endpoint của Backend thay vì truy cập dữ liệu nghiệp vụ trực tiếp."""
+    """
+    Client gọi API nội bộ tới Backend Spring Boot để thực thi các công cụ quản trị (Internal Tool Execution).
+
+    Cơ chế hoạt động và kiến trúc Zero-Trust:
+    - AI Service KHÔNG kết nối trực tiếp vào MySQL nghiệp vụ để đảm bảo an toàn dữ liệu và phân tách trách nhiệm.
+    - Khi AI cần tra cứu hoặc thực hiện hành động (ví dụ: tìm nhân viên, xem tiến độ học tập, tạo quiz),
+      client này sẽ gửi một HTTP POST request tới endpoint nội bộ `/api/v1/ai/internal/tools` của Backend.
+    - Header `X-Internal-Token` dùng để xác thực kết nối giữa AI Service và Backend.
+    - `toolAccessToken` truyền kèm đại diện cho danh tính và quyền hạn của người dùng tại phiên làm việc.
+    - Backend Spring Boot kiểm tra quyền, truy vấn MySQL, lọc bỏ toàn bộ thông tin nhạy cảm (lương, mật khẩu, CCCD, SĐT)
+      rồi mới trả dữ liệu tinh gọn về cho AI Service.
+    """
 
     async def execute(
         self, tool_name: str, arguments: dict[str, Any], tool_access_token: str
     ) -> dict[str, Any]:
-        """Gửi tool call cùng token context bất biến và chỉ trả dữ liệu response tối thiểu."""
+        """
+        Gửi yêu cầu thực thi một công cụ nghiệp vụ cụ thể sang Backend Spring Boot.
+
+        Cơ chế:
+        1. Tạo kết nối HTTP bất đồng bộ với timeout 15 giây.
+        2. Đóng gói tên tool, tham số và `toolAccessToken` vào JSON body.
+        3. Kiểm tra mã phản hồi HTTP:
+           - Nếu thành công: bóc tách `response.json()["data"]["result"]`.
+           - Nếu lỗi kết nối/timeout/HTTP error: ghi log cảnh báo và trả về thông báo lỗi an toàn dạng dict để LLM xử lý tiếp.
+
+        Args:
+            tool_name (str): Tên định danh của công cụ (ví dụ: 'get_system_overview', 'search_employees').
+            arguments (dict[str, Any]): Các tham số đầu vào do Gemini trích xuất từ câu hỏi người dùng.
+            tool_access_token (str): JWT token context chứa quyền hạn người dùng do Backend cấp.
+
+        Returns:
+            dict[str, Any]: Dữ liệu kết quả nghiệp vụ đã được Backend làm sạch, hoặc dict chứa khóa 'error'.
+        """
         backend_url = settings.BACKEND_INTERNAL_BASE_URL.rstrip("/")
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
@@ -67,7 +95,18 @@ class ManagementToolClient:
 
 
 def management_tools() -> list[types.Tool]:
-    """Khai báo allow-list function calling cho các câu hỏi quản trị Admin và HR."""
+    """
+    Khai báo danh sách Allow-list các Function Declarations cho Gemini Tool Calling.
+
+    Cơ chế:
+    - Định nghĩa tên hàm, mô tả ngữ cảnh sử dụng và schema JSON các tham số đầu vào.
+    - Cung cấp các công cụ: Tra cứu nhân viên, hợp đồng, chấm công, học viên, tiến độ học, báo cáo doanh thu,
+      khóa/mở tài khoản, và tạo bài kiểm tra (Quiz).
+
+    Returns:
+        list[types.Tool]: Danh sách đối tượng Tool được Google GenAI SDK hỗ trợ.
+    """
+
     return [
         types.Tool(
             function_declarations=[
@@ -520,6 +559,58 @@ def management_tools() -> list[types.Tool]:
                         "properties": {
                             "olderThanHours": {"type": "integer"},
                         },
+                        "additionalProperties": False,
+                    },
+                ),
+                types.FunctionDeclaration(
+                    name="create_quiz_for_course_or_lesson",
+                    description=(
+                        "Tạo và lưu trực tiếp một bài kiểm tra trắc nghiệm (Quiz) cùng toàn bộ danh sách câu hỏi và đáp án "
+                        "vào cơ sở dữ liệu hệ thống AILMS cho một khóa học (courseId), chương học (sectionId) hoặc bài học (lessonId). "
+                        "Dùng khi Giảng viên hoặc Quản trị viên yêu cầu tạo bài quiz/kiểm tra và lưu vào hệ thống."
+                    ),
+                    parameters_json_schema={
+                        "type": "object",
+                        "properties": {
+                            "courseId": {"type": "string", "description": "ID khóa học cần thêm bài kiểm tra (tùy chọn)"},
+                            "sectionId": {"type": "string", "description": "ID chương học cần thêm bài kiểm tra (tùy chọn)"},
+                            "lessonId": {"type": "string", "description": "ID bài học cần gán bài kiểm tra (tùy chọn)"},
+                            "title": {"type": "string", "description": "Tiêu đề bài kiểm tra"},
+                            "description": {"type": "string", "description": "Mô tả bài kiểm tra và hướng dẫn làm bài"},
+                            "timeLimitMin": {"type": "integer", "description": "Thời gian làm bài tính bằng phút (mặc định 15)"},
+                            "passScore": {"type": "number", "description": "Điểm đạt tối thiểu (VD: 80.0 hoặc 8.0)"},
+                            "questions": {
+                                "type": "array",
+                                "description": "Danh sách các câu hỏi trắc nghiệm",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "content": {"type": "string", "description": "Nội dung câu hỏi"},
+                                        "questionType": {
+                                            "type": "string",
+                                            "enum": ["SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE"],
+                                            "description": "Loại câu hỏi (mặc định SINGLE_CHOICE)",
+                                        },
+                                        "explanation": {"type": "string", "description": "Giải thích đáp án chi tiết"},
+                                        "points": {"type": "number", "description": "Điểm của câu hỏi (mặc định 1)"},
+                                        "options": {
+                                            "type": "array",
+                                            "description": "Danh sách các phương án trả lời (ít nhất 2 đáp án)",
+                                            "items": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "content": {"type": "string", "description": "Nội dung phương án"},
+                                                    "isCorrect": {"type": "boolean", "description": "Có phải đáp án đúng không"},
+                                                },
+                                                "required": ["content", "isCorrect"],
+                                            },
+                                        },
+                                    },
+                                    "required": ["content", "options"],
+                                },
+                            },
+                        },
+                        "required": ["title", "questions"],
                         "additionalProperties": False,
                     },
                 ),

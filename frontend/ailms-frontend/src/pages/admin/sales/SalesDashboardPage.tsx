@@ -80,13 +80,13 @@ export const SalesDashboardPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/40 pb-5">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">Sales Dashboard</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">Tổng quan bán hàng</h1>
             <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 rounded-full">
               Live Metrics
             </span>
           </div>
           <p className="text-sm text-muted-foreground mt-1">
-            Tổng quan 5 giây về sức khỏe bán hàng & các công việc cần xử lý ngay lập tức
+            Tổng quan bán hàng & các công việc cần xử lý ngay lập tức
           </p>
         </div>
         <div className="flex items-center gap-2">

@@ -25,4 +25,5 @@ public class AiServiceChatRequest {
     private String fileBase64;
     private String fileMimeType;
     private String fileName;
+    private String retrievalMode;
 }

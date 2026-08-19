@@ -17,7 +17,7 @@ try:
 except ImportError:
     PdfReader = None
 
-from course_content_catalog import COURSES, REJECTION_REASON
+from course_catalog_50 import COURSES_50 as COURSES, REJECTION_REASON
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -152,8 +152,25 @@ class AilmsApi:
         return data
 
     def request(self, method: str, path: str, **kwargs: Any) -> Any:
-        """Gọi API, giới hạn thời gian và phát lỗi kèm thông điệp Backend."""
-        response = self.session.request(method, self.base_url + path, timeout=90, **kwargs)
+        """Gọi API với retry tự động (tối đa 3 lần) khi bị ConnectionError/RemoteDisconnected."""
+        import time as _time
+        last_err: Exception | None = None
+        for attempt in range(3):
+            try:
+                response = self.session.request(method, self.base_url + path, timeout=90, **kwargs)
+                break
+            except Exception as conn_err:
+                last_err = conn_err
+                if attempt < 2:
+                    _time.sleep(2 + attempt * 2)
+                    # Tạo lại session mới để tránh connection stale
+                    old_headers = dict(self.session.headers)
+                    self.session.close()
+                    import requests as _req
+                    self.session = _req.Session()
+                    self.session.headers.update(old_headers)
+                    continue
+                raise RuntimeError(f"{method} {path} ConnectionError sau 3 lần thử: {conn_err}") from conn_err
         try:
             payload = response.json()
         except ValueError as error:
@@ -357,21 +374,71 @@ def locked_course_needs_repair(
     )
 
 
-def ensure_package(api: AilmsApi, course_id: str, course_name: str) -> None:
-    """Bảo đảm course có gói SELF_STUDY ACTIVE trước khi Admin duyệt."""
+def ensure_package(api: AilmsApi, course_id: str, course_name: str, category_id: str = "1") -> None:
+    """Bảo đảm course có các gói SELF_STUDY, GROUP_CLASS, ONE_ON_ONE ACTIVE trước khi Admin duyệt."""
+    from datetime import datetime, timedelta
     packages = api.request("GET", f"/v1/course-packages/course/{course_id}")
-    if any(package.get("deliveryMode") == "SELF_STUDY" and package.get("status") == "ACTIVE" for package in packages):
-        return
-    api.request("POST", "/v1/course-packages", json={
-        "courseId": course_id,
-        "name": f"Gói tự học - {course_name}"[:100],
-        "description": "Truy cập toàn bộ video, bài đọc, quiz và bài tập trong 180 ngày.",
-        "price": 490000,
-        "originalPrice": 690000,
-        "deliveryMode": "SELF_STUDY",
-        "durationDays": 180,
-        "includedTutorSessions": 0,
-    })
+    existing_modes = {p.get("deliveryMode") for p in packages if p.get("status") == "ACTIVE"}
+
+    if "SELF_STUDY" not in existing_modes:
+        try:
+            api.request("POST", "/v1/course-packages", json={
+                "courseId": int(course_id),
+                "name": f"Gói tự học - {course_name}"[:100],
+                "description": "Truy cập toàn bộ video, bài đọc, quiz và bài tập trong 180 ngày.",
+                "price": 490000,
+                "originalPrice": 690000,
+                "deliveryMode": "SELF_STUDY",
+                "durationDays": 180,
+                "includedTutorSessions": 0,
+            })
+        except Exception:
+            pass
+
+    if "ONE_ON_ONE" not in existing_modes:
+        try:
+            api.request("POST", "/v1/course-packages", json={
+                "courseId": int(course_id),
+                "name": f"Gói kèm 1-1 - {course_name}"[:100],
+                "description": "Kèm 1-1 chuyên sâu cùng giảng viên hướng dẫn.",
+                "price": 2490000,
+                "originalPrice": 2990000,
+                "deliveryMode": "ONE_ON_ONE",
+                "durationDays": 60,
+                "includedTutorSessions": 8,
+            })
+        except Exception:
+            pass
+
+    if "GROUP_CLASS" not in existing_modes:
+        try:
+            start_date = datetime.now() + timedelta(days=3)
+            end_date = start_date + timedelta(days=90)
+            cls = api.request("POST", "/v1/classes", json={
+                "courseId": int(course_id),
+                "categoryId": int(category_id),
+                "name": f"Lớp nhóm {course_name}"[:40],
+                "description": f"Lớp học nhóm trực tuyến cho {course_name}",
+                "registrationOpen": True,
+                "allowLateEnrollment": True,
+                "packageType": "GROUP_CLASS",
+                "maxMembers": 20,
+                "startDate": start_date.isoformat(),
+                "endDate": end_date.isoformat(),
+            })
+            api.request("POST", "/v1/course-packages", json={
+                "courseId": int(course_id),
+                "classId": cls["id"],
+                "name": f"Gói lớp nhóm - {course_name}"[:100],
+                "description": "Học nhóm tương tác trực tuyến 2 buổi/tuần.",
+                "price": 1290000,
+                "originalPrice": 1590000,
+                "deliveryMode": "GROUP_CLASS",
+                "durationDays": 90,
+                "includedTutorSessions": 0,
+            })
+        except Exception:
+            pass
 
 
 def ensure_curriculum(api: AilmsApi, course: dict[str, Any], spec: dict[str, Any], questions: list[dict[str, Any]], essays: list[str], reading_text: str) -> None:
@@ -521,8 +588,57 @@ def validate_assets() -> None:
         raise FileNotFoundError("Thiếu asset khóa học: " + ", ".join(missing))
 
 
+def get_all_teachers(api: AilmsApi) -> list[dict[str, Any]]:
+    """Lấy danh sách teacher ACTIVE từ backend để phân công đa teacher."""
+    try:
+        res = api.request("GET", "/v1/users/page", params={"roleType": "EMPLOYEE", "page": 0, "size": 100})
+        return [
+            user for user in res.get("content", [])
+            if "TEACHER" in (user.get("roles") or [])
+        ]
+    except Exception:
+        return []
+
+
+def get_teacher_active_categories(api: AilmsApi) -> dict[str, Any]:
+    """Lấy category ACTIVE đầu tiên của teacher đang đăng nhập."""
+    categories = api.request("GET", "/v1/teacher_categories/teacher-categories/me")
+    active = [item for item in categories if item.get("status") == "ACTIVE"]
+    return active[0] if active else None
+
+
+def build_teacher_category_map(base_url: str, password: str, teachers: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """
+    Xây dựng danh sách {teacher_user, api, category_id} cho tất cả teacher có ACTIVE category.
+    Kết quả được dùng để phân công khóa học round-robin theo chuyên môn.
+    """
+    result = []
+    for teacher_user in teachers:
+        username = teacher_user.get("username") or teacher_user.get("email")
+        if not username:
+            continue
+        t_api = AilmsApi(base_url)
+        try:
+            t_api.login(username, password)
+        except RuntimeError:
+            continue
+        first_cat = get_teacher_active_categories(t_api)
+        if not first_cat:
+            continue
+        result.append({
+            "user": teacher_user,
+            "api": t_api,
+            "category_id": str(first_cat["categoryId"]),
+        })
+    return result
+
+
 def seed_course_content() -> None:
-    """Điều phối toàn bộ bộ dữ liệu khóa học qua hai actor Teacher và Admin."""
+    """
+    Điều phối toàn bộ bộ dữ liệu khóa học qua nhiều Teacher và Admin.
+    Phân công khóa học round-robin theo danh sách teacher có ACTIVE category,
+    đảm bảo mỗi khóa có đúng 1 teacher phụ trách và category phù hợp.
+    """
     validate_assets()
     demo_password = os.getenv("AILMS_SEED_PASSWORD", "Password@123")
     teacher_password = os.getenv("AILMS_SEED_TEACHER_PASSWORD", demo_password)
@@ -530,22 +646,33 @@ def seed_course_content() -> None:
     if not teacher_password or not admin_password:
         raise RuntimeError("Mật khẩu actor seed không được để trống")
     base_url = os.getenv("AILMS_API_BASE_URL", "http://localhost:8080/api")
-    teacher = AilmsApi(base_url)
-    teacher_user = teacher.login(os.getenv("AILMS_SEED_TEACHER_USERNAME", "teacher01"), teacher_password)
+
+    # Dùng admin để lấy danh sách teacher
     admin = AilmsApi(base_url)
     admin.login(os.getenv("AILMS_SEED_ADMIN_USERNAME", "admin.report"), admin_password)
 
-    categories = teacher.request("GET", "/v1/teacher_categories/teacher-categories/me")
-    active_categories = [item for item in categories if item.get("status") == "ACTIVE"]
-    if not active_categories:
-        raise RuntimeError("Giảng viên seed chưa được gán category ACTIVE")
-    category_id = str(active_categories[0]["categoryId"])
+    teachers = get_all_teachers(admin)
+    if not teachers:
+        raise RuntimeError("Không tìm thấy teacher nào! Hãy chạy phase identity trước.")
+
+    print(f"   [info] Tìm thấy {len(teachers)} teacher, đang kiểm tra chuyên môn...")
+    teacher_slots = build_teacher_category_map(base_url, teacher_password, teachers)
+    if not teacher_slots:
+        raise RuntimeError("Không có teacher nào có ACTIVE category. Hãy chạy phase identity trước.")
+    print(f"   [info] {len(teacher_slots)} teacher có ACTIVE category sẵn sàng tạo khóa học")
+
     questions, essays = parse_question_pdf(ASSET_DIR / "kiemtra.pdf")
     reading_text = compact_text(extract_pdf_text(ASSET_DIR / "baidoc.pdf"))
 
-    for spec in COURSES:
-        print(f"→ Đồng bộ {spec['name']} [{spec['target_status']}]")
-        course = ensure_course(teacher, str(teacher_user["id"]), category_id, spec)
+    for course_idx, spec in enumerate(COURSES):
+        # Phân công teacher theo round-robin — đảm bảo nhiều teacher tạo nhiều khóa
+        slot = teacher_slots[course_idx % len(teacher_slots)]
+        teacher = slot["api"]
+        teacher_user_id = str(slot["user"]["id"])
+        category_id = slot["category_id"]
+
+        print(f"→ [{course_idx+1}/{len(COURSES)}] {spec['name']} [{spec['target_status']}] → teacher={slot['user'].get('username', teacher_user_id)}")
+        course = ensure_course(teacher, teacher_user_id, category_id, spec)
         if course.get("status") in {"ACTIVE", "PENDING"}:
             expected_status = "ACTIVE" if course.get("status") == "ACTIVE" else "DRAFT"
             if locked_course_needs_repair(
@@ -557,7 +684,7 @@ def seed_course_content() -> None:
         ensure_thumbnail(teacher, course, spec)
         ensure_curriculum(teacher, course, spec, questions, essays, reading_text)
         if spec["target_status"] in {"ACTIVE", "PENDING"}:
-            ensure_package(teacher, str(course["id"]), spec["name"])
+            ensure_package(teacher, str(course["id"]), spec["name"], category_id)
         transition_course(teacher, admin, course, spec["target_status"])
         validate_seeded_course(
             teacher, str(course["id"]), spec["target_status"], questions, essays,

@@ -55,6 +55,7 @@ class OrderServiceTest {
     @Mock private OrderMapper orderMapper;
     @Mock private ObjectMapper objectMapper;
     @Mock private PaypalClient paypalClient;
+    @Mock private com.ailms.config.PaypalProperties paypalProperties;
 
     @InjectMocks private OrderService service;
 
@@ -200,6 +201,124 @@ class OrderServiceTest {
         when(enrollmentPackageRepository.existsActiveOwnedPackage(
                 org.mockito.ArgumentMatchers.eq(10L), org.mockito.ArgumentMatchers.eq(coursePackage.getId()), any(LocalDateTime.class)))
                 .thenReturn(false);
+        // Mặc định: không có PENDING order cũ cần cancel.
+        when(orderRepository.findActivePendingOrdersByUserAndPackages(
+                org.mockito.ArgumentMatchers.eq(10L), any(), any(LocalDateTime.class)))
+                .thenReturn(List.of());
+    }
+
+    /** Checkout với voucher 100%: PENDING order cũ bị tự động cancel và quyền học được cấp ngay. */
+    @Test
+    void voucher100PercentCancelsStalePendingOrderThenProvisions() {
+        UserEntity student = UserEntity.builder().id(10L).build();
+        CourseEntity course = CourseEntity.builder().id(20L).name("Java").enrollmentCount(0).build();
+        CoursePackageEntity pkg = CoursePackageEntity.builder()
+                .id(30L).name("Tự học").courseEntity(course)
+                .deliveryMode(DeliveryModeEnum.SELF_STUDY)
+                .status(CoursePackageStatusEnum.ACTIVE)
+                .price(BigDecimal.valueOf(200_000)).build();
+
+        // Order PENDING cũ cùng gói chưa hết hạn
+        OrderEntity staleOrder = OrderEntity.builder().id(99L).userEntity(student)
+                .status(OrderStatusEnum.PENDING)
+                .totalAmount(BigDecimal.valueOf(200_000))
+                .discountAmount(BigDecimal.ZERO)
+                .finalAmount(BigDecimal.valueOf(200_000))
+                .expiredAt(LocalDateTime.now().plusMinutes(10))
+                .build();
+
+        // Voucher 100%
+        CouponEntity coupon = CouponEntity.builder().id(1L).code("FREE100")
+                .discountType(com.ailms.entity.enums.CouponDiscountTypeEnum.PERCENT)
+                .discountValue(BigDecimal.valueOf(100))
+                .maxUsage(10).usedCount(0)
+                .status(com.ailms.entity.enums.CouponStatusEnum.ACTIVE)
+                .build();
+        UserCouponEntity userCoupon = UserCouponEntity.builder().id(2L)
+                .couponEntity(coupon).status(UserCouponStatusEnum.AVAILABLE).build();
+
+        CheckoutRequest request = CheckoutRequest.builder()
+                .coursePackageId(30L).couponCode("FREE100").build();
+
+        when(userRepository.findByIdForUpdate(10L)).thenReturn(Optional.of(student));
+        when(paypalProperties.getReturnUrl()).thenReturn("http://localhost:3000/return");
+        when(coursePackageRepository.findByIdForCheckout(30L)).thenReturn(Optional.of(pkg));
+        when(courseRepository.isPubliclySellable(20L)).thenReturn(true);
+        // Lần đầu trả staleOrder, lần sau trả rỗng (sau khi đã cancel)
+        when(orderRepository.findActivePendingOrdersByUserAndPackages(
+                org.mockito.ArgumentMatchers.eq(10L), any(), any(LocalDateTime.class)))
+                .thenReturn(List.of(staleOrder));
+        when(orderRepository.save(any(OrderEntity.class))).thenAnswer(inv -> {
+            OrderEntity o = inv.getArgument(0);
+            if (o.getId() == null) o.setId(100L);
+            return o;
+        });
+        when(enrollmentPackageRepository.existsActiveOwnedPackage(
+                org.mockito.ArgumentMatchers.eq(10L), org.mockito.ArgumentMatchers.eq(30L), any(LocalDateTime.class)))
+                .thenReturn(false);
+        when(enrollmentPackageRepository.existsActiveCourseAccess(
+                org.mockito.ArgumentMatchers.eq(10L), org.mockito.ArgumentMatchers.eq(20L), any(LocalDateTime.class)))
+                .thenReturn(false);
+        when(orderItemRepository.existsActivePendingCheckout(
+                org.mockito.ArgumentMatchers.eq(10L), org.mockito.ArgumentMatchers.eq(30L), any(LocalDateTime.class)))
+                .thenReturn(false);
+        when(userCouponRepository.findAvailableByUserAndCodeForUpdate(10L, "FREE100"))
+                .thenReturn(Optional.of(userCoupon));
+        when(couponRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(coupon));
+        when(userCouponRepository.findByIdForUpdate(2L)).thenReturn(Optional.of(userCoupon));
+        when(enrollmentRepository.findForUpdateByUserAndCourse(10L, 20L)).thenReturn(Optional.empty());
+        when(enrollmentRepository.save(any(EnrollmentEntity.class))).thenAnswer(inv -> {
+            EnrollmentEntity e = inv.getArgument(0); e.setId(80L); return e;
+        });
+        when(enrollmentPackageRepository.save(any(EnrollmentPackageEntity.class))).thenAnswer(inv -> {
+            EnrollmentPackageEntity ep = inv.getArgument(0); ep.setId(90L); return ep;
+        });
+        when(paymentTransactionRepository.save(any(PaymentTransactionEntity.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(cartItemRepository.findByUserEntity_Id(10L)).thenReturn(List.of());
+
+        var result = service.checkout(10L, request);
+
+        // PENDING order cũ đã bị cancel
+        verify(orderRepository, times(1)).save(org.mockito.ArgumentMatchers.argThat(
+                o -> o.getId() != null && o.getId().equals(99L) && o.getStatus() == OrderStatusEnum.CANCELLED));
+        // Đơn mới PAID được tạo
+        assertThat(result.getOrderId()).isNotNull();
+        assertThat(result.getPayUrl()).contains("free=true");
+    }
+
+    /** Checkout thông thường (có phí) không bị block bởi PENDING order cũ vì stale đã bị auto-cancel. */
+    @Test
+    void checkoutDoesNotBlockWhenStalePendingOrderAutosCancelled() {
+        UserEntity student = UserEntity.builder().id(10L).build();
+        CourseEntity course = CourseEntity.builder().id(20L).name("Python").build();
+        CoursePackageEntity pkg = CoursePackageEntity.builder()
+                .id(31L).name("Group Python").courseEntity(course)
+                .deliveryMode(DeliveryModeEnum.SELF_STUDY)
+                .status(CoursePackageStatusEnum.ACTIVE)
+                .price(BigDecimal.valueOf(300_000)).build();
+
+        // stubSellableCheckout tự stub findActivePendingOrdersByUserAndPackages = List.of()
+        stubSellableCheckout(student, course, pkg);
+        when(enrollmentPackageRepository.existsActiveCourseAccess(
+                org.mockito.ArgumentMatchers.eq(10L), org.mockito.ArgumentMatchers.eq(20L), any(LocalDateTime.class)))
+                .thenReturn(false);
+        when(orderItemRepository.existsActivePendingCheckout(
+                org.mockito.ArgumentMatchers.eq(10L), org.mockito.ArgumentMatchers.eq(31L), any(LocalDateTime.class)))
+                .thenReturn(false);
+        when(orderRepository.save(any(OrderEntity.class))).thenAnswer(inv -> {
+            OrderEntity o = inv.getArgument(0); o.setId(101L); return o;
+        });
+        when(paypalClient.createOrder(any(), any(), any(), any(), any()))
+                .thenReturn(new PaypalClient.CreateOrderResult("PAYPAL-2", "https://paypal.com/approve",
+                        BigDecimal.valueOf(300_000), "VND"));
+        when(paymentTransactionRepository.save(any(PaymentTransactionEntity.class))).thenAnswer(inv -> {
+            PaymentTransactionEntity t = inv.getArgument(0); t.setId(70L); return t;
+        });
+
+        var result = service.checkout(10L, CheckoutRequest.builder().coursePackageId(31L).build());
+
+        assertThat(result.getOrderId()).isEqualTo(101L);
+        assertThat(result.getPayUrl()).isEqualTo("https://paypal.com/approve");
     }
 
     /** Tạo lớp đang nhận học viên trong thời hạn hoạt động. */
@@ -215,3 +334,4 @@ class OrderServiceTest {
                 .startTime(LocalTime.parse(start)).endTime(LocalTime.parse(end)).status(BaseStatusEnum.ACTIVE).build();
     }
 }
+

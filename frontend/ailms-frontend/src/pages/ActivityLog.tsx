@@ -109,12 +109,19 @@ export const ActivityLog: React.FC = () => {
   const [adminLogs, setAdminLogs] = useState<AuditLogResponse[]>([]);
   const [selectedLogIds, setSelectedLogIds] = useState<string[]>([]);
 
-  // Student Activity Log States
-  const [studentTab, setStudentTab] = useState<"LEARNING" | "SYSTEM">("LEARNING"); // Default: Learning History
+  // Student & Staff Activity Log States
+  const [studentTab, setStudentTab] = useState<"LEARNING" | "SYSTEM">(isStudent ? "LEARNING" : "SYSTEM");
   const [studentLogs, setStudentLogs] = useState<StudentActivityHistoryItem[]>([]);
   const [selectedStudentLog, setSelectedStudentLog] = useState<StudentActivityHistoryItem | null>(null);
   const [studentDetailModalOpen, setStudentDetailModalOpen] = useState(false);
   const [studentLogToDelete, setStudentLogToDelete] = useState<{ id: string; type: "LEARNING" | "SYSTEM" } | null>(null);
+
+  // Synchronize studentTab with role
+  useEffect(() => {
+    if (!isStudent) {
+      setStudentTab("SYSTEM");
+    }
+  }, [isStudent]);
 
   // Pagination & Search States
   const [page, setPage] = useState(0);
@@ -474,7 +481,9 @@ export const ActivityLog: React.FC = () => {
           <p className="text-xs text-muted-foreground mt-0.5">
             {isAdmin
               ? "Giám sát tất cả thay đổi dữ liệu, hành vi người dùng và bảo mật hệ thống."
-              : "Theo dõi toàn bộ tiến độ học tập, bài giảng xem gần đây và lịch sử thao tác hệ thống của bạn."}
+              : isStudent
+                ? "Theo dõi toàn bộ tiến độ học tập, bài giảng xem gần đây và lịch sử thao tác hệ thống của bạn."
+                : "Theo dõi lịch sử thao tác và hoạt động hệ thống của bạn."}
           </p>
         </div>
       </div>
@@ -614,41 +623,43 @@ export const ActivityLog: React.FC = () => {
         </div>
       ) : (
         /* ===================================================
-           STUDENT ACTIVITY LOG LAYOUT WITH TABS (Learning & System History)
+           USER ACTIVITY LOG LAYOUT (Learning & System History)
            =================================================== */
         <div className="space-y-6">
-          {/* Tab Switcher Header */}
-          <div className="flex items-center gap-2 p-1.5 bg-muted/40 border border-border/50 rounded-2xl w-fit">
-            <button
-              onClick={() => handleStudentTabSwitch("LEARNING")}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                studentTab === "LEARNING"
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
-              }`}
-            >
-              <BookOpen className="h-4 w-4" />
-              <span>Lịch sử học tập</span>
-            </button>
+          {/* Tab Switcher Header - Chỉ hiển thị cho Học viên */}
+          {isStudent && (
+            <div className="flex items-center gap-2 p-1.5 bg-muted/40 border border-border/50 rounded-2xl w-fit">
+              <button
+                onClick={() => handleStudentTabSwitch("LEARNING")}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  studentTab === "LEARNING"
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                }`}
+              >
+                <BookOpen className="h-4 w-4" />
+                <span>Lịch sử học tập</span>
+              </button>
 
-            <button
-              onClick={() => handleStudentTabSwitch("SYSTEM")}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                studentTab === "SYSTEM"
-                  ? "bg-primary text-primary-foreground shadow-sm"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
-              }`}
-            >
-              <Shield className="h-4 w-4" />
-              <span>Lịch sử hệ thống</span>
-            </button>
-          </div>
+              <button
+                onClick={() => handleStudentTabSwitch("SYSTEM")}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  studentTab === "SYSTEM"
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                }`}
+              >
+                <Shield className="h-4 w-4" />
+                <span>Lịch sử hệ thống</span>
+              </button>
+            </div>
+          )}
 
           <Card className="border-border shadow-sm bg-card rounded-2xl overflow-hidden">
             <CardHeader className="pb-4 border-b border-border/40 flex flex-col md:flex-row md:items-center justify-between gap-3">
               <div>
                 <CardTitle className="text-base font-bold text-foreground flex items-center gap-2">
-                  {studentTab === "LEARNING" ? (
+                  {isStudent && studentTab === "LEARNING" ? (
                     <>
                       <BookOpen className="h-5 w-5 text-primary" />
                       Lịch sử xem bài giảng & học tập cá nhân
@@ -656,12 +667,12 @@ export const ActivityLog: React.FC = () => {
                   ) : (
                     <>
                       <Shield className="h-5 w-5 text-primary" />
-                      Lịch sử tương tác hệ thống & Đăng nhập
+                      Lịch sử thao tác hệ thống & Đăng nhập
                     </>
                   )}
                 </CardTitle>
                 <CardDescription className="text-xs text-muted-foreground mt-0.5">
-                  {studentTab === "LEARNING"
+                  {isStudent && studentTab === "LEARNING"
                     ? "Ghi nhận toàn bộ tiến độ xem video bài học, đánh dấu bài hoàn thành và tương tác học tập."
                     : "Nhật ký lưu vết thao tác cài đặt hệ thống, tài khoản và thời gian đăng nhập."}
                 </CardDescription>
@@ -807,7 +818,7 @@ export const ActivityLog: React.FC = () => {
               <div className="flex items-center gap-2 text-primary mb-1">
                 <FileJson className="h-5 w-5" />
                 <DialogTitle className="text-base font-bold">
-                  Chi tiết Lịch sử {selectedStudentLog.historyType === "LEARNING" ? "Học tập" : "Hệ thống"}
+                  Chi tiết Lịch sử {isStudent && selectedStudentLog.historyType === "LEARNING" ? "Học tập" : "Hệ thống"}
                 </DialogTitle>
               </div>
               <DialogDescription className="text-xs text-muted-foreground">
@@ -869,18 +880,20 @@ export const ActivityLog: React.FC = () => {
             </div>
 
             <DialogFooter className="gap-2 pt-2 border-t border-border/40">
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => {
-                  setStudentDetailModalOpen(false);
-                  setStudentLogToDelete({ id: selectedStudentLog.id, type: studentTab });
-                }}
-                className="text-xs font-bold gap-1 cursor-pointer"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                Xóa bản ghi này
-              </Button>
+              {!isStaffActivity && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => {
+                    setStudentDetailModalOpen(false);
+                    setStudentLogToDelete({ id: selectedStudentLog.id, type: studentTab });
+                  }}
+                  className="text-xs font-bold gap-1 cursor-pointer"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Xóa bản ghi này
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"

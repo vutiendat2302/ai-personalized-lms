@@ -28,4 +28,18 @@ public interface OrderRepository extends BaseRepository<OrderEntity, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT o FROM OrderEntity o WHERE o.id = :id")
     java.util.Optional<OrderEntity> findByIdForUpdate(@Param("id") Long id);
+
+    /** Tìm các PENDING order còn hiệu lực của user có chứa ít nhất một trong danh sách packageId; dùng để cancel trước khi tạo checkout mới. */
+    @Query("""
+        SELECT DISTINCT o FROM OrderEntity o
+        JOIN o.items item
+        WHERE o.userEntity.id = :userId
+          AND o.status = com.ailms.entity.enums.OrderStatusEnum.PENDING
+          AND (o.expiredAt IS NULL OR o.expiredAt > :now)
+          AND item.coursePackageEntity.id IN :packageIds
+        """)
+    List<OrderEntity> findActivePendingOrdersByUserAndPackages(
+            @Param("userId") Long userId,
+            @Param("packageIds") List<Long> packageIds,
+            @Param("now") LocalDateTime now);
 }

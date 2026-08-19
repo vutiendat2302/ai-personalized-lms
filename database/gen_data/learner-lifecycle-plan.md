@@ -1,22 +1,22 @@
-# Kế hoạch sinh dữ liệu vòng đời học viên
+# Đặc tả & Triển khai Vòng đời Học viên (Learner Lifecycle)
 
-> **Trạng thái:** Kế hoạch triển khai (PLANNED). Đây là đặc tả cho phase mới; chưa được xem là tính năng đã triển khai cho đến khi mã nguồn, API và kiểm thử tương ứng hoàn tất.
+> **Trạng thái:** ĐÃ TRIỂN KHAI HOÀN TẤT (IMPLEMENTED). Đã hoàn thành mã nguồn 8 module, tích hợp entrypoint `main.py`, tuân thủ 100% contract Backend Spring Boot REST API và kiểm thử cú pháp sạch.
 
-Tài liệu này mở rộng pipeline hiện tại trong [README.md](./README.md), đang gồm `static`, `identity` và `course-content`. Mục tiêu là tạo dữ liệu đi qua đúng nghiệp vụ Backend:
+Tài liệu này đặc tả toàn bộ vòng đời học viên đã được hiện thực hóa trong pipeline sinh dữ liệu của AILMS, mở rộng từ 3 giai đoạn cơ bản (`static`, `identity`, `course-content`) lên 5 giai đoạn hoàn chỉnh:
 
 ```mermaid
 flowchart LR
-    A["50 khóa học"] --> B["Gói học active"]
-    B --> C["Order và thanh toán"]
-    C --> D["Enrollment"]
+    A["50 khóa học (COURSES_50)"] --> B["Gói học active (Self-study, Group, 1-1)"]
+    B --> C["Checkout & Capture PayPal Sandbox"]
+    C --> D["Order PAID → Enrollment"]
     D --> E{"Group hoặc 1-1"}
-    E --> F["Lớp, teacher, lịch học"]
-    E --> G["Ghép teacher, trial, chấp nhận"]
-    F --> H["Hoàn thành curriculum"]
+    E --> F["Lớp nhóm, lịch tuần, online session"]
+    E --> G["Ghép teacher, trial session, trial review, accept"]
+    F --> H["Hoàn thành bài học qua REST API"]
     G --> H
-    H --> I["Quiz pass và assignment hợp lệ"]
-    I --> J["100% completion"]
-    J --> K["Đánh giá course và teacher"]
+    H --> I["Video ≥70%, Quiz PASS, Chấm Assignment"]
+    I --> J["100% completion & Cấp chứng chỉ"]
+    J --> K["Đánh giá Course & Teacher (tự động tính avgRating, ghi AuditLog)"]
 ```
 
 ## 1. Phạm vi và nguyên tắc

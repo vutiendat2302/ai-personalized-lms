@@ -57,6 +57,7 @@ public class PublicAiChatService {
                         + "Chỉ trả lời về khóa học, danh mục, giáo viên, giá, gói học và việc học. "
                         + "Chỉ dùng CATALOG HIỆN TẠI TỪ BACKEND; không bịa tên, giá, link hoặc trạng thái. "
                         + "Nếu không có dữ liệu phù hợp, nói rõ chưa có dữ liệu. Với câu hỏi ngoài phạm vi, từ chối ngắn gọn.")
+                .retrievalMode("NEVER")
                 .build();
         return aiServiceClient.chatStream(internal);
     }

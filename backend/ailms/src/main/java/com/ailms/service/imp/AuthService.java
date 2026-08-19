@@ -7,6 +7,7 @@ import org.springframework.context.ApplicationEventPublisher;
 
 import com.ailms.entity.UserEntity;
 import com.ailms.entity.enums.UserStatusEnum;
+import com.ailms.exception.*;
 import com.ailms.common.util.CodeGenerator;
 import com.ailms.entity.RoleEntity;
 import com.ailms.entity.StudentProfileEntity;
@@ -67,6 +68,9 @@ public class AuthService implements IAuthService { // login - register
      * Repository thao tác với bảng người dùng.
      */
     private final UserRepository userRepository;
+    private final RoleRepository roleRepository;
+    private final UserRoleRepository userRoleRepository;
+    private final StudentProfileRepository studentProfileRepository;
 
     /**
      * Mã hóa mật khẩu trước khi lưu vào cơ sở dữ liệu.
@@ -151,9 +155,36 @@ public class AuthService implements IAuthService { // login - register
         userEntity.setStatus(UserStatusEnum.ACTIVE);
         userRepository.save(userEntity);
 
+        // Tự động gán quyền STUDENT và hồ sơ học viên mặc định
+        assignDefaultStudentRole(userEntity);
+
         // Xoá OTP sau khi dùng, tránh verify lại nhiều lần bằng mã cũ
         otpService.invalidateOtp(email, OTP_PURPOSE_REGISTER);
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "VERIFY_REGISTER", "AUTH", userEntity.getId(), null, null));
+    }
+
+    /** Tự động gán vai trò STUDENT và tạo hồ sơ học viên mặc định cho người dùng. */
+    private void assignDefaultStudentRole(UserEntity userEntity) {
+        roleRepository.findByCode("STUDENT").ifPresent(role -> {
+            boolean alreadyAssigned = userRoleRepository.findByUserEntity_Id(userEntity.getId()).stream()
+                    .anyMatch(ur -> ur.getRoleEntity() != null && "STUDENT".equalsIgnoreCase(ur.getRoleEntity().getCode()));
+            if (!alreadyAssigned) {
+                UserRoleEntity userRole = UserRoleEntity.builder()
+                        .userEntity(userEntity)
+                        .roleEntity(role)
+                        .assignedBy(userEntity.getId())
+                        .build();
+                userRoleRepository.save(userRole);
+            }
+        });
+
+        if (!studentProfileRepository.existsById(userEntity.getId())) {
+            StudentProfileEntity profile = StudentProfileEntity.builder()
+                    .userEntity(userEntity)
+                    .studentCode(CodeGenerator.generate("ST", studentProfileRepository::existsByStudentCode))
+                    .build();
+            studentProfileRepository.save(profile);
+        }
     }
 
     /**
@@ -339,25 +370,24 @@ public class AuthService implements IAuthService { // login - register
     }
 
     /**
-     * Khởi tạo quy trình quên mật khẩu.
+     * Khởi tạo quy trình quên mật khẩu; ném lỗi nếu không tìm thấy tài khoản.
      * Quy trình:
-     * 1. Tìm người dùng theo user or email.
+     * 1. Tìm người dùng theo username hoặc email — báo lỗi nếu không tồn tại.
      * 2. Sinh mã OTP ngẫu nhiên gồm 6 chữ số.
      * 3. Lưu OTP vào Redis với thời gian sống 3 phút.
      * 4. Gửi OTP đến email đã đăng ký của người dùng.
      */
     @Override
     public void forgotPassword(ForgotPasswordRequest request) {
-        userRepository.findByUsernameOrEmail(request.getUsernameOrEmail())
-                .ifPresent(user -> {
-                    String otp = otpService.generateAndStoreOtp(
-                            user.getEmail(),
-                            OTP_PURPOSE_FORGOT_PASSWORD,
-                            FORGOT_PASSWORD_OTP_TTL
-                    );
-                    emailService.sendResetPasswordOtpEmail(user.getEmail(), otp);
-                    eventPublisher.publishEvent(new AuditLogEvent(this, "Forgot Password", "User", user.getId(), null, null));
-                });
+        UserEntity user = userRepository.findByUsernameOrEmail(request.getUsernameOrEmail())
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy tài khoản với thông tin đã nhập."));
+        String otp = otpService.generateAndStoreOtp(
+                user.getEmail(),
+                OTP_PURPOSE_FORGOT_PASSWORD,
+                FORGOT_PASSWORD_OTP_TTL
+        );
+        emailService.sendResetPasswordOtpEmail(user.getEmail(), otp);
+        eventPublisher.publishEvent(new AuditLogEvent(this, "Forgot Password", "User", user.getId(), null, null));
     }
 
     /**
@@ -420,17 +450,17 @@ public class AuthService implements IAuthService { // login - register
         return Boolean.TRUE.equals(redisTemplate.hasKey(USED_TOKEN_KEY_PREFIX + jti));
     }
 
+    /** Gửi lại mã OTP quên mật khẩu; ném lỗi nếu không tìm thấy tài khoản. */
     @Override
     public void resendForgotPasswordOtp(String usernameOrEmail) {
-        userRepository.findByUsernameOrEmail(usernameOrEmail)
-                .ifPresent(user -> {
-                    String otp = otpService.generateAndStoreOtp(
-                            user.getEmail(),
-                            OTP_PURPOSE_FORGOT_PASSWORD,
-                            FORGOT_PASSWORD_OTP_TTL
-                    );
-                    emailService.sendResetPasswordOtpEmail(user.getEmail(), otp);
-                });
+        UserEntity user = userRepository.findByUsernameOrEmail(usernameOrEmail)
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy tài khoản với thông tin đã nhập."));
+        String otp = otpService.generateAndStoreOtp(
+                user.getEmail(),
+                OTP_PURPOSE_FORGOT_PASSWORD,
+                FORGOT_PASSWORD_OTP_TTL
+        );
+        emailService.sendResetPasswordOtpEmail(user.getEmail(), otp);
     }
 
     @Override

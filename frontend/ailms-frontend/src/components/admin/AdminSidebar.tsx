@@ -107,7 +107,7 @@ export const AdminSidebar: React.FC = () => {
     {
       title: "QUẢN LÝ BÁN HÀNG",
       items: [
-        { label: "Sales Dashboard", path: "/sales/dashboard", icon: TrendingUp },
+        { label: "Tổng quan bán hàng", path: "/sales/dashboard", icon: TrendingUp },
         { label: "Đơn hàng", path: "/sales/orders", icon: ShoppingBag },
         { label: "Mã giảm giá", path: "/admin/coupons", icon: Tag },
         { label: "Gói học", path: "/sales/course-packages", icon: Package },

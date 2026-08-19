@@ -19,6 +19,8 @@ export const PaymentResultPage = () => {
   // PayPal giữ token gateway; orderId chỉ khôi phục ngữ cảnh và vẫn được backend kiểm tra ownership.
   const orderId = sessionStorage.getItem("ailms_pending_order_id") || searchParams.get("orderId");
   const courseId = sessionStorage.getItem("ailms_pending_course_id");
+  const isFreeCheckout = searchParams.get("free") === "true";
+
 
   useEffect(() => {
     if (!orderId) {
@@ -103,7 +105,10 @@ export const PaymentResultPage = () => {
             </h1>
             <p className="mt-2 text-sm text-muted-foreground">
               {paid
-                ? "Quyền học đã được backend kích hoạt sau khi PayPal capture thành công."
+                ? isFreeCheckout
+                  ? "Voucher 100% đã được áp dụng thành công. Quyền học đã được kích hoạt ngay lập tức."
+                  : "Quyền học đã được backend kích hoạt sau khi PayPal capture thành công."
+
                 : errorMessage || (timedOut
                   ? "Đã hết thời gian chờ xác nhận. Bạn có thể kiểm tra lại trong lịch sử đơn hàng."
                   : "Trang này tự kiểm tra trạng thái server; bạn không cần tải lại trang.")}

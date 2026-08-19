@@ -223,9 +223,15 @@ public class PaypalClient {
 
     /** Gắn mã đơn AILMS vào redirect để frontend khôi phục ngữ cảnh, không dùng nó để cấp quyền. */
     private String appendApplicationOrderId(String redirectUrl, Long applicationOrderId) {
-        String separator = redirectUrl.contains("?") ? "&" : "?";
-        return redirectUrl + separator + "orderId=" + applicationOrderId;
+        if (redirectUrl == null) return null;
+        String url = redirectUrl;
+        if (url.startsWith("https://localhost:") || url.startsWith("https://127.0.0.1:")) {
+            url = "http://" + url.substring(8);
+        }
+        String separator = url.contains("?") ? "&" : "?";
+        return url + separator + "orderId=" + applicationOrderId;
     }
+
 
     /** Kết quả tạo order cần cho frontend redirect và đối soát transaction. */
     public record CreateOrderResult(String orderId, String approvalUrl, BigDecimal amount, String currency) {}

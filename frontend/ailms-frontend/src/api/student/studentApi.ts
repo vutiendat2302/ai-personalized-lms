@@ -31,6 +31,8 @@ export interface StudentCourseCard {
   level?: string;
   categoryName: string;
   coverImage?: string;
+  thumbnailUrl?: string;
+  image?: string;
   deliveryMode: DeliveryMode;
   progressPercent: number;
   expiresAt?: string;

@@ -89,6 +89,7 @@ export const CouponManagement: React.FC = () => {
   const [deleteCouponId, setDeleteCouponId] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<{ text: string; isError?: boolean } | null>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
 
   // Form State
   const [formCode, setFormCode] = useState("");
@@ -162,6 +163,7 @@ export const CouponManagement: React.FC = () => {
 
   const handleOpenCreateModal = () => {
     setEditingCoupon(null);
+    setModalError(null);
     setFormCode(`PROMO${Math.floor(1000 + Math.random() * 9000)}`);
     setFormDiscountType("PERCENT");
     setFormValue("20");
@@ -177,6 +179,7 @@ export const CouponManagement: React.FC = () => {
 
   const handleOpenEditModal = (cp: CouponResponse) => {
     setEditingCoupon(cp);
+    setModalError(null);
     setFormCode(cp.code);
     setFormDiscountType(cp.discountType);
     setFormValue(String(cp.value ?? ""));
@@ -192,11 +195,14 @@ export const CouponManagement: React.FC = () => {
 
   const handleSaveCoupon = async (e: React.FormEvent) => {
     e.preventDefault();
+    setModalError(null);
     const value = Number(formValue);
     const maxUsage = formMaxUsage.trim() === "" ? null : Number(formMaxUsage);
     if (!formCode.trim() || !Number.isFinite(value) || value <= 0 || (formDiscountType === "PERCENT" && value > 100)
       || (maxUsage !== null && (!Number.isFinite(maxUsage) || maxUsage <= 0))) {
-      showBanner("Vui lòng kiểm tra mã, mức giảm và số lượt dùng tối đa.", true);
+      const msg = "Vui lòng kiểm tra mã, mức giảm và số lượt dùng tối đa.";
+      setModalError(msg);
+      showBanner(msg, true);
       return;
     }
 
@@ -226,11 +232,13 @@ export const CouponManagement: React.FC = () => {
       showBanner(`${editingCoupon ? "Cập nhật" : "Tạo mới"} mã giảm giá [${formCode.toUpperCase()}] thành công${assignedMessage}.`);
 
       setIsModalOpen(false);
+      setModalError(null);
     } catch (err) {
       const error = err as AxiosError<{ message?: string; details?: string[] }>;
       const message = error.response?.data?.message
         || error.response?.data?.details?.join(", ")
         || (err instanceof Error ? err.message : "Lỗi không xác định");
+      setModalError(`Không thể lưu mã giảm giá: ${message}`);
       showBanner(`Không thể lưu mã giảm giá: ${message}`, true);
     } finally {
       setSubmitting(false);
@@ -361,19 +369,31 @@ export const CouponManagement: React.FC = () => {
 
   return (
     <div className="w-full px-6 py-8 space-y-6 animate-in fade-in duration-300">
-      {/* Toast Notification Banner */}
+      {/* Toast Notification Banner (Cố định góc trên màn hình, đè lên modal) */}
       {actionMessage && (
-        <div
-          className={`p-4 rounded-xl border text-xs font-bold flex items-center justify-between shadow-lg animate-in slide-in-from-top-2 ${
-            actionMessage.isError
-              ? "bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300 border-rose-300"
-              : "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-300"
-          }`}
-        >
-          <span>{actionMessage.text}</span>
-          <button onClick={() => setActionMessage(null)}>
-            <X className="h-4 w-4" />
-          </button>
+        <div className="fixed top-6 right-6 z-[100] max-w-md w-full px-4 animate-in slide-in-from-top-4 fade-in duration-200">
+          <div
+            className={`p-4 rounded-2xl border text-xs font-bold flex items-center justify-between shadow-2xl backdrop-blur-md ${
+              actionMessage.isError
+                ? "bg-rose-50/95 text-rose-700 dark:bg-rose-950/95 dark:text-rose-200 border-rose-400 dark:border-rose-800 shadow-rose-500/10"
+                : "bg-emerald-50/95 text-emerald-700 dark:bg-emerald-950/95 dark:text-emerald-200 border-emerald-400 dark:border-emerald-800 shadow-emerald-500/10"
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              {actionMessage.isError ? (
+                <ShieldAlert className="h-4.5 w-4.5 shrink-0 text-rose-600 dark:text-rose-400" />
+              ) : (
+                <CheckCircle2 className="h-4.5 w-4.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+              )}
+              <span className="leading-snug">{actionMessage.text}</span>
+            </div>
+            <button
+              onClick={() => setActionMessage(null)}
+              className="p-1 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 text-current cursor-pointer shrink-0 ml-2"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       )}
 
@@ -1000,6 +1020,23 @@ export const CouponManagement: React.FC = () => {
             </div>
 
             <form onSubmit={handleSaveCoupon} className="p-6 space-y-4 text-xs">
+              {/* Alert thông báo lỗi hiển thị ngay trên Dialog */}
+              {modalError && (
+                <div className="p-3.5 rounded-2xl border border-rose-300 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 flex items-start justify-between gap-2.5 shadow-xs animate-in fade-in slide-in-from-top-1">
+                  <div className="flex items-start gap-2">
+                    <ShieldAlert className="h-4 w-4 shrink-0 mt-0.5 text-rose-600 dark:text-rose-400" />
+                    <span className="font-semibold text-xs leading-relaxed">{modalError}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setModalError(null)}
+                    className="text-rose-500 hover:text-rose-700 dark:hover:text-rose-200 p-0.5 rounded cursor-pointer shrink-0"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <Label className="text-[11px] font-bold text-muted-foreground">Mã Code (Coupon Code)</Label>

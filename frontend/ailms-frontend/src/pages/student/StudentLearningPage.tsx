@@ -14,6 +14,7 @@ import { Badge } from "../../components/ui/badge";
 import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "../../hooks/useToast";
 import { Skeleton } from "../../components/ui/skeleton";
+import { AiChatWidget } from "@/components/admin/chat/AdminAiChatWidget";
 
 export const StudentLearningPage: React.FC = () => {
   const { courseId, lessonId } = useParams<{ courseId: string; lessonId?: string }>();
@@ -597,6 +598,9 @@ export const StudentLearningPage: React.FC = () => {
           />
         )}
       </div>
+
+      {/* Trợ lý AI sẵn sàng hỗ trợ trực tiếp trong không gian học tập */}
+      <AiChatWidget />
     </div>
   );
 };

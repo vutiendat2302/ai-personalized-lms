@@ -10,7 +10,9 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/useToast";
+import { useCartStore } from "@/store/useCartStore";
 import { StudentPageSkeleton } from "@/components/student/StudentPageSkeleton";
+
 import {
   BookOpen,
   CheckCircle2,
@@ -140,14 +142,15 @@ export const StudentCatalogPage = () => {
     if (found) void openPackageSelection(found);
   }, [id, packageCourse, catalogLoading, catalogItems, openPackageSelection]);
 
-  /** Thêm package và nhu cầu gia sư đã được component dùng chung xác thực vào giỏ. */
+  const addCartItem = useCartStore((state) => state.addToCart);
+
+  /** Thêm package và nhu cầu gia sư vào giỏ hàng, cập nhật badge mà không điều hướng rời khỏi trang. */
   const handleAddToCart = async (coursePackage: CourseDetailPackage, needs?: OneOnOneNeedsPayload) => {
     setAddingToCart(true);
     try {
-      await studentApi.addToCart(coursePackage.id, needs);
+      await addCartItem(coursePackage.id, needs);
       success(`Đã thêm gói ${coursePackage.name} vào giỏ hàng.`);
       setPackageCourse(null);
-      navigate("/student/cart");
     } catch (addError) {
       const message = axios.isAxiosError(addError) ? addError.response?.data?.message : null;
       error(message || "Không thể thêm gói học vào giỏ hàng.");
@@ -157,6 +160,7 @@ export const StudentCatalogPage = () => {
   };
 
   /** Mở trang chi tiết công khai của khóa học. */
+
   const openCourseDetail = (courseId: string) => {
     navigate(`/courses/${courseId}`, { state: { from: "/student/catalog" } });
   };

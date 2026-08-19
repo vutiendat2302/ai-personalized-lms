@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from "react";
-import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { studentApi, type StudentOrderItem } from "@/api/student/studentApi";
 import type { OrderResponse } from "@/api/orders/orderApi";
-import { orderApi } from "@/api/orders/orderApi";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/useToast";
@@ -22,7 +20,6 @@ export const StudentOrdersPage: React.FC = () => {
   const [orderDetail, setOrderDetail] = useState<OrderResponse | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
-  const [retryingOrderId, setRetryingOrderId] = useState<string | null>(null);
 
   // Refund Modal State
   const [showRefundModal, setShowRefundModal] = useState(false);
@@ -85,23 +82,6 @@ export const StudentOrdersPage: React.FC = () => {
     }
   };
 
-  /** Mở lại PayPal cho order PENDING, giữ nguyên order và không tạo đơn trùng. */
-  const handleRetryPayment = async (orderId: string) => {
-    try {
-      setRetryingOrderId(orderId);
-      const payment = await orderApi.retryPaypalPayment(orderId);
-      sessionStorage.setItem("ailms_pending_order_id", payment.orderId);
-      window.location.assign(payment.payUrl);
-    } catch (retryError) {
-      const message = axios.isAxiosError(retryError)
-        ? String(retryError.response?.data?.message || "Đơn hàng không còn hiệu lực để thanh toán lại.")
-        : "Đơn hàng không còn hiệu lực để thanh toán lại.";
-      error(message);
-      setOrders(await studentApi.getOrders());
-    } finally {
-      setRetryingOrderId(null);
-    }
-  };
 
   if (loading) {
     return <StudentPageSkeleton cards={3} columns={1} />;
@@ -131,7 +111,7 @@ export const StudentOrdersPage: React.FC = () => {
             <Card className="p-10 text-center text-sm text-muted-foreground xl:col-span-2">Bạn chưa có đơn hàng nào.</Card>
           ) : orders.map((ord) => (
             <Card key={ord.id} className="overflow-hidden border-border/60 p-0 shadow-xs transition hover:border-primary/35 hover:shadow-lg">
-              <div className={`h-1.5 ${ord.status === "PAID" ? "bg-emerald-500" : ord.status === "PENDING" ? "bg-amber-500" : ord.status === "REFUNDED" ? "bg-blue-500" : "bg-muted-foreground/40"}`} />
+              <div className={`h-1.5 ${ord.status === "PAID" ? "bg-emerald-500" : ord.status === "PENDING" ? "bg-amber-500" : ord.status === "REFUNDED" ? "bg-blue-500" : ord.status === "EXPIRED" ? "bg-rose-400" : ord.status === "CANCELLED" ? "bg-muted-foreground/50" : "bg-muted-foreground/40"}`} />
               <div className="space-y-4 p-5">
               <div className="flex items-start justify-between gap-3 border-b border-border/40 pb-3">
                 <div>
@@ -143,6 +123,10 @@ export const StudentOrdersPage: React.FC = () => {
                           ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800"
                           : ord.status === "PENDING"
                           ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 border border-amber-300 dark:border-amber-800"
+                          : ord.status === "EXPIRED"
+                          ? "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300 border border-rose-300 dark:border-rose-800"
+                          : ord.status === "CANCELLED"
+                          ? "bg-muted text-muted-foreground border border-border"
                           : "bg-muted text-muted-foreground"
                       }`}
                     >
@@ -210,16 +194,7 @@ export const StudentOrdersPage: React.FC = () => {
                       Nâng cấp / Mua thêm gói
                     </Button>
                   )}
-                  {ord.status === "PENDING" && (
-                    <Button
-                      size="sm"
-                      onClick={() => void handleRetryPayment(ord.id)}
-                      disabled={retryingOrderId !== null}
-                      className="bg-amber-500 text-xs font-semibold text-white hover:bg-amber-600"
-                    >
-                      {retryingOrderId === ord.id ? <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />Đang mở PayPal...</> : "Thanh toán lại"}
-                    </Button>
-                  )}
+
                 </div>
               </div>
               </div>

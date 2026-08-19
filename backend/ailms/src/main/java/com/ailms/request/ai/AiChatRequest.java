@@ -29,4 +29,6 @@ public class AiChatRequest {
 
     @Size(max = 255, message = "Route tối đa 255 ký tự")
     private String route;
+
+    private String retrievalMode;
 }

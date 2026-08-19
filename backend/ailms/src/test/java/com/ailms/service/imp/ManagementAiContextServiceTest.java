@@ -1,7 +1,5 @@
 package com.ailms.service.imp;
 
-import com.ailms.entity.CourseEntity;
-import com.ailms.entity.CourseSectionEntity;
 import com.ailms.entity.QuizEntity;
 import com.ailms.exception.BadRequestException;
 import com.ailms.exception.ForbiddenException;
@@ -45,13 +43,8 @@ class ManagementAiContextServiceTest {
     @Test
     void createQuizForCourseOrLessonSuccessForTeacher() {
         AiToolAccessContext context = new AiToolAccessContext(100L, List.of("ROLE_TEACHER"));
-        CourseEntity course = CourseEntity.builder().id(10L).name("Toán Lớp 6").createdBy(100L).build();
-        CourseSectionEntity section = CourseSectionEntity.builder().id(20L).courseEntity(course).build();
         QuizEntity quizEntity = QuizEntity.builder().id(999L).title("Kiểm tra Lũy thừa 6 câu").build();
 
-        when(courseRepository.findAll()).thenReturn(List.of(course));
-        when(courseSectionRepository.findByCourseEntity_IdOrderByOrderIndexAsc(10L)).thenReturn(List.of(section));
-        when(courseRepository.findById(10L)).thenReturn(Optional.of(course));
         when(quizRepository.findById(999L)).thenReturn(Optional.of(quizEntity));
 
         QuizResponse createdQuiz = QuizResponse.builder()
@@ -116,9 +109,6 @@ class ManagementAiContextServiceTest {
     @Test
     void createQuizThrowsBadRequestWhenQuestionsEmpty() {
         AiToolAccessContext context = new AiToolAccessContext(100L, List.of("ROLE_TEACHER"));
-        CourseEntity course = CourseEntity.builder().id(10L).name("Khóa học").createdBy(100L).build();
-        when(courseRepository.findAll()).thenReturn(List.of(course));
-
         Map<String, Object> arguments = Map.of(
                 "title", "Đề thi không có câu hỏi",
                 "questions", List.of()
