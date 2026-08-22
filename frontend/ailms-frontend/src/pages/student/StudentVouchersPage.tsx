@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CalendarClock, Gift, Percent, ShoppingCart, Tag } from "lucide-react";
 import { studentApi, type StudentVoucher } from "@/api/student/studentApi";
@@ -18,12 +18,29 @@ export const StudentVouchersPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  /** Tải ví voucher theo JWT; không có thao tác lưu voucher ở frontend. */
-  useEffect(() => {
-    studentApi.getVouchers().then(setVouchers)
-      .catch(() => setError("Không thể tải voucher của bạn."))
-      .finally(() => setLoading(false));
+  /** Tải lại ví voucher theo JWT để nhận voucher mới được quản trị viên cấp. */
+  const refreshVouchers = useCallback(async () => {
+    try {
+      setVouchers(await studentApi.getVouchers());
+      setError("");
+    } catch {
+      setError("Không thể tải voucher của bạn.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  /** Tự đồng bộ khi tab đang mở và tải lại ngay khi học viên quay lại trang. */
+  useEffect(() => {
+    const load = () => { void refreshVouchers(); };
+    queueMicrotask(load);
+    const intervalId = window.setInterval(load, 15000);
+    window.addEventListener("focus", load);
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", load);
+    };
+  }, [refreshVouchers]);
 
   const visibleVouchers = useMemo(() => vouchers.filter((voucher) => filter === "ALL"
     || (filter === "USABLE" ? voucher.usable : !voucher.usable)), [filter, vouchers]);
@@ -81,7 +98,7 @@ export const StudentVouchersPage: React.FC = () => {
                     <div className="min-w-0">
                       <p className="font-mono text-base font-black tracking-wide text-primary">{voucher.code}</p>
                       <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                        {voucher.applicableCourseName ? `Áp dụng cho ${voucher.applicableCourseName}` : "Áp dụng cho các gói học đủ điều kiện"}
+                        {voucher.applicableCourseNames?.length ? `Áp dụng cho ${voucher.applicableCourseNames.join(", ")}` : voucher.applicableCourseName ? `Áp dụng cho ${voucher.applicableCourseName}` : "Áp dụng cho các gói học đủ điều kiện"}
                       </p>
                     </div>
                     <Badge variant={voucher.usable ? "default" : "secondary"}>{voucher.status}</Badge>

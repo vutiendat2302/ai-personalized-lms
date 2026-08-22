@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { QuizResponseDTO } from "@/api/courses/courseAuthoringApi";
 import { studentApi } from "@/api/student/studentApi";
 import type { QuestionItem } from "@/components/admin/course-builder/QuestionBuilderManager";
+import { MathRenderer } from "@/components/common/MathRenderer";
 import { useToast } from "@/hooks/useToast";
 import { AlertCircle, Award, CheckCircle, Clock, HelpCircle, Loader2, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +16,25 @@ interface LearningQuizPlayerProps {
 
 type AnswerValue = string | string[] | Record<string, string>;
 
+interface QuizTextProps {
+  content: string;
+}
+
+/** Hiển thị văn bản quiz và render công thức LaTeX inline bằng KaTeX. */
+const QuizText = ({ content }: QuizTextProps) => {
+  const parts = content.split(/(\$\$[\s\S]*?\$\$|\$[^$\n]+\$|\\\([\s\S]*?\\\))/g);
+  return (
+    <>
+      {parts.map((part, index) => {
+        const isMath = /^(\$\$[\s\S]*\$\$|\$[^$\n]+\$|\\\([\s\S]*\\\))$/.test(part);
+        return isMath
+          ? <MathRenderer key={`${part}-${String(index)}`} math={part} displayMode={false} />
+          : <span key={`${part}-${String(index)}`}>{part}</span>;
+      })}
+    </>
+  );
+};
+
 /** Làm quiz trong không gian học bằng attempt backend; preview quản trị không ghi dữ liệu. */
 export const LearningQuizPlayer = ({ quiz, onComplete, persistAttempt = false }: LearningQuizPlayerProps) => {
   const toast = useToast();
@@ -27,6 +47,7 @@ export const LearningQuizPlayer = ({ quiz, onComplete, persistAttempt = false }:
   const [score, setScore] = useState<number | null>(null);
   const [passed, setPassed] = useState(false);
   const [timeLeftSec, setTimeLeftSec] = useState<number | null>(null);
+  const resultVisible = quiz.showResultAfterSubmit !== false;
 
   /** Chỉ đọc danh sách câu hỏi thật từ DTO; JSON mô tả được hỗ trợ cho dữ liệu cũ. */
   const questions = useMemo<QuestionItem[]>(() => {
@@ -126,8 +147,9 @@ export const LearningQuizPlayer = ({ quiz, onComplete, persistAttempt = false }:
       }
       return sum;
     }, 0);
-    setScore(total > 0 ? Number(((earned / total) * 100).toFixed(2)) : 0);
-    setPassed(quiz.passScore != null ? earned >= quiz.passScore : false);
+    const normalizedScore = total > 0 ? Number(((earned / total) * 100).toFixed(2)) : 0;
+    setScore(normalizedScore);
+    setPassed(quiz.passScore != null ? normalizedScore >= quiz.passScore : false);
     setSubmitted(true);
   };
 
@@ -147,8 +169,8 @@ export const LearningQuizPlayer = ({ quiz, onComplete, persistAttempt = false }:
       await studentApi.submitQuizAttempt(attemptId, buildSubmission());
       const quizResults = await studentApi.getQuizzes();
       const result = quizResults.find((item) => item.id === quiz.id);
-      setScore(result?.bestScore ?? null);
-      setPassed(Boolean(result?.passed));
+      setScore(resultVisible ? result?.bestScore ?? null : null);
+      setPassed(resultVisible && Boolean(result?.passed));
       setSubmitted(true);
       toast.success("Đã nộp quiz thành công.");
     } catch {
@@ -189,21 +211,31 @@ export const LearningQuizPlayer = ({ quiz, onComplete, persistAttempt = false }:
         <div className="rounded-2xl border border-dashed p-12 text-center text-muted-foreground"><AlertCircle className="mx-auto mb-3 h-10 w-10" />Quiz chưa có câu hỏi.</div>
       ) : !started ? (
         <div className="space-y-5 py-10 text-center">
-          <p className="text-sm text-muted-foreground">Lượt làm chỉ được tính sau khi backend tạo attempt thành công.</p>
+          <p className="text-sm text-muted-foreground">
+            {persistAttempt
+              ? "Lượt làm chỉ được tính sau khi backend tạo attempt thành công."
+              : "Chế độ preview: kết quả chỉ hiển thị tại trình duyệt và không ghi tiến độ."}
+          </p>
           <Button onClick={() => void handleStart()} disabled={starting} className="gap-2">
             {starting && <Loader2 className="h-4 w-4 animate-spin" />}{starting ? "Đang bắt đầu..." : "Bắt đầu làm quiz"}
           </Button>
         </div>
       ) : submitted ? (
         <div className="space-y-6 py-4">
-          <div className={`rounded-2xl border p-8 text-center ${passed ? "border-emerald-200 bg-emerald-50 text-emerald-950" : "border-rose-200 bg-rose-50 text-rose-950"}`}>
-            {passed ? <CheckCircle className="mx-auto mb-3 h-12 w-12 text-emerald-600" /> : <AlertCircle className="mx-auto mb-3 h-12 w-12 text-rose-600" />}
-            <h3 className="text-xl font-bold">{passed ? "Bạn đã đạt quiz" : "Quiz chưa đạt yêu cầu"}</h3>
-            {score != null && <p className="mt-2 text-2xl font-black">Điểm backend: {score}</p>}
+          <div className={`rounded-2xl border p-8 text-center ${!resultVisible && persistAttempt ? "border-primary/20 bg-primary/5" : passed ? "border-emerald-200 bg-emerald-50 text-emerald-950" : "border-rose-200 bg-rose-50 text-rose-950"}`}>
+            {!resultVisible && persistAttempt
+              ? <Clock className="mx-auto mb-3 h-12 w-12 text-primary" />
+              : passed ? <CheckCircle className="mx-auto mb-3 h-12 w-12 text-emerald-600" /> : <AlertCircle className="mx-auto mb-3 h-12 w-12 text-rose-600" />}
+            <h3 className="text-xl font-bold">
+              {!resultVisible && persistAttempt ? "Đã ghi nhận bài nộp" : passed ? "Bạn đã đạt quiz" : "Quiz chưa đạt yêu cầu"}
+            </h3>
+            {!resultVisible && persistAttempt
+              ? <p className="mt-2 text-sm text-muted-foreground">Giáo viên chưa cho phép xem điểm ngay sau khi nộp.</p>
+              : score != null && <p className="mt-2 text-2xl font-black">{persistAttempt ? "Điểm backend" : "Điểm preview"}: {score}</p>}
           </div>
           <div className="flex flex-wrap justify-between gap-3">
             <Button variant="outline" onClick={resetAttempt} className="gap-2"><RefreshCw className="h-4 w-4" />Làm lượt mới</Button>
-            {passed && <Button onClick={onComplete} className="gap-2"><CheckCircle className="h-4 w-4" />Hoàn thành và tiếp tục</Button>}
+            {(passed || (!resultVisible && persistAttempt)) && <Button onClick={onComplete} className="gap-2"><CheckCircle className="h-4 w-4" />Hoàn thành và tiếp tục</Button>}
           </div>
         </div>
       ) : (
@@ -212,20 +244,20 @@ export const LearningQuizPlayer = ({ quiz, onComplete, persistAttempt = false }:
           {questions.map((question, questionIndex) => (
             <div key={question.id} className="space-y-4 rounded-2xl border bg-muted/20 p-5">
               <div className="flex items-start justify-between gap-3">
-                <h3 className="text-sm font-semibold">Câu {questionIndex + 1}: {question.content}</h3>
+                <h3 className="text-sm font-semibold">Câu {questionIndex + 1}: <QuizText content={question.content} /></h3>
                 {question.points != null && <Badge variant="outline">{question.points} điểm</Badge>}
               </div>
               {(question.questionType === "SINGLE_CHOICE" || question.questionType === "TRUE_FALSE") && (
                 <div className="space-y-2">{question.options.map((option, optionIndex) => {
                   const optionId = option.id ?? String(optionIndex);
-                  return <label key={optionId} className="flex cursor-pointer items-center gap-3 rounded-xl border bg-background p-3 text-sm"><input type="radio" name={question.id} checked={answers[question.id] === optionId} onChange={() => setAnswer(question.id, optionId)} />{option.content}</label>;
+                  return <label key={optionId} className="flex cursor-pointer items-center gap-3 rounded-xl border bg-background p-3 text-sm"><input type="radio" name={question.id} checked={answers[question.id] === optionId} onChange={() => setAnswer(question.id, optionId)} /><QuizText content={option.content} /></label>;
                 })}</div>
               )}
               {question.questionType === "MULTIPLE_CHOICE" && (
                 <div className="space-y-2">{question.options.map((option, optionIndex) => {
                   const optionId = option.id ?? String(optionIndex);
                   const selected = Array.isArray(answers[question.id]) && (answers[question.id] as string[]).includes(optionId);
-                  return <label key={optionId} className="flex cursor-pointer items-center gap-3 rounded-xl border bg-background p-3 text-sm"><input type="checkbox" checked={selected} onChange={() => toggleMultipleAnswer(question.id, optionId)} />{option.content}</label>;
+                  return <label key={optionId} className="flex cursor-pointer items-center gap-3 rounded-xl border bg-background p-3 text-sm"><input type="checkbox" checked={selected} onChange={() => toggleMultipleAnswer(question.id, optionId)} /><QuizText content={option.content} /></label>;
                 })}</div>
               )}
               {(question.questionType === "SHORT_ANSWER" || question.questionType === "ESSAY") && <textarea rows={question.questionType === "ESSAY" ? 6 : 2} value={typeof answers[question.id] === "string" ? answers[question.id] as string : ""} onChange={(event) => setAnswer(question.id, event.target.value)} className="w-full rounded-xl border bg-background p-3 text-sm" placeholder="Nhập câu trả lời" />}

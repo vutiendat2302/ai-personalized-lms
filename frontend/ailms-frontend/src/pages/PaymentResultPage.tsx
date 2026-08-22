@@ -19,6 +19,8 @@ export const PaymentResultPage = () => {
   // PayPal giữ token gateway; orderId chỉ khôi phục ngữ cảnh và vẫn được backend kiểm tra ownership.
   const orderId = sessionStorage.getItem("ailms_pending_order_id") || searchParams.get("orderId");
   const courseId = sessionStorage.getItem("ailms_pending_course_id");
+  const isFreeCheckout = searchParams.get("free") === "true";
+
 
   useEffect(() => {
     if (!orderId) {
@@ -31,21 +33,22 @@ export const PaymentResultPage = () => {
     let timer: ReturnType<typeof setTimeout> | undefined;
 
     /** Capture chỉ khi PayPal redirect về; backend dùng PayPal order đã lưu, không tin token query. */
-    const captureIfApproved = async () => {
+    const captureIfApproved = async (): Promise<OrderStatusResponse | null | false> => {
       if (searchParams.get("cancelled") === "1") {
         setErrorMessage("Bạn đã hủy thanh toán PayPal.");
         return false;
       }
-      if (!searchParams.get("token")) return true;
-      await orderApi.capturePaypalPayment(orderId);
-      return true;
+      if (!searchParams.get("token")) return null;
+      return orderApi.capturePaypalPayment(orderId);
     };
 
     /** Hỏi backend về kết quả capture PayPal, không sử dụng query redirect để cấp quyền học. */
     const pollStatus = async () => {
       try {
-        if (attempts === 0 && !(await captureIfApproved())) return;
-        const result = await orderApi.getOrderStatus(orderId);
+        const captured = attempts === 0 ? await captureIfApproved() : null;
+        if (captured === false) return;
+        // Capture response đã chứa trạng thái authoritative nên không gọi GET dư ngay sau redirect.
+        const result = captured || await orderApi.getOrderStatus(orderId);
         if (cancelled) return;
         setStatus(result);
         const completed = result.orderStatus === "PAID"
@@ -102,7 +105,10 @@ export const PaymentResultPage = () => {
             </h1>
             <p className="mt-2 text-sm text-muted-foreground">
               {paid
-                ? "Quyền học đã được backend kích hoạt sau khi PayPal capture thành công."
+                ? isFreeCheckout
+                  ? "Voucher 100% đã được áp dụng thành công. Quyền học đã được kích hoạt ngay lập tức."
+                  : "Quyền học đã được backend kích hoạt sau khi PayPal capture thành công."
+
                 : errorMessage || (timedOut
                   ? "Đã hết thời gian chờ xác nhận. Bạn có thể kiểm tra lại trong lịch sử đơn hàng."
                   : "Trang này tự kiểm tra trạng thái server; bạn không cần tải lại trang.")}

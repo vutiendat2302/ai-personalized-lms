@@ -5,6 +5,7 @@ import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import com.ailms.entity.enums.BaseStatusEnum;
 
 @Getter
@@ -24,6 +25,8 @@ public class QuizResponse {
 
     private Long classId;
 
+    private Long sourceQuizId;
+
     private String code;
 
     private String title;
@@ -39,11 +42,16 @@ public class QuizResponse {
     private Boolean shuffleQuestions;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
+    private LocalDateTime availableFrom;
+
+    private Boolean showResultAfterSubmit;
+
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime dueAt;
 
     private BaseStatusEnum status;
 
-    private Object questions;
+    private List<QuizQuestionResponse> questions;
 
     private String createdBy;
 

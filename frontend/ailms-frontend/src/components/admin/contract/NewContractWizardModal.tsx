@@ -97,14 +97,23 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
   const [submittingB, setSubmittingB] = useState(false);
   const [generateConfirmOpen, setGenerateConfirmOpen] = useState(false);
 
+  /**
+   * Định dạng chuỗi hiển thị số tiền lương theo định dạng vi-VN
+   */
   const formatSalaryInput = (value: number) => value > 0 ? value.toLocaleString("vi-VN") : "";
+
+  /**
+   * Xử lý thay đổi số tiền lương nhập vào từ ô input
+   */
   const handleSalaryChange = (rawValue: string) => {
     const digits = rawValue.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
     setBaseSalary(digits ? Number(digits) : 0);
     setFormError("");
   };
 
-  // Load Active Check
+  /**
+   * Kiểm tra xem nhân viên có hợp đồng đang hiệu lực hay không
+   */
   const runActiveCheck = async () => {
     setCheckingActive(true);
     setActiveCheckError("");
@@ -151,7 +160,9 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
     return () => { active = false; };
   }, [contractType]);
 
-  // Terminate Active Contract Action
+  /**
+   * Chấm dứt hợp đồng đang hiệu lực cũ của nhân viên
+   */
   const handleTerminateActiveContract = async () => {
     if (!activeContractInfo?.activeContractId) return;
     setTerminatingActive(true);
@@ -166,7 +177,9 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
     }
   };
 
-  // Handle File Change (Branch A)
+  /**
+   * Xử lý chọn file hợp đồng đính kèm ở Nhánh A
+   */
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFileError("");
     if (e.target.files && e.target.files[0]) {
@@ -184,7 +197,9 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
     }
   };
 
-  // Kiểm tra dữ liệu chung trước khi đi vào từng nhánh tạo hợp đồng.
+  /**
+   * Kiểm tra tính hợp lệ của dữ liệu hợp đồng trước khi submit
+   */
   const validateContractInformation = (requireFile: boolean) => {
     const errors: string[] = [];
     if (!contractType) errors.push("loại hợp đồng");
@@ -200,7 +215,9 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
     return errors.length === 0;
   };
 
-  // Submit Branch A
+  /**
+   * Thực hiện tạo hợp đồng và upload file ở Nhánh A
+   */
   const handleSubmitBranchA = async () => {
     if (!validateContractInformation(true)) return;
     setSubmittingA(true);
@@ -234,8 +251,9 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
     }
   };
 
-  // Submit Branch B
-  // Nhánh B sinh hợp đồng từ mẫu đã chọn thay vì tải tệp có sẵn.
+  /**
+   * Thực hiện sinh file PDF hợp đồng từ mẫu ở Nhánh B
+   */
   const handleSubmitBranchB = async () => {
     if (!validateContractInformation(false)) return;
     if (!selectedTemplateId) {
@@ -265,7 +283,9 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
     }
   };
 
-  // Calculate live preview HTML for Branch B
+  /**
+   * Sinh HTML xem trước trực tiếp hợp đồng ở Nhánh B
+   */
   const getLivePreviewHtml = () => {
     const selectedTpl = templates.find((t) => t.templateId === selectedTemplateId);
     if (!selectedTpl) return "";
@@ -383,9 +403,9 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
           ) : activeContractInfo?.hasActiveContract ? (
             /* ACTIVE WARNING MODAL (QUY TẮC 1.1) */
             <div className="space-y-6 animate-in zoom-in-95 duration-200">
-              <div className="p-5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 space-y-4">
+              <div className="p-5 rounded-2xl bg-chart-1/10 border border-chart-1/30 text-chart-1 space-y-4">
                 <div className="flex items-start gap-3">
-                  <AlertTriangle className="h-6 w-6 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <AlertTriangle className="h-6 w-6 text-chart-1 shrink-0 mt-0.5" />
                   <div className="space-y-1">
                     <h4 className="text-sm font-extrabold">Cảnh báo: Nhân viên đang có hợp đồng hiệu lực!</h4>
                     <p className="text-xs leading-relaxed opacity-90">
@@ -395,7 +415,7 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
                   </div>
                 </div>
 
-                <div className="p-3.5 bg-background/60 rounded-xl border border-amber-500/20 text-xs flex items-center justify-between">
+                <div className="p-3.5 bg-background/60 rounded-xl border border-chart-1/20 text-xs flex items-center justify-between">
                   <div>
                     <span className="text-muted-foreground font-semibold">Mã HĐ Active:</span>{" "}
                     <strong className="text-foreground font-mono">#{activeContractInfo.activeContractId}</strong>
@@ -449,7 +469,7 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <div className="h-10 w-10 rounded-xl bg-blue-500/10 text-blue-600 flex items-center justify-center border border-blue-500/20">
+                        <div className="h-10 w-10 rounded-xl bg-brand-cobalt/10 text-brand-cobalt flex items-center justify-center border border-brand-cobalt/20">
                           <Upload className="h-5 w-5" />
                         </div>
                         {selectedBranch === "BRANCH_A" && <CheckCircle2 className="h-5 w-5 text-primary" />}
@@ -473,7 +493,7 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
                       }`}
                     >
                       <div className="flex items-center justify-between">
-                        <div className="h-10 w-10 rounded-xl bg-purple-500/10 text-purple-600 flex items-center justify-center border border-purple-500/20">
+                        <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center border border-primary/20">
                           <Sparkles className="h-5 w-5" />
                         </div>
                         {selectedBranch === "BRANCH_B" && <CheckCircle2 className="h-5 w-5 text-primary" />}
@@ -484,7 +504,7 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
                           Chọn loại hợp đồng, điền form dữ liệu, xem trước Live Preview HTML và hệ thống tự động sinh file PDF chuẩn.
                         </p>
                       </div>
-                      <Badge variant="secondary" className="text-[10px] font-bold bg-purple-500/10 text-purple-600 border border-purple-500/20">Nhánh B — Sinh PDF từ Template</Badge>
+                      <Badge variant="secondary" className="text-[10px] font-bold bg-primary/10 text-primary border border-primary/20">Nhánh B — Sinh PDF từ Template</Badge>
                     </div>
                   </div>
 
@@ -504,7 +524,7 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
                 <div className="space-y-5 animate-in fade-in duration-200">
                   <div className="flex items-center justify-between">
                     <h4 className="text-xs font-extrabold uppercase text-muted-foreground tracking-wider flex items-center gap-1.5">
-                      <Upload className="h-4 w-4 text-blue-600" /> Nhánh A: Nhập thông tin & Upload file
+                      <Upload className="h-4 w-4 text-brand-cobalt" /> Nhánh A: Nhập thông tin & Upload file
                     </h4>
                     <Button size="sm" variant="ghost" onClick={() => setWizardStep("SELECT_BRANCH")} className="h-7 text-xs gap-1 text-muted-foreground">
                       <ArrowLeft className="h-3 w-3" /> Đổi phương thức
@@ -518,9 +538,9 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
                       <Select value={contractType} onValueChange={(v: any) => setContractType(v)}>
                         <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="PROBATION">Thỏa thuận thử việc (PROBATION)</SelectItem>
-                          <SelectItem value="FIXED_TERM">Hợp đồng xác định thời hạn (FIXED_TERM)</SelectItem>
-                          <SelectItem value="INDEFINITE">Hợp đồng không xác định thời hạn (INDEFINITE)</SelectItem>
+                          <SelectItem value="PROBATION">Hợp đồng thử việc</SelectItem>
+                          <SelectItem value="FIXED_TERM">Hợp đồng xác định thời hạn</SelectItem>
+                          <SelectItem value="INDEFINITE">Hợp đồng không xác định thời hạn</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -530,9 +550,9 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
                       <Select value={salaryType} onValueChange={(v: any) => setSalaryType(v)}>
                         <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="MONTHLY">Trả theo tháng (MONTHLY)</SelectItem>
-                          <SelectItem value="DAILY">Trả theo ngày (DAILY)</SelectItem>
-                          <SelectItem value="HOURLY">Trả theo giờ (HOURLY)</SelectItem>
+                          <SelectItem value="MONTHLY">Trả theo tháng</SelectItem>
+                          <SelectItem value="DAILY">Trả theo ngày</SelectItem>
+                          <SelectItem value="HOURLY">Trả theo giờ</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -583,7 +603,7 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
                         <Upload className="h-6 w-6 text-muted-foreground" />
                         {uploadedFile ? (
                           <div className="space-y-0.5">
-                            <p className="text-xs font-extrabold text-emerald-600 flex items-center gap-1">
+                            <p className="text-xs font-extrabold text-success-forest flex items-center gap-1">
                               <CheckCircle2 className="h-3.5 w-3.5" /> {uploadedFile.name}
                             </p>
                             <p className="text-[10px] text-muted-foreground">{(uploadedFile.size / (1024 * 1024)).toFixed(2)} MB</p>
@@ -597,7 +617,7 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
                       </div>
                     </div>
 
-                    {fileError && <p className="text-xs font-bold text-red-500 flex items-center gap-1 mt-1"><AlertCircle className="h-3.5 w-3.5" /> {fileError}</p>}
+                    {fileError && <p className="text-xs font-bold text-destructive flex items-center gap-1 mt-1"><AlertCircle className="h-3.5 w-3.5" /> {fileError}</p>}
                   </div>
 
                   {formError && <p className="text-xs font-bold text-destructive flex items-center gap-1"><AlertCircle className="h-3.5 w-3.5" /> {formError}</p>}
@@ -621,7 +641,7 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
                 <div className="space-y-5 animate-in fade-in duration-200">
                   <div className="flex items-center justify-between">
                     <h4 className="text-xs font-extrabold uppercase text-muted-foreground tracking-wider flex items-center gap-1.5">
-                      <Sparkles className="h-4 w-4 text-purple-600" /> Nhánh B: Sinh file PDF từ HTML Template
+                      <Sparkles className="h-4 w-4 text-primary" /> Nhánh B: Sinh file PDF từ HTML Template
                     </h4>
                     <Button size="sm" variant="ghost" onClick={() => setWizardStep("SELECT_BRANCH")} className="h-7 text-xs gap-1 text-muted-foreground">
                       <ArrowLeft className="h-3 w-3" /> Đổi phương thức
@@ -633,14 +653,14 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
                     {/* LEFT: FORM DATA (5 Cols) */}
                     <div className="lg:col-span-4 space-y-4">
                       <div className="space-y-1">
-                        <Label className="text-xs font-bold text-muted-foreground">Loại hợp đồng (ContractType)</Label>
+                        <Label className="text-xs font-bold text-muted-foreground">Loại hợp đồng</Label>
                         <Select value={contractType} onValueChange={(v: any) => setContractType(v)}>
                           <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="PROBATION">Thử việc (PROBATION)</SelectItem>
-                            <SelectItem value="FIXED_TERM">Xác định thời hạn (FIXED_TERM)</SelectItem>
-                            <SelectItem value="INDEFINITE">Không xác định thời hạn (INDEFINITE)</SelectItem>
-                            <SelectItem value="SEASONAL">Theo mùa vụ (SEASONAL)</SelectItem>
+                            <SelectItem value="PROBATION">Thử việc</SelectItem>
+                            <SelectItem value="FIXED_TERM">Xác định thời hạn</SelectItem>
+                            <SelectItem value="INDEFINITE">Không xác định thời hạn</SelectItem>
+                            <SelectItem value="SEASONAL">Theo mùa vụ</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -715,7 +735,7 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
                     <div className="lg:col-span-8 space-y-2 flex flex-col">
                       <div className="flex items-center justify-between">
                         <Label className="text-xs font-bold text-muted-foreground flex items-center gap-1.5">
-                          <Eye className="h-3.5 w-3.5 text-purple-600" /> Live Preview (Thời gian thực)
+                          <Eye className="h-3.5 w-3.5 text-primary" /> Live Preview (Thời gian thực)
                         </Label>
                         <span className="text-[10px] italic text-muted-foreground">Tự động cập nhật theo dữ liệu đang nhập</span>
                       </div>
@@ -729,7 +749,7 @@ export const NewContractWizardModal: React.FC<NewContractWizardModalProps> = ({
                             className="w-full h-[62vh] border-0 bg-white"
                           />
                         ) : (
-                          <div className="h-[62vh] grid place-items-center p-6 text-center text-xs text-slate-500">
+                          <div className="h-[62vh] grid place-items-center p-6 text-center text-xs text-muted-foreground">
                             {templatesLoading ? "Đang tải bản xem trước..." : "Chọn một mẫu hợp đồng để xem preview."}
                           </div>
                         )}

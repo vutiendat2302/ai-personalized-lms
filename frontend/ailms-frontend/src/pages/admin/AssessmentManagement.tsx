@@ -57,6 +57,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { QuestionBuilderManager, type QuestionItem } from "@/components/admin/course-builder/QuestionBuilderManager";
 import { LearningQuizPlayer } from "@/components/student/learning/LearningQuizPlayer";
 import type { QuizResponseDTO } from "@/api/courses/courseAuthoringApi";
+import { ClassQuizPublishDialog } from "@/components/teacher/assessment/ClassQuizPublishDialog";
 
 // Format date display (DD/MM/YYYY HH:mm)
 const formatDateDisplay = (dateStr?: string | null) => {
@@ -100,13 +101,33 @@ const getQuizCleanDescription = (quiz: QuizResponseItem | null): string => {
   return quiz.description;
 };
 
-export const AssessmentManagement: React.FC = () => {
+/** Đọc hướng dẫn assignment từ JSON block-editor hoặc trả văn bản thuần. */
+const getAssignmentInstructions = (assignment: AssignmentResponseItem | null): string => {
+  if (!assignment?.description) return "Chưa có hướng dẫn làm bài.";
+  if (!assignment.description.trim().startsWith("{")) return assignment.description;
+  try {
+    const parsed = JSON.parse(assignment.description);
+    return typeof parsed?.instructions === "string" && parsed.instructions.trim()
+      ? parsed.instructions
+      : "Chưa có hướng dẫn làm bài.";
+  } catch {
+    return assignment.description;
+  }
+};
+
+interface AssessmentManagementProps {
+  scope?: "all" | "authored";
+}
+
+/** Giao diện quản lý Quiz/Assignment dùng chung; scope authored bắt buộc gọi API theo người tạo hiện tại. */
+export const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ scope = "all" }) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const authoredOnly = scope === "authored";
 
   // Active Tab: "quizzes" | "assignments" (Chỉ 2 Tab)
   const [activeTab, setActiveTab] = useState<"quizzes" | "assignments">(() => {
-    if (location.pathname.includes("assignments")) return "assignments";
+    if (location.pathname.includes("assignments") || new URLSearchParams(location.search).get("tab") === "assignments") return "assignments";
     return "quizzes";
   });
 
@@ -138,7 +159,7 @@ export const AssessmentManagement: React.FC = () => {
     description: "",
     code: "",
     timeLimitMin: 15,
-    passScore: 5.0,
+    passScore: 70,
     maxScore: 10.0,
     dueDate: "",
   });
@@ -153,6 +174,7 @@ export const AssessmentManagement: React.FC = () => {
   // Confirm Delete Dialog
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | number | null>(null);
+  const [quizToPublish, setQuizToPublish] = useState<QuizResponseItem | null>(null);
 
   // Notification Banners
   const [banner, setBanner] = useState<{ type: "success" | "error"; msg: string } | null>(null);
@@ -169,8 +191,10 @@ export const AssessmentManagement: React.FC = () => {
     setSelectedIds([]);
     setSearchKeyword("");
 
-    if (tab === "quizzes") navigate("/admin/quizzes", { replace: true });
-    else if (tab === "assignments") navigate("/admin/assignments", { replace: true });
+    if (authoredOnly) {
+      navigate(`/teacher/assessments?tab=${tab}`, { replace: true });
+    } else if (tab === "quizzes") navigate("/admin/quizzes", { replace: true });
+    else navigate("/admin/assignments", { replace: true });
   };
 
   // Fetch Real Backend Data
@@ -182,7 +206,7 @@ export const AssessmentManagement: React.FC = () => {
     setLoading(true);
     try {
       if (activeTab === "quizzes") {
-        const res = await quizApi.searchQuizzes({
+        const res = await (authoredOnly ? quizApi.searchAuthoredQuizzes : quizApi.searchQuizzes)({
           keyword: searchKeyword.trim() || undefined,
           page,
           size: pageSize,
@@ -192,16 +216,20 @@ export const AssessmentManagement: React.FC = () => {
           setQuizzes(data.content);
           setTotalPages(data.totalPages || 1);
           setTotalElements(data.totalElements || data.content.length);
-        } else {
+        } else if (!authoredOnly) {
           // Fallback to getAllQuizzes if search endpoint is empty
           const allRes = await quizApi.getAllQuizzes();
           const allData = allRes.data?.data || [];
           setQuizzes(Array.isArray(allData) ? allData : []);
           setTotalPages(1);
           setTotalElements(Array.isArray(allData) ? allData.length : 0);
+        } else {
+          setQuizzes([]);
+          setTotalPages(1);
+          setTotalElements(0);
         }
       } else if (activeTab === "assignments") {
-        const res = await assignmentApi.searchAssignments({
+        const res = await (authoredOnly ? assignmentApi.searchAuthoredAssignments : assignmentApi.searchAssignments)({
           keyword: searchKeyword.trim() || undefined,
           page,
           size: pageSize,
@@ -211,13 +239,17 @@ export const AssessmentManagement: React.FC = () => {
           setAssignments(data.content);
           setTotalPages(data.totalPages || 1);
           setTotalElements(data.totalElements || data.content.length);
-        } else {
+        } else if (!authoredOnly) {
           // Fallback to getAllAssignments
           const allRes = await assignmentApi.getAllAssignments();
           const allData = allRes.data?.data || [];
           setAssignments(Array.isArray(allData) ? allData : []);
           setTotalPages(1);
           setTotalElements(Array.isArray(allData) ? allData.length : 0);
+        } else {
+          setAssignments([]);
+          setTotalPages(1);
+          setTotalElements(0);
         }
       }
     } catch (e: any) {
@@ -237,14 +269,30 @@ export const AssessmentManagement: React.FC = () => {
     fetchData();
   };
 
-  // Open Detail / Student Studio Preview Modal
-  const handleViewDetail = (item: any) => {
+  /** Tải bản chi tiết trước khi mở preview để luôn có câu hỏi và phương án thật. */
+  const handleViewDetail = async (item: QuizResponseItem | AssignmentResponseItem) => {
     if (activeTab === "quizzes") {
-      setSelectedQuizDetail(item);
-      setSelectedAssignmentDetail(null);
+      try {
+        const response = await (authoredOnly
+          ? quizApi.getAuthoredQuizById(item.id)
+          : quizApi.getQuizById(item.id));
+        setSelectedQuizDetail(response.data.data);
+        setSelectedAssignmentDetail(null);
+      } catch {
+        showBanner("error", "Không thể tải chi tiết câu hỏi của quiz.");
+        return;
+      }
     } else {
-      setSelectedAssignmentDetail(item);
-      setSelectedQuizDetail(null);
+      try {
+        const response = await (authoredOnly
+          ? assignmentApi.getAuthoredAssignmentById(item.id)
+          : assignmentApi.getAssignmentById(item.id));
+        setSelectedAssignmentDetail(response.data.data);
+        setSelectedQuizDetail(null);
+      } catch {
+        showBanner("error", "Không thể tải chi tiết bài tập.");
+        return;
+      }
     }
     setDetailModalOpen(true);
   };
@@ -255,9 +303,9 @@ export const AssessmentManagement: React.FC = () => {
     setFormData({
       title: "",
       description: "",
-      code: `QZ-${Date.now().toString().slice(-4)}`,
+      code: "",
       timeLimitMin: 15,
-      passScore: 8.0,
+      passScore: 70,
       maxScore: 10.0,
       dueDate: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10),
     });
@@ -268,27 +316,41 @@ export const AssessmentManagement: React.FC = () => {
     setCreateModalOpen(true);
   };
 
-  const handleOpenEditModal = (item: any) => {
-    setEditingItem(item);
+  /** Tải chi tiết assessment trước khi sửa để không ghi đè mất câu hỏi đang có. */
+  const handleOpenEditModal = async (item: QuizResponseItem | AssignmentResponseItem) => {
+    let detail: QuizResponseItem | AssignmentResponseItem = item;
+    try {
+      const response = activeTab === "quizzes"
+        ? await (authoredOnly ? quizApi.getAuthoredQuizById(item.id) : quizApi.getQuizById(item.id))
+        : await (authoredOnly
+          ? assignmentApi.getAuthoredAssignmentById(item.id)
+          : assignmentApi.getAssignmentById(item.id));
+      detail = response.data.data;
+    } catch {
+      showBanner("error", "Không thể tải dữ liệu chi tiết để chỉnh sửa.");
+      return;
+    }
+    const editable = detail as any;
+    setEditingItem(editable);
     setFormData({
-      title: item.title || "",
-      description: item.description || "",
-      code: item.code || "",
-      timeLimitMin: item.timeLimitMin || 15,
-      passScore: item.passScore || 8.0,
-      maxScore: item.maxScore || 10.0,
-      dueDate: item.dueDate ? item.dueDate.slice(0, 10) : "",
+      title: editable.title || "",
+      description: activeTab === "assignments" ? getAssignmentInstructions(editable) : editable.description || "",
+      code: editable.code || "",
+      timeLimitMin: editable.timeLimitMin || 15,
+      passScore: editable.passScore || 70,
+      maxScore: editable.maxScore || 10.0,
+      dueDate: editable.dueDate ? editable.dueDate.slice(0, 10) : "",
     });
-    setMaxAttempts(item.maxAttempts || 3);
-    setShuffleQuestions(item.shuffleQuestions !== false);
-    setAllowLate(item.allowLate || false);
+    setMaxAttempts(editable.maxAttempts || 3);
+    setShuffleQuestions(editable.shuffleQuestions !== false);
+    setAllowLate(editable.allowLate || false);
 
     // Extract questions if existing
-    if (item.questions && Array.isArray(item.questions)) {
-      setQuizQuestions(item.questions);
-    } else if (item.description && item.description.trim().startsWith("[")) {
+    if (editable.questions && Array.isArray(editable.questions)) {
+      setQuizQuestions(editable.questions);
+    } else if (editable.description && editable.description.trim().startsWith("[")) {
       try {
-        const parsed = JSON.parse(item.description);
+        const parsed = JSON.parse(editable.description);
         if (Array.isArray(parsed)) setQuizQuestions(parsed);
         else setQuizQuestions([]);
       } catch {
@@ -310,21 +372,20 @@ export const AssessmentManagement: React.FC = () => {
       if (activeTab === "quizzes") {
         const payload = {
           title: formData.title,
-          description: quizQuestions.length > 0 ? JSON.stringify(quizQuestions) : formData.description,
+          description: formData.description,
           timeLimitMin: Number(formData.timeLimitMin),
           passScore: Number(formData.passScore),
           maxAttempts,
           shuffleQuestions,
-          code: formData.code,
           questions: quizQuestions,
           status: "ACTIVE",
         };
 
         if (editingItem) {
-          await quizApi.updateQuiz(editingItem.id, payload);
+          await (authoredOnly ? quizApi.updateAuthoredQuiz : quizApi.updateQuiz)(editingItem.id, payload);
           showBanner("success", "Đã cập nhật bài Quiz & danh sách câu hỏi vào CSDL!");
         } else {
-          await quizApi.createQuiz(payload);
+          await (authoredOnly ? quizApi.createAuthoredQuiz : quizApi.createQuiz)(payload);
           showBanner("success", "Đã tạo bài Quiz mới với câu hỏi vào CSDL!");
         }
       } else if (activeTab === "assignments") {
@@ -338,10 +399,10 @@ export const AssessmentManagement: React.FC = () => {
         };
 
         if (editingItem) {
-          await assignmentApi.updateAssignment(editingItem.id, payload);
+          await (authoredOnly ? assignmentApi.updateAuthoredAssignment : assignmentApi.updateAssignment)(editingItem.id, payload);
           showBanner("success", "Đã cập nhật bài tập vào CSDL!");
         } else {
-          await assignmentApi.createAssignment(payload);
+          await (authoredOnly ? assignmentApi.createAuthoredAssignment : assignmentApi.createAssignment)(payload);
           showBanner("success", "Đã tạo bài tập mới vào CSDL!");
         }
       }
@@ -362,10 +423,10 @@ export const AssessmentManagement: React.FC = () => {
     if (!itemToDelete) return;
     try {
       if (activeTab === "quizzes") {
-        await quizApi.deleteQuiz(itemToDelete);
+        await (authoredOnly ? quizApi.deleteAuthoredQuiz : quizApi.deleteQuiz)(itemToDelete);
         showBanner("success", "Đã xóa bài kiểm tra thành công!");
       } else {
-        await assignmentApi.deleteAssignment(itemToDelete);
+        await (authoredOnly ? assignmentApi.deleteAuthoredAssignment : assignmentApi.deleteAssignment)(itemToDelete);
         showBanner("success", "Đã xóa bài tập thành công!");
       }
       setConfirmDeleteOpen(false);
@@ -382,23 +443,14 @@ export const AssessmentManagement: React.FC = () => {
       {/* HEADER BAR */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/40 pb-4">
         <div>
-          <div className="flex items-center gap-2 text-sm font-semibold text-primary mb-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate(-1)}
-              className="h-8 px-2.5 text-xs font-bold gap-1.5 rounded-xl border border-border/40 hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              <span>Quay lại</span>
-            </Button>
-          </div>
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-foreground flex items-center gap-3 mt-1">
             <HelpCircle className="h-7 w-7 text-primary" />
-            <span>Quản Lý Bài Kiểm Tra (Quiz) & Bài Tập (Assignment)</span>
+            <span>Quản Lý Bài Kiểm Tra & Bài Tập</span>
           </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Quản lý ngân hàng câu hỏi Quiz và bài tập tự luận trong hệ thống.
+          <p className="text-sm text-foreground/80 mt-0.5">
+            {authoredOnly
+              ? "Quản lý ngân hàng Quiz và bài tập do chính bạn tạo."
+              : "Quản lý ngân hàng câu hỏi Quiz và bài tập tự luận trong hệ thống."}
           </p>
         </div>
 
@@ -406,7 +458,7 @@ export const AssessmentManagement: React.FC = () => {
           <Button
             size="sm"
             onClick={handleOpenCreateModal}
-            className="text-xs font-bold gap-1.5 rounded-xl bg-primary text-primary-foreground shadow-sm"
+            className="text-xs font-bold gap-1.5 rounded-xl bg-white border-border/30 text-foreground hover:bg-foreground hover:text-white shadow-sm"
           >
             <Plus className="h-4 w-4" />
             <span>{activeTab === "quizzes" ? "Tạo Quiz Mới" : "Tạo Bài Tập Mới"}</span>
@@ -433,14 +485,11 @@ export const AssessmentManagement: React.FC = () => {
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
             activeTab === "quizzes"
               ? "bg-primary text-primary-foreground shadow-xs"
-              : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              : "text-foreground hover:bg-foreground hover:text-white"
           }`}
         >
           <FileQuestion className="h-4 w-4" />
-          <span>Quản Lý Bài Kiểm Tra (Quiz)</span>
-          <Badge variant="secondary" className="ml-1 text-[10px] bg-background/20 text-current font-extrabold">
-            {activeTab === "quizzes" ? totalElements : ""}
-          </Badge>
+          <span>Quản Lý Quizz</span>
         </button>
 
         <button
@@ -448,14 +497,11 @@ export const AssessmentManagement: React.FC = () => {
           className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
             activeTab === "assignments"
               ? "bg-primary text-primary-foreground shadow-xs"
-              : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              : "text-foreground hover:bg-foreground hover:text-white"
           }`}
         >
           <FileText className="h-4 w-4" />
-          <span>Quản Lý Bài Tập (Assignment)</span>
-          <Badge variant="secondary" className="ml-1 text-[10px] bg-background/20 text-current font-extrabold">
-            {activeTab === "assignments" ? totalElements : ""}
-          </Badge>
+          <span>Quản Lý Bài Tập</span>
         </button>
       </div>
 
@@ -464,11 +510,11 @@ export const AssessmentManagement: React.FC = () => {
         <CardContent className="p-4">
           <form onSubmit={handleSearchSubmit} className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="relative flex-1 w-full">
-              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-foreground/80" />
               <Input
                 placeholder={
                   activeTab === "quizzes"
-                    ? "Tìm kiếm bài Quiz theo tiêu đề, mã code..."
+                    ? "Tìm kiếm bài Quiz..."
                     : "Tìm kiếm bài tập theo tiêu đề..."
                 }
                 value={searchKeyword}
@@ -478,7 +524,7 @@ export const AssessmentManagement: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-3 w-full sm:w-auto shrink-0">
-              <Button type="submit" size="sm" className="h-9 text-xs font-bold rounded-xl gap-1 bg-primary text-primary-foreground">
+              <Button type="submit" size="sm" className="h-9 text-xs font-semibold hover:bg-foreground hover:text-white rounded-xl gap-1 bg-primary text-primary-foreground">
                 <Search className="h-3.5 w-3.5" /> Tìm kiếm
               </Button>
 
@@ -491,9 +537,9 @@ export const AssessmentManagement: React.FC = () => {
                   setPage(0);
                   fetchData();
                 }}
-                className="h-9 text-xs font-semibold rounded-xl gap-1"
+                className="h-9 text-xs font-semibold rounded-xl gap-1 hover:bg-foreground/20 hover:text-white"
               >
-                <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" /> Làm mới
+                <RefreshCw className="h-3.5 w-3.5 text-foreground group-hover:text-white" />
               </Button>
             </div>
           </form>
@@ -528,27 +574,27 @@ export const AssessmentManagement: React.FC = () => {
                     />
                   </TableHead>
 
-                  <TableHead className="font-extrabold text-xs">Mã / ID</TableHead>
-                  <TableHead className="font-extrabold text-xs">
-                    {activeTab === "quizzes" ? "Tiêu Đề Bài Quiz" : "Tiêu Đề Bài Tập"}
+                  <TableHead className="font-extrabold text-xs opacity-80">Code</TableHead>
+                  <TableHead className="font-extrabold text-xs opacity-80">
+                    {activeTab === "quizzes" ? "Tiêu Đề " : "Tiêu Đề "}
                   </TableHead>
                   
                   {activeTab === "quizzes" ? (
                     <>
-                      <TableHead className="font-extrabold text-xs text-center">Thời Gian (Phút)</TableHead>
-                      <TableHead className="font-extrabold text-xs text-center">Điểm Đạt</TableHead>
+                      <TableHead className="font-extrabold text-xs text-center opacity-80">Thời Gian (Phút)</TableHead>
+                      <TableHead className="font-extrabold text-xs text-center opacity-80">Điểm Đạt</TableHead>
                     </>
                   ) : (
                     <>
-                      <TableHead className="font-extrabold text-xs text-center">Điểm Tối Đa</TableHead>
-                      <TableHead className="font-extrabold text-xs">Hạn Nộp</TableHead>
+                      <TableHead className="font-extrabold text-xs text-center opacity-80">Điểm Tối Đa</TableHead>
+                      <TableHead className="font-extrabold text-xs opacity-80">Hạn Nộp</TableHead>
                     </>
                   )}
 
-                  <TableHead className="font-extrabold text-xs">Người Tạo (createdBy)</TableHead>
-                  <TableHead className="font-extrabold text-xs">Thời Gian Tạo (createdAt)</TableHead>
-                  <TableHead className="font-extrabold text-xs text-center">Trạng Thái</TableHead>
-                  <TableHead className="font-extrabold text-xs text-right pr-6">Thao Tác</TableHead>
+                  <TableHead className="font-extrabold text-xs opacity-80">Người Tạo</TableHead>
+                  <TableHead className="font-extrabold text-xs opacity-80">Thời Gian Tạo</TableHead>
+                  <TableHead className="font-extrabold text-xs text-center opacity-80">Trạng Thái</TableHead>
+                  <TableHead className="font-extrabold text-xs text-right pr-6 opacity-80">Thao Tác</TableHead>
                 </TableRow>
               </TableHeader>
 
@@ -567,7 +613,7 @@ export const AssessmentManagement: React.FC = () => {
                     <TableCell colSpan={10} className="h-48 text-center">
                       <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
                         <FileQuestion className="h-10 w-10 text-muted-foreground/30" />
-                        <span className="text-xs font-extrabold text-foreground">Không có bài kiểm tra (Quiz) nào trong CSDL.</span>
+                        <span className="text-xs font-extrabold text-foreground">Không có bài Quiz nào trong CSDL.</span>
                         <span className="text-xs">Bấm "Tạo Quiz Mới" để bắt đầu soạn đề thi.</span>
                       </div>
                     </TableCell>
@@ -577,7 +623,7 @@ export const AssessmentManagement: React.FC = () => {
                     <TableCell colSpan={10} className="h-48 text-center">
                       <div className="flex flex-col items-center justify-center gap-2 text-muted-foreground">
                         <FileText className="h-10 w-10 text-muted-foreground/30" />
-                        <span className="text-xs font-extrabold text-foreground">Không có bài tập (Assignment) nào trong CSDL.</span>
+                        <span className="text-xs font-extrabold text-foreground">Không có bài tập nào trong CSDL.</span>
                         <span className="text-xs">Bấm "Tạo Bài Tập Mới" để bổ sung bài làm.</span>
                       </div>
                     </TableCell>
@@ -597,7 +643,7 @@ export const AssessmentManagement: React.FC = () => {
                       </TableCell>
 
                       <TableCell className="font-mono text-xs font-bold text-primary">
-                        {quiz.code || `#QZ-${quiz.id}`}
+                        {quiz.code || `QZ-${quiz.id}`}
                       </TableCell>
 
                       <TableCell>
@@ -632,17 +678,30 @@ export const AssessmentManagement: React.FC = () => {
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => handleViewDetail(quiz)}
+                            onClick={() => void handleViewDetail(quiz)}
                             className="h-8 text-xs font-bold gap-1 text-primary hover:bg-primary/10 rounded-xl"
                             title="Xem chi tiết & Preview giao diện học sinh"
                           >
                             <Eye className="h-3.5 w-3.5" />
                             <span>Preview</span>
                           </Button>
+                          {authoredOnly && !quiz.classId && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                setQuizToPublish(quiz);
+                              }}
+                              className="h-8 gap-1 rounded-xl text-xs font-bold text-primary hover:bg-primary/10"
+                              title="Phát hành Quiz vào lớp"
+                            >
+                              <Send className="h-3.5 w-3.5" /><span>Giao lớp</span>
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => handleOpenEditModal(quiz)}
+                            onClick={() => void handleOpenEditModal(quiz)}
                             className="h-8 text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl"
                             title="Sửa bài Quiz"
                           >
@@ -675,12 +734,12 @@ export const AssessmentManagement: React.FC = () => {
                       </TableCell>
 
                       <TableCell className="font-mono text-xs font-bold text-primary">
-                        {`#ASN-${asn.id}`}
+                        {asn.code || `ASN-${asn.id}`}
                       </TableCell>
 
                       <TableCell>
                         <div className="font-extrabold text-xs text-foreground">{asn.title}</div>
-                        <div className="text-[11px] text-muted-foreground truncate max-w-md">{asn.description || "Chưa có hướng dẫn làm bài."}</div>
+                        <div className="text-[11px] text-muted-foreground truncate max-w-md">{getAssignmentInstructions(asn)}</div>
                       </TableCell>
 
                       <TableCell className="text-center font-mono text-xs font-bold text-emerald-600">
@@ -700,8 +759,8 @@ export const AssessmentManagement: React.FC = () => {
                       </TableCell>
 
                       <TableCell className="text-center">
-                        <Badge className="bg-blue-600 text-white font-bold text-[10px]">
-                          {asn.status || "ACTIVE"}
+                        <Badge className={asn.status === "ACTIVE" ? "bg-emerald-600 text-white font-bold text-[10px]" : "bg-amber-600 text-white font-bold text-[10px]"}>
+                          {asn.status === "ACTIVE" ? "Đang hoạt động" : "Bài nháp"}
                         </Badge>
                       </TableCell>
 
@@ -710,7 +769,7 @@ export const AssessmentManagement: React.FC = () => {
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => handleViewDetail(asn)}
+                            onClick={() => void handleViewDetail(asn)}
                             className="h-8 text-xs font-bold gap-1 text-primary hover:bg-primary/10 rounded-xl"
                             title="Xem chi tiết & Preview giao diện học sinh"
                           >
@@ -720,7 +779,7 @@ export const AssessmentManagement: React.FC = () => {
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => handleOpenEditModal(asn)}
+                            onClick={() => void handleOpenEditModal(asn)}
                             className="h-8 text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl"
                             title="Sửa bài tập"
                           >
@@ -744,14 +803,14 @@ export const AssessmentManagement: React.FC = () => {
           </div>
 
           {/* PAGINATION BAR */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border-t border-border/40">
-            <div className="text-xs text-muted-foreground font-semibold">
-              Hiển thị <strong className="text-foreground">{totalElements}</strong> kết quả từ CSDL
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 border-t border-border/30">
+            <div className="text-xs text-foreground/80">
+              Hiển thị <strong className="text-foreground/80">{totalElements}</strong> kết quả từ CSDL
             </div>
 
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-1.5 text-xs">
-                <span className="text-muted-foreground font-semibold">Số dòng:</span>
+                <span className="text-foreground/80 font-semibold">Số dòng:</span>
                 <Select
                   value={String(pageSize)}
                   onValueChange={(val) => {
@@ -781,7 +840,7 @@ export const AssessmentManagement: React.FC = () => {
                 >
                   <ChevronLeft className="h-4 w-4" /> Trước
                 </Button>
-                <span className="text-xs font-mono font-bold text-foreground px-1">
+                <span className="text-xs font-semibold text-foreground/80 px-1">
                   Trang {page + 1} / {Math.max(totalPages, 1)}
                 </span>
                 <Button
@@ -807,12 +866,12 @@ export const AssessmentManagement: React.FC = () => {
               {selectedQuizDetail ? (
                 <>
                   <FileQuestion className="h-5 w-5 text-primary" />
-                  <span>Chi Tiết Quiz & Bản Preview Học Sinh (Studio Authoring)</span>
+                  <span>Chi Tiết Quiz & Preview</span>
                 </>
               ) : (
                 <>
                   <FileText className="h-5 w-5 text-primary" />
-                  <span>Chi Tiết Bài Tập & Bản Preview Học Sinh (Studio Authoring)</span>
+                  <span>Chi Tiết Bài Tập & Preview</span>
                 </>
               )}
             </DialogTitle>
@@ -824,18 +883,18 @@ export const AssessmentManagement: React.FC = () => {
           {/* AUDIT INFORMATION SECTION (người tạo, thời gian tạo, ng update, thời gian update) */}
           <div className="p-4 bg-muted/30 rounded-2xl border border-border/50 space-y-3">
             <h4 className="text-xs font-bold text-primary flex items-center gap-1.5 uppercase tracking-wider">
-              <ShieldCheck className="h-4 w-4" /> Thông Tin Audit Bản Ghi (Hệ Thống CSDL)
+              <ShieldCheck className="h-4 w-4" /> Thông Tin Audit Bản Ghi
             </h4>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
               <div className="space-y-1">
-                <p className="text-muted-foreground">👤 Người tạo (createdBy): <strong className="text-foreground font-mono">{selectedQuizDetail?.createdBy || selectedAssignmentDetail?.createdBy || "Admin System"}</strong></p>
-                <p className="text-muted-foreground">🕒 Thời gian tạo (createdAt): <strong className="text-foreground font-mono">{formatDateDisplay(selectedQuizDetail?.createdAt || selectedAssignmentDetail?.createdAt)}</strong></p>
+                <p className="text-muted-foreground">👤 Người tạo: <strong className="text-foreground font-mono">{selectedQuizDetail?.createdBy || selectedAssignmentDetail?.createdBy || "Admin System"}</strong></p>
+                <p className="text-muted-foreground">🕒 Thời gian tạo: <strong className="text-foreground font-mono">{formatDateDisplay(selectedQuizDetail?.createdAt || selectedAssignmentDetail?.createdAt)}</strong></p>
               </div>
 
               <div className="space-y-1">
-                <p className="text-muted-foreground">✏️ Người cập nhật (updatedBy): <strong className="text-foreground font-mono">{selectedQuizDetail?.updatedBy || selectedAssignmentDetail?.updatedBy || "Chưa chỉnh sửa"}</strong></p>
-                <p className="text-muted-foreground">🔄 Thời gian cập nhật (updatedAt): <strong className="text-foreground font-mono">{formatDateDisplay(selectedQuizDetail?.updatedAt || selectedAssignmentDetail?.updatedAt)}</strong></p>
+                <p className="text-muted-foreground">✏️ Người cập nhật: <strong className="text-foreground font-mono">{selectedQuizDetail?.updatedBy || selectedAssignmentDetail?.updatedBy || "Chưa chỉnh sửa"}</strong></p>
+                <p className="text-muted-foreground">🔄 Thời gian cập nhật: <strong className="text-foreground font-mono">{formatDateDisplay(selectedQuizDetail?.updatedAt || selectedAssignmentDetail?.updatedAt)}</strong></p>
               </div>
             </div>
           </div>
@@ -877,10 +936,10 @@ export const AssessmentManagement: React.FC = () => {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/50 pb-3">
                   <div>
                     <Badge variant="outline" className="text-[10px] font-bold text-primary border-primary/40 mb-1">
-                      Mã: `#ASN-${selectedAssignmentDetail.id}`
+                      Mã: {selectedAssignmentDetail.code || `ASN-${selectedAssignmentDetail.id}`}
                     </Badge>
                     <h3 className="font-extrabold text-base text-foreground">{selectedAssignmentDetail.title}</h3>
-                    <p className="text-xs text-muted-foreground mt-0.5">{selectedAssignmentDetail.description || "Không có hướng dẫn bài tập."}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5 whitespace-pre-wrap">{getAssignmentInstructions(selectedAssignmentDetail)}</p>
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
@@ -903,7 +962,7 @@ export const AssessmentManagement: React.FC = () => {
                     <textarea
                       rows={4}
                       readOnly
-                      value={selectedAssignmentDetail.instructions || selectedAssignmentDetail.description || "Hãy viết bài luận trình bày giải pháp kiến trúc hệ thống backend microservices..."}
+                      value={getAssignmentInstructions(selectedAssignmentDetail)}
                       className="w-full text-xs p-3 rounded-lg border border-input bg-background outline-none resize-none"
                     />
 
@@ -915,8 +974,8 @@ export const AssessmentManagement: React.FC = () => {
                   </div>
 
                   <div className="flex justify-end pt-2">
-                    <Button size="sm" className="font-bold text-xs gap-1.5 bg-primary text-primary-foreground">
-                      <Upload className="h-3.5 w-3.5" /> Nộp Bài Tập (Preview Submit)
+                    <Button size="sm" disabled className="font-bold text-xs gap-1.5">
+                      <Upload className="h-3.5 w-3.5" /> Preview không ghi bài nộp
                     </Button>
                   </div>
                 </div>
@@ -942,6 +1001,18 @@ export const AssessmentManagement: React.FC = () => {
         cancelText="Hủy"
         onConfirm={handleConfirmDelete}
       />
+
+      {quizToPublish && (
+        <ClassQuizPublishDialog
+          open
+          onOpenChange={(value) => {
+            if (!value) setQuizToPublish(null);
+          }}
+          quizId={String(quizToPublish.id)}
+          quizTitle={quizToPublish.title}
+          courseId={quizToPublish.courseId == null ? undefined : String(quizToPublish.courseId)}
+        />
+      )}
 
       {/* CREATE / EDIT FORM DIALOG FOR QUIZ & ASSIGNMENT (STUDIO AUTHORING EXPERIENCE) */}
       <Dialog
@@ -1051,9 +1122,9 @@ export const AssessmentManagement: React.FC = () => {
                   <Input
                     type="text"
                     value={formData.code}
-                    onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+                    readOnly
                     className="h-9 text-sm font-mono"
-                    placeholder="VD: QZ-2026-001"
+                    placeholder="Backend tự sinh sau khi lưu"
                   />
                 </div>
               </div>
@@ -1085,13 +1156,13 @@ export const AssessmentManagement: React.FC = () => {
 
                 <div className="space-y-1">
                   <Label className="text-xs font-bold flex items-center gap-1">
-                    <Award className="w-3.5 h-3.5 text-muted-foreground" /> Điểm đạt tối thiểu (Thang 10)
+                    <Award className="w-3.5 h-3.5 text-muted-foreground" /> Điểm đạt tối thiểu (Thang 100)
                   </Label>
                   <Input
                     type="number"
                     step="0.5"
                     min={0}
-                    max={10}
+                    max={100}
                     value={formData.passScore}
                     onChange={(e) => setFormData({ ...formData, passScore: parseFloat(e.target.value) || 0 })}
                     className="h-9 text-sm font-mono"

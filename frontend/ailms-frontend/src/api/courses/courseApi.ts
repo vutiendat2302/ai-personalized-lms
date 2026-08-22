@@ -15,7 +15,7 @@ export interface CourseMetrics {
   averageRating: number;
   reviewCount: number;
   level?: string;
-  deliveryMode?: "SELF_STUDY" | "GROUP_CLASS" | "ONE_ON_ONE" | "COMBO";
+  deliveryMode?: "SELF_STUDY" | "GROUP_CLASS" | "ONE_ON_ONE";
   satisfactionPercent: number;
 }
 
@@ -81,7 +81,7 @@ export interface CourseDetailPackage {
   code: string;
   name: string;
   description?: string | null;
-  deliveryMode: "SELF_STUDY" | "GROUP_CLASS" | "ONE_ON_ONE" | "COMBO";
+  deliveryMode: "SELF_STUDY" | "GROUP_CLASS" | "ONE_ON_ONE";
   price: number;
   originalPrice?: number | null;
   durationDays?: number | null;
@@ -107,6 +107,7 @@ export interface CourseDetailResponse {
   category?: { id: string; name: string } | null;
   creator?: {
     id: string;
+    code?: string | null;
     fullName?: string | null;
     avatarUrl?: string | null;
     title?: string | null;
@@ -155,6 +156,10 @@ export const courseApi = {
   approveCourse: (id: string, approve: boolean, rejectionReason?: string) =>
     httpClient.post<ApiResponse<CourseResponse>>(`/v1/courses/${id}/approve`, { approve, rejectionReason }),
 
+  /** Lấy khóa học chờ duyệt trực tiếp từ database, không qua chỉ mục tìm kiếm. */
+  getPendingApprovalCourses: (params?: { page?: number; size?: number; sort?: string[] }) =>
+    httpClient.get<ApiResponse<any>>("/v1/courses/pending-approvals", { params }),
+
   getSuggestedClasses: (teacherUserId: string) =>
     httpClient.get<ApiResponse<any[]>>("/v1/courses/suggested-classes", { params: { teacherUserId } }),
 
@@ -200,7 +205,7 @@ export const courseApi = {
     httpClient.get<ApiResponse<any>>("/v1/courses/latest", { params }),
 
   getActiveCoursesCount: () =>
-    httpClient.get<ApiResponse<number>>("/v1/courses/active-count"),
+    httpClient.get<ApiResponse<number | string>>("/v1/courses/active-count"),
 
   // Category Endpoints
   createCategory: (payload: CreateCategoryRequest) =>

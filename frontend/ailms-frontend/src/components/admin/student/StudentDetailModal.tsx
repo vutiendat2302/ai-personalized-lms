@@ -29,6 +29,8 @@ import {
 } from "lucide-react";
 import { studentApi, type StudentProfileData, type GuardianData, type StudyGoalData, type LearningActivityData, type EnrollmentData, type StudentOrderData, type StudentOrderDetailData, type StudentPaymentData } from "@/api/students/studentApi";
 import { userApi } from "@/api/users/userApi";
+import { useAuth } from "@/hooks/useAuth";
+import { resolveAvatarUrl } from "@/utils/avatarUrl";
 
 const ACTIVITY_LABELS: Record<string, string> = { LESSON_VIEW: "Xem bài học", LESSON_COMPLETE: "Hoàn thành bài học", QUIZ_SUBMIT: "Nộp bài kiểm tra", RESOURCE_DOWNLOAD: "Tải tài liệu", LEARNING_SESSION_END: "Kết thúc phiên học" };
 
@@ -49,6 +51,11 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   onShowBanner,
   initialTab = "general"
 }) => {
+  const { auth } = useAuth();
+  const currentRoles = (auth.user?.roles || []).map((role: any) =>
+    (typeof role === "object" ? role?.code || role?.name || "" : String(role)).replace("ROLE_", "").toUpperCase()
+  );
+  const isHrOnly = currentRoles.includes("HR") && !currentRoles.includes("ADMIN");
   if (!student) return null;
 
   const [activeTab, setActiveTab] = useState("general");
@@ -130,7 +137,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
         student.isMinor ? studentApi.getGuardians(student.userId) : Promise.resolve([]),
         studentApi.getStudyGoals(student.userId),
         studentApi.getStudentInterests(student.userId),
-        studentApi.getLearningActivities(student.userId),
+        isHrOnly ? Promise.resolve([]) : studentApi.getLearningActivities(student.userId),
         studentApi.getEnrollments(student.userId),
         studentApi.getOrders(student.userId),
       ]).then(([guardianData, goalData, interestData, activityData, enrollmentData, orderData]) => {
@@ -207,8 +214,12 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
         <DialogHeader className="p-6 bg-linear-to-r from-primary/10 via-card to-card border-b border-border/40 shrink-0">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
-              <div className="h-16 w-16 rounded-full bg-primary/20 text-primary font-black text-2xl flex items-center justify-center border-2 border-primary/30 shrink-0">
-                {student.fullName ? student.fullName.charAt(0).toUpperCase() : "S"}
+              <div className="h-16 w-16 rounded-full bg-primary/20 text-primary font-black text-2xl flex items-center justify-center border-2 border-primary/30 shrink-0 overflow-hidden">
+                {resolveAvatarUrl(student.avatarUrl) ? (
+                  <img src={resolveAvatarUrl(student.avatarUrl)} alt={student.fullName} className="h-full w-full object-cover" />
+                ) : (
+                  student.fullName ? student.fullName.charAt(0).toUpperCase() : "S"
+                )}
               </div>
 
               <div>
@@ -256,7 +267,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0 overflow-hidden">
           <TabsList className="px-6 border-b border-border/30 bg-muted/20 justify-start gap-4 rounded-none h-12 overflow-x-auto">
             <TabsTrigger value="general" className="font-bold text-xs gap-1.5"><User className="h-3.5 w-3.5" /> Thông tin chung</TabsTrigger>
-            <TabsTrigger value="activities" className="font-bold text-xs gap-1.5"><Activity className="h-3.5 w-3.5" /> Hoạt động học tập</TabsTrigger>
+            {!isHrOnly && <TabsTrigger value="activities" className="font-bold text-xs gap-1.5"><Activity className="h-3.5 w-3.5" /> Hoạt động học tập</TabsTrigger>}
             <TabsTrigger value="tuition" className="font-bold text-xs gap-1.5"><CreditCard className="h-3.5 w-3.5" /> Học phí / Thanh toán</TabsTrigger>
             <TabsTrigger value="classes" className="font-bold text-xs gap-1.5"><BookOpen className="h-3.5 w-3.5" /> Lớp học & Kết quả</TabsTrigger>
           </TabsList>
@@ -289,12 +300,12 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                 <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-4"><div className="text-xs font-semibold text-muted-foreground">Streak hiện tại</div><div className="mt-1 flex items-center gap-2 text-2xl font-black text-amber-600"><Flame className="h-5 w-5 fill-amber-500" />{student.currentStreak ?? 0} ngày</div></div>
                 <div className="rounded-xl border border-orange-500/20 bg-orange-500/10 p-4"><div className="text-xs font-semibold text-muted-foreground">Streak dài nhất</div><div className="mt-1 flex items-center gap-2 text-2xl font-black text-orange-600"><Award className="h-5 w-5" />{student.longestStreak ?? 0} ngày</div></div>
                 <div>
-                  <Label className="text-xs font-bold text-muted-foreground">Mã Học viên (Readonly)</Label>
+                  <Label className="text-xs font-bold text-muted-foreground">Mã học viên</Label>
                   <Input value={student.studentCode} readOnly className="mt-1 bg-muted/60 font-mono font-bold text-xs cursor-text select-text" />
                 </div>
 
                 <div>
-                  <Label className="text-xs font-bold text-muted-foreground">User ID (Readonly)</Label>
+                  <Label className="text-xs font-bold text-muted-foreground">ID người dùng</Label>
                   <Input value={student.userId} readOnly className="mt-1 bg-muted/60 font-mono font-bold text-xs cursor-text select-text" />
                 </div>
 
@@ -464,7 +475,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
             </div>
 
             {/* TAB 5: HOẠT ĐỘNG HỌC TẬP (Timeline & Active hours) */}
-            <TabsContent value="activities" className="mt-0 space-y-4">
+            {!isHrOnly && <TabsContent value="activities" className="mt-0 space-y-4">
               <h4 className="text-sm font-extrabold text-foreground pt-2">Nhật ký hoạt động học tập</h4>
               {activitiesError && <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs font-semibold text-red-600">{activitiesError}</div>}
               <div className="space-y-2 text-xs">
@@ -476,7 +487,7 @@ export const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                 ))}
                 {!detailLoading && activities.length === 0 && <p className="py-8 text-center text-muted-foreground">Chưa ghi nhận hoạt động học tập.</p>}
               </div>
-            </TabsContent>
+            </TabsContent>}
 
             {/* TAB 6: HỌC PHÍ / THANH TOÁN */}
             <TabsContent value="tuition" className="mt-0 space-y-4">

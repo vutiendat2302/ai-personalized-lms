@@ -3,11 +3,13 @@ package com.ailms.service.imp;
 import com.ailms.entity.*;
 import com.ailms.entity.enums.ClassMemberRole;
 import com.ailms.entity.enums.ClassMemberStatusEnum;
+import com.ailms.entity.enums.NotificationTypeEnum;
 import com.ailms.event.ClassMemberLeftEvent;
 import com.ailms.exception.BusinessException;
 import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.repository.ClassMemberRepository;
 import com.ailms.repository.ClassRepository;
+import com.ailms.repository.ClassScheduleRepository;
 import com.ailms.repository.DegreeRepository;
 import com.ailms.repository.EmployeeRepository;
 import com.ailms.repository.EnrollmentRepository;
@@ -17,6 +19,8 @@ import com.ailms.event.AuditLogEvent;
 import com.ailms.response.MemberDetailResponse;
 import com.ailms.response.PageResponse;
 import com.ailms.service.IClassMemberService;
+import com.ailms.service.INotificationService;
+import com.ailms.service.ITeacherActivityService;
 import com.ailms.response.ClassMemberResponse;
 import com.ailms.service.lock.CapacityLockStrategy;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +35,7 @@ import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.Objects;
 
 @Service
 @Slf4j
@@ -45,6 +50,9 @@ public class ClassMemberService implements IClassMemberService {
     private final StudentProfileRepository studentProfileRepository;
     private final DegreeRepository degreeRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final ITeacherActivityService teacherActivityService;
+    private final INotificationService notificationService;
+    private final ClassScheduleRepository classScheduleRepository;
 
     @Qualifier("pessimisticLockStrategy")
     private final CapacityLockStrategy capacityLockStrategy;
@@ -126,10 +134,12 @@ public class ClassMemberService implements IClassMemberService {
             Optional<ClassMemberEntity> existingOpt = classMemberRepository.findById_ClassIdAndId_UserId(classId, userId);
             ClassMemberEntity member;
             ClassMemberStatusEnum oldStatus = null;
+            ClassMemberRole oldRole = null;
 
             if (existingOpt.isPresent()) {
                 member = existingOpt.get();
                 oldStatus = member.getStatus();
+                oldRole = member.getRoleInClass();
                 if (oldStatus != newStatus) {
                     if (!oldStatus.canTransitionTo(newStatus)) {
                         throw new BusinessException("Cannot transition class member from " + oldStatus + " to " + newStatus);
@@ -159,6 +169,19 @@ public class ClassMemberService implements IClassMemberService {
             }
 
             ClassMemberEntity saved = classMemberRepository.save(member);
+
+            if (role == ClassMemberRole.STUDENT && newStatus == ClassMemberStatusEnum.ACTIVE
+                    && oldStatus != ClassMemberStatusEnum.ACTIVE) {
+                teacherActivityService.studentJoined(saved);
+            }
+
+            if ((role == ClassMemberRole.TEACHER || role == ClassMemberRole.TA)
+                    && (oldStatus != ClassMemberStatusEnum.ACTIVE || oldRole != role)) {
+                notificationService.createSystemNotification(user, NotificationTypeEnum.GENERAL,
+                        "Phân công lớp mới",
+                        "Bạn vừa được phân công phụ trách lớp " + classEntity.getName() + ".",
+                        classEntity.getId(), "/teacher/classes/" + classEntity.getId());
+            }
 
             // Sync enrollment status
             if (role == ClassMemberRole.STUDENT) {
@@ -209,6 +232,82 @@ public class ClassMemberService implements IClassMemberService {
         eventPublisher.publishEvent(new AuditLogEvent(this, "LEAVE", "ClassMember", classId, oldStatus.toString(), ClassMemberStatusEnum.REMOVED.toString()));
 
         return saved;
+    }
+
+    /** Đổi giáo viên trong một transaction, chặn lịch giao nhau trước khi gỡ người cũ. */
+    @Override
+    @Transactional
+    public ClassMemberEntity replaceTeacher(Long classId, Long newTeacherUserId, String reason) {
+        ClassEntity targetClass = classRepository.findById(classId)
+                .orElseThrow(() -> ResourceNotFoundException.of("Class", classId));
+        UserEntity newTeacher = userRepository.findById(newTeacherUserId)
+                .orElseThrow(() -> ResourceNotFoundException.of("User", newTeacherUserId));
+        validateTeacherScheduleConflict(targetClass, newTeacherUserId);
+        List<ClassMemberEntity> currentTeachers = classMemberRepository
+                .findById_ClassIdAndRoleInClassInAndStatus(classId,
+                        List.of(ClassMemberRole.TEACHER), ClassMemberStatusEnum.ACTIVE);
+        currentTeachers.stream().filter(item -> !Objects.equals(item.getUserEntity().getId(), newTeacherUserId))
+                .forEach(item -> {
+                    item.setStatus(ClassMemberStatusEnum.REMOVED);
+                    item.setLeftAt(LocalDateTime.now());
+                    classMemberRepository.save(item);
+                    notificationService.createSystemNotification(item.getUserEntity(), NotificationTypeEnum.GENERAL,
+                            "Thay đổi phân công lớp", "Bạn không còn phụ trách lớp " + targetClass.getName()
+                                    + ". Lý do: " + reason.trim(), classId, "/teacher/classes");
+                });
+        ClassMemberEntity assigned = classMemberRepository.findById_ClassIdAndId_UserId(classId, newTeacherUserId)
+                .filter(item -> item.getStatus() == ClassMemberStatusEnum.ACTIVE
+                        && item.getRoleInClass() == ClassMemberRole.TEACHER)
+                .orElseGet(() -> join(classId, newTeacherUserId, ClassMemberRole.TEACHER));
+        classMemberRepository.findById_ClassIdAndRoleInClassAndStatus(
+                        classId, ClassMemberRole.STUDENT, ClassMemberStatusEnum.ACTIVE)
+                .forEach(item -> notificationService.createSystemNotification(item.getUserEntity(),
+                        NotificationTypeEnum.GENERAL, "Lớp đã đổi giáo viên",
+                        "Giáo viên mới của lớp " + targetClass.getName() + " là " + newTeacher.getFullName() + ".",
+                        classId, "/student/classes/" + classId));
+        eventPublisher.publishEvent(new AuditLogEvent(this, "REPLACE_TEACHER", "ClassMember", classId,
+                currentTeachers.stream().map(item -> item.getUserEntity().getId()).toList(), newTeacherUserId));
+        return assigned;
+    }
+
+    /** So sánh lịch định kỳ và thời hạn lớp của giáo viên mới với lớp đích. */
+    private void validateTeacherScheduleConflict(ClassEntity targetClass, Long teacherUserId) {
+        List<Long> otherClassIds = classMemberRepository.findById_UserId(teacherUserId).stream()
+                .filter(item -> item.getStatus() == ClassMemberStatusEnum.ACTIVE)
+                .filter(item -> item.getRoleInClass() == ClassMemberRole.TEACHER
+                        || item.getRoleInClass() == ClassMemberRole.TA)
+                .map(ClassMemberEntity::getClassEntity).filter(Objects::nonNull)
+                .filter(item -> !Objects.equals(item.getId(), targetClass.getId()))
+                .filter(item -> dateRangesOverlap(targetClass, item)).map(ClassEntity::getId).toList();
+        if (otherClassIds.isEmpty()) return;
+        List<ClassScheduleEntity> targetSlots = classScheduleRepository.findByClassEntity_Id(targetClass.getId()).stream()
+                .filter(item -> item.getStatus() == com.ailms.entity.enums.BaseStatusEnum.ACTIVE).toList();
+        Optional<ClassScheduleEntity> conflict = classScheduleRepository.findByClassEntity_IdIn(otherClassIds).stream()
+                .filter(item -> item.getStatus() == com.ailms.entity.enums.BaseStatusEnum.ACTIVE)
+                .filter(existing -> targetSlots.stream().anyMatch(target -> schedulesOverlap(target, existing)))
+                .findFirst();
+        if (conflict.isPresent()) {
+            throw new BusinessException("Giáo viên bị trùng lịch với lớp "
+                    + conflict.get().getClassEntity().getName() + ".");
+        }
+    }
+
+    /** Kiểm tra thời hạn hoạt động của hai lớp có giao nhau hay không. */
+    private boolean dateRangesOverlap(ClassEntity left, ClassEntity right) {
+        boolean leftBefore = left.getEndDate() != null && right.getStartDate() != null
+                && !left.getEndDate().isAfter(right.getStartDate());
+        boolean rightBefore = right.getEndDate() != null && left.getStartDate() != null
+                && !right.getEndDate().isAfter(left.getStartDate());
+        return !leftBefore && !rightBefore;
+    }
+
+    /** Kiểm tra hai khung lịch định kỳ có giao nhau trên cùng ngày hay không. */
+    private boolean schedulesOverlap(ClassScheduleEntity left, ClassScheduleEntity right) {
+        return Objects.equals(left.getDayOfWeek(), right.getDayOfWeek())
+                && left.getStartTime() != null && left.getEndTime() != null
+                && right.getStartTime() != null && right.getEndTime() != null
+                && left.getStartTime().isBefore(right.getEndTime())
+                && right.getStartTime().isBefore(left.getEndTime());
     }
 
     @Override

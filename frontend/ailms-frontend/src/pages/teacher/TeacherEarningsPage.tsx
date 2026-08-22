@@ -9,12 +9,14 @@ export const TeacherEarningsPage: React.FC = () => {
   const navigate = useNavigate();
   const [records, setRecords] = useState<SessionPaymentRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
 
   useEffect(() => {
     teacherApi.getEarnings().then((res) => {
-      setRecords(res);
-      setLoading(false);
-    });
+      setRecords(res); setLoadError("");
+    }).catch(() => {
+      setRecords([]); setLoadError("Không thể tải hoặc đối soát thu nhập buổi dạy.");
+    }).finally(() => { setLoading(false); });
   }, []);
 
   const formatVND = (val: number) => {
@@ -43,10 +45,10 @@ export const TeacherEarningsPage: React.FC = () => {
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
           <DollarSign className="h-6 w-6 text-primary" />
-          Thu nhập & Buổi dạy (Teaching Session Payments)
+          Thu nhập & Buổi dạy
         </h1>
         <p className="text-xs text-muted-foreground mt-1">
-          Theo dõi minh bạch trạng thái thù lao theo từng buổi dạy (Draft → Pending → Confirmed → Paid).
+          Theo dõi minh bạch trạng thái thù lao theo từng buổi dạy.
         </p>
       </div>
 
@@ -65,11 +67,11 @@ export const TeacherEarningsPage: React.FC = () => {
         </Card>
 
         <Card className="bg-card border-border/40 p-4 shadow-xs">
-          <span className="text-xs text-muted-foreground font-semibold">Buổi dạy chờ nhận xét (Draft)</span>
+          <span className="text-xs text-muted-foreground font-semibold">Buổi dạy chờ HR duyệt (PENDING)</span>
           <p className="text-2xl font-black text-amber-600 dark:text-amber-400 mt-1">
-            {records.filter((r) => r.status === "DRAFT").length} buổi
+            {records.filter((r) => r.status === "PENDING").length} buổi
           </p>
-          <p className="text-[11px] text-muted-foreground mt-0.5">Cần nhận xét 24h để được tính thù lao</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Đã nhận xét, đang chờ HR/Admin xác nhận</p>
         </Card>
       </div>
 
@@ -78,6 +80,7 @@ export const TeacherEarningsPage: React.FC = () => {
         <h3 className="text-sm font-bold text-foreground">Lịch sử thù lao buổi dạy (teaching_session_payment)</h3>
 
         <div className="overflow-x-auto rounded-xl border border-border/40">
+          {loadError && <p className="p-4 text-sm text-destructive">{loadError}</p>}
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="border-b border-border/40 bg-muted/40 text-muted-foreground font-bold uppercase text-[11px]">

@@ -22,5 +22,9 @@ public class ClassResourceResponse {
     private String fileUrl;
     private Long uploadedByUserId;
     private String uploadedByName;
+    private String ragStatus;
+    private Integer ragChunksCount;
+    private String ragError;
+    private Boolean canUseForAi;
     private LocalDateTime createdAt;
 }

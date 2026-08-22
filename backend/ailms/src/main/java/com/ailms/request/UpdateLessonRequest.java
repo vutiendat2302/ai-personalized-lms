@@ -24,6 +24,8 @@ public class UpdateLessonRequest {
 
     private Integer durationMin;
 
+    private Integer durationSec;
+
     private Integer orderIndex;
 
     private PreviewTypeEnum previewType;

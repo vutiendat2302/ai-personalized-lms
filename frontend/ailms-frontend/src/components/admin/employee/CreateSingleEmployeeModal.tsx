@@ -317,19 +317,19 @@ export const CreateSingleEmployeeModal: React.FC<CreateSingleEmployeeModalProps>
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && handleClose()}>
-      <DialogContent className="max-w-4xl p-0 overflow-hidden bg-white rounded-2xl border border-slate-200 shadow-2xl">
+      <DialogContent className="max-w-4xl p-0 overflow-hidden bg-background rounded-2xl border border-border/60 shadow-2xl">
         {/* Modal Header */}
-        <DialogHeader className="p-6 bg-slate-900 text-white space-y-1">
+        <DialogHeader className="p-6 bg-muted/40 border-b border-border/30 text-foreground space-y-1">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-xl bg-blue-600 text-white">
+              <div className="p-2 rounded-xl bg-primary/10 text-primary border border-primary/20">
                 <Briefcase className="w-5 h-5" />
               </div>
               <div>
-                <DialogTitle className="text-xl font-bold tracking-tight text-white">
-                  Thêm 1 Nhân Viên Mới & Tạo Hợp Đồng
+                <DialogTitle className="text-xl font-extrabold tracking-tight text-foreground">
+                  Thêm nhân viên mới &amp; Tạo Hợp đồng
                 </DialogTitle>
-                <DialogDescription className="text-xs text-slate-300">
+                <DialogDescription className="text-xs text-muted-foreground">
                   Nhập thông tin cá nhân, vị trí công việc, khởi tạo hợp đồng điện tử và tự động gửi mail
                 </DialogDescription>
               </div>
@@ -338,7 +338,7 @@ export const CreateSingleEmployeeModal: React.FC<CreateSingleEmployeeModalProps>
               variant="ghost"
               size="sm"
               onClick={handleClose}
-              className="h-8 w-8 p-0 text-slate-400 hover:text-white hover:bg-slate-800"
+              className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground hover:bg-muted"
             >
               <X className="w-5 h-5" />
             </Button>
@@ -346,48 +346,48 @@ export const CreateSingleEmployeeModal: React.FC<CreateSingleEmployeeModalProps>
         </DialogHeader>
 
         {/* Tab Navigation Header */}
-        <div className="bg-slate-100/80 px-6 pt-3 border-b border-slate-200">
+        <div className="bg-muted/20 px-6 pt-3 border-b border-border/30">
           <Tabs value={activeTab} onValueChange={(value) => handleTabChange(value as "personal" | "employment" | "contract")}>
-            <TabsList className="bg-slate-200/70 p-1 border border-slate-300/60 rounded-xl space-x-1">
+            <TabsList className="bg-muted/40 p-1 border border-border/40 rounded-xl space-x-1">
               {/* Tab 1 Trigger */}
               <TabsTrigger
                 value="personal"
-                className="data-[state=active]:bg-white data-[state=active]:shadow-sm font-semibold text-xs sm:text-sm px-4 py-2"
+                className="data-[state=active]:bg-background data-[state=active]:shadow-xs font-semibold text-xs sm:text-sm px-4 py-2"
               >
-                <User className="w-4 h-4 mr-1.5 text-blue-600" />
-                1. Thông Tin Cá Nhân
+                <User className="w-4 h-4 mr-1.5 text-primary" />
+                1. Thông tin cá nhân
                 {isPersonalValid ? (
-                  <CheckCircle2 className="w-3.5 h-3.5 ml-2 text-emerald-600" />
+                  <CheckCircle2 className="w-3.5 h-3.5 ml-2 text-success-forest" />
                 ) : (
-                  <AlertCircle className="w-3.5 h-3.5 ml-2 text-amber-500" />
+                  <AlertCircle className="w-3.5 h-3.5 ml-2 text-destructive" />
                 )}
               </TabsTrigger>
 
               {/* Tab 2 Trigger */}
               <TabsTrigger
                 value="employment"
-                className="data-[state=active]:bg-white data-[state=active]:shadow-sm font-semibold text-xs sm:text-sm px-4 py-2"
+                className="data-[state=active]:bg-background data-[state=active]:shadow-xs font-semibold text-xs sm:text-sm px-4 py-2"
               >
-                <Briefcase className="w-4 h-4 mr-1.5 text-purple-600" />
-                2. Hồ Sơ Công Việc
+                <Briefcase className="w-4 h-4 mr-1.5 text-brand-cobalt" />
+                2. Hồ sơ công việc
                 {isEmploymentValid ? (
-                  <CheckCircle2 className="w-3.5 h-3.5 ml-2 text-emerald-600" />
+                  <CheckCircle2 className="w-3.5 h-3.5 ml-2 text-success-forest" />
                 ) : (
-                  <AlertCircle className="w-3.5 h-3.5 ml-2 text-amber-500" />
+                  <AlertCircle className="w-3.5 h-3.5 ml-2 text-destructive" />
                 )}
               </TabsTrigger>
 
               {/* Tab 3 Trigger */}
               <TabsTrigger
                 value="contract"
-                className="data-[state=active]:bg-white data-[state=active]:shadow-sm font-semibold text-xs sm:text-sm px-4 py-2"
+                className="data-[state=active]:bg-background data-[state=active]:shadow-xs font-semibold text-xs sm:text-sm px-4 py-2"
               >
-                <FileText className="w-4 h-4 mr-1.5 text-emerald-600" />
-                3. Hợp Đồng Lao Động
+                <FileText className="w-4 h-4 mr-1.5 text-success-forest" />
+                3. Hợp đồng lao động
                 {isContractValid ? (
-                  <CheckCircle2 className="w-3.5 h-3.5 ml-2 text-emerald-600" />
+                  <CheckCircle2 className="w-3.5 h-3.5 ml-2 text-success-forest" />
                 ) : (
-                  <AlertCircle className="w-3.5 h-3.5 ml-2 text-amber-500" />
+                  <AlertCircle className="w-3.5 h-3.5 ml-2 text-destructive" />
                 )}
               </TabsTrigger>
             </TabsList>

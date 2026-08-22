@@ -50,14 +50,20 @@ class QdrantVectorStore(BaseVectorStore):
         )
 
     async def search(
-        self, collection: str, vector: list[float], limit: int, filters: dict[str, Any]
+        self,
+        collection: str,
+        vector: list[float],
+        limit: int,
+        filters: dict[str, Any],
+        score_threshold: float | None = None,
     ) -> list[SearchResult]:
-        """Query Qdrant và chuyển kết quả về model trung gian."""
+        """Query Qdrant và chuyển kết quả về model trung gian có lọc ngưỡng điểm tương đồng."""
         response = await self.client.query_points(
             collection_name=collection,
             query=vector,
             query_filter=self._filter(filters) if filters else None,
             limit=limit,
+            score_threshold=score_threshold,
             with_payload=True,
         )
         return [
@@ -67,14 +73,48 @@ class QdrantVectorStore(BaseVectorStore):
             for point in response.points
         ]
 
+    async def get_payload_field(
+        self,
+        collection: str,
+        key: str,
+        values: list[str],
+        field: str,
+    ) -> dict[str, Any]:
+        """Lấy nhanh một trường payload theo danh sách giá trị lọc mà không tải vector."""
+        if not values:
+            return {}
+        if not await self.client.collection_exists(collection):
+            return {}
+        result: dict[str, Any] = {}
+        offset = None
+        scroll_filter = self._filter({key: values})
+        while True:
+            records, offset = await self.client.scroll(
+                collection_name=collection,
+                scroll_filter=scroll_filter,
+                with_payload=[field, key],
+                with_vectors=False,
+                limit=256,
+                offset=offset,
+            )
+            for point in records:
+                if point.payload:
+                    source_val = point.payload.get(key)
+                    field_val = point.payload.get(field)
+                    if source_val is not None and field_val is not None:
+                        result[str(source_val)] = field_val
+            if offset is None:
+                break
+        return result
+
     @staticmethod
     def _filter(filters: dict[str, Any]) -> models.Filter:
         """Chuyển dictionary thành exact hoặc MatchAny filter của Qdrant."""
         return models.Filter(
-            must=[
-                QdrantVectorStore._condition(key, value)
-                for key, value in filters.items()
-            ]
+            must=[QdrantVectorStore._condition(key, value) for key, value in filters.items()
+                  if not key.startswith("!")],
+            must_not=[QdrantVectorStore._condition(key[1:], value) for key, value in filters.items()
+                      if key.startswith("!")],
         )
 
     @staticmethod

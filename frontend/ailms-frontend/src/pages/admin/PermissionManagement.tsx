@@ -84,7 +84,15 @@ import type { PermissionResponse } from "@/types/admin";
 import { PermissionDetailModal } from "@/components/admin/permission/PermissionDetailModal";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
-const PERM_COLORS = ["#2563eb", "#7c3aed", "#db2777", "#ea580c", "#059669", "#d97706", "#06b6d4"];
+const PERM_COLORS = [
+  "var(--primary)",
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
+  "var(--brand-cobalt)"
+];
 
 const getPageNumbers = (currentPage: number, total: number) => {
   const pages: (number | string)[] = [];
@@ -632,14 +640,14 @@ export const PermissionManagement: React.FC = () => {
       
       {/* Toast Banners */}
       {actionBanner && (
-        <div className="fixed bottom-6 right-6 z-9999 flex items-center gap-3 rounded-2xl bg-emerald-600 text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
-          <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-100" />
+        <div className="fixed bottom-6 right-6 z-9999 flex items-center gap-3 rounded-2xl bg-success-forest text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
+          <CheckCircle2 className="h-5 w-5 shrink-0 text-white/80" />
           <div className="flex items-center gap-3 flex-wrap text-sm font-semibold">
             <span>{actionBanner.message}</span>
             {actionBanner.actionText && actionBanner.onAction && (
               <button
                 onClick={actionBanner.onAction}
-                className="underline font-bold text-amber-200 hover:text-white transition-colors cursor-pointer bg-white/20 px-2.5 py-1 rounded-xl text-xs flex items-center gap-1 shadow-xs"
+                className="underline font-bold text-chart-1 hover:text-white transition-colors cursor-pointer bg-white/20 px-2.5 py-1 rounded-xl text-xs flex items-center gap-1 shadow-xs"
               >
                 <span>[{actionBanner.actionText}]</span>
               </button>
@@ -648,14 +656,14 @@ export const PermissionManagement: React.FC = () => {
         </div>
       )}
       {successBanner && (
-        <div className="fixed bottom-6 right-6 z-9999 flex items-center gap-3 rounded-2xl bg-emerald-600 text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
+        <div className="fixed bottom-6 right-6 z-9999 flex items-center gap-3 rounded-2xl bg-success-forest text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
           <CheckCircle2 className="h-5 w-5 shrink-0" />
           <span className="text-sm font-semibold">{successBanner}</span>
         </div>
       )}
 
       {errorBanner && (
-        <div className="fixed bottom-6 right-6 z-9999 flex items-center gap-3 rounded-2xl bg-red-600 text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
+        <div className="fixed bottom-6 right-6 z-9999 flex items-center gap-3 rounded-2xl bg-destructive text-white px-5 py-3.5 shadow-2xl animate-in slide-in-from-bottom-5 duration-300">
           <AlertCircle className="h-5 w-5 shrink-0" />
           <span className="text-sm font-semibold">{errorBanner}</span>
         </div>
@@ -665,22 +673,18 @@ export const PermissionManagement: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-border/30 pb-4">
         <div>
           <div className="flex items-center gap-2 text-sm font-semibold text-primary mb-1">
-            <Link to="/dashboard" className="flex items-center gap-1 hover:underline">
-              <ArrowLeft className="h-3.5 w-3.5" />
-              <span>Quay lại Tổng quan</span>
-            </Link>
           </div>
           <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-foreground flex items-center gap-3 mt-2">
             <div className="p-2.5 rounded-2xl bg-primary/10 text-primary">
               <FileKey className="h-7 w-7" />
             </div>
-            <span>Quản lý Permission (Quyền hạn chi tiết)</span>
+            <span>Quản lý quyền hạn</span>
           </h1>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
           <Button onClick={handleOpenCreateModal} size="sm" className="rounded-xl gap-1.5 font-semibold bg-primary text-primary-foreground cursor-pointer">
-            <Plus className="h-4 w-4" /> Thêm Permission
+            <Plus className="h-4 w-4" /> Thêm Quyền mới
           </Button>
           <Button onClick={() => { fetchPermissions(); fetchOverviewStats(); }} variant="outline" size="sm" className="rounded-xl gap-1.5 font-semibold cursor-pointer">
             <RefreshCw className={`h-4 w-4 ${loading || statsLoading ? "animate-spin" : ""}`} /> Làm mới
@@ -701,7 +705,7 @@ export const PermissionManagement: React.FC = () => {
               }`}
             >
               <BarChart3 className="h-4 w-4" />
-              <span>Thống kê & Phân tích (3.9.1)</span>
+              <span>Thống kê & Phân tích</span>
             </button>
 
             <button
@@ -713,7 +717,7 @@ export const PermissionManagement: React.FC = () => {
               }`}
             >
               <FileKey className="h-4 w-4" />
-              <span>Danh sách Permission (3.9.3)</span>
+              <span>Danh sách quyền hạn</span>
             </button>
           </div>
         </div>
@@ -729,7 +733,7 @@ export const PermissionManagement: React.FC = () => {
             onClick={() => {
               handleResetFilters();
               scrollToSection("management");
-              showBanner("Đã hiển thị danh sách tất cả Permission!");
+              showBanner("Đã hiển thị danh sách tất cả Quyền!");
             }}
             className="border-border shadow-xs bg-card overflow-hidden relative cursor-pointer hover:border-primary/50 transition-all"
           >
@@ -738,7 +742,7 @@ export const PermissionManagement: React.FC = () => {
             </div>
             <CardHeader className="pb-2">
               <CardDescription className="text-xs font-semibold text-muted-foreground uppercase">
-                1. Tổng số Permission / Thực thể Entity
+                1. Tổng số Quyền / Thành phần
               </CardDescription>
               <CardTitle className="text-3xl font-extrabold text-foreground flex items-center gap-3 mt-1">
                 {statsLoading ? (
@@ -748,8 +752,8 @@ export const PermissionManagement: React.FC = () => {
                   </div>
                 ) : (
                   <>
-                    <span className="text-primary">{totalPermissions} Permissions</span>
-                    <span className="text-sm font-bold text-muted-foreground">/ {totalEntities} Entities</span>
+                    <span className="text-primary">{totalPermissions} Quyền</span>
+                    <span className="text-sm font-bold text-muted-foreground">/ {totalEntities} Thành phần</span>
                   </>
                 )}
               </CardTitle>
@@ -763,16 +767,16 @@ export const PermissionManagement: React.FC = () => {
               setFilterIsUsed("ORPHAN");
               setPage(0);
               scrollToSection("management");
-              showBanner("Đã lọc danh sách Permission mồ côi chưa được gán cho role nào!");
+              showBanner("Đã lọc danh sách Quyền chưa được gán cho vai trò nào!");
             }}
-            className="border-2 border-amber-500/40 bg-linear-to-br from-amber-500/10 via-card to-card shadow-xs cursor-pointer hover:border-amber-500 hover:shadow-md hover:scale-[1.005] transition-all group flex flex-col justify-between"
+            className="border-2 border-chart-1/40 bg-linear-to-br from-chart-1/10 via-card to-card shadow-xs cursor-pointer hover:border-chart-1 hover:shadow-md hover:scale-[1.005] transition-all group flex flex-col justify-between"
           >
             <CardHeader className="pb-2">
-              <CardDescription className="text-xs font-extrabold text-amber-600 uppercase flex items-center justify-between">
-                <span className="flex items-center gap-1"><ShieldAlert className="h-4 w-4" /> 4. Permission Mồ Côi (No Role)</span>
-                <span className="px-2 py-0.5 rounded-full bg-amber-600 text-white text-[10px] font-black">CẢNH BÁO</span>
+              <CardDescription className="text-xs font-extrabold text-chart-1 uppercase flex items-center justify-between">
+                <span className="flex items-center gap-1"><ShieldAlert className="h-4 w-4" /> 4. Quyền chưa gán Vai trò</span>
+                <span className="px-2 py-0.5 rounded-full bg-chart-1 text-white text-[10px] font-black">CẢNH BÁO</span>
               </CardDescription>
-              <CardTitle className="text-3xl font-extrabold text-amber-600 flex items-center gap-2 mt-1">
+              <CardTitle className="text-3xl font-extrabold text-chart-1 flex items-center gap-2 mt-1">
                 {statsLoading ? (
                   <div className="flex items-center gap-2">
                     <Loader2 className="h-6 w-6 animate-spin" />
@@ -781,12 +785,12 @@ export const PermissionManagement: React.FC = () => {
                 ) : (
                   <>
                     <span>{orphanPermissions}</span>
-                    <span className="text-xs font-semibold text-amber-600 bg-amber-500/10 px-2 py-0.5 rounded-full">Chưa gán Role</span>
+                    <span className="text-xs font-semibold text-chart-1 bg-chart-1/10 px-2 py-0.5 rounded-full">Chưa gán Vai trò</span>
                   </>
                 )}
               </CardTitle>
             </CardHeader>
-            <CardContent className="pt-0"><p className="text-xs text-muted-foreground">Có thể do tạo thừa hoặc chưa seed data vào role_permission &rarr;</p></CardContent>
+            <CardContent className="pt-0"><p className="text-xs text-muted-foreground">Có thể do tạo thừa hoặc chưa gán vào vai trò &rarr;</p></CardContent>
           </Card>
         </div>
 
@@ -797,20 +801,20 @@ export const PermissionManagement: React.FC = () => {
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
                 <BarChart3 className="h-4 w-4 text-primary" />
-                <span>2. Số lượng Permission Theo Entity</span>
+                <span>2. Số lượng Quyền Theo Thành phần</span>
               </CardTitle>
-              <CardDescription className="text-xs">Phát hiện Entity nào chứa nhiều action quyền hạn nhất</CardDescription>
+              <CardDescription className="text-xs">Phát hiện Thành phần nào chứa nhiều thao tác quyền hạn nhất</CardDescription>
             </CardHeader>
             <CardContent className="min-h-55 flex items-center justify-center">
               {statsLoading ? (
                 <div className="flex items-center justify-center gap-2 text-muted-foreground py-10">
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                  <span className="text-xs">Đang tải thống kê entity...</span>
+                  <span className="text-xs">Đang tải thống kê thành phần...</span>
                 </div>
               ) : byEntityData.length === 0 ? (
                 <div className="flex flex-col items-center justify-center text-muted-foreground text-xs py-10 gap-2">
                   <BarChart3 className="h-8 w-8 opacity-40" />
-                  <span>Không có dữ liệu thống kê entity</span>
+                  <span>Không có dữ liệu thống kê thành phần</span>
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height={200}>
@@ -818,8 +822,8 @@ export const PermissionManagement: React.FC = () => {
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="name" style={{ fontSize: "11px" }} />
                     <YAxis style={{ fontSize: "11px" }} />
-                    <Tooltip formatter={(v: any) => [`${v} Quyền`, "Số lượng permission"]} />
-                    <Bar dataKey="value" radius={[6, 6, 0, 0]} fill="#2563eb">
+                    <Tooltip formatter={(v: any) => [`${v} Quyền`, "Số lượng"]} />
+                    <Bar dataKey="value" radius={[6, 6, 0, 0]} fill="var(--primary)">
                       {byEntityData.map((_, idx) => <Cell key={idx} fill={PERM_COLORS[idx % PERM_COLORS.length]} />)}
                     </Bar>
                   </BarChart>
@@ -832,21 +836,21 @@ export const PermissionManagement: React.FC = () => {
           <Card className="lg:col-span-6 border-border shadow-xs bg-card">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                <Layers className="h-4 w-4 text-purple-600" />
-                <span>3. Top Permission Được Dùng Nhiều Nhất (Gán Cho Nhiều Role)</span>
+                <Layers className="h-4 w-4 text-primary" />
+                <span>3. Top Quyền được gán nhiều nhất</span>
               </CardTitle>
               <CardDescription className="text-xs">Danh sách các quyền phổ biến nhất trong các vai trò hệ thống</CardDescription>
             </CardHeader>
             <CardContent className="min-h-55 flex items-center justify-center">
               {statsLoading ? (
                 <div className="flex items-center justify-center gap-2 text-muted-foreground py-10">
-                  <Loader2 className="h-6 w-6 animate-spin text-purple-600" />
-                  <span className="text-xs">Đang tải top permission...</span>
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                  <span className="text-xs">Đang tải danh sách quyền...</span>
                 </div>
               ) : topUsedData.length === 0 ? (
                 <div className="flex flex-col items-center justify-center text-muted-foreground text-xs py-10 gap-2">
                   <Layers className="h-8 w-8 opacity-40" />
-                  <span>Không có dữ liệu top permission</span>
+                  <span>Không có dữ liệu quyền được gán</span>
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height={200}>
@@ -854,8 +858,8 @@ export const PermissionManagement: React.FC = () => {
                     <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                     <XAxis type="number" style={{ fontSize: "11px" }} />
                     <YAxis dataKey="name" type="category" style={{ fontSize: "11px" }} width={80} />
-                    <Tooltip formatter={(v: any) => [`${v} Roles`, "Số role gán"]} />
-                    <Bar dataKey="value" radius={[0, 6, 6, 0]} fill="#7c3aed" />
+                    <Tooltip formatter={(v: any) => [`${v} Vai trò`, "Số vai trò gán"]} />
+                    <Bar dataKey="value" radius={[0, 6, 6, 0]} fill="var(--primary)" />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -866,21 +870,21 @@ export const PermissionManagement: React.FC = () => {
           <Card className="lg:col-span-12 border-border shadow-xs bg-card">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                <PieIcon className="h-4 w-4 text-emerald-600" />
-                <span>5. Phân bổ Permission Theo Loại Action (VIEW / CREATE / EDIT / DELETE / APPROVE)</span>
+                <PieIcon className="h-4 w-4 text-success-forest" />
+                <span>5. Phân bổ Quyền theo Thao tác</span>
               </CardTitle>
-              <CardDescription className="text-xs">Tỷ lệ các loại hành động trong toàn bộ hệ thống phân quyền</CardDescription>
+              <CardDescription className="text-xs">Tỷ lệ các loại thao tác trong toàn bộ hệ thống phân quyền</CardDescription>
             </CardHeader>
             <CardContent className="min-h-50 flex items-center justify-center">
               {statsLoading ? (
                 <div className="flex items-center justify-center gap-2 text-muted-foreground py-10">
-                  <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
-                  <span className="text-xs">Đang tải phân bổ action...</span>
+                  <Loader2 className="h-6 w-6 animate-spin text-success-forest" />
+                  <span className="text-xs">Đang tải phân bổ thao tác...</span>
                 </div>
               ) : byActionData.length === 0 ? (
                 <div className="flex flex-col items-center justify-center text-muted-foreground text-xs py-10 gap-2">
                   <PieIcon className="h-8 w-8 opacity-40" />
-                  <span>Không có dữ liệu thống kê action</span>
+                  <span>Không có dữ liệu thống kê thao tác</span>
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height={180}>
@@ -906,10 +910,10 @@ export const PermissionManagement: React.FC = () => {
           <CardHeader className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 pb-4 border-b border-border/30 bg-card">
             <div>
               <CardTitle className="text-xl font-semibold tracking-tight font-heading flex items-center gap-2">
-                <span>Danh sách Permission trong Hệ thống</span>
+                <span>Danh sách Quyền trong Hệ thống</span>
               </CardTitle>
               <CardDescription className="text-sm text-muted-foreground mt-0.5">
-                Các quyền hạn được định nghĩa cho từng Entity và Action. Chỉ xem và gán vào Role, hạn chế thêm sửa xóa trực tiếp qua UI.
+                Các quyền hạn được định nghĩa cho từng Thành phần và Thao tác. Chỉ xem và gán vào Vai trò, hạn chế thêm sửa xóa trực tiếp.
               </CardDescription>
             </div>
 
@@ -929,7 +933,7 @@ export const PermissionManagement: React.FC = () => {
                 <span>Làm mới</span>
               </Button>
               <Button onClick={handleOpenCreateModal} size="sm" className="rounded-xl gap-1.5 font-semibold bg-primary text-primary-foreground cursor-pointer shadow-xs">
-                <Plus className="h-4 w-4" /> Thêm Permission
+                <Plus className="h-4 w-4" /> Thêm Quyền mới
               </Button>
             </div>
           </CardHeader>
@@ -943,7 +947,7 @@ export const PermissionManagement: React.FC = () => {
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
                 <Input
                   type="text"
-                  placeholder="Mã code, entity, action..."
+                  placeholder="Mã quyền, thành phần, thao tác..."
                   value={searchKeyword}
                   onChange={(e) => setSearchKeyword(e.target.value)}
                   className="pl-8 h-9 text-sm border border-border/30 bg-background rounded-lg focus-visible:ring-2 focus-visible:ring-primary/20 placeholder:opacity-50"
@@ -953,11 +957,11 @@ export const PermissionManagement: React.FC = () => {
 
             {/* Select Entity (Dynamic Metadata from BE) */}
             <div className="flex flex-col gap-1 w-37.5 shrink-0">
-              <Label className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Thực thể (Entity)</Label>
+              <Label className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Thành phần</Label>
               <Select value={filterEntity} onValueChange={setFilterEntity}>
                 <SelectTrigger className="h-9 text-sm border border-border/30 bg-background rounded-lg w-full"><SelectValue placeholder="Tất cả" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ALL">Tất cả Entity</SelectItem>
+                  <SelectItem value="ALL">Tất cả thành phần</SelectItem>
                   {availableEntities.map(ent => (
                     <SelectItem key={ent} value={ent}>{ent}</SelectItem>
                   ))}
@@ -967,11 +971,11 @@ export const PermissionManagement: React.FC = () => {
 
             {/* Select Action (Dynamic Metadata from BE) */}
             <div className="flex flex-col gap-1 w-35 shrink-0">
-              <Label className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Hành động (Action)</Label>
+              <Label className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Thao tác</Label>
               <Select value={filterAction} onValueChange={setFilterAction}>
                 <SelectTrigger className="h-9 text-sm border border-border/30 bg-background rounded-lg w-full"><SelectValue placeholder="Tất cả" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ALL">Tất cả Action</SelectItem>
+                  <SelectItem value="ALL">Tất cả thao tác</SelectItem>
                   {availableActions.map(act => (
                     <SelectItem key={act} value={act}>{act}</SelectItem>
                   ))}
@@ -981,13 +985,13 @@ export const PermissionManagement: React.FC = () => {
 
             {/* Select Is Used */}
             <div className="flex flex-col gap-1 w-40 shrink-0">
-              <Label className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Trạng thái Gán Role</Label>
+              <Label className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Trạng thái gán Vai trò</Label>
               <Select value={filterIsUsed} onValueChange={setFilterIsUsed}>
                 <SelectTrigger className="h-9 text-sm border border-border/30 bg-background rounded-lg w-full"><SelectValue placeholder="Tất cả" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="ALL">Tất cả</SelectItem>
-                  <SelectItem value="USED">Đang gán cho Role</SelectItem>
-                  <SelectItem value="ORPHAN">Mồ côi (Chưa gán Role)</SelectItem>
+                  <SelectItem value="USED">Đang gán cho Vai trò</SelectItem>
+                  <SelectItem value="ORPHAN">Chưa gán Vai trò</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1075,7 +1079,7 @@ export const PermissionManagement: React.FC = () => {
                   {/* Entity Header */}
                   <TableHead className="cursor-pointer pb-4 select-none text-sm font-semibold uppercase tracking-wider group" onClick={() => handleSort("entity")}>
                     <div className="flex items-center gap-1.5 pl-2">
-                      <span className={getSortRuleInfo("entity") ? "text-primary font-bold" : "text-muted-foreground"}>Entity</span>
+                      <span className={getSortRuleInfo("entity") ? "text-primary font-bold" : "text-muted-foreground"}>Thành phần</span>
                       {renderSortIcon("entity")}
                     </div>
                   </TableHead>
@@ -1083,7 +1087,7 @@ export const PermissionManagement: React.FC = () => {
                   {/* Action Header */}
                   <TableHead className="cursor-pointer pb-4 select-none text-sm font-semibold uppercase tracking-wider text-center group" onClick={() => handleSort("action")}>
                     <div className="flex items-center gap-1.5 justify-center">
-                      <span className={getSortRuleInfo("action") ? "text-primary font-bold" : "text-muted-foreground"}>Action</span>
+                      <span className={getSortRuleInfo("action") ? "text-primary font-bold" : "text-muted-foreground"}>Thao tác</span>
                       {renderSortIcon("action")}
                     </div>
                   </TableHead>
@@ -1091,7 +1095,7 @@ export const PermissionManagement: React.FC = () => {
                   {/* Code / Name Header */}
                   <TableHead className="cursor-pointer pb-4 select-none text-sm font-semibold uppercase tracking-wider group" onClick={() => handleSort("code")}>
                     <div className="flex items-center gap-1.5 pl-2">
-                      <span className={getSortRuleInfo("code") ? "text-primary font-bold" : "text-muted-foreground"}>Mã Code / Tên hiển thị</span>
+                      <span className={getSortRuleInfo("code") ? "text-primary font-bold" : "text-muted-foreground"}>Mã quyền / Tên quyền</span>
                       {renderSortIcon("code")}
                     </div>
                   </TableHead>
@@ -1099,7 +1103,7 @@ export const PermissionManagement: React.FC = () => {
                   {/* Số Role đang dùng Header */}
                   <TableHead className="cursor-pointer pb-4 select-none text-sm font-semibold uppercase tracking-wider text-center group" onClick={() => handleSort("roleCount")}>
                     <div className="flex items-center gap-1.5 justify-center">
-                      <span className={getSortRuleInfo("roleCount") ? "text-primary font-bold" : "text-muted-foreground"}>Số Roles gán</span>
+                      <span className={getSortRuleInfo("roleCount") ? "text-primary font-bold" : "text-muted-foreground"}>Số Vai trò gán</span>
                       {renderSortIcon("roleCount")}
                     </div>
                   </TableHead>
@@ -1113,7 +1117,7 @@ export const PermissionManagement: React.FC = () => {
                   </TableHead>
 
                   {/* Actions Header */}
-                  <TableHead className="text-sm text-center pb-4 font-semibold text-muted-foreground uppercase tracking-wider">Actions</TableHead>
+                  <TableHead className="text-sm text-center pb-4 font-semibold text-muted-foreground uppercase tracking-wider">Thao tác</TableHead>
                 </TableRow>
               </TableHeader>
 
@@ -1123,7 +1127,7 @@ export const PermissionManagement: React.FC = () => {
                     <TableCell colSpan={7} className="py-16 text-center text-muted-foreground text-sm">
                       <div className="flex items-center justify-center gap-2">
                         <Loader2 className="h-6 w-6 text-primary animate-spin" />
-                        <span>Đang tải danh sách permission...</span>
+                        <span>Đang tải danh sách quyền...</span>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -1132,8 +1136,8 @@ export const PermissionManagement: React.FC = () => {
                     <TableCell colSpan={7} className="py-16 text-center text-muted-foreground text-sm">
                       <div className="flex flex-col items-center justify-center gap-2 py-4">
                         <FileKey className="h-10 w-10 text-muted-foreground/40" />
-                        <p className="font-semibold text-foreground">Không có dữ liệu permission</p>
-                        <p className="text-xs text-muted-foreground">Không tìm thấy permission nào phù hợp với điều kiện tìm kiếm/lọc.</p>
+                        <p className="font-semibold text-foreground">Không có dữ liệu quyền</p>
+                        <p className="text-xs text-muted-foreground">Không tìm thấy quyền nào phù hợp với điều kiện tìm kiếm/lọc.</p>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -1148,7 +1152,7 @@ export const PermissionManagement: React.FC = () => {
                         className={cn(
                           "transition-all duration-700 border-border/30",
                           isNewlyCreated
-                            ? "bg-emerald-500/20 dark:bg-emerald-950/40 border-l-4 border-l-emerald-500 font-semibold shadow-xs"
+                            ? "bg-success-forest/20 dark:bg-success-forest/40 border-l-4 border-l-success-forest font-semibold shadow-xs"
                             : "hover:bg-foreground/10"
                         )}
                       >
@@ -1179,11 +1183,11 @@ export const PermissionManagement: React.FC = () => {
 
                         <TableCell className="text-center font-mono font-bold text-xs">
                           {isUsed ? (
-                            <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
-                              {perm.roleCount} Roles
+                            <span className="px-2.5 py-0.5 rounded-full bg-success-forest/10 text-success-forest border border-success-forest/20">
+                              {perm.roleCount} Vai trò
                             </span>
                           ) : (
-                            <span className="px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                            <span className="px-2.5 py-0.5 rounded-full bg-chart-1/10 text-chart-1 border border-chart-1/20">
                               0
                             </span>
                           )}
@@ -1195,11 +1199,11 @@ export const PermissionManagement: React.FC = () => {
 
                         <TableCell className="text-center">
                           <div className="flex items-center justify-center gap-1">
-                            <Button onClick={() => handleOpenDetailModal(perm)} variant="ghost" size="icon" className="h-8 w-8 text-primary hover:bg-primary/10 cursor-pointer" title="Xem chi tiết (Danh sách Role dùng)">
+                            <Button onClick={() => handleOpenDetailModal(perm)} variant="ghost" size="icon" className="h-8 w-8 text-primary hover:bg-primary/10 cursor-pointer" title="Xem chi tiết (Danh sách vai trò dùng)">
                               <Eye className="h-4 w-4" />
                             </Button>
 
-                            <Button onClick={() => handleOpenEditModal(perm)} variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:bg-blue-500/10 cursor-pointer" title="Sửa Permission">
+                            <Button onClick={() => handleOpenEditModal(perm)} variant="ghost" size="icon" className="h-8 w-8 text-brand-cobalt hover:bg-brand-cobalt/10 cursor-pointer" title="Sửa Quyền">
                               <Edit className="h-4 w-4" />
                             </Button>
 
@@ -1208,8 +1212,8 @@ export const PermissionManagement: React.FC = () => {
                               disabled={isUsed}
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 text-red-600 hover:bg-red-500/10 disabled:opacity-30 cursor-pointer"
-                              title={isUsed ? "Không thể xóa Permission đang được gán cho Role" : "Xóa Permission"}
+                              className="h-8 w-8 text-destructive hover:bg-destructive/10 disabled:opacity-30 cursor-pointer"
+                              title={isUsed ? "Không thể xóa Quyền đang được gán cho Vai trò" : "Xóa Quyền"}
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -1301,10 +1305,10 @@ export const PermissionManagement: React.FC = () => {
         <DialogContent className="max-w-md w-[90vw] p-6 rounded-2xl bg-card border border-border/40 shadow-2xl">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold text-foreground">
-              {editingPerm ? "Sửa Permission" : "Thêm Permission Mới"}
+              {editingPerm ? "Sửa Quyền" : "Thêm Quyền Mới"}
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              {editingPerm ? "Cập nhật thông tin quyền hạn hệ thống." : "Nhập đầy đủ thông tin quyền hạn chi tiết cho thực thể và hành động."}
+              {editingPerm ? "Cập nhật thông tin quyền hạn hệ thống." : "Nhập đầy đủ thông tin quyền hạn chi tiết cho thành phần và thao tác."}
             </DialogDescription>
           </DialogHeader>
 
@@ -1316,7 +1320,7 @@ export const PermissionManagement: React.FC = () => {
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-xs font-semibold text-muted-foreground">Tên Quyền (Name) *</FormLabel>
+                    <FormLabel className="text-xs font-semibold text-muted-foreground">Tên Quyền *</FormLabel>
                     <FormControl>
                       <Input placeholder="VD: course:create, user:view" className="h-9 text-sm border-border/30" {...field} />
                     </FormControl>
@@ -1326,7 +1330,7 @@ export const PermissionManagement: React.FC = () => {
               />
 
               <div className="space-y-1">
-                <Label className="text-xs font-semibold text-muted-foreground">Mã Code Duy Nhất (Code)</Label>
+                <Label className="text-xs font-semibold text-muted-foreground">Mã quyền duy nhất</Label>
                 <Input
                   placeholder={editingPerm ? (editingPerm.code ?? "") : "Tự động sinh (VD: PERM-2607-A1B2C3)"}
                   value={editingPerm ? (editingPerm.code ?? "") : ""}
@@ -1344,7 +1348,7 @@ export const PermissionManagement: React.FC = () => {
                   name="entity"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-xs font-semibold text-muted-foreground">Thực thể (Entity)</FormLabel>
+                      <FormLabel className="text-xs font-semibold text-muted-foreground">Thành phần</FormLabel>
                       <FormControl>
                         <Input
                           placeholder="VD: COURSE, USER, ROLE"
@@ -1363,7 +1367,7 @@ export const PermissionManagement: React.FC = () => {
                   name="action"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-xs font-semibold text-muted-foreground">Hành động (Action)</FormLabel>
+                      <FormLabel className="text-xs font-semibold text-muted-foreground">Thao tác</FormLabel>
                       <FormControl>
                         <Input
                           placeholder="VD: CREATE, VIEW, EDIT"
@@ -1398,7 +1402,7 @@ export const PermissionManagement: React.FC = () => {
                 </Button>
                 <Button type="submit" size="sm" disabled={formSubmitting} className="bg-primary text-primary-foreground font-semibold">
                   {formSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-                  {editingPerm ? "Lưu thay đổi" : "Tạo Permission"}
+                  {editingPerm ? "Lưu thay đổi" : "Tạo Quyền"}
                 </Button>
               </DialogFooter>
             </form>
@@ -1410,8 +1414,8 @@ export const PermissionManagement: React.FC = () => {
       <ConfirmDialog
         open={Boolean(confirmDeletePermId)}
         onOpenChange={(open) => { if (!open) setConfirmDeletePermId(null); }}
-        title="Xác nhận xóa Permission"
-        description="Bạn có chắc chắn muốn xóa Permission này? Thao tác không thể hoàn tác."
+        title="Xác nhận xóa Quyền"
+        description="Bạn có chắc chắn muốn xóa Quyền này? Thao tác không thể hoàn tác."
         confirmText="Xóa ngay"
         cancelText="Hủy bỏ"
         onConfirm={confirmDeletePermission}
@@ -1421,8 +1425,8 @@ export const PermissionManagement: React.FC = () => {
       <ConfirmDialog
         open={confirmBulkDeletePerms}
         onOpenChange={setConfirmBulkDeletePerms}
-        title="Xác nhận xóa hàng loạt Permission"
-        description={`Bạn có chắc chắn muốn xóa ${selectedPermIds.length} Permission đã chọn khỏi hệ thống?`}
+        title="Xác nhận xóa hàng loạt Quyền"
+        description={`Bạn có chắc chắn muốn xóa ${selectedPermIds.length} Quyền đã chọn khỏi hệ thống?`}
         confirmText="Xóa tất cả"
         cancelText="Hủy bỏ"
         onConfirm={confirmBulkDeletePermissionsAction}

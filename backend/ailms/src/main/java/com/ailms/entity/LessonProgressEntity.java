@@ -59,6 +59,10 @@ public class LessonProgressEntity extends BaseEntity {
     @Column(name = "attempt_count")
     private Integer attemptCount;
 
+    /** Ghi chú riêng của học viên cho bài học. */
+    @Column(name = "personal_note", columnDefinition = "TEXT")
+    private String personalNote;
+
     /** Thời điểm bắt đầu học bài học. */
     @Column(name = "started_at")
     private LocalDateTime startedAt;

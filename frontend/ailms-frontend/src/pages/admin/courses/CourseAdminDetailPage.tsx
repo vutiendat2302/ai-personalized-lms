@@ -91,7 +91,7 @@ export const CourseAdminDetailPage: React.FC = () => {
           const status = assignment.status || "ACTIVE";
           return {
             id: String(assignment.userId),
-            name: employee?.fullName || employee?.username || `Giảng viên #${assignment.userId}`,
+            name: employee?.fullName || employee?.username || "Chưa xác định",
             avatar: employee?.avatarUrl && employee.avatarUrl.trim() !== "" ? employee.avatarUrl : undefined,
             category: isPrimary ? "Giảng viên chính" : "Đồng phụ trách",
             isPrimary,
@@ -103,7 +103,7 @@ export const CourseAdminDetailPage: React.FC = () => {
         setCurriculum(sections.map((section: any, index: number) => ({ ...section, lessons: lessons[index] || [] })));
         setCourse({ ...row, id: String(row.id), categoryId: String(row.categoryId),
           status: row.status as import("@/types/adminCourseClass").CourseStatus,
-          level: row.level === "BEGINNER" ? "BASIC" : row.level,
+          level: row.level as import("@/types/adminCourseClass").CourseLevel,
           teachers: assignedTeachers,
           rating: Number(row.avgRating || 0), reviewCount: row.reviewCount || 0, referencePrice: Number(row.suggestedPrice || 0),
           packages: packages.map((item: any) => ({ ...item, id: String(item.id), courseId: String(item.courseId), active: item.status === "ACTIVE", attachedClassId: item.classId ? String(item.classId) : undefined, attachedClassName: item.className })), packagesCount: packages.length,
@@ -137,7 +137,7 @@ export const CourseAdminDetailPage: React.FC = () => {
       await adminCourseClassApi.assignCourseTeacher(course.id, uid);
       const newTeacher = {
         id: uid,
-        name: employee.fullName || employee.username || `Giảng viên #${uid}`,
+        name: employee.fullName || employee.username || "Chưa xác định",
         avatar: employee.avatarUrl && employee.avatarUrl.trim() !== "" ? employee.avatarUrl : undefined,
         category: asPrimary || teachers.length === 0 ? "Giảng viên chính" : "Đồng phụ trách",
         isPrimary: asPrimary || teachers.length === 0,
@@ -177,6 +177,14 @@ export const CourseAdminDetailPage: React.FC = () => {
       setSelectedLesson(detail); setLessonResources(resources);
     } catch (err: any) { setLessonError(err?.response?.data?.message || "Không thể tải chi tiết bài học"); }
     finally { setLessonLoading(false); }
+  };
+
+  /** Mở đúng bài học trong Learning Space ở chế độ preview của quản trị viên. */
+  const openLessonInLearningSpace = (lessonId: string | number) => {
+    if (!id || lessonId == null) return;
+    navigate(`/learn/courses/${id}/lessons/${lessonId}`, {
+      state: { returnTo: `/admin/courses/${id}` },
+    });
   };
 
   if (loading) return <div className="py-20 flex justify-center gap-2 text-sm text-slate-500"><Loader2 className="h-5 w-5 animate-spin" /> Đang tải khóa học...</div>;
@@ -371,7 +379,7 @@ export const CourseAdminDetailPage: React.FC = () => {
                       <button
                         type="button"
                         key={lIdx}
-                        onClick={() => void openLessonDetail(les)}
+                        onClick={() => openLessonInLearningSpace(les.id)}
                         className="w-full flex items-center justify-between p-2.5 rounded-lg bg-slate-50/70 hover:bg-blue-50 hover:text-blue-700 text-xs text-left transition-colors cursor-pointer"
                       >
                         <div className="flex items-center gap-2.5 font-medium text-slate-800">

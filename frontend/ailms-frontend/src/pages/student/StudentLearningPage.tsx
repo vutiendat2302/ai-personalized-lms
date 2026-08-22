@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import React, { useState, useEffect, useRef } from "react";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { studentLearningApi } from "../../api/courses/studentLearningApi";
 import type { CourseCurriculumResponse, LessonCurriculumItem } from "../../api/courses/courseAuthoringApi";
 import { LearningSidebar } from "../../components/student/learning/LearningSidebar";
@@ -14,10 +14,12 @@ import { Badge } from "../../components/ui/badge";
 import { useAuth } from "../../hooks/useAuth";
 import { useToast } from "../../hooks/useToast";
 import { Skeleton } from "../../components/ui/skeleton";
+import { AiChatWidget } from "@/components/admin/chat/AdminAiChatWidget";
 
 export const StudentLearningPage: React.FC = () => {
   const { courseId, lessonId } = useParams<{ courseId: string; lessonId?: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { auth } = useAuth();
   const user = auth.user;
   const { error: showError } = useToast();
@@ -28,6 +30,7 @@ export const StudentLearningPage: React.FC = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [showRightPanel, setShowRightPanel] = useState(true);
   const [currentWatchPercent, setCurrentWatchPercent] = useState<number>(0);
+  const noteSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /** Tải cây bài học và chỉ chọn bài được backend đánh dấu có quyền mở. */
   const fetchTree = async () => {
@@ -43,7 +46,7 @@ export const StudentLearningPage: React.FC = () => {
 
         if (lessonId) {
           for (const s of data.sections) {
-            const found = s.lessons?.find((l) => l.id === lessonId);
+            const found = s.lessons?.find((l) => String(l.id) === String(lessonId));
             if (found?.accessible && !found.locked) {
               targetLesson = found;
               break;
@@ -79,8 +82,12 @@ export const StudentLearningPage: React.FC = () => {
         contentUrl: accessible.contentUrl ?? lesson.contentUrl,
         description: accessible.description ?? lesson.description,
         durationMin: accessible.durationMin ?? lesson.durationMin,
+        durationSec: accessible.durationSec ?? lesson.durationSec,
       });
-      navigate(`/learn/courses/${courseId}/lessons/${lesson.id}`, { replace: true });
+      navigate(`/learn/courses/${courseId}/lessons/${lesson.id}`, {
+        replace: true,
+        state: location.state,
+      });
     } catch {
       showError("Bạn cần đăng ký khóa học để mở bài học này.");
     }
@@ -90,10 +97,17 @@ export const StudentLearningPage: React.FC = () => {
     setCurrentWatchPercent(watchPercent);
     if (!activeLesson || !user?.id || !curriculum?.enrollmentId) return;
     try {
-      await studentLearningApi.updateProgress(activeLesson.id, curriculum.enrollmentId, {
+      const progress = await studentLearningApi.updateProgress(activeLesson.id, curriculum.enrollmentId, {
         watchPercent,
         lastPositionSec: positionSec,
       });
+      if (progress?.completedAt || progress?.status === 1 || (progress?.progressPercent ?? 0) >= 70) {
+        setActiveLesson((previous) => previous ? {
+          ...previous,
+          completed: true,
+          progressPercent: progress?.progressPercent ?? watchPercent,
+        } : null);
+      }
     } catch (err) {
       console.error("Progress save failed:", err);
     }
@@ -110,19 +124,31 @@ export const StudentLearningPage: React.FC = () => {
     }
   };
 
+  /** Cập nhật ghi chú trên giao diện và lưu trễ để tránh gửi request theo từng phím gõ. */
+  const handleNoteChange = (value: string) => {
+    setActiveLesson((previous) => previous ? { ...previous, personalNote: value } : previous);
+    if (noteSaveTimerRef.current) clearTimeout(noteSaveTimerRef.current);
+    if (!activeLesson || !curriculum?.enrollmentId) return;
+    noteSaveTimerRef.current = setTimeout(() => {
+      void studentLearningApi.updateProgress(activeLesson.id, curriculum.enrollmentId!, { personalNote: value });
+    }, 600);
+  };
+
   const userRoles = (user?.roles || []).map((r: any) =>
     (typeof r === "object" ? r?.code || r?.name || "" : String(r)).replace("ROLE_", "").toUpperCase()
   );
   const isAdmin = userRoles.includes("ADMIN") || userRoles.includes("MANAGER");
-  const isPrivilegedRole =
-    isAdmin ||
-    userRoles.includes("TEACHER") ||
-    userRoles.includes("TA") ||
-    userRoles.includes("HR");
 
   // Toggle for Admin/Teacher to switch between Admin bypass mode and Student simulation mode
   const [simulateStudentView, setSimulateStudentView] = useState<boolean>(false);
-  const canBypassLock = isPrivilegedRole && !simulateStudentView;
+  const hasStaffPreviewAccess = Boolean(curriculum?.staffPreviewAccess);
+  const canBypassLock = hasStaffPreviewAccess && !simulateStudentView;
+  const shouldPersistAssessment = Boolean(curriculum?.enrollmentId) && !hasStaffPreviewAccess;
+
+  /** Đồng bộ thanh phần trăm video khi người dùng chuyển bài. */
+  useEffect(() => {
+    setCurrentWatchPercent(activeLesson?.progressPercent ?? 0);
+  }, [activeLesson?.id, activeLesson?.progressPercent]);
 
   // Reading Timer Enforcement State for TEXT/PDF Lessons
   const [readingTimeLeftSec, setReadingTimeLeftSec] = useState<number>(0);
@@ -183,7 +209,7 @@ export const StudentLearningPage: React.FC = () => {
       );
     }
 
-    if (readingTimeLeftSec > 0 && !isPrivilegedRole) {
+    if (readingTimeLeftSec > 0 && !canBypassLock) {
       const progressPercent = Math.min(
         100,
         Math.max(0, ((readingDurationTotalSec - readingTimeLeftSec) / readingDurationTotalSec) * 100)
@@ -216,7 +242,7 @@ export const StudentLearningPage: React.FC = () => {
 
     return (
       <div className="flex items-center gap-2">
-        {isPrivilegedRole && readingTimeLeftSec > 0 && (
+        {canBypassLock && readingTimeLeftSec > 0 && (
           <span className="text-[11px] text-amber-700 font-medium bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200">
             [GV / Admin: Cho phép bỏ qua {formatMMSS(readingTimeLeftSec)}]
           </span>
@@ -233,6 +259,12 @@ export const StudentLearningPage: React.FC = () => {
   };
 
   const handleGoBack = () => {
+    const navigationState = location.state as { returnTo?: string } | null;
+    if (navigationState?.returnTo) {
+      navigate(navigationState.returnTo);
+      return;
+    }
+
     // If opened as a new tab from studio, focus parent and close preview tab
     if (window.opener && !window.opener.closed) {
       try {
@@ -295,7 +327,7 @@ export const StudentLearningPage: React.FC = () => {
           </button>
           <div className="h-4 w-px bg-gray-700" />
           <h1 className="text-sm font-bold truncate max-w-md">{curriculum?.courseName || "Khóa học"}</h1>
-          {isPrivilegedRole && (
+          {hasStaffPreviewAccess && (
             <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
               Chế độ Preview (Admin / Giảng viên)
             </span>
@@ -303,7 +335,7 @@ export const StudentLearningPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
-          {isPrivilegedRole && (
+          {hasStaffPreviewAccess && (
             <button
               onClick={() => setSimulateStudentView(!simulateStudentView)}
               className={`px-3 py-1.5 text-xs font-bold rounded-lg border transition flex items-center gap-1.5 cursor-pointer ${
@@ -311,13 +343,13 @@ export const StudentLearningPage: React.FC = () => {
                   ? "bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-500 shadow-2xs"
                   : "bg-gray-800 text-amber-300 border-amber-500/40 hover:bg-gray-700"
               }`}
-              title="Bật/Tắt chế độ mô phỏng Học sinh để test quy tắc khóa 90% video"
+              title="Bật/Tắt chế độ mô phỏng Học sinh để test quy tắc khóa 70% video"
             >
-              {simulateStudentView ? "🎓 Đang test góc nhìn Học sinh (Khóa 90%)" : "👑 Góc nhìn Admin (Bypass khóa)"}
+              {simulateStudentView ? "🎓 Đang test góc nhìn Học sinh (Khóa 70%)" : "👑 Góc nhìn Admin (Bypass khóa)"}
             </button>
           )}
 
-          {isPrivilegedRole && (
+          {hasStaffPreviewAccess && (
             <button
               onClick={handleGoBack}
               className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition cursor-pointer"
@@ -353,13 +385,13 @@ export const StudentLearningPage: React.FC = () => {
                   <LearningVideoPlayer
                     lesson={activeLesson}
                     onProgressUpdate={handleProgressUpdate}
-                    onComplete={handleCompleteLesson}
+                    canPersistProgress={Boolean(curriculum?.enrollmentId) && !hasStaffPreviewAccess}
                   />
 
                   {/* Attached Quiz for Video Lesson */}
                   {activeLesson.linkedQuiz && (
                     <div className="w-full max-w-6xl mx-auto my-4 space-y-4">
-                      {canBypassLock || activeLesson.completed || currentWatchPercent >= 90 ? (
+                      {canBypassLock || activeLesson.completed || currentWatchPercent >= 70 ? (
                         <div className="space-y-4">
                           <div className="flex items-center gap-2 p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-900 text-sm font-bold shadow-2xs">
                             <Sparkles className="w-5 h-5 text-amber-600 animate-bounce" />
@@ -368,7 +400,7 @@ export const StudentLearningPage: React.FC = () => {
                           <LearningQuizPlayer
                             quiz={activeLesson.linkedQuiz}
                             onComplete={handleCompleteLesson}
-                            persistAttempt
+                            persistAttempt={shouldPersistAssessment}
                           />
                         </div>
                       ) : (
@@ -378,12 +410,12 @@ export const StudentLearningPage: React.FC = () => {
                             <div>
                               <h4 className="text-sm font-bold text-amber-950">Bài kiểm tra Quiz đính kèm theo bài giảng (Đang khóa)</h4>
                               <p className="text-xs text-amber-800 mt-0.5">
-                                Vui lòng xem đủ <b>90% video bài giảng</b> để tự động mở khóa bài kiểm tra Quiz bên dưới. (Hiện tại: <b>{currentWatchPercent}%</b> / 90%)
+                                Vui lòng xem đủ <b>70% video bài giảng</b> để tự động mở khóa bài kiểm tra Quiz bên dưới. (Hiện tại: <b>{currentWatchPercent}%</b> / 70%)
                               </p>
                             </div>
                           </div>
                           <Badge className="bg-amber-200 text-amber-900 border-amber-300 font-bold text-xs py-1 px-3">
-                            {currentWatchPercent}% / 90%
+                            {currentWatchPercent}% / 70%
                           </Badge>
                         </div>
                       )}
@@ -393,7 +425,7 @@ export const StudentLearningPage: React.FC = () => {
                   {/* Attached Assignment for Video Lesson */}
                   {activeLesson.linkedAssignment && (
                     <div className="w-full max-w-6xl mx-auto my-4 space-y-4">
-                      {canBypassLock || activeLesson.completed || currentWatchPercent >= 90 ? (
+                      {canBypassLock || activeLesson.completed || currentWatchPercent >= 70 ? (
                         <div className="space-y-4">
                           <div className="flex items-center gap-2 p-3.5 bg-purple-500/10 border border-purple-500/30 rounded-xl text-purple-900 text-sm font-bold shadow-2xs">
                             <CheckSquare className="w-5 h-5 text-purple-600" />
@@ -402,6 +434,8 @@ export const StudentLearningPage: React.FC = () => {
                           <LearningAssignmentPanel
                             assignment={activeLesson.linkedAssignment}
                             onComplete={handleCompleteLesson}
+                            persistSubmission={shouldPersistAssessment}
+                            deliveryMode={curriculum?.deliveryMode}
                           />
                         </div>
                       ) : (
@@ -411,12 +445,12 @@ export const StudentLearningPage: React.FC = () => {
                             <div>
                               <h4 className="text-sm font-bold text-purple-950">Bài tập tự luận đính kèm (Đang khóa)</h4>
                               <p className="text-xs text-purple-800 mt-0.5">
-                                Vui lòng xem đủ <b>90% video bài giảng</b> để tự động mở khóa bài tập tự luận bên dưới. (Hiện tại: <b>{currentWatchPercent}%</b> / 90%)
+                                Vui lòng xem đủ <b>70% video bài giảng</b> để tự động mở khóa bài tập tự luận bên dưới. (Hiện tại: <b>{currentWatchPercent}%</b> / 70%)
                               </p>
                             </div>
                           </div>
                           <Badge className="bg-purple-200 text-purple-900 border-purple-300 font-bold text-xs py-1 px-3">
-                            {currentWatchPercent}% / 90%
+                            {currentWatchPercent}% / 70%
                           </Badge>
                         </div>
                       )}
@@ -427,13 +461,18 @@ export const StudentLearningPage: React.FC = () => {
 
               {activeLesson.contentType === "QUIZ" && (
                 activeLesson.linkedQuiz
-                  ? <LearningQuizPlayer quiz={activeLesson.linkedQuiz} onComplete={handleCompleteLesson} persistAttempt />
+                  ? <LearningQuizPlayer quiz={activeLesson.linkedQuiz} onComplete={handleCompleteLesson} persistAttempt={shouldPersistAssessment} />
                   : <div className="m-auto text-sm text-gray-500">Bài học chưa có dữ liệu quiz.</div>
               )}
 
               {activeLesson.contentType === "ASSIGNMENT" && (
                 activeLesson.linkedAssignment
-                  ? <LearningAssignmentPanel assignment={activeLesson.linkedAssignment} onComplete={handleCompleteLesson} />
+                  ? <LearningAssignmentPanel
+                      assignment={activeLesson.linkedAssignment}
+                      onComplete={handleCompleteLesson}
+                      persistSubmission={shouldPersistAssessment}
+                      deliveryMode={curriculum?.deliveryMode}
+                    />
                   : <div className="m-auto text-sm text-gray-500">Bài học chưa có dữ liệu bài tập.</div>
               )}
 
@@ -485,7 +524,7 @@ export const StudentLearningPage: React.FC = () => {
                         <HelpCircle className="w-5 h-5 text-amber-600" />
                         <span>🎯 Bài kiểm tra Quiz đính kèm theo bài đọc PDF này:</span>
                       </div>
-                      <LearningQuizPlayer quiz={activeLesson.linkedQuiz} onComplete={handleCompleteLesson} persistAttempt />
+                      <LearningQuizPlayer quiz={activeLesson.linkedQuiz} onComplete={handleCompleteLesson} persistAttempt={shouldPersistAssessment} />
                     </div>
                   )}
 
@@ -495,7 +534,7 @@ export const StudentLearningPage: React.FC = () => {
                         <CheckSquare className="w-5 h-5 text-purple-600" />
                         <span>📝 Bài tập tự luận đính kèm theo bài đọc PDF này:</span>
                       </div>
-                      <LearningAssignmentPanel assignment={activeLesson.linkedAssignment} onComplete={handleCompleteLesson} />
+                      <LearningAssignmentPanel assignment={activeLesson.linkedAssignment} onComplete={handleCompleteLesson} deliveryMode={curriculum?.deliveryMode} />
                     </div>
                   )}
                 </div>
@@ -526,7 +565,7 @@ export const StudentLearningPage: React.FC = () => {
                         <HelpCircle className="w-5 h-5 text-amber-600" />
                         <span>🎯 Bài kiểm tra Quiz đính kèm theo bài đọc này:</span>
                       </div>
-                      <LearningQuizPlayer quiz={activeLesson.linkedQuiz} onComplete={handleCompleteLesson} persistAttempt />
+                      <LearningQuizPlayer quiz={activeLesson.linkedQuiz} onComplete={handleCompleteLesson} persistAttempt={shouldPersistAssessment} />
                     </div>
                   )}
 
@@ -536,7 +575,7 @@ export const StudentLearningPage: React.FC = () => {
                         <CheckSquare className="w-5 h-5 text-purple-600" />
                         <span>📝 Bài tập tự luận đính kèm theo bài đọc này:</span>
                       </div>
-                      <LearningAssignmentPanel assignment={activeLesson.linkedAssignment} onComplete={handleCompleteLesson} />
+                      <LearningAssignmentPanel assignment={activeLesson.linkedAssignment} onComplete={handleCompleteLesson} deliveryMode={curriculum?.deliveryMode} />
                     </div>
                   )}
                 </div>
@@ -554,9 +593,14 @@ export const StudentLearningPage: React.FC = () => {
           <LearningRightPanel
             description={activeLesson?.description}
             resources={activeLesson?.resources}
+            notes={activeLesson?.personalNote ?? ""}
+            onNotesChange={handleNoteChange}
           />
         )}
       </div>
+
+      {/* Trợ lý AI nhận đúng course/lesson từ URL của không gian học tập. */}
+      {user && <AiChatWidget key={`${courseId ?? "course"}-${lessonId ?? "course"}`} />}
     </div>
   );
 };

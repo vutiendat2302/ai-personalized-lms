@@ -7,6 +7,10 @@ export type FileUsageTypeEnum =
   | "ASSIGNMENT"
   | "ASSIGNMENT_SUBMISSION"
   | "LESSON_RESOURCE"
+  | "LESSON_VIDEO"
+  | "COURSE_LESSON"
+  | "COURSE_THUMBNAIL"
+  | "POLICY"
   | "OTHER";
 
 export type BaseStatusEnum = "ACTIVE" | "INACTIVE" | "ARCHIVED" | "DELETED";
@@ -46,8 +50,8 @@ export interface FileManagementSummaryResponse {
   archivedOrDeletedCount: number;
   activeFiles?: number;
   deletedFiles?: number;
-  sizeByUsageType: Record<FileUsageTypeEnum, number>;
-  sizeByFileType: Record<FileTypeEnum, number>;
+  sizeByUsageType: Partial<Record<FileUsageTypeEnum, number>>;
+  sizeByFileType: Partial<Record<FileTypeEnum, number>>;
   uploadTrend: MonthlyUploadTrend[];
 }
 

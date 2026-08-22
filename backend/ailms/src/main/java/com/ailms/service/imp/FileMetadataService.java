@@ -2,6 +2,7 @@ package com.ailms.service.imp;
 import com.ailms.common.converter.SimpleJsonWriter;
 import com.ailms.entity.enums.FileUsageTypeEnum;
 import com.ailms.event.AuditLogEvent;
+import com.ailms.event.PolicyFileChangedEvent;
 import com.ailms.job.FileOrphanScanJob;
 import com.ailms.repository.EmployeeRepository;
 import com.ailms.repository.UserRepository;
@@ -28,7 +29,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FilenameUtils;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.data.domain.Page;
 import com.ailms.response.PageResponse;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -42,6 +42,7 @@ import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -55,6 +56,7 @@ public class FileMetadataService implements IFileMetadataService {
     private final EmployeeRepository employeeRepository;
     private final IFileStorageService fileStorageService;
     private final ApplicationEventPublisher applicationEventPublisher;
+    private final com.ailms.search.MeilisearchFileService meilisearchFileService;
 
     /** Ánh xạ metadata kèm thông tin người tạo để hiển thị trong trang quản trị. */
     private FileMetadataResponse mapToResponseWithUser(FileMetadataEntity entity) {
@@ -80,8 +82,12 @@ public class FileMetadataService implements IFileMetadataService {
         FileMetadataEntity entity = fileMetadataMapper.toEntity(request);
         entity.setStatus(BaseStatusEnum.ACTIVE);
         FileMetadataEntity saved = fileMetadataRepository.save(entity);
+        meilisearchFileService.index(saved);
 
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "UPLOAD", "FILE", saved.getId(), null, saved));
+        if (saved.getUsageType() == FileUsageTypeEnum.POLICY) {
+            applicationEventPublisher.publishEvent(new PolicyFileChangedEvent(saved.getId()));
+        }
         return fileMetadataMapper.toResponse(saved);
     }
 
@@ -148,13 +154,38 @@ public class FileMetadataService implements IFileMetadataService {
                 .orElse(false);
     }
 
+    /** Tìm metadata trực tiếp từ MySQL để dữ liệu quản trị luôn đầy đủ và nhất quán với MinIO. */
     @Override
     public PageResponse<FileMetadataResponse> search(FileSearchRequest request) {
-        log.info("Searching file metadata via specification");
+        log.info("Searching file metadata via MySQL specification");
         Specification<FileMetadataEntity> spec = FileSpecification.filterAndSearch(request);
         Pageable pageable = request.toPageable();
-        Page<FileMetadataEntity> page = fileMetadataRepository.findAll(spec, pageable);
-        return PageResponse.from(page.map(this::mapToResponseWithUser));
+        List<FileMetadataEntity> storedFiles = filterExistingFiles(fileMetadataRepository.findAll(spec, pageable.getSort()));
+
+        int start = Math.min((int) pageable.getOffset(), storedFiles.size());
+        int end = Math.min(start + pageable.getPageSize(), storedFiles.size());
+        List<FileMetadataResponse> content = storedFiles.subList(start, end).stream()
+                .map(this::mapToResponseWithUser)
+                .toList();
+        long total = storedFiles.size();
+
+        return PageResponse.<FileMetadataResponse>builder()
+                .content(content)
+                .pageNumber(pageable.getPageNumber())
+                .pageSize(pageable.getPageSize())
+                .totalElements(total)
+                .totalPages((int) Math.ceil((double) total / pageable.getPageSize()))
+                .first(pageable.getPageNumber() == 0)
+                .last(end >= total)
+                .build();
+    }
+
+    /** Khởi tạo cấu hình và đồng bộ lại index tập tin sau khi ứng dụng sẵn sàng. */
+    @org.springframework.context.event.EventListener(org.springframework.boot.context.event.ApplicationReadyEvent.class)
+    public void initializeFileSearchIndex() {
+        if (!meilisearchFileService.isEnabled()) return;
+        fileMetadataRepository.findAll().forEach(meilisearchFileService::index);
+        meilisearchFileService.configureIndex();
     }
 
     @Override
@@ -224,34 +255,44 @@ public class FileMetadataService implements IFileMetadataService {
 
     @Override
     public List<FileMetadataResponse> getAllFiles() {
-        List<FileMetadataEntity> entities = fileMetadataRepository.findAll();
+        List<FileMetadataEntity> entities = filterExistingFiles(fileMetadataRepository.findAll());
         return fileMetadataMapper.toResponseList(entities);
     }
 
     @Override
     public FileManagementSummaryResponse getSummary() {
         log.info("Generating FileManagementSummaryResponse metrics");
-        Long totalFiles = fileMetadataRepository.countActiveFiles();
-        Long totalSizeBytes = fileMetadataRepository.sumActiveFileSize();
-        Long orphanedFilesCount = fileMetadataRepository.countOrphanedFiles();
+        List<FileMetadataEntity> storedFiles = filterExistingFiles(fileMetadataRepository.findAll());
+        List<FileMetadataEntity> activeFiles = storedFiles.stream()
+                .filter(file -> file.getStatus() == BaseStatusEnum.ACTIVE)
+                .toList();
+        Long totalFiles = (long) activeFiles.size();
+        Long totalSizeBytes = activeFiles.stream()
+                .mapToLong(file -> file.getFileSize() != null ? file.getFileSize() : 0L)
+                .sum();
+        Long orphanedFilesCount = activeFiles.stream()
+                .filter(file -> file.getReferenceEntityId() == null || file.getOrphanedDetectedAt() != null)
+                .count();
 
         LocalDateTime startOfMonth = LocalDateTime.now().withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0);
-        Long uploadedThisMonth = fileMetadataRepository.countUploadedSince(startOfMonth);
-        Long archivedOrDeletedCount = fileMetadataRepository.countArchivedOrDeleted();
+        Long uploadedThisMonth = activeFiles.stream()
+                .filter(file -> file.getCreatedAt() != null && !file.getCreatedAt().isBefore(startOfMonth))
+                .count();
+        Long archivedOrDeletedCount = storedFiles.stream()
+                .filter(file -> file.getStatus() == BaseStatusEnum.ARCHIVED || file.getStatus() == BaseStatusEnum.DELETED)
+                .count();
 
         Map<FileUsageTypeEnum, Long> sizeByUsageType = new EnumMap<>(FileUsageTypeEnum.class);
-        for (Object[] row : fileMetadataRepository.aggregateSizeByUsageType()) {
-            if (row[0] != null) {
-                sizeByUsageType.put((FileUsageTypeEnum) row[0], (Long) row[1]);
-            }
-        }
+        activeFiles.stream()
+                .filter(file -> file.getUsageType() != null)
+                .forEach(file -> sizeByUsageType.merge(file.getUsageType(),
+                        file.getFileSize() != null ? file.getFileSize() : 0L, Long::sum));
 
         Map<FileTypeEnum, Long> sizeByFileType = new EnumMap<>(FileTypeEnum.class);
-        for (Object[] row : fileMetadataRepository.aggregateSizeByFileType()) {
-            if (row[0] != null) {
-                sizeByFileType.put((FileTypeEnum) row[0], (Long) row[1]);
-            }
-        }
+        activeFiles.stream()
+                .filter(file -> file.getFileType() != null)
+                .forEach(file -> sizeByFileType.merge(file.getFileType(),
+                        file.getFileSize() != null ? file.getFileSize() : 0L, Long::sum));
 
         // Build 12 months trend
         List<FileManagementSummaryResponse.MonthlyUploadTrend> trend = new ArrayList<>();
@@ -261,12 +302,10 @@ public class FileMetadataService implements IFileMetadataService {
             LocalDateTime from = ym.atDay(1).atStartOfDay();
             LocalDateTime to = ym.atEndOfMonth().atTime(23, 59, 59);
 
-            FileSearchRequest monthRequest = FileSearchRequest.builder()
-                    .startDate(from)
-                    .endDate(to)
-                    .build();
-            Specification<FileMetadataEntity> spec = FileSpecification.filterAndSearch(monthRequest);
-            List<FileMetadataEntity> monthFiles = fileMetadataRepository.findAll(spec);
+            List<FileMetadataEntity> monthFiles = activeFiles.stream()
+                    .filter(file -> file.getCreatedAt() != null)
+                    .filter(file -> !file.getCreatedAt().isBefore(from) && !file.getCreatedAt().isAfter(to))
+                    .toList();
 
             long count = monthFiles.size();
             long size = monthFiles.stream().mapToLong(f -> f.getFileSize() != null ? f.getFileSize() : 0L).sum();
@@ -288,6 +327,16 @@ public class FileMetadataService implements IFileMetadataService {
                 .sizeByFileType(sizeByFileType)
                 .uploadTrend(trend)
                 .build();
+    }
+
+    /** Lọc metadata, chỉ giữ các dòng còn object vật lý tương ứng trên MinIO. */
+    private List<FileMetadataEntity> filterExistingFiles(List<FileMetadataEntity> files) {
+        Set<String> existingKeys = fileStorageService.findExistingKeys(files.stream()
+                .map(FileMetadataEntity::getFileKey)
+                .toList());
+        return files.stream()
+                .filter(file -> existingKeys.contains(file.getFileKey()))
+                .toList();
     }
 
     @Override
@@ -361,11 +410,11 @@ public class FileMetadataService implements IFileMetadataService {
     }
 
     @Override
-    /** Xuất metadata tệp theo bộ lọc quản trị hiện tại. */
+    /** Xuất metadata của các tệp vật lý còn tồn tại theo bộ lọc quản trị. */
     public byte[] exportCsv(FileSearchRequest request) {
         log.info("Exporting CSV report for files with request filters");
         Specification<FileMetadataEntity> spec = FileSpecification.filterAndSearch(request);
-        List<FileMetadataEntity> files = fileMetadataRepository.findAll(spec);
+        List<FileMetadataEntity> files = filterExistingFiles(fileMetadataRepository.findAll(spec));
 
         StringBuilder sb = new StringBuilder();
         sb.append("ID,Original Name,File Key,Usage Type,File Type,Size (Bytes),Status,Orphaned,Created At\n");
@@ -416,6 +465,10 @@ public class FileMetadataService implements IFileMetadataService {
 
             if (request.getCreatedAt() != null) {
                 entity.setCreatedAt(request.getCreatedAt());
+            }
+
+            if (request.getUsageType() != null) {
+                entity.setUsageType(request.getUsageType());
             }
         }
 

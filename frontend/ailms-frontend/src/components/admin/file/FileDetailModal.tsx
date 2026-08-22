@@ -10,8 +10,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import type { FileMetadataResponse } from "@/types/fileManagement";
+import type { FileMetadataResponse, FileUsageTypeEnum } from "@/types/fileManagement";
 import { formatBytes, formatDateTime, getUsageTypeBadge, getStatusBadge } from "./fileUtils";
 import { fileAdminApi } from "@/api/file/fileAdminApi";
 import { auditLogApi, type AuditLogResponse } from "@/api/audit/auditLogApi";
@@ -67,9 +68,10 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
-  // Edit metadata form state (Rename only)
+  // Edit metadata form state
   const [isEditing, setIsEditing] = useState(false);
   const [nameInput, setNameInput] = useState("");
+  const [usageTypeInput, setUsageTypeInput] = useState<FileUsageTypeEnum>("OTHER");
 
   // Confirm dialogs states
   const [confirmArchiveOpen, setConfirmArchiveOpen] = useState(false);
@@ -85,6 +87,7 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({
   useEffect(() => {
     if (file && isOpen) {
       setNameInput(file.originalName || "");
+      setUsageTypeInput(file.usageType || "OTHER");
       setIsEditing(false);
       setErrorMsg("");
       setSuccessMsg("");
@@ -99,6 +102,7 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({
     }
   }, [file?.id, isOpen]);
 
+  /** Tải đường dẫn xem trước và tải xuống từ hệ thống lưu trữ */
   const fetchDownloadUrl = async () => {
     if (!file) return;
     try {
@@ -112,6 +116,7 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({
     }
   };
 
+  /** Truy vấn lịch sử thay đổi của tệp tin từ hệ thống nhật ký Audit Log */
   const fetchAuditLogs = async () => {
     if (!file) return;
     try {
@@ -137,17 +142,16 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({
 
   const isOrphan = file.orphaned || !file.referenceEntityId;
 
+  /** Lấy đường dẫn chuyển hướng chi tiết của thực thể tham chiếu */
   const getEntityRoute = () => {
     if (!file.referenceEntityType || !file.referenceEntityId) return null;
     switch (file.referenceEntityType) {
-      case "EmployeeContract":
+      case "CONTRACT":
         return `/admin/contracts?id=${file.referenceEntityId}`;
-      case "LessonResource":
-        return `/admin/courses`;
-      case "Submission":
-        return `/admin/assignments`;
-      case "User":
-        return `/admin/users`;
+      case "COURSE":
+        return `/admin/courses?id=${file.referenceEntityId}`;
+      case "DEPARTMENT":
+        return `/admin/departments?id=${file.referenceEntityId}`;
       default:
         return null;
     }
@@ -155,19 +159,20 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({
 
   const entityRoute = getEntityRoute();
 
-  const handleRename = async () => {
+  /** Lưu tên hiển thị và phân loại mục đích tệp tin */
+  const handleUpdateMetadata = async () => {
     if (!file) return;
     const name = nameInput.trim();
     if (!name) {
-      setErrorMsg("Tên file gốc không được để trống!");
+      setErrorMsg("Tên tệp tin gốc không được để trống!");
       return;
     }
     if (name.length > 255) {
-      setErrorMsg("Tên file gốc không được vượt quá 255 ký tự!");
+      setErrorMsg("Tên tệp tin gốc không được vượt quá 255 ký tự!");
       return;
     }
     if (/[\\/\r\n\t]/.test(name)) {
-      setErrorMsg("Tên file gốc không được chứa các ký tự đặc biệt (\\, /, Enter, Tab)!");
+      setErrorMsg("Tên tệp tin gốc không được chứa các ký tự đặc biệt (\\, /, Enter, Tab)!");
       return;
     }
 
@@ -180,7 +185,7 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({
     const newExt = getExt(name);
 
     if (oldExt && newExt && oldExt !== newExt) {
-      setErrorMsg(`Đuôi mở rộng file không hợp lệ! Vui lòng giữ nguyên đuôi .${oldExt} (ví dụ: tên_file.${oldExt})`);
+      setErrorMsg(`Định dạng tệp tin không hợp lệ! Vui lòng giữ nguyên đuôi .${oldExt}`);
       return;
     }
 
@@ -188,8 +193,8 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({
       setActionLoading(true);
       setErrorMsg("");
       setSuccessMsg("");
-      const updated = await fileAdminApi.renameFile(file.fileKey, name);
-      const msg = "Đã đổi tên file gốc thành công!";
+      const updated = await fileAdminApi.updateFileMetadata(file.id, name, usageTypeInput);
+      const msg = "Đã cập nhật thông tin tệp tin thành công!";
       setSuccessMsg(msg);
       onActionSuccess?.(msg);
       setIsEditing(false);
@@ -200,85 +205,89 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({
       onRefresh?.();
       setTimeout(() => setSuccessMsg(""), 4000);
     } catch (err: any) {
-      setErrorMsg(err?.response?.data?.message || err?.message || "Lỗi khi đổi tên file");
+      setErrorMsg(err?.response?.data?.message || err?.message || "Lỗi khi đổi tên tệp tin");
     } finally {
       setActionLoading(false);
     }
   };
 
+  /** Thực hiện lưu trữ tệp tin */
   const executeArchive = async () => {
     try {
       setActionLoading(true);
       setErrorMsg("");
       await fileAdminApi.bulkArchive({ fileIds: [file.id] });
-      onActionSuccess?.("Đã lưu trữ (ARCHIVED) file thành công!");
+      onActionSuccess?.("Đã lưu trữ tệp tin thành công!");
       onRefresh?.();
       onClose();
     } catch (err: any) {
-      setErrorMsg(err?.response?.data?.message || "Lỗi khi chuyển trạng thái file");
+      setErrorMsg(err?.response?.data?.message || "Lỗi khi chuyển trạng thái tệp tin");
     } finally {
       setActionLoading(false);
     }
   };
 
+  /** Thực hiện xóa mềm tệp tin */
   const executeDelete = async () => {
     try {
       setActionLoading(true);
       setErrorMsg("");
       await fileAdminApi.bulkDelete({ fileIds: [file.id] });
-      onActionSuccess?.("Đã xoá mềm file thành công!");
+      onActionSuccess?.("Đã xóa mềm tệp tin thành công!");
       onRefresh?.();
       onClose();
     } catch (err: any) {
-      setErrorMsg(err?.response?.data?.message || "Không thể xoá file");
+      setErrorMsg(err?.response?.data?.message || "Không thể xóa tệp tin");
     } finally {
       setActionLoading(false);
     }
   };
 
+  /** Thực hiện xóa vĩnh viễn tệp tin */
   const executePurge = async () => {
     try {
       setActionLoading(true);
       setErrorMsg("");
       await fileAdminApi.bulkPurge({ fileIds: [file.id] });
-      onActionSuccess?.("Đã xoá vĩnh viễn tệp tin khỏi MinIO và Database!");
+      onActionSuccess?.("Đã xóa vĩnh viễn tệp tin khỏi hệ thống!");
       onRefresh?.();
       onClose();
     } catch (err: any) {
-      setErrorMsg(err?.response?.data?.message || "Lỗi khi xoá vĩnh viễn tệp tin");
+      setErrorMsg(err?.response?.data?.message || "Lỗi khi xóa vĩnh viễn tệp tin");
     } finally {
       setActionLoading(false);
     }
   };
 
+  /** Trả về Icon loại tệp tin theo token màu index.css */
   const renderFileIcon = () => {
     switch (file.fileType) {
       case "IMAGE":
-        return <FileImage className="h-10 w-10 text-blue-500" />;
+        return <FileImage className="h-10 w-10 text-brand-cobalt" />;
       case "VIDEO":
-        return <FileVideo className="h-10 w-10 text-purple-500" />;
+        return <FileVideo className="h-10 w-10 text-primary" />;
       case "AUDIO":
-        return <FileAudio className="h-10 w-10 text-emerald-500" />;
+        return <FileAudio className="h-10 w-10 text-success-forest" />;
       case "DOCUMENT":
-        return <FileText className="h-10 w-10 text-amber-500" />;
+        return <FileText className="h-10 w-10 text-brand-cobalt" />;
       default:
-        return <FileCode className="h-10 w-10 text-gray-500" />;
+        return <FileCode className="h-10 w-10 text-muted-foreground" />;
     }
   };
 
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl p-6">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl p-6 bg-card border border-border/40 shadow-xl">
           <DialogHeader>
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1">
-                <DialogTitle className="text-lg font-bold flex items-center gap-2">
+                <DialogTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
                   {renderFileIcon()}
                   <span className="truncate max-w-md">{file.originalName}</span>
                 </DialogTitle>
                 <DialogDescription className="text-xs text-muted-foreground mt-1">
-                  Mã file nội bộ: <code className="font-mono bg-muted px-1.5 py-0.5 rounded">{file.fileKey}</code>
+                  Mã tệp tin nội bộ: <code className="font-mono bg-muted px-1.5 py-0.5 rounded">{file.fileKey}</code>
                 </DialogDescription>
               </div>
 
@@ -288,9 +297,9 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({
                     variant="outline"
                     size="sm"
                     onClick={() => setIsEditing(true)}
-                    className="text-xs gap-1.5 rounded-xl border-border/80"
+                    className="text-xs gap-1.5 rounded-xl border-border/80 cursor-pointer"
                   >
-                    <Edit2 className="h-3.5 w-3.5" /> Đổi tên file
+                    <Edit2 className="h-3.5 w-3.5" /> Chỉnh sửa
                   </Button>
                 ) : (
                   <Button
@@ -299,10 +308,11 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({
                     onClick={() => {
                       setIsEditing(false);
                       setNameInput(file.originalName);
+                      setUsageTypeInput(file.usageType || "OTHER");
                     }}
-                    className="text-xs gap-1 rounded-xl"
+                    className="text-xs gap-1 rounded-xl cursor-pointer"
                   >
-                    <RotateCcw className="h-3.5 w-3.5" /> Hủy
+                    <RotateCcw className="h-3.5 w-3.5" /> Hủy bỏ
                   </Button>
                 )}
 
@@ -310,7 +320,7 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({
                   variant="ghost"
                   size="icon"
                   onClick={onClose}
-                  className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted"
+                  className="h-8 w-8 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer"
                   title="Đóng"
                 >
                   <X className="h-4 w-4" />
@@ -320,61 +330,81 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({
           </DialogHeader>
 
           {errorMsg && (
-            <div className="p-3 bg-red-500/10 border border-red-500/30 text-red-600 rounded-xl text-xs flex items-center gap-2">
+            <div className="p-3 bg-destructive/10 border border-destructive/30 text-destructive rounded-xl text-xs flex items-center gap-2">
               <ShieldAlert className="h-4 w-4 shrink-0" />
               <span>{errorMsg}</span>
             </div>
           )}
 
           {successMsg && (
-            <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 rounded-xl text-xs flex items-center justify-between gap-2">
+            <div className="p-3 bg-success-forest/10 border border-success-forest/30 text-success-forest rounded-xl text-xs flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4 shrink-0" />
                 <span className="font-semibold">{successMsg}</span>
               </div>
-              <button onClick={() => setSuccessMsg("")} className="text-xs opacity-70 hover:opacity-100 font-bold">
+              <button onClick={() => setSuccessMsg("")} className="text-xs opacity-70 hover:opacity-100 font-bold cursor-pointer">
                 ✕
               </button>
             </div>
           )}
 
-          {/* Form Đổi tên file gốc bằng hàm renameFile */}
+          {/* Form chỉnh sửa metadata file */}
           {isEditing && (
             <div className="p-4 rounded-xl border border-primary/30 bg-primary/5 space-y-3 animate-in fade-in duration-200">
               <h4 className="text-xs font-bold uppercase tracking-wider text-primary flex items-center gap-1.5">
-                <Edit2 className="h-3.5 w-3.5" /> Đổi tên tệp tin gốc
+                <Edit2 className="h-3.5 w-3.5" /> Chỉnh sửa tệp tin
               </h4>
 
               <div className="space-y-1">
-                <Label className="text-[11px] font-semibold text-muted-foreground">Tên file gốc mới</Label>
+                <Label className="text-[11px] font-semibold text-muted-foreground">Tên hiển thị</Label>
                 <div className="flex gap-2">
                   <Input
                     value={nameInput}
                     onChange={(e) => setNameInput(e.target.value)}
-                    placeholder="Nhập tên file gốc mới..."
-                    className="h-9 text-xs rounded-xl bg-card border-border/80 flex-1"
+                    placeholder="Nhập tên hiển thị..."
+                    className="h-9 text-xs rounded-xl bg-background border-border/80 flex-1 text-foreground"
                   />
                   <Button
                     size="sm"
-                    onClick={handleRename}
+                    onClick={handleUpdateMetadata}
                     disabled={actionLoading || !nameInput.trim()}
-                    className="text-xs gap-1.5 rounded-xl shadow-xs"
+                    className="text-xs gap-1.5 rounded-xl shadow-xs cursor-pointer"
                   >
                     {actionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                    Lưu tên mới
+                    Lưu thay đổi
                   </Button>
                 </div>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[11px] font-semibold text-muted-foreground">Phân loại mục đích sử dụng</Label>
+                <Select value={usageTypeInput} onValueChange={(value) => setUsageTypeInput(value as FileUsageTypeEnum)}>
+                  <SelectTrigger className="h-9 text-xs rounded-xl bg-background border-border/80 text-foreground">
+                    <SelectValue placeholder="Chọn mục đích" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="CONTRACT">Hợp đồng</SelectItem>
+                    <SelectItem value="AVATAR">Ảnh đại diện</SelectItem>
+                    <SelectItem value="LESSON_RESOURCE">Tài liệu bài học</SelectItem>
+                    <SelectItem value="LESSON_VIDEO">Video bài học</SelectItem>
+                    <SelectItem value="COURSE_LESSON">Bài học khóa học</SelectItem>
+                    <SelectItem value="ASSIGNMENT">Bài tập</SelectItem>
+                    <SelectItem value="ASSIGNMENT_SUBMISSION">Bài nộp bài tập</SelectItem>
+                    <SelectItem value="QUIZ_ATTACHMENT">Đính kèm bài trắc nghiệm</SelectItem>
+                    <SelectItem value="POLICY">Chính sách</SelectItem>
+                    <SelectItem value="OTHER">Khác</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           )}
 
           <Tabs defaultValue="overview" className="w-full mt-2">
             <TabsList className="grid w-full grid-cols-2 rounded-xl bg-muted/40 p-1">
-              <TabsTrigger value="overview" className="text-xs font-semibold rounded-lg gap-1.5">
-                <Info className="h-3.5 w-3.5" /> Tổng quan & Nghiệp vụ
+              <TabsTrigger value="overview" className="text-xs font-semibold rounded-lg gap-1.5 cursor-pointer">
+                <Info className="h-3.5 w-3.5" /> Tổng quan &amp; Nghiệp vụ
               </TabsTrigger>
-              <TabsTrigger value="audit" className="text-xs font-semibold rounded-lg gap-1.5">
-                <History className="h-3.5 w-3.5" /> Lịch sử thay đổi (Audit Log)
+              <TabsTrigger value="audit" className="text-xs font-semibold rounded-lg gap-1.5 cursor-pointer">
+                <History className="h-3.5 w-3.5" /> Lịch sử thay đổi
               </TabsTrigger>
             </TabsList>
 
@@ -385,7 +415,7 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({
                 {loadingUrl ? (
                   <div className="flex flex-col items-center gap-2 text-xs text-muted-foreground">
                     <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                    <span>Đang sinh đường dẫn xem trước MinIO...</span>
+                    <span>Đang sinh đường dẫn xem trước tệp tin...</span>
                   </div>
                 ) : file.fileType === "IMAGE" && downloadUrl ? (
                   <img
@@ -395,8 +425,8 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({
                   />
                 ) : file.fileType === "DOCUMENT" && downloadUrl ? (
                   <div className="text-center space-y-2">
-                    <FileText className="h-12 w-12 text-amber-500 mx-auto" />
-                    <p className="text-xs text-muted-foreground font-medium">Tài liệu PDF / Word</p>
+                    <FileText className="h-12 w-12 text-brand-cobalt mx-auto" />
+                    <p className="text-xs text-muted-foreground font-medium">Tài liệu PDF</p>
                     <a
                       href={downloadUrl}
                       target="_blank"
@@ -409,7 +439,7 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({
                 ) : (
                   <div className="text-center space-y-1">
                     {renderFileIcon()}
-                    <p className="text-xs text-muted-foreground">Tệp tin không hỗ trợ preview trực tiếp</p>
+                    <p className="text-xs text-muted-foreground">Tệp tin không hỗ trợ xem trực tiếp</p>
                   </div>
                 )}
               </div>
@@ -417,13 +447,13 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({
               {/* Grid Details */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
                 {/* Thông tin cơ bản */}
-                <div className="p-4 rounded-xl border border-border/60 space-y-2.5">
+                <div className="p-4 rounded-xl border border-border/60 space-y-2.5 bg-card">
                   <h4 className="font-bold text-muted-foreground uppercase text-[11px] tracking-wider flex items-center gap-1.5">
-                    <HardDrive className="h-3.5 w-3.5 text-primary" /> Metadata Gốc
+                    <HardDrive className="h-3.5 w-3.5 text-primary" /> Thông tin tệp tin gốc
                   </h4>
 
                   <div className="flex justify-between border-b border-border/40 pb-1.5">
-                    <span className="text-muted-foreground">Tên file gốc:</span>
+                    <span className="text-muted-foreground">Tên tệp tin gốc:</span>
                     <span className="font-semibold text-foreground truncate max-w-[160px]" title={file.originalName}>
                       {file.originalName}
                     </span>
@@ -458,13 +488,13 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({
                 </div>
 
                 {/* Thông tin nghiệp vụ */}
-                <div className="p-4 rounded-xl border border-border/60 space-y-2.5">
+                <div className="p-4 rounded-xl border border-border/60 space-y-2.5 bg-card">
                   <h4 className="font-bold text-muted-foreground uppercase text-[11px] tracking-wider flex items-center gap-1.5">
-                    <User className="h-3.5 w-3.5 text-emerald-500" /> Nghiệp vụ & Tham chiếu
+                    <User className="h-3.5 w-3.5 text-success-forest" /> Nghiệp vụ &amp; Tham chiếu
                   </h4>
 
                   <div className="flex justify-between border-b border-border/40 pb-1.5">
-                    <span className="text-muted-foreground">Thuộc Module:</span>
+                    <span className="text-muted-foreground">Phân loại mục đích:</span>
                     <span>{getUsageTypeBadge(file.usageType)}</span>
                   </div>
 
@@ -478,26 +508,26 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({
                           rel="noopener noreferrer"
                           className="font-bold text-primary hover:underline flex items-center gap-1"
                         >
-                          {file.referenceEntityType} #{file.referenceEntityId} <ExternalLink className="h-3 w-3" />
+                          {file.referenceEntityType} {file.referenceEntityId} <ExternalLink className="h-3 w-3" />
                         </a>
                       ) : (
                         <span className="font-semibold text-foreground">
-                          {file.referenceEntityType} #{file.referenceEntityId}
+                          {file.referenceEntityType} {file.referenceEntityId}
                         </span>
                       )
                     ) : (
-                      <span className="text-muted-foreground italic">Không có (Chưa gán)</span>
+                      <span className="text-muted-foreground italic">Không có (Chưa liên kết)</span>
                     )}
                   </div>
 
                   <div className="flex justify-between border-b border-border/40 pb-1.5">
                     <span className="text-muted-foreground">Trạng thái tham chiếu:</span>
                     {isOrphan ? (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-500/10 text-red-600 border border-red-500/20">
-                        Mồ côi (Orphaned)
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-destructive/10 text-destructive border border-destructive/20">
+                        Chưa liên kết
                       </span>
                     ) : (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-success-forest/10 text-success-forest border border-success-forest/20">
                         Đang sử dụng
                       </span>
                     )}
@@ -512,7 +542,7 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({
                     <span className="text-muted-foreground">Người tải lên:</span>
                     <div className="text-right">
                       <span className="font-medium text-foreground block">
-                        {file.createdByName || (file.createdBy ? `User #${file.createdBy}` : "Hệ thống")}
+                        {file.createdByName || (file.createdBy ? `ID: ${file.createdBy}` : "Hệ thống")}
                       </span>
                       {file.createdByCode && (
                         <span className="font-mono text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded font-semibold mt-0.5 inline-block">
@@ -529,12 +559,12 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({
                 <div className="flex items-center gap-2">
                   {downloadUrl && (
                     <a href={downloadUrl} target="_blank" rel="noopener noreferrer" download>
-                      <Button variant="outline" size="sm" className="text-xs gap-1.5 rounded-xl">
+                      <Button variant="outline" size="sm" className="text-xs gap-1.5 rounded-xl cursor-pointer">
                         <DownloadCloud className="h-3.5 w-3.5" /> Tải tệp gốc
                       </Button>
                     </a>
                   )}
-                  <Button variant="ghost" size="sm" onClick={onClose} className="text-xs rounded-xl">
+                  <Button variant="ghost" size="sm" onClick={onClose} className="text-xs rounded-xl cursor-pointer">
                     Đóng
                   </Button>
                 </div>
@@ -546,10 +576,10 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({
                       size="sm"
                       onClick={() => setConfirmArchiveOpen(true)}
                       disabled={actionLoading}
-                      className="text-xs gap-1.5 rounded-xl border-blue-500/40 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/20"
+                      className="text-xs gap-1.5 rounded-xl border-brand-cobalt/40 text-brand-cobalt hover:bg-brand-cobalt/10 cursor-pointer"
                     >
                       {actionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Archive className="h-3.5 w-3.5" />}
-                      Archive File
+                      Lưu trữ tệp tin
                     </Button>
                   )}
 
@@ -559,10 +589,10 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({
                       size="sm"
                       onClick={() => setConfirmPurgeOpen(true)}
                       disabled={actionLoading}
-                      className="text-xs gap-1.5 rounded-xl bg-red-700 hover:bg-red-800"
+                      className="text-xs gap-1.5 rounded-xl bg-destructive hover:bg-destructive/90 cursor-pointer"
                     >
                       {actionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                      Xoá vĩnh viễn (Purge MinIO)
+                      Xóa vĩnh viễn
                     </Button>
                   ) : (
                     <Button
@@ -570,10 +600,10 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({
                       size="sm"
                       onClick={() => setConfirmDeleteOpen(true)}
                       disabled={actionLoading}
-                      className="text-xs gap-1.5 rounded-xl"
+                      className="text-xs gap-1.5 rounded-xl cursor-pointer"
                     >
                       {actionLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                      Xoá mềm
+                      Xóa mềm
                     </Button>
                   )}
                 </div>
@@ -589,7 +619,7 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({
                 </div>
               ) : auditLogs.length === 0 ? (
                 <div className="h-36 flex flex-col items-center justify-center text-xs text-muted-foreground italic border border-dashed border-border/60 rounded-xl">
-                  <span>Chưa ghi nhận lịch sử thay đổi (Audit Log) nào cho file này.</span>
+                  <span>Chưa ghi nhận nhật ký thay đổi nào cho tệp tin này.</span>
                 </div>
               ) : (
                 <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
@@ -607,13 +637,13 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({
                           {logItem.action}
                         </Badge>
                         <span className="font-semibold text-foreground">
-                          {logItem.userFullName || logItem.userEmail || (logItem.userId ? `User #${logItem.userId}` : "Hệ thống")}
+                          {logItem.userFullName || logItem.userEmail || (logItem.userId ? `ID: ${logItem.userId}` : "Hệ thống")}
                         </span>
                       </div>
 
                       <div className="flex items-center gap-3 text-muted-foreground text-[11px]">
                         <span className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
+                          <Calendar className="h-3 w-3 text-primary" />
                           {formatDateTime(logItem.occurredAt || (logItem as any).createdAt)}
                         </span>
                         <Button variant="ghost" size="icon" className="h-6 w-6">
@@ -633,30 +663,30 @@ export const FileDetailModal: React.FC<FileDetailModalProps> = ({
       <ConfirmDialog
         open={confirmArchiveOpen}
         onOpenChange={setConfirmArchiveOpen}
-        title="Xác nhận Archive File"
-        description={`Bạn có chắc chắn muốn chuyển trạng thái file "${file.originalName}" sang ARCHIVED?`}
+        title="Xác nhận lưu trữ tệp tin"
+        description={`Bạn có chắc chắn muốn chuyển trạng thái tệp tin "${file.originalName}" sang đã lưu trữ?`}
         variant="warning"
-        confirmText="Archive"
+        confirmText="Lưu trữ"
         onConfirm={executeArchive}
       />
 
       <ConfirmDialog
         open={confirmDeleteOpen}
         onOpenChange={setConfirmDeleteOpen}
-        title="Xác nhận Xoá Mềm File"
-        description={`Bạn có chắc chắn muốn xoá mềm file mồ côi "${file.originalName}"? File sẽ chuyển vào trạng thái DELETED.`}
+        title="Xác nhận xóa mềm tệp tin"
+        description={`Bạn có chắc chắn muốn xóa mềm tệp tin "${file.originalName}"? Tệp tin sẽ được chuyển vào trạng thái đã xóa.`}
         variant="destructive"
-        confirmText="Xoá mềm"
+        confirmText="Xóa mềm"
         onConfirm={executeDelete}
       />
 
       <ConfirmDialog
         open={confirmPurgeOpen}
         onOpenChange={setConfirmPurgeOpen}
-        title="CẢNH BÁO XOÁ VĨNH VIỄN"
-        description={`Hành động này sẽ XOÁ VĨNH VIỄN tệp tin "${file.originalName}" khỏi hệ thống lưu trữ MinIO and Database. Dữ liệu không thể phục hồi!`}
+        title="Cảnh báo xóa vĩnh viễn"
+        description={`Hành động này sẽ xóa vĩnh viễn tệp tin "${file.originalName}" khỏi hệ thống lưu trữ và cơ sở dữ liệu. Dữ liệu không thể phục hồi!`}
         variant="destructive"
-        confirmText="Xoá vĩnh viễn"
+        confirmText="Xóa vĩnh viễn"
         onConfirm={executePurge}
       />
 

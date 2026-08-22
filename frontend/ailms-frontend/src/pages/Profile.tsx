@@ -24,6 +24,13 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   User,
   ShieldAlert,
   GraduationCap,
@@ -51,6 +58,8 @@ import {
   Trophy,
   Tag,
   Calendar,
+  Check,
+  X,
 } from "lucide-react";
 
 // ==========================================
@@ -112,49 +121,121 @@ const displayText = (value?: string | number | null): string => {
 
 // 1. Basic Info Schema (UserEntity: fullName, phone, dateOfBirth, gender)
 const basicInfoSchema = z.object({
-  fullName: z.string().min(2, "Họ và tên phải chứa ít nhất 2 ký tự"),
-  phone: z.string().optional(),
-  dateOfBirth: z.string().min(1, "Vui lòng chọn ngày sinh"),
-  gender: z.string(), // 0 - Nam, 1 - Nữ, 2 - Khác
+  fullName: z
+    .string()
+    .trim()
+    .min(2, "Họ và tên phải chứa ít nhất 2 ký tự")
+    .max(100, "Họ và tên không được vượt quá 100 ký tự"),
+  phone: z
+    .string()
+    .trim()
+    .optional()
+    .refine(
+      (val) => !val || /^(0|\+84)[3|5|7|8|9][0-9]{8}$/.test(val) || /^[0-9+\s().-]{8,20}$/.test(val),
+      { message: "Số điện thoại không hợp lệ (VD: 0988888888 hoặc 10 chữ số)" }
+    ),
+  dateOfBirth: z
+    .string()
+    .trim()
+    .optional()
+    .refine(
+      (val) => {
+        if (!val) return true;
+        const d = new Date(val);
+        if (isNaN(d.getTime())) return false;
+        const today = new Date();
+        today.setHours(23, 59, 59, 999);
+        return d <= today;
+      },
+      { message: "Ngày sinh phải nhỏ hơn hoặc bằng ngày hiện tại" }
+    ),
+  gender: z.string().optional(),
 });
 
 // 2. StudentProfileEntity Schema (Dành cho Học viên)
 const studentProfileSchema = z.object({
-  educationLevel: z.string().min(1, "Vui lòng chọn trình độ học vấn"),
-  schoolName: z.string().min(2, "Vui lòng nhập tên trường học"),
-  goal: z.string().min(2, "Vui lòng nhập mục tiêu học tập"),
-  description: z.string().optional(),
+  educationLevel: z.string().optional(),
+  schoolName: z.string().max(255, "Tên trường không được vượt quá 255 ký tự").optional(),
+  goal: z.string().max(1000, "Mục tiêu học tập không được vượt quá 1000 ký tự").optional(),
+  description: z.string().max(2000, "Mô tả không được vượt quá 2000 ký tự").optional(),
   isMinor: z.boolean(),
 });
 
-// 3. EmployeeEntity Schema (Dùng chung cho Teacher, TA, HR, Admin)
+// 3. EmployeeEntity Schema (Dùng chung cho Teacher, TA, HR, Support, Admin)
 const employeeProfileSchema = z.object({
   employeeCode: z.string().optional(),
   departmentId: z.string().optional(),
-  position: z.string().optional(),
+  position: z.string().max(100, "Chức vụ không được vượt quá 100 ký tự").optional(),
   employmentTypeEnum: z.union([z.enum(["FULL_TIME", "PART_TIME"]), z.literal("")]).optional(),
-  startDate: z.string().optional(),
-  address: z.string().optional(),
+  startDate: z
+    .string()
+    .optional()
+    .refine(
+      (val) => {
+        if (!val) return true;
+        const d = new Date(val);
+        return !isNaN(d.getTime());
+      },
+      { message: "Ngày vào làm không hợp lệ" }
+    ),
+  address: z.string().max(255, "Địa chỉ không được vượt quá 255 ký tự").optional(),
 });
 
-// 4. Change Password Schema
+// 4. GuardianEntity Schema (Người giám hộ cho học viên chưa thành niên)
+export const guardianSchema = z.object({
+  fullName: z
+    .string()
+    .trim()
+    .min(2, "Họ và tên người giám hộ phải có ít nhất 2 ký tự")
+    .max(255, "Họ và tên không được vượt quá 255 ký tự"),
+  relationship: z.enum(["FATHER", "MOTHER", "GUARDIAN", "OTHER"]),
+  phone: z
+    .string()
+    .trim()
+    .min(1, "Vui lòng nhập số điện thoại người giám hộ")
+    .refine(
+      (val) => /^(0|\+84)[3|5|7|8|9][0-9]{8}$/.test(val) || /^[0-9+\s().-]{8,20}$/.test(val),
+      { message: "Số điện thoại không hợp lệ (VD: 0988888888)" }
+    ),
+  email: z
+    .string()
+    .trim()
+    .optional()
+    .refine((val) => !val || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val), {
+      message: "Email người giám hộ không đúng định dạng",
+    }),
+  address: z.string().max(255, "Địa chỉ không được vượt quá 255 ký tự").optional(),
+});
+
+// 5. Change Password Schema
 const changePasswordSchema = z
   .object({
-    oldPassword: z.string().min(6, "Mật khẩu cũ phải từ 6 ký tự"),
-    newPassword: z.string().min(6, "Mật khẩu mới phải từ 6 ký tự"),
-    confirmPassword: z.string().min(1, "Vui lòng xác nhận mật khẩu mới"),
+    oldPassword: z.string().min(1, "Vui lòng nhập mật khẩu hiện tại"),
+    newPassword: z
+      .string()
+      .min(6, "Mật khẩu mới phải chứa ít nhất 6 ký tự")
+      .max(100, "Mật khẩu không được vượt quá 100 ký tự")
+      .regex(/[A-Z]/, "Mật khẩu phải chứa ít nhất 1 chữ cái in hoa (A-Z)")
+      .regex(/[a-z]/, "Mật khẩu phải chứa ít nhất 1 chữ cái thường (a-z)")
+      .regex(/[0-9]/, "Mật khẩu phải chứa ít nhất 1 chữ số (0-9)")
+      .regex(/^\S+$/, "Mật khẩu không được chứa khoảng trắng"),
+    confirmPassword: z.string().min(1, "Vui lòng xác nhận lại mật khẩu mới"),
   })
   .refine((data) => data.newPassword === data.confirmPassword, {
     message: "Mật khẩu xác nhận không khớp",
     path: ["confirmPassword"],
+  })
+  .refine((data) => data.oldPassword !== data.newPassword, {
+    message: "Mật khẩu mới không được trùng với mật khẩu hiện tại",
+    path: ["newPassword"],
   });
 
 export const Profile: React.FC = () => {
   const navigate = useNavigate();
-  const { auth } = useAuth();
+  const { auth, updateCurrentUser } = useAuth();
   const [profile, setProfile] = useState<UserEntity | null>(null);
 
-  // Profile Type: "STUDENT" (Học viên) hoặc "EMPLOYEE" (Giảng viên, TA, HR, Admin)
+  // Profile Type: "STUDENT" hoặc "EMPLOYEE" (Giảng viên, TA, HR, Support, Admin)
   const [profileCategory, setProfileCategory] = useState<"STUDENT" | "EMPLOYEE">("STUDENT");
   const [roleTitle, setRoleTitle] = useState<string>("Học Viên");
 
@@ -232,11 +313,13 @@ export const Profile: React.FC = () => {
   // ==========================================
   const basicForm = useForm<z.infer<typeof basicInfoSchema>>({
     resolver: zodResolver(basicInfoSchema),
+    mode: "onTouched",
     defaultValues: { fullName: "", phone: "", dateOfBirth: "", gender: "" },
   });
 
   const studentForm = useForm<z.infer<typeof studentProfileSchema>>({
     resolver: zodResolver(studentProfileSchema),
+    mode: "onTouched",
     defaultValues: {
       educationLevel: "",
       schoolName: "",
@@ -248,6 +331,7 @@ export const Profile: React.FC = () => {
 
   const employeeForm = useForm<z.infer<typeof employeeProfileSchema>>({
     resolver: zodResolver(employeeProfileSchema),
+    mode: "onTouched",
     defaultValues: {
       employeeCode: "",
       departmentId: "",
@@ -260,8 +344,21 @@ export const Profile: React.FC = () => {
 
   const passwordForm = useForm<z.infer<typeof changePasswordSchema>>({
     resolver: zodResolver(changePasswordSchema),
+    mode: "onTouched",
     defaultValues: { oldPassword: "", newPassword: "", confirmPassword: "" },
   });
+
+  const [guardianErrors, setGuardianErrors] = useState<Record<string, string>>({});
+
+  const profileNewPass = passwordForm.watch("newPassword") || "";
+  const profileConfirmPass = passwordForm.watch("confirmPassword") || "";
+  const profileHasMinLen = profileNewPass.length >= 6;
+  const profileHasUpper = /[A-Z]/.test(profileNewPass);
+  const profileHasLower = /[a-z]/.test(profileNewPass);
+  const profileHasDigit = /[0-9]/.test(profileNewPass);
+  const profileHasNoSpace = /^\S+$/.test(profileNewPass) && profileNewPass.length > 0;
+  const isAllProfilePassCriteriaMet =
+    profileHasMinLen && profileHasUpper && profileHasLower && profileHasDigit && profileHasNoSpace;
 
   // Watch isMinor for conditional Guardian list rendering
   const isMinorValue = studentForm.watch("isMinor");
@@ -290,7 +387,7 @@ export const Profile: React.FC = () => {
     }
   };
 
-  // Strictly categorize user profile: STUDENT vs EMPLOYEE (Teacher, TA, HR, Admin)
+  // Strictly categorize user profile: STUDENT vs EMPLOYEE (Teacher, TA, HR, Support, Admin)
   const detectCategoryAndTitle = (userData: any, authState: any) => {
     const rolesList = authState?.user?.roles || userData?.roles || [];
     const roleStr = JSON.stringify(rolesList).toUpperCase();
@@ -309,6 +406,10 @@ export const Profile: React.FC = () => {
     }
     if (roleStr.includes("HR")) {
       setRoleTitle("Nhân Sự");
+      return "EMPLOYEE";
+    }
+    if (roleStr.includes("SUPPORT")) {
+      setRoleTitle("Nhân Viên Hỗ Trợ");
       return "EMPLOYEE";
     }
     setRoleTitle("Học Viên");
@@ -364,7 +465,7 @@ export const Profile: React.FC = () => {
             setGuardians([]);
           }
         } else {
-          // EMPLOYEE (Teacher, TA, HR, Admin share EmployeeEntity)
+          // EMPLOYEE (Teacher, TA, HR, Support, Admin share EmployeeEntity)
           employeeForm.reset({
             employeeCode: attrs.employeeCode || "",
             departmentId: attrs.departmentId ? String(attrs.departmentId) : "",
@@ -398,45 +499,50 @@ export const Profile: React.FC = () => {
   // SUBMIT HANDLERS
   // ==========================================
 
-  // 1. Basic Info Submit (UserEntity: fullName, phone, dateOfBirth, gender)
+  /** Xử lý submit thông tin cá nhân cơ bản (UserEntity) */
   const onBasicSubmit = async (data: z.infer<typeof basicInfoSchema>) => {
     setBasicStatus({ success: "", error: "", loading: true });
     try {
       const updated = await userService.updateBasicProfile({
         fullName: data.fullName,
         phone: data.phone || "",
-        dateOfBirth: data.dateOfBirth,
-        gender: data.gender ? parseInt(data.gender) : undefined,
+        dateOfBirth: data.dateOfBirth || undefined,
+        gender: data.gender !== "" && data.gender !== undefined ? parseInt(data.gender) : undefined,
       });
       setProfile(updated);
       setAvatarVersion(String(Date.now()));
+      updateCurrentUser({ fullName: updated.fullName || undefined });
       await fetchProfile();
-      setBasicStatus({ success: "Đã lưu thông tin cá nhân cơ bản vào CSDL!", error: "", loading: false });
+      setBasicStatus({ success: "Đã lưu thông tin cá nhân cơ bản thành công!", error: "", loading: false });
       setTimeout(() => setBasicStatus((s) => ({ ...s, success: "" })), 3500);
     } catch (e) {
-      setBasicStatus({ success: "", error: extractBeError(e, "Lỗi lưu thông tin vào CSDL. Vui lòng thử lại."), loading: false });
+      setBasicStatus({ success: "", error: extractBeError(e, "Lỗi lưu thông tin cá nhân. Vui lòng thử lại."), loading: false });
     }
   };
 
-  // 2. Role Info Submit (StudentProfileEntity vs EmployeeEntity)
+  /** Xử lý submit hồ sơ vai trò (Học viên / Cán bộ nhân sự) */
   const onRoleInfoSubmit = async (formData: any) => {
     setRoleInfoStatus({ success: "", error: "", loading: true });
     try {
       if (isAdminProfile) {
         if (!formData.departmentId || !String(formData.departmentId).trim()) {
           setRoleInfoStatus({ success: "", error: "Vui lòng chọn phòng ban.", loading: false });
+          employeeForm.setError("departmentId", { message: "Vui lòng chọn phòng ban" });
           return;
         }
         if (!formData.position || !String(formData.position).trim()) {
           setRoleInfoStatus({ success: "", error: "Vui lòng nhập chức vụ / vị trí công tác.", loading: false });
+          employeeForm.setError("position", { message: "Vui lòng nhập chức vụ / vị trí" });
           return;
         }
         if (!formData.employmentTypeEnum) {
           setRoleInfoStatus({ success: "", error: "Vui lòng chọn loại hình làm việc.", loading: false });
+          employeeForm.setError("employmentTypeEnum", { message: "Vui lòng chọn loại hình làm việc" });
           return;
         }
         if (!formData.startDate) {
           setRoleInfoStatus({ success: "", error: "Vui lòng chọn ngày vào làm.", loading: false });
+          employeeForm.setError("startDate", { message: "Vui lòng chọn ngày vào làm" });
           return;
         }
       }
@@ -458,16 +564,19 @@ export const Profile: React.FC = () => {
           : await userService.updateRoleProfile(payload);
       setProfile(updated);
       await fetchProfile();
-      setRoleInfoStatus({ success: "Đã cập nhật hồ sơ vào CSDL!", error: "", loading: false });
+      setRoleInfoStatus({ success: "Cập nhật hồ sơ thành công!", error: "", loading: false });
       setTimeout(() => setRoleInfoStatus((s) => ({ ...s, success: "" })), 3500);
     } catch (e) {
-      setRoleInfoStatus({ success: "", error: extractBeError(e, "Lỗi lưu hồ sơ vào CSDL. Vui lòng thử lại."), loading: false });
+      setRoleInfoStatus({ success: "", error: extractBeError(e, "Lỗi lưu hồ sơ. Vui lòng thử lại."), loading: false });
     }
   };
 
   // 3. Guardian CRUD Actions (GuardianEntity List)
+
+  /** Mở modal thêm người giám hộ */
   const handleOpenAddGuardian = () => {
     setEditingGuardianIndex(null);
+    setGuardianErrors({});
     setGuardianForm({
       fullName: "",
       relationship: "FATHER",
@@ -478,14 +587,30 @@ export const Profile: React.FC = () => {
     setGuardianModalOpen(true);
   };
 
+  /** Mở modal chỉnh sửa người giám hộ */
   const handleOpenEditGuardian = (index: number) => {
     setEditingGuardianIndex(index);
+    setGuardianErrors({});
     setGuardianForm({ ...guardians[index] });
     setGuardianModalOpen(true);
   };
 
+  /** Lưu người giám hộ sau khi kiểm tra hợp lệ */
   const handleSaveGuardian = async () => {
-    if (!guardianForm.fullName.trim()) return;
+    const parseResult = guardianSchema.safeParse(guardianForm);
+    if (!parseResult.success) {
+      const errMap: Record<string, string> = {};
+      parseResult.error.issues.forEach((issue) => {
+        const fieldName = issue.path[0];
+        if (fieldName) {
+          errMap[String(fieldName)] = issue.message;
+        }
+      });
+      setGuardianErrors(errMap);
+      return;
+    }
+    setGuardianErrors({});
+
     let updatedList = [...guardians];
     if (editingGuardianIndex !== null) {
       updatedList[editingGuardianIndex] = guardianForm;
@@ -497,10 +622,10 @@ export const Profile: React.FC = () => {
       setProfile(updated);
       setGuardians(updatedList);
       setGuardianModalOpen(false);
-      setRoleInfoStatus({ success: "Đã lưu thông tin người giám hộ!", error: "", loading: false });
+      setRoleInfoStatus({ success: "Đã lưu thông tin người giám hộ thành công!", error: "", loading: false });
       setTimeout(() => setRoleInfoStatus((s) => ({ ...s, success: "" })), 3000);
     } catch (e) {
-      setRoleInfoStatus({ success: "", error: extractBeError(e, "Lỗi lưu người giám hộ vào CSDL."), loading: false });
+      setRoleInfoStatus({ success: "", error: extractBeError(e, "Lỗi lưu thông tin người giám hộ."), loading: false });
     }
   };
 
@@ -608,16 +733,21 @@ export const Profile: React.FC = () => {
 
       const updated = await userService.uploadAvatar(croppedFile);
 
-
       setProfile(updated);
-      setAvatarVersion(String(Date.now()));
-      setAvatarStatus({ success: "Đã tải avatar lên MinIO & lưu CSDL!", error: "", loading: false });
+      const nextAvatarVersion = String(Date.now());
+      setAvatarVersion(nextAvatarVersion);
+      updateCurrentUser({
+        avatarUrl: updated.avatarUrl
+          ? `${updated.avatarUrl}${updated.avatarUrl.includes("?") ? "&" : "?"}v=${nextAvatarVersion}`
+          : null,
+      });
+      setAvatarStatus({ success: "Cập nhật ảnh đại diện thành công!", error: "", loading: false });
       setAvatarEditOpen(false);
       setSelectedAvatarFile(null);
       setAvatarPreviewUrl("");
       setTimeout(() => setAvatarStatus((s) => ({ ...s, success: "" })), 3500);
     } catch (e) {
-      console.error("Lỗi upload avatar MinIO:", e);
+      console.error("Lỗi upload avatar:", e);
       setAvatarStatus({ success: "", error: extractBeError(e, "Tải lên ảnh thất bại. Vui lòng thử lại."), loading: false });
     } finally {
       setUploadingAvatar(false);
@@ -630,7 +760,8 @@ export const Profile: React.FC = () => {
       const updated = await userService.deleteAvatar();
       setProfile(updated);
       setAvatarVersion(String(Date.now()));
-      setAvatarStatus({ success: "Đã xóa ảnh đại diện về mặc định trong CSDL!", error: "", loading: false });
+      updateCurrentUser({ avatarUrl: null });
+      setAvatarStatus({ success: "Đã xóa ảnh đại diện thành công!", error: "", loading: false });
       setTimeout(() => setAvatarStatus((s) => ({ ...s, success: "" })), 3000);
     } catch (e) {
       setAvatarStatus({ success: "", error: extractBeError(e, "Lỗi xóa ảnh đại diện. Vui lòng thử lại."), loading: false });
@@ -667,6 +798,7 @@ export const Profile: React.FC = () => {
     if (roleTitle.includes("Giảng Viên")) return <Badge className="bg-blue-600 text-white font-bold text-xs gap-1"><Award className="h-3.5 w-3.5" /> {roleTitle}</Badge>;
     if (roleTitle.includes("Trợ Giảng")) return <Badge className="bg-cyan-600 text-white font-bold text-xs gap-1"><Award className="h-3.5 w-3.5" /> {roleTitle}</Badge>;
     if (roleTitle.includes("Nhân Sự")) return <Badge className="bg-purple-600 text-white font-bold text-xs gap-1"><Briefcase className="h-3.5 w-3.5" /> {roleTitle}</Badge>;
+    if (roleTitle.includes("Hỗ Trợ")) return <Badge className="bg-indigo-600 text-white font-bold text-xs gap-1"><Briefcase className="h-3.5 w-3.5" /> {roleTitle}</Badge>;
     return <Badge className="bg-emerald-600 text-white font-bold text-xs gap-1"><GraduationCap className="h-3.5 w-3.5" /> {roleTitle}</Badge>;
   };
 
@@ -696,11 +828,8 @@ export const Profile: React.FC = () => {
           </div>
           <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-foreground flex items-center gap-3 mt-1">
             <User className="h-7 w-7 text-primary" />
-            <span>Cài Đặt Tài Khoản</span>
+            <span>Thông tin tài khoản</span>
           </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            Quản lý thông tin hồ sơ cá nhân và cài đặt bảo mật tài khoản.
-          </p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -710,7 +839,7 @@ export const Profile: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
 
-        {/* CỘT TRÁI: NAV SHORTCUTS */}
+        {/* CỘT TRÁI: DANH MỤC ĐIỀU HƯỚNG NHANH */}
         <div className="lg:col-span-1 space-y-4">
           <nav className="flex flex-col gap-1.5 text-sm font-medium sticky top-20">
             <button
@@ -722,7 +851,7 @@ export const Profile: React.FC = () => {
               }`}
             >
               <Camera className="h-4.5 w-4.5" />
-              <span>Ảnh đại diện (Avatar)</span>
+              <span>Ảnh đại diện</span>
             </button>
 
             <button
@@ -734,7 +863,7 @@ export const Profile: React.FC = () => {
               }`}
             >
               <User className="h-4.5 w-4.5" />
-              <span>Thông tin cá nhân cơ bản</span>
+              <span>Thông tin cơ bản</span>
             </button>
 
             <button
@@ -747,7 +876,7 @@ export const Profile: React.FC = () => {
             >
               {profileCategory === "STUDENT" ? <GraduationCap className="h-4.5 w-4.5" /> : <Briefcase className="h-4.5 w-4.5" />}
               <span>
-                {profileCategory === "STUDENT" ? "Hồ sơ Học Viên" : "Hồ sơ Cán Bộ / Nhân Sự"}
+                {profileCategory === "STUDENT" ? "Hồ sơ học viên" : "Hồ sơ công tác"}
               </span>
             </button>
 
@@ -760,24 +889,21 @@ export const Profile: React.FC = () => {
               }`}
             >
               <KeyRound className="h-4.5 w-4.5" />
-              <span>Cài đặt đổi mật khẩu</span>
+              <span>Đổi mật khẩu</span>
             </button>
           </nav>
         </div>
 
-        {/* CỘT PHẢI: AVATAR CARD & PROFILE FORMS */}
+        {/* CỘT PHẢI: CÁC KHUNG THÔNG TIN HỒ SƠ */}
         <div className="lg:col-span-3 space-y-8">
 
-          {/* KHUNG 1: AVATAR CÁ NHÂN (UserEntity.avatarUrl) */}
+          {/* KHUNG 1: ẢNH ĐẠI DIỆN */}
           <Card id="sec-avatar" className="border-border shadow-sm bg-card transition-all">
             <CardHeader className="border-b border-border/60 pb-4">
               <CardTitle className="text-base font-bold flex items-center gap-2">
                 <Camera className="h-5 w-5 text-primary" />
-                <span>Ảnh đại diện (Avatar)</span>
+                <span>Ảnh đại diện</span>
               </CardTitle>
-              <CardDescription className="text-xs text-muted-foreground">
-                Tải lên file ảnh mới và lưu trữ trên máy chủ MinIO (`UserEntity.avatarUrl`).
-              </CardDescription>
             </CardHeader>
 
             <CardContent className="p-6">
@@ -796,14 +922,13 @@ export const Profile: React.FC = () => {
 
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 bg-muted/20 p-5 rounded-2xl border border-border/40">
                 <div className="flex items-center gap-5">
-                  {/* AVATAR CLICK TO ENLARGE MODAL */}
                   <div
                     onClick={() => setAvatarDetailOpen(true)}
                     className="relative group cursor-pointer"
-                    title="Click vào ảnh để xem phóng to HD"
+                    title="Xem ảnh kích thước lớn"
                   >
                     <Avatar className="h-24 w-24 border-4 border-primary/20 group-hover:border-primary/60 transition-all shadow-md">
-                      <AvatarImage src={resolveAvatarUrl(profile?.avatarUrl, avatarVersion || profile?.updatedAt) || `https://api.dicebear.com/7.x/adventurer/svg?seed=${profile?.username}`} />
+                      <AvatarImage src={resolveAvatarUrl(profile?.avatarUrl, avatarVersion || profile?.updatedAt)} />
                       <AvatarFallback className="bg-primary/10 text-primary font-extrabold uppercase text-2xl">
                         {profile?.username.slice(0, 2)}
                       </AvatarFallback>
@@ -819,13 +944,10 @@ export const Profile: React.FC = () => {
                       {renderRoleBadge()}
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">{profile?.email}</p>
-                    <p className="text-[11px] text-primary font-semibold mt-1 flex items-center gap-1 cursor-pointer" onClick={() => setAvatarDetailOpen(true)}>
-                      <ZoomIn className="h-3.5 w-3.5" /> (Click ảnh để xem phóng to HD)
-                    </p>
                   </div>
                 </div>
 
-                {/* Avatar Action Buttons */}
+                {/* Các nút thao tác ảnh */}
                 <div className="flex items-center gap-2 flex-wrap shrink-0">
                   <Button
                     size="sm"
@@ -834,7 +956,7 @@ export const Profile: React.FC = () => {
                     className="text-xs font-bold gap-1.5 rounded-xl border-border/50"
                   >
                     <ZoomIn className="h-3.5 w-3.5 text-primary" />
-                    <span>Xem phóng to Avatar</span>
+                    <span>Xem ảnh lớn</span>
                   </Button>
 
                   <Button
@@ -843,7 +965,7 @@ export const Profile: React.FC = () => {
                     className="text-xs font-bold gap-1.5 rounded-xl bg-primary text-primary-foreground"
                   >
                     <Upload className="h-3.5 w-3.5" />
-                    <span>{profile?.avatarUrl ? "Đổi ảnh khác" : "Tải ảnh đại diện"}</span>
+                    <span>{profile?.avatarUrl ? "Đổi ảnh" : "Tải ảnh lên"}</span>
                   </Button>
 
                   {profile?.avatarUrl && (
@@ -854,7 +976,7 @@ export const Profile: React.FC = () => {
                       className="text-xs font-bold gap-1.5 rounded-xl"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
-                      <span>Xóa Avatar</span>
+                      <span>Xóa ảnh</span>
                     </Button>
                   )}
                 </div>
@@ -862,16 +984,13 @@ export const Profile: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* KHUNG 2: THÔNG TIN CÁ NHÂN CƠ BẢN (UserEntity: fullName, email, phone, dateOfBirth, gender) */}
+          {/* KHUNG 2: THÔNG TIN CÁ NHÂN CƠ BẢN */}
           <Card id="sec-basic" className="border-border shadow-sm bg-card transition-all">
             <CardHeader className="border-b border-border/60 pb-4">
               <CardTitle className="text-base font-bold flex items-center gap-2">
                 <User className="h-5 w-5 text-primary" />
-                <span>Thông tin cá nhân cơ bản</span>
+                <span>Thông tin cơ bản</span>
               </CardTitle>
-              <CardDescription className="text-xs text-muted-foreground">
-                Thông tin tài khoản chung dùng cho mọi vai trò hệ thống (`UserEntity`).
-              </CardDescription>
             </CardHeader>
 
             <CardContent className="p-6">
@@ -891,76 +1010,94 @@ export const Profile: React.FC = () => {
               <form onSubmit={basicForm.handleSubmit(onBasicSubmit)} className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <Label htmlFor="basic-fullName" className="text-xs font-semibold">Họ và tên (fullName)</Label>
-                    <Input id="basic-fullName" {...basicForm.register("fullName")} />
+                    <Label htmlFor="basic-fullName" className="text-xs font-semibold">Họ và tên *</Label>
+                    <Input id="basic-fullName" placeholder="Nhập họ và tên đầy đủ" {...basicForm.register("fullName")} />
                     {basicForm.formState.errors.fullName && (
-                      <p className="text-[10px] text-destructive font-medium">{basicForm.formState.errors.fullName.message}</p>
+                      <p className="text-xs text-destructive font-medium mt-1">{basicForm.formState.errors.fullName.message}</p>
                     )}
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label htmlFor="basic-email" className="text-xs font-semibold">Email tài khoản (email)</Label>
+                    <Label htmlFor="basic-email" className="text-xs font-semibold">Email tài khoản</Label>
                     <Input id="basic-email" value={profile?.email || ""} disabled className="bg-muted/50 cursor-not-allowed" />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="space-y-1.5">
-                    <Label htmlFor="basic-phone" className="text-xs font-semibold">Số điện thoại (phone)</Label>
+                    <Label htmlFor="basic-phone" className="text-xs font-semibold">Số điện thoại</Label>
                     <Input id="basic-phone" placeholder="0988888888" {...basicForm.register("phone")} />
+                    {basicForm.formState.errors.phone && (
+                      <p className="text-xs text-destructive font-medium mt-1">{basicForm.formState.errors.phone.message}</p>
+                    )}
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label htmlFor="basic-dob" className="text-xs font-semibold">Ngày sinh (dateOfBirth)</Label>
+                    <Label htmlFor="basic-dob" className="text-xs font-semibold">Ngày sinh</Label>
                     <DatePickerInput
                       value={basicForm.watch("dateOfBirth")}
                       onChange={(value) => basicForm.setValue("dateOfBirth", value, { shouldDirty: true, shouldValidate: true })}
                       placeholder="dd/mm/yyyy"
                     />
+                    {basicForm.formState.errors.dateOfBirth && (
+                      <p className="text-xs text-destructive font-medium mt-1">{basicForm.formState.errors.dateOfBirth.message}</p>
+                    )}
                   </div>
 
                   <div className="space-y-1.5">
-                    <Label htmlFor="basic-gender" className="text-xs font-semibold">Giới tính (gender)</Label>
-                    <select
-                      id="basic-gender"
-                      className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none"
-                      {...basicForm.register("gender")}
+                    <Label htmlFor="basic-gender" className="text-xs font-semibold">Giới tính</Label>
+                    <Select
+                      value={basicForm.watch("gender") ?? "NONE"}
+                      onValueChange={(val) => {
+                        const actualVal = val === "NONE" ? "" : val;
+                        basicForm.setValue("gender", actualVal, { shouldDirty: true, shouldValidate: true });
+                      }}
                     >
-                      <option value="">Không có</option>
-                      <option value="0">Nam (0)</option>
-                      <option value="1">Nữ (1)</option>
-                      <option value="2">Khác (2)</option>
-                    </select>
+                      <SelectTrigger id="basic-gender" className="h-10 w-full rounded-lg">
+                        <SelectValue placeholder="Chọn giới tính" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="NONE">Không có</SelectItem>
+                        <SelectItem value="0">Nam</SelectItem>
+                        <SelectItem value="1">Nữ</SelectItem>
+                        <SelectItem value="2">Khác</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {basicForm.formState.errors.gender && (
+                      <p className="text-xs text-destructive font-medium mt-1">{basicForm.formState.errors.gender.message}</p>
+                    )}
                   </div>
                 </div>
 
                 <div className="flex justify-end pt-2">
                   <Button
                     type="submit"
-                    className="font-bold bg-primary text-primary-foreground"
-                    disabled={basicStatus.loading || !basicForm.formState.isDirty}
+                    className="font-bold bg-primary text-primary-foreground cursor-pointer"
+                    disabled={basicStatus.loading}
                   >
-                    {basicStatus.loading ? "Đang lưu..." : "Lưu thông tin cá nhân"}
+                    {basicStatus.loading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Đang lưu...
+                      </>
+                    ) : (
+                      "Lưu thông tin"
+                    )}
                   </Button>
                 </div>
               </form>
             </CardContent>
           </Card>
 
-          {/* KHUNG 3: THÔNG TIN THEO HỒ SƠ CHÍNH CỦA USER (TỰ ĐỘNG CHỌN HỌC VIÊN HOẶC NHÂN SỰ CHUẨN XÁC) */}
+          {/* KHUNG 3: THÔNG TIN THEO HỒ SƠ */}
           <Card id="sec-role-info" className="border-border shadow-sm bg-card transition-all">
             <CardHeader className="border-b border-border/60 pb-4">
               <CardTitle className="text-base font-bold flex items-center gap-2">
                 {profileCategory === "STUDENT" ? <GraduationCap className="h-5 w-5 text-emerald-600" /> : <Briefcase className="h-5 w-5 text-blue-600" />}
                 <span>
-                  {profileCategory === "STUDENT" ? "Thông tin Hồ Sơ Học Viên (StudentProfileEntity)" : `Thông tin Hồ Sơ Cán Bộ / Nhân Sự (${roleTitle})`}
+                  {profileCategory === "STUDENT" ? "Hồ sơ học viên" : `Hồ sơ công tác - ${roleTitle}`}
                 </span>
               </CardTitle>
-              <CardDescription className="text-xs text-muted-foreground">
-                {profileCategory === "STUDENT"
-                  ? "Quản lý trình độ, trường học, mục tiêu và người giám hộ khi học viên chưa thành niên."
-                  : "Hồ sơ công tác dành cho Giảng viên, Trợ giảng, Nhân sự HR và Admin."}
-              </CardDescription>
             </CardHeader>
 
             <CardContent className="p-6 space-y-6">
@@ -978,22 +1115,22 @@ export const Profile: React.FC = () => {
               )}
 
               {/* ==========================================
-                  HỒ SƠ 1: CHỈ HIỂN THỊ KHI LÀ HỌC VIÊN
+                  HỒ SƠ 1: DÀNH CHO HỌC VIÊN
                   ========================================== */}
               {profileCategory === "STUDENT" && (
                 <div className="space-y-6 animate-in fade-in-50">
 
-                  {/* READONLY STATS */}
+                  {/* THÔNG SỐ HỌC TẬP */}
                   <div className="p-4 bg-muted/20 rounded-2xl border border-border/40 space-y-3">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                       <div>
-                        <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Mã học viên (Hệ thống sinh)</span>
+                        <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Mã học viên</span>
                         <div className="font-extrabold text-base text-foreground font-mono mt-0.5">{displayText(studentStats.studentCode)}</div>
                       </div>
 
                       <div className="flex items-center gap-2 flex-wrap">
                         <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 font-bold border-emerald-300 gap-1">
-                          <CheckCircle2 className="h-3.5 w-3.5" /> hasGoal: {studentStats.hasGoal === null ? "Không có" : (studentStats.hasGoal ? "True" : "False")}
+                          <CheckCircle2 className="h-3.5 w-3.5" /> Mục tiêu: {studentStats.hasGoal === null ? "Không có" : (studentStats.hasGoal ? "Đã đặt" : "Chưa đặt")}
                         </Badge>
                         <Badge variant="outline" className="bg-amber-500/10 text-amber-600 font-bold border-amber-300 gap-1">
                           <Flame className="h-3.5 w-3.5" /> Chuỗi hiện tại: {studentStats.currentStreak === null ? "Không có" : `${studentStats.currentStreak} ngày`}
@@ -1004,11 +1141,11 @@ export const Profile: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Student Interests Badges */}
+                    {/* Lĩnh vực quan tâm */}
                     {studentStats.interests.length > 0 ? (
                       <div className="pt-2 border-t border-border/30 flex items-center gap-2 flex-wrap">
                         <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
-                          <Tag className="h-3.5 w-3.5" /> Lĩnh vực quan tâm (studentInterests):
+                          <Tag className="h-3.5 w-3.5" /> Lĩnh vực quan tâm:
                         </span>
                         {studentStats.interests.map((tag, idx) => (
                           <Badge key={idx} variant="secondary" className="text-[11px] font-medium bg-primary/10 text-primary">
@@ -1027,47 +1164,67 @@ export const Profile: React.FC = () => {
                   <form onSubmit={studentForm.handleSubmit(onRoleInfoSubmit)} className="space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-1.5">
-                        <Label className="text-xs font-semibold">Trình độ học vấn (educationLevel)</Label>
-                        <select
-                          className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none"
-                          {...studentForm.register("educationLevel")}
+                        <Label className="text-xs font-semibold">Trình độ học vấn</Label>
+                        <Select
+                          value={studentForm.watch("educationLevel") || "NONE"}
+                          onValueChange={(val) => {
+                            const actualVal = val === "NONE" ? "" : val;
+                            studentForm.setValue("educationLevel", actualVal, { shouldDirty: true, shouldValidate: true });
+                          }}
                         >
-                          <option value="">Không có</option>
-                          <option value="Học sinh THCS">Học sinh THCS</option>
-                          <option value="Học sinh THPT">Học sinh THPT</option>
-                          <option value="Đại học">Đại học</option>
-                          <option value="Sau đại học">Sau đại học</option>
-                          <option value="Người đi làm">Người đi làm</option>
-                        </select>
+                          <SelectTrigger className="h-10 w-full rounded-lg">
+                            <SelectValue placeholder="Chọn trình độ học vấn" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="NONE">Không có</SelectItem>
+                            <SelectItem value="Học sinh THCS">Học sinh THCS</SelectItem>
+                            <SelectItem value="Học sinh THPT">Học sinh THPT</SelectItem>
+                            <SelectItem value="Đại học">Đại học</SelectItem>
+                            <SelectItem value="Sau đại học">Sau đại học</SelectItem>
+                            <SelectItem value="Người đi làm">Người đi làm</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {studentForm.formState.errors.educationLevel && (
+                          <p className="text-xs text-destructive font-medium mt-1">{studentForm.formState.errors.educationLevel.message}</p>
+                        )}
                       </div>
 
                       <div className="space-y-1.5">
-                        <Label className="text-xs font-semibold">Trường học / Cơ sở (schoolName)</Label>
-                        <Input placeholder="Tên trường học" {...studentForm.register("schoolName")} />
+                        <Label className="text-xs font-semibold">Trường học</Label>
+                        <Input placeholder="Nhập tên trường học hoặc cơ sở đào tạo" {...studentForm.register("schoolName")} />
+                        {studentForm.formState.errors.schoolName && (
+                          <p className="text-xs text-destructive font-medium mt-1">{studentForm.formState.errors.schoolName.message}</p>
+                        )}
                       </div>
                     </div>
 
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold">Mục tiêu học tập (goal)</Label>
+                      <Label className="text-xs font-semibold">Mục tiêu học tập</Label>
                       <textarea
                         rows={2}
                         placeholder="Nhập mục tiêu học tập..."
                         className="flex w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none resize-none"
                         {...studentForm.register("goal")}
                       />
+                      {studentForm.formState.errors.goal && (
+                        <p className="text-xs text-destructive font-medium mt-1">{studentForm.formState.errors.goal.message}</p>
+                      )}
                     </div>
 
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold">Mô tả bản thân / Ghi chú (description)</Label>
+                      <Label className="text-xs font-semibold">Giới thiệu bản thân</Label>
                       <textarea
                         rows={2}
-                        placeholder="Mô tả bản thân..."
+                        placeholder="Mô tả ngắn gọn về bản thân hoặc định hướng học tập..."
                         className="flex w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none resize-none"
                         {...studentForm.register("description")}
                       />
+                      {studentForm.formState.errors.description && (
+                        <p className="text-xs text-destructive font-medium mt-1">{studentForm.formState.errors.description.message}</p>
+                      )}
                     </div>
 
-                    {/* CHECKBOX IS_MINOR */}
+                    {/* CHECKBOX DÀNH CHO HỌC VIÊN CHƯA THÀNH NIÊN */}
                     <div className="flex items-center gap-3 p-3 bg-muted/30 rounded-xl border border-border/40">
                       <input
                         type="checkbox"
@@ -1076,38 +1233,42 @@ export const Profile: React.FC = () => {
                         {...studentForm.register("isMinor")}
                       />
                       <label htmlFor="chk-isMinor" className="text-xs font-semibold text-foreground cursor-pointer">
-                        Học viên là người chưa thành niên (&lt; 18 tuổi) — <span className="text-muted-foreground font-normal font-mono">isMinor = true (Yêu cầu thông tin Người Giám Hộ)</span>
+                        Học viên là người chưa thành niên (dưới 18 tuổi)
                       </label>
                     </div>
 
                     <div className="flex justify-end pt-2">
                       <Button
                         type="submit"
-                        className="font-bold bg-primary text-primary-foreground"
-                        disabled={roleInfoStatus.loading || !studentForm.formState.isDirty}
+                        className="font-bold bg-primary text-primary-foreground cursor-pointer"
+                        disabled={roleInfoStatus.loading}
                       >
-                        {roleInfoStatus.loading ? "Đang lưu..." : "Lưu hồ sơ học viên vào CSDL"}
+                        {roleInfoStatus.loading ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Đang lưu...
+                          </>
+                        ) : (
+                          "Lưu thông tin"
+                        )}
                       </Button>
                     </div>
                   </form>
 
-                  {/* GUARDIAN LIST SECTION (HIỆN KHI IS_MINOR = TRUE) */}
+                  {/* DANH SÁCH NGƯỜI GIÁM HỘ (KHI HỌC VIÊN DƯỚI 18 TUỔI) */}
                   {isMinorValue && (
                     <div className="pt-4 border-t border-border/40 space-y-4 animate-in fade-in-50">
                       <div className="flex items-center justify-between">
                         <div>
                           <h4 className="text-xs font-bold text-amber-600 flex items-center gap-1.5 uppercase">
-                            <ShieldAlert className="h-4 w-4" /> Danh Sách Người Giám Hộ (GuardianEntity)
+                            <ShieldAlert className="h-4 w-4" /> Người giám hộ
                           </h4>
-                          <p className="text-[11px] text-muted-foreground mt-0.5">
-                            Quản lý 1-nhiều người giám hộ cho học viên vị thành niên (`GuardianEntity`).
-                          </p>
                         </div>
 
                         <Button
                           size="sm"
                           onClick={handleOpenAddGuardian}
-                          className="text-xs font-bold gap-1 rounded-xl bg-amber-600 hover:bg-amber-700 text-white"
+                          className="text-xs font-bold gap-1 rounded-xl bg-amber-600 hover:bg-amber-700 text-white cursor-pointer"
                         >
                           <Plus className="h-3.5 w-3.5" />
                           <span>Thêm người giám hộ</span>
@@ -1116,7 +1277,7 @@ export const Profile: React.FC = () => {
 
                       {guardians.length === 0 ? (
                         <div className="p-6 text-center border-2 border-dashed border-border/60 rounded-2xl bg-muted/10">
-                          <p className="text-xs text-muted-foreground italic">Chưa có người giám hộ nào trong CSDL. Bấm "Thêm người giám hộ" để bổ sung.</p>
+                          <p className="text-xs text-muted-foreground italic">Chưa có người giám hộ. Bấm "Thêm người giám hộ" để bổ sung.</p>
                         </div>
                       ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1130,9 +1291,9 @@ export const Profile: React.FC = () => {
                               </div>
 
                               <div className="text-xs text-muted-foreground space-y-1">
-                                <p>📞 SĐT: <strong className="text-foreground">{g.phone || "Chưa cập nhật"}</strong></p>
-                                <p>✉️ Email: <strong className="text-foreground">{g.email || "Chưa cập nhật"}</strong></p>
-                                <p>📍 Địa chỉ: <strong className="text-foreground">{g.address || "Chưa cập nhật"}</strong></p>
+                                <p>Số điện thoại: <strong className="text-foreground">{g.phone || "Chưa cập nhật"}</strong></p>
+                                <p>Email: <strong className="text-foreground">{g.email || "Chưa cập nhật"}</strong></p>
+                                <p>Địa chỉ: <strong className="text-foreground">{g.address || "Chưa cập nhật"}</strong></p>
                               </div>
 
                               <div className="flex items-center gap-1 justify-end pt-2 border-t border-border/20">
@@ -1140,7 +1301,7 @@ export const Profile: React.FC = () => {
                                   size="sm"
                                   variant="ghost"
                                   onClick={() => handleOpenEditGuardian(idx)}
-                                  className="h-7 text-xs font-semibold gap-1 text-muted-foreground hover:text-foreground"
+                                  className="h-7 text-xs font-semibold gap-1 text-muted-foreground hover:text-foreground cursor-pointer"
                                 >
                                   <Pencil className="h-3 w-3" /> Sửa
                                 </Button>
@@ -1148,7 +1309,7 @@ export const Profile: React.FC = () => {
                                   size="sm"
                                   variant="ghost"
                                   onClick={() => handleDeleteGuardian(idx)}
-                                  className="h-7 text-xs font-semibold gap-1 text-destructive hover:bg-destructive/10"
+                                  className="h-7 text-xs font-semibold gap-1 text-destructive hover:bg-destructive/10 cursor-pointer"
                                 >
                                   <Trash2 className="h-3 w-3" /> Xóa
                                 </Button>
@@ -1164,16 +1325,16 @@ export const Profile: React.FC = () => {
               )}
 
               {/* ==========================================
-                  HỒ SƠ 2: CHỈ HIỂN THỊ KHI LÀ CÁN BỘ / NHÂN SỰ (TEACHER, TA, HR, ADMIN)
+                  HỒ SƠ 2: DÀNH CHO CÁN BỘ / NHÂN SỰ
                   ========================================== */}
               {profileCategory === "EMPLOYEE" && (
                 <div className="space-y-6 animate-in fade-in-50">
 
-                  {/* READONLY STATS (endDate & status) */}
+                  {/* THÔNG TIN HỢP ĐỒNG & PHÒNG BAN */}
                   <div className="p-4 bg-muted/20 rounded-2xl border border-border/40 flex flex-wrap items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
                       <Calendar className="h-4 w-4 text-primary" />
-                      <span className="text-xs font-semibold">Ngày kết thúc hợp đồng (endDate):</span>
+                      <span className="text-xs font-semibold">Ngày kết thúc hợp đồng:</span>
                       <span className="text-xs font-bold font-mono text-foreground">
                         {employeeStats.endDate ? formatDateDisplay(employeeStats.endDate) : "Chưa xác định / Đang hoạt động"}
                       </span>
@@ -1187,7 +1348,7 @@ export const Profile: React.FC = () => {
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold">Trạng thái nhân sự (status):</span>
+                      <span className="text-xs font-semibold">Trạng thái:</span>
                       {employeeStats.status ? (
                         <Badge className="bg-green-600 text-white font-bold text-xs">
                           {employeeStats.status}
@@ -1198,15 +1359,12 @@ export const Profile: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* READONLY TEACHER CATEGORIES (Hiển thị cho Giảng viên / Trợ giảng) */}
+                  {/* CHUYÊN MÔN GIẢNG DẠY (DÀNH CHO GIẢNG VIÊN / TRỢ GIẢNG) */}
                   {roleTitle.includes("Giảng Viên") && (
                     <div className="p-4 bg-blue-500/5 rounded-2xl border border-blue-200 dark:border-blue-900 space-y-2">
                       <div className="flex items-center gap-2 text-xs font-bold text-blue-700 dark:text-blue-400">
-                        <Award className="h-4 w-4" /> Lĩnh Vực Chuyên Môn Giảng Dạy (TeacherCategoryEntity)
+                        <Award className="h-4 w-4" /> Lĩnh vực chuyên môn giảng dạy
                       </div>
-                      <p className="text-[11px] text-muted-foreground">
-                        Danh sách chuyên môn được gán bởi Admin/HR (Chế độ Readonly).
-                      </p>
                       <div className="flex items-center gap-2 flex-wrap pt-1">
                         {teacherCategories.length > 0 ? teacherCategories.map((cat, idx) => (
                           <Badge key={idx} variant="secondary" className="bg-blue-600 text-white font-bold text-xs px-3 py-1">
@@ -1219,28 +1377,41 @@ export const Profile: React.FC = () => {
                     </div>
                   )}
 
-                  {/* FORM EMPLOYEEENTITY (TEACHER, TA, HR, ADMIN) */}
+                  {/* FORM CÁN BỘ NHÂN SỰ */}
                   <form onSubmit={employeeForm.handleSubmit(onRoleInfoSubmit)} className="space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div className="space-y-1.5">
-                        <Label className="text-xs font-semibold">Mã nhân viên (employeeCode)</Label>
+                        <Label className="text-xs font-semibold">Mã nhân viên</Label>
                         <Input placeholder="Không có" disabled className="bg-muted/50 cursor-not-allowed" {...employeeForm.register("employeeCode")} />
                       </div>
 
                       <div className="space-y-1.5">
-                        <Label className="text-xs font-semibold">Phòng ban (department FK)</Label>
+                        <Label className="text-xs font-semibold">Phòng ban</Label>
                         {isAdminProfile ? (
-                          <select
-                            className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none"
-                            {...employeeForm.register("departmentId")}
-                          >
-                            <option value="">Không có</option>
-                            {Array.isArray(departments) && departments.map((dept) => (
-                              <option key={dept.id} value={String(dept.id)}>
-                                {dept.name} ({dept.code})
-                              </option>
-                            ))}
-                          </select>
+                          <>
+                            <Select
+                              value={employeeForm.watch("departmentId") || "NONE"}
+                              onValueChange={(val) => {
+                                const actualVal = val === "NONE" ? "" : val;
+                                employeeForm.setValue("departmentId", actualVal, { shouldDirty: true, shouldValidate: true });
+                              }}
+                            >
+                              <SelectTrigger className="h-10 w-full rounded-lg">
+                                <SelectValue placeholder="Chọn phòng ban" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="NONE">Không có</SelectItem>
+                                {Array.isArray(departments) && departments.map((dept) => (
+                                  <SelectItem key={dept.id} value={String(dept.id)}>
+                                    {dept.name} ({dept.code})
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            {employeeForm.formState.errors.departmentId && (
+                              <p className="text-xs text-destructive font-medium mt-1">{employeeForm.formState.errors.departmentId.message}</p>
+                            )}
+                          </>
                         ) : (
                           <Input
                             value={employeeStats.departmentName || "Không có"}
@@ -1251,48 +1422,75 @@ export const Profile: React.FC = () => {
                       </div>
 
                       <div className="space-y-1.5">
-                        <Label className="text-xs font-semibold">Chức vụ / Vị trí (position)</Label>
-                        <Input placeholder="Không có" disabled={!isAdminProfile} className={!isAdminProfile ? "bg-muted/50 cursor-not-allowed" : ""} {...employeeForm.register("position")} />
+                        <Label className="text-xs font-semibold">Chức vụ / Vị trí</Label>
+                        <Input placeholder="Nhập chức vụ hoặc vị trí" disabled={!isAdminProfile} className={!isAdminProfile ? "bg-muted/50 cursor-not-allowed" : ""} {...employeeForm.register("position")} />
+                        {employeeForm.formState.errors.position && (
+                          <p className="text-xs text-destructive font-medium mt-1">{employeeForm.formState.errors.position.message}</p>
+                        )}
                       </div>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-1.5">
-                        <Label className="text-xs font-semibold">Loại hình làm việc (employmentTypeEnum)</Label>
-                        <select
-                          className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none"
+                        <Label className="text-xs font-semibold">Loại hình làm việc</Label>
+                        <Select
+                          value={employeeForm.watch("employmentTypeEnum") || "NONE"}
+                          onValueChange={(val) => {
+                            const actualVal = val === "NONE" ? "" : (val as "FULL_TIME" | "PART_TIME");
+                            employeeForm.setValue("employmentTypeEnum", actualVal, { shouldDirty: true, shouldValidate: true });
+                          }}
                           disabled={!isAdminProfile}
-                          {...employeeForm.register("employmentTypeEnum")}
                         >
-                          <option value="">Không có</option>
-                          <option value="FULL_TIME">Toàn thời gian (FULL_TIME)</option>
-                          <option value="PART_TIME">Bán thời gian (PART_TIME)</option>
-                        </select>
+                          <SelectTrigger className="h-10 w-full rounded-lg" disabled={!isAdminProfile}>
+                            <SelectValue placeholder="Chọn loại hình làm việc" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="NONE">Không có</SelectItem>
+                            <SelectItem value="FULL_TIME">Toàn thời gian</SelectItem>
+                            <SelectItem value="PART_TIME">Bán thời gian</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {employeeForm.formState.errors.employmentTypeEnum && (
+                          <p className="text-xs text-destructive font-medium mt-1">{employeeForm.formState.errors.employmentTypeEnum.message}</p>
+                        )}
                       </div>
 
                       <div className="space-y-1.5">
-                        <Label className="text-xs font-semibold">Ngày vào làm (startDate)</Label>
+                        <Label className="text-xs font-semibold">Ngày vào làm</Label>
                         <DatePickerInput
                           value={employeeForm.watch("startDate")}
                           onChange={(value) => employeeForm.setValue("startDate", value, { shouldDirty: true, shouldValidate: true })}
                           placeholder="dd/mm/yyyy"
                           disabled={!isAdminProfile}
                         />
+                        {employeeForm.formState.errors.startDate && (
+                          <p className="text-xs text-destructive font-medium mt-1">{employeeForm.formState.errors.startDate.message}</p>
+                        )}
                       </div>
                     </div>
 
                     <div className="space-y-1.5">
-                      <Label className="text-xs font-semibold">Địa chỉ làm việc / Thường trú (address)</Label>
+                      <Label className="text-xs font-semibold">Địa chỉ làm việc / Thường trú</Label>
                       <Input placeholder="VD: Hà Nội, Việt Nam" {...employeeForm.register("address")} />
+                      {employeeForm.formState.errors.address && (
+                        <p className="text-xs text-destructive font-medium mt-1">{employeeForm.formState.errors.address.message}</p>
+                      )}
                     </div>
 
                     <div className="flex justify-end pt-2">
                       <Button
                         type="submit"
-                        className="font-bold bg-primary text-primary-foreground"
-                        disabled={roleInfoStatus.loading || !employeeForm.formState.isDirty}
+                        className="font-bold bg-primary text-primary-foreground cursor-pointer"
+                        disabled={roleInfoStatus.loading}
                       >
-                        {roleInfoStatus.loading ? "Đang lưu..." : "Lưu hồ sơ nhân sự vào CSDL"}
+                        {roleInfoStatus.loading ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Đang lưu...
+                          </>
+                        ) : (
+                          "Lưu thông tin"
+                        )}
                       </Button>
                     </div>
                   </form>
@@ -1308,11 +1506,8 @@ export const Profile: React.FC = () => {
             <CardHeader className="border-b border-border/60 pb-4">
               <CardTitle className="text-base font-bold flex items-center gap-2">
                 <KeyRound className="h-5 w-5 text-primary" />
-                <span>Cài đặt đổi mật khẩu</span>
+                <span>Đổi mật khẩu</span>
               </CardTitle>
-              <CardDescription className="text-xs text-muted-foreground">
-                Hãy đổi mật khẩu thường xuyên để tăng cường tính bảo mật cho tài khoản của bạn.
-              </CardDescription>
             </CardHeader>
 
             <CardContent className="p-6">
@@ -1331,12 +1526,12 @@ export const Profile: React.FC = () => {
 
               <form onSubmit={passwordForm.handleSubmit(onPasswordSubmit)} className="space-y-4">
                 <div className="space-y-1.5">
-                  <Label htmlFor="pass-old" className="text-xs font-semibold">Mật khẩu cũ</Label>
+                  <Label htmlFor="pass-old" className="text-xs font-semibold">Mật khẩu hiện tại</Label>
                   <div className="relative">
                     <Input
                       id="pass-old"
                       type={showOldPass ? "text" : "password"}
-                      placeholder="••••••••"
+                      placeholder="Nhập mật khẩu hiện tại"
                       {...passwordForm.register("oldPassword")}
                     />
                     <button
@@ -1348,7 +1543,7 @@ export const Profile: React.FC = () => {
                     </button>
                   </div>
                   {passwordForm.formState.errors.oldPassword && (
-                    <p className="text-[10px] text-destructive font-medium">{passwordForm.formState.errors.oldPassword.message}</p>
+                    <p className="text-xs text-destructive font-medium mt-1">{passwordForm.formState.errors.oldPassword.message}</p>
                   )}
                 </div>
 
@@ -1359,7 +1554,7 @@ export const Profile: React.FC = () => {
                       <Input
                         id="pass-new"
                         type={showNewPass ? "text" : "password"}
-                        placeholder="••••••••"
+                        placeholder="Nhập mật khẩu mới"
                         {...passwordForm.register("newPassword")}
                       />
                       <button
@@ -1370,8 +1565,41 @@ export const Profile: React.FC = () => {
                         {showNewPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
                     </div>
+
+                    {/* Live Checklist yêu cầu mật khẩu mới */}
+                    {profileNewPass.length > 0 && (
+                      <div className="rounded-lg bg-muted/40 p-2.5 text-xs space-y-1.5 border border-border/60 transition-all duration-200 mt-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-foreground/80 text-[11px]">Yêu cầu mật khẩu:</span>
+                          {isAllProfilePassCriteriaMet ? (
+                            <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                              <Check className="h-3 w-3" /> Đạt chuẩn
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="grid grid-cols-1 gap-y-1 text-[11px]">
+                          <div className={`flex items-center gap-1.5 transition-colors ${profileHasMinLen ? "text-emerald-600 dark:text-emerald-400 font-medium" : "text-muted-foreground"}`}>
+                            {profileHasMinLen ? <Check className="h-3 w-3 shrink-0" /> : <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 mx-0.5" />}
+                            <span>Tối thiểu 6 ký tự</span>
+                          </div>
+                          <div className={`flex items-center gap-1.5 transition-colors ${profileHasUpper && profileHasLower ? "text-emerald-600 dark:text-emerald-400 font-medium" : "text-muted-foreground"}`}>
+                            {profileHasUpper && profileHasLower ? <Check className="h-3 w-3 shrink-0" /> : <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 mx-0.5" />}
+                            <span>Gồm cả chữ hoa & chữ thường</span>
+                          </div>
+                          <div className={`flex items-center gap-1.5 transition-colors ${profileHasDigit ? "text-emerald-600 dark:text-emerald-400 font-medium" : "text-muted-foreground"}`}>
+                            {profileHasDigit ? <Check className="h-3 w-3 shrink-0" /> : <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 mx-0.5" />}
+                            <span>Ít nhất 1 chữ số (0-9)</span>
+                          </div>
+                          <div className={`flex items-center gap-1.5 transition-colors ${profileHasNoSpace ? "text-emerald-600 dark:text-emerald-400 font-medium" : "text-muted-foreground"}`}>
+                            {profileHasNoSpace ? <Check className="h-3 w-3 shrink-0" /> : <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/50 mx-0.5" />}
+                            <span>Không chứa khoảng trắng</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {passwordForm.formState.errors.newPassword && (
-                      <p className="text-[10px] text-destructive font-medium">{passwordForm.formState.errors.newPassword.message}</p>
+                      <p className="text-xs text-destructive font-medium mt-1">{passwordForm.formState.errors.newPassword.message}</p>
                     )}
                   </div>
 
@@ -1380,11 +1608,26 @@ export const Profile: React.FC = () => {
                     <Input
                       id="pass-confirm"
                       type="password"
-                      placeholder="••••••••"
+                      placeholder="Nhập lại mật khẩu mới"
                       {...passwordForm.register("confirmPassword")}
                     />
-                    {passwordForm.formState.errors.confirmPassword && (
-                      <p className="text-[10px] text-destructive font-medium">{passwordForm.formState.errors.confirmPassword.message}</p>
+
+                    {profileConfirmPass.length > 0 && profileNewPass.length > 0 && (
+                      <div className="mt-1">
+                        {profileConfirmPass === profileNewPass ? (
+                          <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-medium">
+                            <Check className="h-3.5 w-3.5" /> Mật khẩu khớp
+                          </p>
+                        ) : (
+                          <p className="text-xs text-destructive flex items-center gap-1 font-medium">
+                            <X className="h-3.5 w-3.5" /> Mật khẩu xác nhận chưa khớp
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {passwordForm.formState.errors.confirmPassword && profileConfirmPass.length === 0 && (
+                      <p className="text-xs text-destructive font-medium mt-1">{passwordForm.formState.errors.confirmPassword.message}</p>
                     )}
                   </div>
                 </div>
@@ -1392,10 +1635,17 @@ export const Profile: React.FC = () => {
                 <div className="flex justify-end pt-2">
                   <Button
                     type="submit"
-                    className="font-bold bg-primary text-primary-foreground"
-                    disabled={passwordStatus.loading || !passwordForm.formState.isDirty}
+                    className="font-bold bg-primary text-primary-foreground cursor-pointer"
+                    disabled={passwordStatus.loading}
                   >
-                    {passwordStatus.loading ? "Đang đổi..." : "Thay đổi mật khẩu"}
+                    {passwordStatus.loading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Đang đổi...
+                      </>
+                    ) : (
+                      "Đổi mật khẩu"
+                    )}
                   </Button>
                 </div>
               </form>
@@ -1405,36 +1655,39 @@ export const Profile: React.FC = () => {
         </div>
       </div>
 
-      {/* MODAL 1: PHÓNG TO XEM CHI TIẾT AVATAR (CÓ NÚT ZOOM & ROTATE HD) */}
+      {/* MODAL 1: PHÓNG TO XEM CHI TIẾT AVATAR */}
       <Dialog open={avatarDetailOpen} onOpenChange={setAvatarDetailOpen}>
         <DialogContent className="max-w-xl w-[92vw] p-6 text-center space-y-4 rounded-2xl">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold text-center flex items-center justify-center gap-2">
-              <ZoomIn className="h-5 w-5 text-primary" /> Phóng To Ảnh Đại Diện HD
+              <ZoomIn className="h-5 w-5 text-primary" /> Ảnh đại diện
             </DialogTitle>
-            <DialogDescription className="text-xs text-center text-muted-foreground">
-              {profile?.fullName || profile?.username} ({roleTitle})
-            </DialogDescription>
           </DialogHeader>
 
           <div className="flex flex-col items-center justify-center gap-4 py-4">
             <div className="w-80 h-80 rounded-full border-4 border-primary/40 shadow-2xl overflow-hidden bg-black flex items-center justify-center">
-              <img
-                src={resolveAvatarUrl(profile?.avatarUrl, avatarVersion || profile?.updatedAt) || `https://api.dicebear.com/7.x/adventurer/svg?seed=${profile?.username}`}
-                alt="Avatar Large Preview"
-                style={{ transform: `scale(${detailZoom}) rotate(${detailRotate}deg)`, transition: "transform 0.2s ease" }}
-                className="w-full h-full object-cover"
-              />
+              {resolveAvatarUrl(profile?.avatarUrl, avatarVersion || profile?.updatedAt) ? (
+                <img
+                  src={resolveAvatarUrl(profile?.avatarUrl, avatarVersion || profile?.updatedAt)}
+                  alt="Avatar Large Preview"
+                  style={{ transform: `scale(${detailZoom}) rotate(${detailRotate}deg)`, transition: "transform 0.2s ease" }}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span className="text-6xl font-extrabold uppercase text-white">
+                  {profile?.username.slice(0, 2)}
+                </span>
+              )}
             </div>
 
-            {/* Zoom / Rotate Controls for enlarged preview */}
+            {/* Điều khiển thu phóng / xoay */}
             <div className="flex items-center gap-3 bg-muted/30 p-2 rounded-2xl border border-border/40">
               <Button size="sm" variant="outline" onClick={() => setDetailZoom((z) => Math.max(0.5, z - 0.2))} className="h-8 text-xs font-bold">
-                - Zoom
+                - Thu nhỏ
               </Button>
               <span className="text-xs font-bold font-mono px-2">{detailZoom.toFixed(1)}x</span>
               <Button size="sm" variant="outline" onClick={() => setDetailZoom((z) => Math.min(3, z + 0.2))} className="h-8 text-xs font-bold">
-                + Zoom
+                + Phóng to
               </Button>
               <Button size="sm" variant="outline" onClick={() => setDetailRotate((r) => (r + 90) % 360)} className="h-8 text-xs font-bold gap-1">
                 <RotateCw className="h-3.5 w-3.5" /> Xoay {detailRotate}°
@@ -1450,23 +1703,20 @@ export const Profile: React.FC = () => {
         </DialogContent>
       </Dialog>
 
-      {/* MODAL 2: INTERACTIVE AVATAR CROPPER & UPLOAD */}
+      {/* MODAL 2: CẮT & TẢI LÊN ẢNH ĐẠI DIỆN */}
       <Dialog open={avatarEditOpen} onOpenChange={setAvatarEditOpen}>
         <DialogContent className="max-w-lg w-[92vw] p-6 space-y-4 rounded-2xl">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold flex items-center gap-2">
               <Scissors className="h-5 w-5 text-primary" />
-              <span>Cắt & Tải Lên Ảnh Đại Diện (MinIO)</span>
+              <span>Cắt & tải ảnh đại diện</span>
             </DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground">
-              Tải file ảnh từ máy tính. Kéo-thả ảnh để di chuyển vị trí, phóng to/thu nhỏ hoặc xoay trước khi lưu.
-            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
-            {/* FILE INPUT AREA */}
+            {/* VÙNG CHỌN FILE */}
             <div className="space-y-2">
-              <Label className="text-xs font-bold text-foreground">Chọn file ảnh từ máy tính</Label>
+              <Label className="text-xs font-bold text-foreground">Chọn file ảnh từ thiết bị</Label>
               <div className="border-2 border-dashed border-border/80 rounded-2xl p-4 text-center hover:border-primary/60 transition-colors bg-muted/20">
                 <input
                   type="file"
@@ -1480,21 +1730,21 @@ export const Profile: React.FC = () => {
                     <Upload className="h-6 w-6" />
                   </div>
                   <div>
-                    <p className="text-xs font-bold text-foreground">Click để chọn file ảnh mới</p>
-                    <p className="text-[10px] text-muted-foreground">Hỗ trợ PNG, JPG, WEBP, GIF (Tối đa 5MB)</p>
+                    <p className="text-xs font-bold text-foreground">Nhấn để chọn file ảnh</p>
+                    <p className="text-[10px] text-muted-foreground">PNG, JPG, WEBP, GIF (Tối đa 5MB)</p>
                   </div>
                 </label>
               </div>
             </div>
 
-            {/* CROP PREVIEW BOX */}
+            {/* KHUNG CẮT ẢNH */}
             {avatarPreviewUrl && (
               <div className="space-y-3 p-4 bg-card border border-border/50 rounded-2xl">
                 <div className="text-xs font-bold text-foreground flex items-center justify-between">
                   <span className="flex items-center gap-1">
                     <Move className="h-3.5 w-3.5 text-primary" /> Kéo thả ảnh để di chuyển vị trí
                   </span>
-                  <Badge variant="outline" className="text-[10px]">Zoom: {zoomLevel.toFixed(1)}x</Badge>
+                  <Badge variant="outline" className="text-[10px]">Thu phóng: {zoomLevel.toFixed(1)}x</Badge>
                 </div>
 
                 <div
@@ -1519,7 +1769,7 @@ export const Profile: React.FC = () => {
                   <div className="absolute inset-0 rounded-full border-2 border-dashed border-white/60 pointer-events-none" />
                 </div>
 
-                {/* Controls Bar */}
+                {/* Thanh điều khiển */}
                 <div className="flex items-center justify-between gap-4 pt-2">
                   <div className="flex items-center gap-2 flex-1">
                     <ZoomOut className="h-4 w-4 text-muted-foreground shrink-0" />
@@ -1557,79 +1807,104 @@ export const Profile: React.FC = () => {
               size="sm"
               disabled={uploadingAvatar || !selectedAvatarFile}
               onClick={handleUploadAndSaveAvatar}
-              className="rounded-xl font-bold bg-primary text-primary-foreground gap-1.5"
+              className="rounded-xl font-bold bg-primary text-primary-foreground gap-1.5 cursor-pointer"
             >
               {uploadingAvatar ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Scissors className="h-3.5 w-3.5" />}
-              <span>{uploadingAvatar ? "Đang cắt & tải lên MinIO..." : "Cắt & Lưu Avatar (MinIO)"}</span>
+              <span>{uploadingAvatar ? "Đang xử lý..." : "Lưu ảnh"}</span>
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* MODAL 3: ADD / EDIT GUARDIAN MODAL (GuardianEntity) */}
+      {/* MODAL 3: THÊM / SỬA THÔNG TIN NGƯỜI GIÁM HỘ */}
       <Dialog open={guardianModalOpen} onOpenChange={setGuardianModalOpen}>
         <DialogContent className="max-w-md w-[90vw] p-6 space-y-4 rounded-2xl">
           <DialogHeader>
             <DialogTitle className="text-base font-bold flex items-center gap-2">
               <ShieldAlert className="h-5 w-5 text-amber-600" />
-              <span>{editingGuardianIndex !== null ? "Sửa Thông Tin Người Giám Hộ" : "Thêm Người Giám Hộ Mới"}</span>
+              <span>{editingGuardianIndex !== null ? "Sửa người giám hộ" : "Thêm người giám hộ"}</span>
             </DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground">
-              Nhập đầy đủ thông tin người giám hộ (`GuardianEntity`) và lưu vào CSDL.
-            </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Họ và tên người giám hộ (fullName)</Label>
+              <Label className="text-xs font-semibold">Họ và tên *</Label>
               <Input
                 value={guardianForm.fullName}
-                onChange={(e) => setGuardianForm({ ...guardianForm, fullName: e.target.value })}
-                placeholder="VD: Nguyễn Văn A"
+                onChange={(e) => {
+                  setGuardianForm({ ...guardianForm, fullName: e.target.value });
+                  if (guardianErrors.fullName) setGuardianErrors({ ...guardianErrors, fullName: "" });
+                }}
+                placeholder="Nhập họ và tên người giám hộ"
               />
+              {guardianErrors.fullName && (
+                <p className="text-xs text-destructive font-medium mt-1">{guardianErrors.fullName}</p>
+              )}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">Mối quan hệ (relationship)</Label>
-                <select
-                  className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none"
-                  value={guardianForm.relationship}
-                  onChange={(e: any) => setGuardianForm({ ...guardianForm, relationship: e.target.value })}
+                <Label className="text-xs font-semibold">Mối quan hệ *</Label>
+                <Select
+                  value={guardianForm.relationship || "FATHER"}
+                  onValueChange={(val: any) => setGuardianForm({ ...guardianForm, relationship: val })}
                 >
-                  <option value="FATHER">Cha / Bố (FATHER)</option>
-                  <option value="MOTHER">Mẹ (MOTHER)</option>
-                  <option value="GUARDIAN">Người giám hộ (GUARDIAN)</option>
-                  <option value="OTHER">Quan hệ khác (OTHER)</option>
-                </select>
+                  <SelectTrigger className="h-10 w-full rounded-lg">
+                    <SelectValue placeholder="Chọn mối quan hệ" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="FATHER">Cha / Bố</SelectItem>
+                    <SelectItem value="MOTHER">Mẹ</SelectItem>
+                    <SelectItem value="GUARDIAN">Người giám hộ</SelectItem>
+                    <SelectItem value="OTHER">Khác</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs font-semibold">Số điện thoại (phone)</Label>
+                <Label className="text-xs font-semibold">Số điện thoại *</Label>
                 <Input
                   value={guardianForm.phone}
-                  onChange={(e) => setGuardianForm({ ...guardianForm, phone: e.target.value })}
+                  onChange={(e) => {
+                    setGuardianForm({ ...guardianForm, phone: e.target.value });
+                    if (guardianErrors.phone) setGuardianErrors({ ...guardianErrors, phone: "" });
+                  }}
                   placeholder="0988888888"
                 />
+                {guardianErrors.phone && (
+                  <p className="text-xs text-destructive font-medium mt-1">{guardianErrors.phone}</p>
+                )}
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Địa chỉ Email (email)</Label>
+              <Label className="text-xs font-semibold">Email</Label>
               <Input
                 value={guardianForm.email}
-                onChange={(e) => setGuardianForm({ ...guardianForm, email: e.target.value })}
+                onChange={(e) => {
+                  setGuardianForm({ ...guardianForm, email: e.target.value });
+                  if (guardianErrors.email) setGuardianErrors({ ...guardianErrors, email: "" });
+                }}
                 placeholder="guardian@example.com"
               />
+              {guardianErrors.email && (
+                <p className="text-xs text-destructive font-medium mt-1">{guardianErrors.email}</p>
+              )}
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Địa chỉ (address)</Label>
+              <Label className="text-xs font-semibold">Địa chỉ</Label>
               <Input
                 value={guardianForm.address}
-                onChange={(e) => setGuardianForm({ ...guardianForm, address: e.target.value })}
+                onChange={(e) => {
+                  setGuardianForm({ ...guardianForm, address: e.target.value });
+                  if (guardianErrors.address) setGuardianErrors({ ...guardianErrors, address: "" });
+                }}
                 placeholder="Nhập địa chỉ người giám hộ"
               />
+              {guardianErrors.address && (
+                <p className="text-xs text-destructive font-medium mt-1">{guardianErrors.address}</p>
+              )}
             </div>
           </div>
 
@@ -1639,11 +1914,10 @@ export const Profile: React.FC = () => {
             </Button>
             <Button
               size="sm"
-              disabled={!guardianForm.fullName.trim()}
               onClick={handleSaveGuardian}
-              className="rounded-xl font-bold bg-amber-600 hover:bg-amber-700 text-white"
+              className="rounded-xl font-bold bg-amber-600 hover:bg-amber-700 text-white cursor-pointer"
             >
-              Lưu Người Giám Hộ Vào CSDL
+              Lưu
             </Button>
           </DialogFooter>
         </DialogContent>

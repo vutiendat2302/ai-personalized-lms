@@ -2,6 +2,8 @@ package com.ailms.service.imp;
 
 import com.ailms.entity.*;
 import com.ailms.entity.enums.*;
+import com.ailms.event.AuditLogEvent;
+import com.ailms.common.util.CodeGenerator;
 import com.ailms.exception.BusinessException;
 import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.exception.UnauthorizedException;
@@ -13,20 +15,20 @@ import com.ailms.security.CustomUserDetails;
 import com.ailms.service.ICourseAuthoringService;
 import com.ailms.service.IEmailService;
 import com.ailms.service.INotificationService;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -34,6 +36,8 @@ import java.util.stream.Collectors;
 @Slf4j
 @Transactional(readOnly = true)
 public class CourseAuthoringService implements ICourseAuthoringService {
+
+    private static final String QUIZ_CODE_PREFIX = "QZ";
 
     private final CourseRepository courseRepository;
     private final CourseSectionRepository courseSectionRepository;
@@ -45,6 +49,7 @@ public class CourseAuthoringService implements ICourseAuthoringService {
     private final AssignmentRepository assignmentRepository;
     private final SubmissionRepository submissionRepository;
     private final CourseInstructorRepository courseInstructorRepository;
+    private final CourseTeacherRepository courseTeacherRepository;
     private final UserRepository userRepository;
     private final EmployeeRepository employeeRepository;
     private final INotificationService notificationService;
@@ -57,9 +62,23 @@ public class CourseAuthoringService implements ICourseAuthoringService {
     private final SubmissionMapper submissionMapper;
     private final LessonResourceMapper lessonResourceMapper;
     private final FileService fileService;
+    private final ApprovalRequestRepository approvalRequestRepository;
+    private final UserRoleRepository userRoleRepository;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     @Override
     public CourseCurriculumResponse getCurriculum(Long courseId) {
+        return buildCurriculum(courseId, true);
+    }
+
+    /** Lấy curriculum học viên và loại bỏ cờ đáp án đúng khỏi mọi phương án. */
+    @Override
+    public CourseCurriculumResponse getLearningCurriculum(Long courseId) {
+        return buildCurriculum(courseId, false);
+    }
+
+    /** Dựng curriculum theo ngữ cảnh tác giả hoặc học viên. */
+    private CourseCurriculumResponse buildCurriculum(Long courseId, boolean includeCorrectAnswers) {
         log.info("Getting curriculum for courseId: {}", courseId);
         CourseEntity course = courseRepository.findById(courseId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Course", courseId));
@@ -69,13 +88,15 @@ public class CourseAuthoringService implements ICourseAuthoringService {
         // Final Exam Quizzes and Assignments (sectionId=null, lessonId=null)
         List<QuizEntity> finalQuizzes = quizRepository.findByCourseId(courseId).stream()
                 .filter(q -> q.getSectionId() == null && q.getLessonId() == null)
+                .filter(q -> includeCorrectAnswers || q.getStatus() == BaseStatusEnum.ACTIVE)
                 .collect(Collectors.toList());
         List<AssignmentEntity> finalAssignments = assignmentRepository.findByCourseId(courseId).stream()
                 .filter(a -> a.getSectionId() == null && a.getLessonId() == null)
+                .filter(a -> includeCorrectAnswers || a.getStatus() == BaseStatusEnum.ACTIVE)
                 .collect(Collectors.toList());
 
         List<CourseCurriculumResponse.SectionCurriculumItem> sectionItems = sections.stream()
-                .map(this::buildSectionItem)
+                .map(section -> buildSectionItem(section, includeCorrectAnswers))
                 .collect(Collectors.toList());
 
         int totalLessons = sectionItems.stream()
@@ -90,22 +111,29 @@ public class CourseAuthoringService implements ICourseAuthoringService {
                 .status(course.getStatus() != null ? course.getStatus().name() : null)
                 .createdBy(course.getCreatedBy())
                 .sections(sectionItems)
-                .finalExamQuizzes(finalQuizzes.stream().map(this::mapQuizToResponse).collect(Collectors.toList()))
+                .finalExamQuizzes(finalQuizzes.stream()
+                        .map(quiz -> mapQuizToResponse(quiz, includeCorrectAnswers)).collect(Collectors.toList()))
                 .finalExamAssignments(finalAssignments.stream().map(assignmentMapper::toResponse).collect(Collectors.toList()))
                 .totalLessons(totalLessons)
                 .totalDurationMin(totalDurationMin)
                 .build();
     }
 
-    private CourseCurriculumResponse.SectionCurriculumItem buildSectionItem(CourseSectionEntity section) {
+    /** Dựng một chương và truyền chính sách hiển thị đáp án xuống các quiz con. */
+    private CourseCurriculumResponse.SectionCurriculumItem buildSectionItem(
+            CourseSectionEntity section, boolean includeCorrectAnswers) {
         List<QuizEntity> chapterQuizzes = quizRepository.findBySectionId(section.getId()).stream()
-                .filter(q -> q.getLessonId() == null).collect(Collectors.toList());
+                .filter(q -> q.getLessonId() == null)
+                .filter(q -> includeCorrectAnswers || q.getStatus() == BaseStatusEnum.ACTIVE)
+                .collect(Collectors.toList());
         List<AssignmentEntity> chapterAssignments = assignmentRepository.findBySectionId(section.getId()).stream()
-                .filter(a -> a.getLessonId() == null).collect(Collectors.toList());
+                .filter(a -> a.getLessonId() == null)
+                .filter(a -> includeCorrectAnswers || a.getStatus() == BaseStatusEnum.ACTIVE)
+                .collect(Collectors.toList());
 
         List<CourseCurriculumResponse.LessonCurriculumItem> lessonItems = section.getLessonEntities().stream()
                 .filter(l -> l.getStatus() == null || !BaseStatusEnum.INACTIVE.equals(l.getStatus()))
-                .map(this::buildLessonItem)
+                .map(lesson -> buildLessonItem(lesson, includeCorrectAnswers))
                 .collect(Collectors.toList());
 
         return CourseCurriculumResponse.SectionCurriculumItem.builder()
@@ -113,21 +141,28 @@ public class CourseAuthoringService implements ICourseAuthoringService {
                 .name(section.getName())
                 .orderIndex(section.getOrderIndex())
                 .status(section.getStatus() != null ? section.getStatus().name() : null)
-                .chapterQuizzes(chapterQuizzes.stream().map(this::mapQuizToResponse).collect(Collectors.toList()))
+                .chapterQuizzes(chapterQuizzes.stream()
+                        .map(quiz -> mapQuizToResponse(quiz, includeCorrectAnswers)).collect(Collectors.toList()))
                 .chapterAssignments(chapterAssignments.stream().map(assignmentMapper::toResponse).collect(Collectors.toList()))
                 .lessons(lessonItems)
                 .build();
     }
 
-    private CourseCurriculumResponse.LessonCurriculumItem buildLessonItem(LessonEntity lesson) {
+    /** Dựng lesson cùng assessment và tài nguyên theo ngữ cảnh truy cập. */
+    private CourseCurriculumResponse.LessonCurriculumItem buildLessonItem(
+            LessonEntity lesson, boolean includeCorrectAnswers) {
         QuizResponse linkedQuiz = null;
         AssignmentResponse linkedAssignment = null;
 
         List<QuizEntity> quizzes = quizRepository.findByLessonId(lesson.getId());
-        if (!quizzes.isEmpty()) linkedQuiz = mapQuizToResponse(quizzes.get(0));
+        linkedQuiz = quizzes.stream()
+                .filter(quiz -> includeCorrectAnswers || quiz.getStatus() == BaseStatusEnum.ACTIVE)
+                .findFirst().map(quiz -> mapQuizToResponse(quiz, includeCorrectAnswers)).orElse(null);
 
         List<AssignmentEntity> assignments = assignmentRepository.findByLessonId(lesson.getId());
-        if (!assignments.isEmpty()) linkedAssignment = assignmentMapper.toResponse(assignments.get(0));
+        linkedAssignment = assignments.stream()
+                .filter(assignment -> includeCorrectAnswers || assignment.getStatus() == BaseStatusEnum.ACTIVE)
+                .findFirst().map(assignmentMapper::toResponse).orElse(null);
 
         List<ResourceResponse> resourceResponses = null;
         if (lesson.getResources() != null && !lesson.getResources().isEmpty()) {
@@ -149,6 +184,7 @@ public class CourseAuthoringService implements ICourseAuthoringService {
                 .contentUrl(lesson.getContentUrl())
                 .description(lesson.getDescription())
                 .durationMin(lesson.getDurationMin())
+                .durationSec(lesson.getDurationSec())
                 .orderIndex(lesson.getOrderIndex())
                 .previewType(lesson.getPreviewType() != null ? lesson.getPreviewType().name() : null)
                 .status(lesson.getStatus() != null ? lesson.getStatus().name() : null)
@@ -162,8 +198,7 @@ public class CourseAuthoringService implements ICourseAuthoringService {
     @Transactional
     public SectionResponse addSection(Long courseId, CreateSectionRequest request) {
         log.info("Adding section to courseId: {}", courseId);
-        CourseEntity course = courseRepository.findById(courseId)
-                .orElseThrow(() -> ResourceNotFoundException.of("Course", courseId));
+        CourseEntity course = requireEditableCourse(courseId);
 
         List<CourseSectionEntity> existingSections = courseSectionRepository.findByCourseEntity_IdOrderByOrderIndexAsc(courseId);
         long activeCount = existingSections.stream()
@@ -190,6 +225,7 @@ public class CourseAuthoringService implements ICourseAuthoringService {
         log.info("Updating sectionId: {}", sectionId);
         CourseSectionEntity section = courseSectionRepository.findById(sectionId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Section", sectionId));
+        requireEditableCourse(section.getCourseEntity().getId());
         if (request.getName() != null) section.setName(request.getName());
         if (request.getStatus() != null) section.setStatus(request.getStatus());
         return courseSectionMapper.toResponse(courseSectionRepository.save(section));
@@ -201,6 +237,7 @@ public class CourseAuthoringService implements ICourseAuthoringService {
         log.info("Deleting sectionId: {}", sectionId);
         CourseSectionEntity section = courseSectionRepository.findById(sectionId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Section", sectionId));
+        requireEditableCourse(section.getCourseEntity().getId());
 
         long activeLessons = section.getLessonEntities().stream()
                 .filter(l -> !BaseStatusEnum.INACTIVE.equals(l.getStatus()))
@@ -216,6 +253,7 @@ public class CourseAuthoringService implements ICourseAuthoringService {
     @Transactional
     public void reorderSections(Long courseId, ReorderRequest request) {
         log.info("Reordering sections for courseId: {}", courseId);
+        requireEditableCourse(courseId);
         List<Long> ids = request.getIds();
         for (int i = 0; i < ids.size(); i++) {
             final int order = i;
@@ -232,6 +270,7 @@ public class CourseAuthoringService implements ICourseAuthoringService {
         log.info("Adding lesson to sectionId: {}", sectionId);
         CourseSectionEntity section = courseSectionRepository.findById(sectionId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Section", sectionId));
+        requireEditableCourse(section.getCourseEntity().getId());
 
         int nextOrder = lessonRepository.countByCourseSectionEntityId(sectionId);
         LessonEntity lesson = lessonMapper.toEntity(request);
@@ -247,6 +286,7 @@ public class CourseAuthoringService implements ICourseAuthoringService {
         log.info("Updating lessonId: {}", lessonId);
         LessonEntity lesson = lessonRepository.findById(lessonId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Lesson", lessonId));
+        requireEditableCourse(lesson.getCourseSectionEntity().getCourseEntity().getId());
         lessonMapper.updateEntityFromRequest(request, lesson);
         return lessonMapper.toResponse(lessonRepository.save(lesson));
     }
@@ -257,6 +297,7 @@ public class CourseAuthoringService implements ICourseAuthoringService {
         log.info("Deleting/deactivating lessonId: {}", lessonId);
         LessonEntity lesson = lessonRepository.findById(lessonId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Lesson", lessonId));
+        requireEditableCourse(lesson.getCourseSectionEntity().getCourseEntity().getId());
 
         boolean hasProgress = !lessonProgressRepository.findByLessonId(lessonId).isEmpty();
         if (hasProgress) {
@@ -273,6 +314,9 @@ public class CourseAuthoringService implements ICourseAuthoringService {
     @Transactional
     public void reorderLessons(Long sectionId, ReorderRequest request) {
         log.info("Reordering lessons in sectionId: {}", sectionId);
+        CourseSectionEntity sourceSection = courseSectionRepository.findById(sectionId)
+                .orElseThrow(() -> ResourceNotFoundException.of("Section", sectionId));
+        requireEditableCourse(sourceSection.getCourseEntity().getId());
         List<Long> ids = request.getIds();
         for (int i = 0; i < ids.size(); i++) {
             final int order = i;
@@ -287,83 +331,82 @@ public class CourseAuthoringService implements ICourseAuthoringService {
         }
     }
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
-
+    /** Ánh xạ quiz cùng câu hỏi và phương án từ các bảng quan hệ làm nguồn dữ liệu chính. */
     private QuizResponse mapQuizToResponse(QuizEntity quiz) {
+        return mapQuizToResponse(quiz, true);
+    }
+
+    /** Ánh xạ quiz và chỉ trả cờ đáp án đúng cho giao diện tác giả. */
+    private QuizResponse mapQuizToResponse(QuizEntity quiz, boolean includeCorrectAnswers) {
         if (quiz == null) return null;
         QuizResponse response = quizMapper.toResponse(quiz);
-        if (quiz.getDescription() != null && quiz.getDescription().trim().startsWith("[")) {
-            try {
-                Object parsed = objectMapper.readValue(quiz.getDescription(), Object.class);
-                response.setQuestions(parsed);
-            } catch (Exception e) {
-                log.warn("Could not parse quiz description JSON for quiz id {}", quiz.getId());
-            }
-        }
+        List<QuizQuestionResponse> questions = questionRepository.findByQuizIdOrderByOrderIndexAsc(quiz.getId()).stream()
+                .map(question -> QuizQuestionResponse.builder()
+                        .id(question.getId())
+                        .content(question.getContent())
+                        .questionType(QuestionTypeEnum.apiName(question.getQuestionType()))
+                        .points(question.getPoints())
+                        .orderIndex(question.getOrderIndex())
+                        .explanation(question.getExplanation())
+                        .options(questionOptionRepository.findByQuestionIdOrderByOrderIndexAsc(question.getId()).stream()
+                                .map(option -> QuizQuestionOptionResponse.builder()
+                                        .id(option.getId())
+                                        .content(option.getContent())
+                                        .isCorrect(includeCorrectAnswers ? option.getIsCorrect() : null)
+                                        .orderIndex(option.getOrderIndex())
+                                        .build())
+                                .toList())
+                        .build())
+                .toList();
+        response.setQuestions(questions);
         return response;
     }
 
-    @SuppressWarnings("unchecked")
-    private void saveQuizQuestionsToDb(Long quizId, String description) {
-        if (quizId == null || description == null || !description.trim().startsWith("[")) {
-            return;
+    /** Thay thế atomically danh sách câu hỏi của quiz sau khi kiểm tra quy tắc đáp án. */
+    private void synchronizeQuizQuestions(Long quizId, List<QuizQuestionRequest> questions) {
+        if (questions == null) return;
+
+        List<QuestionEntity> oldQuestions = questionRepository.findByQuizId(quizId);
+        oldQuestions.forEach(question -> questionOptionRepository.deleteByQuestionId(question.getId()));
+        questionRepository.deleteByQuizId(quizId);
+
+        for (int questionIndex = 0; questionIndex < questions.size(); questionIndex++) {
+            QuizQuestionRequest request = questions.get(questionIndex);
+            QuestionTypeEnum type = QuestionTypeEnum.fromName(request.getQuestionType());
+            validateQuestionOptions(request, type, questionIndex);
+            QuestionEntity savedQuestion = questionRepository.save(QuestionEntity.builder()
+                    .quizId(quizId)
+                    .content(request.getContent().trim())
+                    .questionType(type.getCode())
+                    .points(request.getPoints() != null ? request.getPoints() : BigDecimal.ONE)
+                    .orderIndex(questionIndex)
+                    .explanation(request.getExplanation())
+                    .status((byte) 1)
+                    .build());
+
+            for (int optionIndex = 0; optionIndex < request.getOptions().size(); optionIndex++) {
+                QuizQuestionOptionRequest option = request.getOptions().get(optionIndex);
+                questionOptionRepository.save(QuestionOptionEntity.builder()
+                        .questionId(savedQuestion.getId())
+                        .content(option.getContent().trim())
+                        .isCorrect(Boolean.TRUE.equals(option.getIsCorrect()))
+                        .orderIndex(optionIndex)
+                        .build());
+            }
         }
-        try {
-            List<Map<String, Object>> qList = objectMapper.readValue(description, List.class);
-            if (qList == null || qList.isEmpty()) return;
+    }
 
-            List<QuestionEntity> oldQuestions = questionRepository.findByQuizId(quizId);
-            for (QuestionEntity oldQ : oldQuestions) {
-                questionOptionRepository.deleteByQuestionId(oldQ.getId());
-            }
-            questionRepository.deleteByQuizId(quizId);
-
-            int qOrder = 0;
-            for (Map<String, Object> qMap : qList) {
-                String content = (String) qMap.getOrDefault("content", "");
-                String qTypeStr = (String) qMap.getOrDefault("questionType", "SINGLE_CHOICE");
-                byte qType = 1;
-                switch (qTypeStr) {
-                    case "MULTIPLE_CHOICE": qType = 2; break;
-                    case "TRUE_FALSE": qType = 3; break;
-                    case "SHORT_ANSWER": qType = 4; break;
-                    case "ESSAY": qType = 4; break;
-                    case "MATCHING": qType = 5; break;
-                    default: qType = 1;
-                }
-                Double pointsVal = qMap.get("points") != null ? Double.parseDouble(qMap.get("points").toString()) : 1.0;
-                String explanation = (String) qMap.getOrDefault("explanation", "");
-
-                QuestionEntity qEntity = QuestionEntity.builder()
-                        .quizId(quizId)
-                        .content(content)
-                        .questionType(qType)
-                        .points(BigDecimal.valueOf(pointsVal))
-                        .orderIndex(qOrder++)
-                        .explanation(explanation)
-                        .status((byte) 1)
-                        .build();
-                QuestionEntity savedQ = questionRepository.save(qEntity);
-
-                List<Map<String, Object>> options = (List<Map<String, Object>>) qMap.get("options");
-                if (options != null) {
-                    int optOrder = 0;
-                    for (Map<String, Object> optMap : options) {
-                        String optContent = (String) optMap.getOrDefault("content", "");
-                        Boolean isCorrect = Boolean.TRUE.equals(optMap.get("isCorrect"));
-
-                        QuestionOptionEntity optEntity = QuestionOptionEntity.builder()
-                                .questionId(savedQ.getId())
-                                .content(optContent)
-                                .isCorrect(isCorrect)
-                                .orderIndex(optOrder++)
-                                .build();
-                        questionOptionRepository.save(optEntity);
-                    }
-                }
-            }
-        } catch (Exception e) {
-            log.warn("Could not sync quiz questions to relational DB tables for quizId {}: {}", quizId, e.getMessage());
+    /** Kiểm tra số đáp án đúng phù hợp với loại câu hỏi trước khi ghi database. */
+    private void validateQuestionOptions(QuizQuestionRequest request, QuestionTypeEnum type, int questionIndex) {
+        if (request.getOptions() == null || request.getOptions().isEmpty()) {
+            throw new BusinessException("Câu hỏi " + (questionIndex + 1) + " phải có phương án trả lời.");
+        }
+        long correctCount = request.getOptions().stream().filter(option -> Boolean.TRUE.equals(option.getIsCorrect())).count();
+        if ((type == QuestionTypeEnum.SINGLE_CHOICE || type == QuestionTypeEnum.TRUE_FALSE) && correctCount != 1) {
+            throw new BusinessException("Câu hỏi " + (questionIndex + 1) + " phải có đúng một đáp án đúng.");
+        }
+        if (type == QuestionTypeEnum.MULTIPLE_CHOICE && correctCount < 1) {
+            throw new BusinessException("Câu hỏi " + (questionIndex + 1) + " phải có ít nhất một đáp án đúng.");
         }
     }
 
@@ -372,10 +415,18 @@ public class CourseAuthoringService implements ICourseAuthoringService {
     public QuizResponse createQuiz(QuizRequest request) {
         log.info("Creating quiz for courseId: {}, sectionId: {}, lessonId: {}",
                 request.getCourseId(), request.getSectionId(), request.getLessonId());
+        Long courseId = request.getCourseId() == null && request.getSectionId() == null && request.getLessonId() == null
+                ? null
+                : resolveCourseId(request.getCourseId(), request.getSectionId(), request.getLessonId());
+        if (courseId != null) {
+            requireEditableCourse(courseId);
+        }
+        request.setCourseId(courseId);
         QuizEntity quiz = quizMapper.toEntity(request);
+        quiz.setCode(CodeGenerator.generate(QUIZ_CODE_PREFIX, quizRepository::existsByCode));
         if (quiz.getStatus() == null) quiz.setStatus(BaseStatusEnum.DRAFT);
         QuizEntity saved = quizRepository.save(quiz);
-        saveQuizQuestionsToDb(saved.getId(), request.getDescription());
+        synchronizeQuizQuestions(saved.getId(), request.getQuestions());
         return mapQuizToResponse(saved);
     }
 
@@ -385,9 +436,12 @@ public class CourseAuthoringService implements ICourseAuthoringService {
         log.info("Updating quizId: {}", quizId);
         QuizEntity quiz = quizRepository.findById(quizId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Quiz", quizId));
+        Long courseId = resolveCourseId(quiz.getCourseId(), quiz.getSectionId(), quiz.getLessonId());
+        requireEditableCourse(courseId);
+        request.setCourseId(courseId);
         quizMapper.updateFromRequest(request, quiz);
         QuizEntity saved = quizRepository.save(quiz);
-        saveQuizQuestionsToDb(saved.getId(), request.getDescription());
+        synchronizeQuizQuestions(saved.getId(), request.getQuestions());
         return mapQuizToResponse(saved);
     }
 
@@ -395,6 +449,9 @@ public class CourseAuthoringService implements ICourseAuthoringService {
     @Transactional
     public AssignmentResponse createAssignment(CreateAssignmentRequest request) {
         log.info("Creating assignment");
+        Long courseId = resolveCourseId(request.getCourseId(), request.getSectionId(), request.getLessonId());
+        requireEditableCourse(courseId);
+        request.setCourseId(courseId);
         if (request.getMaxScore() == null) {
             request.setMaxScore(BigDecimal.valueOf(10.0));
         }
@@ -409,6 +466,9 @@ public class CourseAuthoringService implements ICourseAuthoringService {
         log.info("Updating assignmentId: {}", assignmentId);
         AssignmentEntity assignment = assignmentRepository.findById(assignmentId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Assignment", assignmentId));
+        Long courseId = resolveCourseId(assignment.getCourseId(), assignment.getSectionId(), assignment.getLessonId());
+        requireEditableCourse(courseId);
+        request.setCourseId(courseId);
         assignmentMapper.updateFromRequest(request, assignment);
         return assignmentMapper.toResponse(assignmentRepository.save(assignment));
     }
@@ -424,6 +484,43 @@ public class CourseAuthoringService implements ICourseAuthoringService {
         return null;
     }
 
+    /** Xác định course cha từ context assessment và chặn context mâu thuẫn. */
+    private Long resolveCourseId(Long courseId, Long sectionId, Long lessonId) {
+        Long resolved = courseId;
+        if (lessonId != null) {
+            LessonEntity lesson = lessonRepository.findById(lessonId)
+                    .orElseThrow(() -> ResourceNotFoundException.of("Lesson", lessonId));
+            Long lessonCourseId = lesson.getCourseSectionEntity().getCourseEntity().getId();
+            if (resolved != null && !resolved.equals(lessonCourseId)) {
+                throw new BusinessException("Lesson không thuộc khóa học đã chọn.");
+            }
+            resolved = lessonCourseId;
+        } else if (sectionId != null) {
+            CourseSectionEntity section = courseSectionRepository.findById(sectionId)
+                    .orElseThrow(() -> ResourceNotFoundException.of("Section", sectionId));
+            Long sectionCourseId = section.getCourseEntity().getId();
+            if (resolved != null && !resolved.equals(sectionCourseId)) {
+                throw new BusinessException("Chương học không thuộc khóa học đã chọn.");
+            }
+            resolved = sectionCourseId;
+        }
+        if (resolved == null) {
+            throw new BusinessException("Quiz hoặc assignment phải thuộc một khóa học.");
+        }
+        return resolved;
+    }
+
+    /** Chỉ cho phép chủ sở hữu, giảng viên phụ trách đã xác nhận hoặc Admin sửa khóa học ở trạng thái có thể biên soạn. */
+    private CourseEntity requireEditableCourse(Long courseId) {
+        CourseEntity course = courseRepository.findById(courseId)
+                .orElseThrow(() -> ResourceNotFoundException.of("Course", courseId));
+        verifyCourseOwner(course, getCurrentUserId());
+        if (course.getStatus() != CourseStatusEnum.DRAFT && course.getStatus() != CourseStatusEnum.REJECTED) {
+            throw new BusinessException("Chỉ được chỉnh sửa khóa học ở trạng thái DRAFT hoặc REJECTED.");
+        }
+        return course;
+    }
+
     private void verifyCourseOwner(CourseEntity course, Long currentUserId) {
         if (course == null) return;
         if (currentUserId == null) {
@@ -436,8 +533,16 @@ public class CourseAuthoringService implements ICourseAuthoringService {
             if (isAdmin) return;
         }
 
-        if (course.getCreatedBy() != null && !course.getCreatedBy().equals(currentUserId)) {
-            throw new BusinessException("Chỉ người tạo khóa học mới có quyền thực hiện thao tác này.");
+        if (course.getCreatedBy() != null && course.getCreatedBy().equals(currentUserId)) {
+            return;
+        }
+        boolean acceptedCoInstructor = courseInstructorRepository.existsByCourseIdAndInstructorIdAndStatus(
+                course.getId(), currentUserId, CourseInstructorStatusEnum.ACCEPTED);
+        boolean activeAssignedTeacher = courseTeacherRepository
+                .existsByCourseEntity_IdAndUserEntity_IdAndStatus(
+                        course.getId(), currentUserId, CourseTeacherStatusEnum.ACTIVE);
+        if (!acceptedCoInstructor && !activeAssignedTeacher) {
+            throw new BusinessException("Chỉ người tạo hoặc giảng viên phụ trách khóa học mới có quyền thực hiện thao tác này.");
         }
     }
 
@@ -464,9 +569,62 @@ public class CourseAuthoringService implements ICourseAuthoringService {
         if (!hasLesson) {
             throw new BusinessException("Khóa học phải có ít nhất 1 bài học trước khi gửi duyệt.");
         }
+        validateCourseForReview(course, sections);
 
         course.setStatus(CourseStatusEnum.PENDING);
-        return courseMapper.toResponse(courseRepository.save(course));
+        CourseEntity saved = courseRepository.save(course);
+        ApprovalRequestEntity approvalRequest = ApprovalRequestEntity.builder()
+                .targetType("COURSE")
+                .targetId(courseId)
+                .level(1)
+                .totalLevels(1)
+                .status(ApprovalStatusEnum.PENDING)
+                .createdBy(currentUserId)
+                .createdAt(LocalDateTime.now())
+                .build();
+        approvalRequestRepository.save(approvalRequest);
+        userRoleRepository.findAdminAndHrUsers().forEach(recipient ->
+                notificationService.createSystemNotification(
+                        recipient,
+                        NotificationTypeEnum.GENERAL,
+                        "Khóa học mới chờ phê duyệt",
+                        "Khóa học '" + saved.getName() + "' đã được gửi duyệt.",
+                        saved.getId(),
+                        "/admin/approvals?section=COURSES"
+                ));
+        applicationEventPublisher.publishEvent(new AuditLogEvent(
+                this, "SUBMIT_FOR_REVIEW", "COURSE", courseId, null, saved));
+        return courseMapper.toResponse(saved);
+    }
+
+    /** Kiểm tra tài nguyên và assessment thật trước khi cho course vào hàng đợi duyệt. */
+    private void validateCourseForReview(CourseEntity course, List<CourseSectionEntity> sections) {
+        if (!StringUtils.hasText(course.getThumbnailUrl())) {
+            throw new BusinessException("Khóa học phải có ảnh đại diện trước khi gửi duyệt.");
+        }
+        for (CourseSectionEntity section : sections) {
+            if (section.getStatus() == BaseStatusEnum.INACTIVE) continue;
+            for (LessonEntity lesson : section.getLessonEntities()) {
+                if (lesson.getStatus() == BaseStatusEnum.INACTIVE) continue;
+                String contentType = lesson.getContentType() == null ? "" : lesson.getContentType().toUpperCase();
+                if (("VIDEO".equals(contentType) || "PDF".equals(contentType))
+                        && !StringUtils.hasText(lesson.getContentUrl())) {
+                    throw new BusinessException("Bài học '" + lesson.getName() + "' chưa có file nội dung.");
+                }
+                if ("QUIZ".equals(contentType)) {
+                    QuizEntity quiz = quizRepository.findByLessonId(lesson.getId()).stream().findFirst()
+                            .orElseThrow(() -> new BusinessException(
+                                    "Bài học '" + lesson.getName() + "' chưa có quiz thật."));
+                    if (questionRepository.findByQuizId(quiz.getId()).isEmpty()) {
+                        throw new BusinessException("Quiz '" + quiz.getTitle() + "' chưa có câu hỏi.");
+                    }
+                }
+                if ("ASSIGNMENT".equals(contentType)
+                        && assignmentRepository.findByLessonId(lesson.getId()).isEmpty()) {
+                    throw new BusinessException("Bài học '" + lesson.getName() + "' chưa có assignment thật.");
+                }
+            }
+        }
     }
 
     @Override
@@ -484,7 +642,18 @@ public class CourseAuthoringService implements ICourseAuthoringService {
         }
 
         course.setStatus(CourseStatusEnum.DRAFT);
-        return courseMapper.toResponse(courseRepository.save(course));
+        approvalRequestRepository.findFirstByTargetTypeAndTargetIdAndStatusOrderByLevelDesc(
+                        "COURSE", courseId, ApprovalStatusEnum.PENDING)
+                .ifPresent(request -> {
+                    request.setStatus(ApprovalStatusEnum.CANCELLED);
+                    request.setDecidedAt(LocalDateTime.now());
+                    request.setComment("Người tạo khóa học đã hủy yêu cầu duyệt.");
+                    approvalRequestRepository.save(request);
+                });
+        CourseEntity saved = courseRepository.save(course);
+        applicationEventPublisher.publishEvent(new AuditLogEvent(
+                this, "CANCEL_REVIEW", "COURSE", courseId, null, saved));
+        return courseMapper.toResponse(saved);
     }
 
     @Override

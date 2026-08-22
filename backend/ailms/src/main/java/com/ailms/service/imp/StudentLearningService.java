@@ -1,22 +1,29 @@
 package com.ailms.service.imp;
 
 import com.ailms.entity.EnrollmentEntity;
+import com.ailms.entity.CourseEntity;
 import com.ailms.entity.LessonEntity;
 import com.ailms.entity.LessonProgressEntity;
+import com.ailms.entity.LearningActivityLogEntity;
 
 import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.exception.ForbiddenException;
+import com.ailms.exception.BusinessException;
 import com.ailms.mapper.LessonProgressMapper;
 import com.ailms.repository.EnrollmentRepository;
 import com.ailms.repository.CourseRepository;
+import com.ailms.repository.CourseTeacherRepository;
 import com.ailms.repository.LessonProgressRepository;
 import com.ailms.repository.LessonRepository;
+import com.ailms.repository.LearningActivityLogRepository;
 import com.ailms.request.UpdateProgressRequest;
 import com.ailms.response.CourseCurriculumResponse;
 import com.ailms.response.LessonProgressResponse;
 import com.ailms.response.LessonPreviewResponse;
 import com.ailms.service.ICourseAuthoringService;
 import com.ailms.service.IStudentLearningService;
+import com.ailms.service.IStudyGoalService;
+import com.ailms.service.ICertificateService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -34,6 +41,8 @@ import com.ailms.entity.CourseProgressEntity;
 import com.ailms.repository.CourseProgressRepository;
 import com.ailms.repository.EnrollmentPackageRepository;
 import com.ailms.entity.enums.PreviewTypeEnum;
+import com.ailms.entity.enums.DeliveryModeEnum;
+import com.ailms.entity.enums.CourseTeacherStatusEnum;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 @Service
@@ -41,6 +50,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 @Slf4j
 @Transactional(readOnly = true)
 public class StudentLearningService implements IStudentLearningService {
+
+    private static final int VIDEO_COMPLETION_PERCENT = 70;
 
     private final ICourseAuthoringService courseAuthoringService;
     private final LessonProgressRepository lessonProgressRepository;
@@ -50,21 +61,33 @@ public class StudentLearningService implements IStudentLearningService {
     private final LessonProgressMapper lessonProgressMapper;
     private final EnrollmentPackageRepository enrollmentPackageRepository;
     private final CourseRepository courseRepository;
+    private final CourseTeacherRepository courseTeacherRepository;
+    private final LearningActivityLogRepository learningActivityLogRepository;
+    private final IStudyGoalService studyGoalService;
+    private final ICertificateService certificateService;
 
     @Override
     public CourseCurriculumResponse getCourseTree(Long courseId, Long userId) {
         log.info("Getting student course tree for courseId: {}, userId: {}", courseId, userId);
-        CourseCurriculumResponse curriculum = courseAuthoringService.getCurriculum(courseId);
+        CourseEntity course = courseRepository.findById(courseId)
+                .orElseThrow(() -> ResourceNotFoundException.of("Course", courseId));
+        boolean staffPreviewAccess = hasStaffPreviewAccess(courseId, userId, course.getCreatedBy());
+        CourseCurriculumResponse curriculum = staffPreviewAccess
+                ? courseAuthoringService.getCurriculum(courseId)
+                : courseAuthoringService.getLearningCurriculum(courseId);
         EnrollmentEntity enrollment = userId != null
                 ? enrollmentRepository.findByUserEntity_IdAndCourseEntity_Id(userId, courseId).orElse(null)
                 : null;
-        boolean hasAccess = userId != null && (isPrivilegedUser()
-                || (curriculum.getCreatedBy() != null && curriculum.getCreatedBy().equals(userId))
+        boolean hasAccess = userId != null && (staffPreviewAccess
                 || enrollmentPackageRepository.existsActiveCourseAccess(userId, courseId, LocalDateTime.now()));
         if (!hasAccess && !courseRepository.isPubliclySellable(courseId)) {
             throw ResourceNotFoundException.of("Course", courseId);
         }
         curriculum.setEnrollmentId(hasAccess && enrollment != null ? enrollment.getId() : null);
+        curriculum.setStaffPreviewAccess(staffPreviewAccess);
+        if (hasAccess && enrollment != null) {
+            curriculum.setDeliveryMode(resolveDeliveryMode(enrollment.getId()));
+        }
 
         if (curriculum.getSections() != null) {
             curriculum.getSections().forEach(section -> {
@@ -102,10 +125,12 @@ public class StudentLearningService implements IStudentLearningService {
                             lesson.setCompleted(progress.getCompletedAt() != null || (progress.getStatus() != null && progress.getStatus() == 1));
                             lesson.setProgressPercent(progress.getProgressPercent());
                             lesson.setLastPositionSec(progress.getLastPositionSec());
+                            lesson.setPersonalNote(progress.getPersonalNote());
                         } else {
                             lesson.setCompleted(false);
                             lesson.setProgressPercent(0);
                             lesson.setLastPositionSec(0);
+                            lesson.setPersonalNote("");
                         }
                     });
                 }
@@ -113,6 +138,16 @@ public class StudentLearningService implements IStudentLearningService {
         }
 
         return curriculum;
+    }
+
+    /** Xác định hình thức gói đang cấp quyền để giao diện xử lý đúng bài tự luyện hay bài có giảng viên. */
+    private DeliveryModeEnum resolveDeliveryMode(Long enrollmentId) {
+        return enrollmentPackageRepository.findActiveByEnrollment(enrollmentId, LocalDateTime.now()).stream()
+                .map(item -> item.getCoursePackageEntity().getDeliveryMode())
+                .filter(Objects::nonNull)
+                .sorted((left, right) -> Boolean.compare(left == DeliveryModeEnum.SELF_STUDY, right == DeliveryModeEnum.SELF_STUDY))
+                .findFirst()
+                .orElse(DeliveryModeEnum.SELF_STUDY);
     }
 
     /** Kiểm tra và trả nội dung bài học; bài không preview khi chưa mua trả 403. */
@@ -124,8 +159,11 @@ public class StudentLearningService implements IStudentLearningService {
                 && lesson.getCourseSectionEntity().getCourseEntity() != null
                 ? lesson.getCourseSectionEntity().getCourseEntity().getId() : null;
         boolean preview = lesson.getPreviewType() == PreviewTypeEnum.FREE;
-        boolean hasAccess = userId != null && courseId != null && (isPrivilegedUser()
-                || Objects.equals(lesson.getCourseSectionEntity().getCourseEntity().getCreatedBy(), userId)
+        Long createdBy = courseId != null
+                ? lesson.getCourseSectionEntity().getCourseEntity().getCreatedBy()
+                : null;
+        boolean hasAccess = userId != null && courseId != null
+                && (hasStaffPreviewAccess(courseId, userId, createdBy)
                 || enrollmentPackageRepository.existsActiveCourseAccess(userId, courseId, LocalDateTime.now()));
         if (!hasAccess && (courseId == null || !courseRepository.isPubliclySellable(courseId))) {
             throw ResourceNotFoundException.of("Lesson", lessonId);
@@ -139,6 +177,7 @@ public class StudentLearningService implements IStudentLearningService {
                 .contentType(lesson.getContentType())
                 .description(lesson.getDescription())
                 .durationMin(lesson.getDurationMin())
+                .durationSec(lesson.getDurationSec())
                 .previewType(preview ? PreviewTypeEnum.FREE.name() : PreviewTypeEnum.LOCKED.name())
                 .locked(false)
                 .contentUrl(lesson.getContentUrl())
@@ -157,12 +196,13 @@ public class StudentLearningService implements IStudentLearningService {
                 userId, enrollment.getCourseEntity().getId(), LocalDateTime.now())) {
             throw new ForbiddenException("Gói học của bạn không còn hiệu lực.");
         }
-        if (enrollment.getCourseEntity() == null || lessonRepository.findById(lessonId)
-                .map(lesson -> lesson.getCourseSectionEntity() == null
-                        || lesson.getCourseSectionEntity().getCourseEntity() == null
-                        || !enrollment.getCourseEntity().getId().equals(
-                        lesson.getCourseSectionEntity().getCourseEntity().getId()))
-                .orElse(true)) {
+        LessonEntity lesson = lessonRepository.findById(lessonId)
+                .orElseThrow(() -> ResourceNotFoundException.of("Lesson", lessonId));
+        if (enrollment.getCourseEntity() == null
+                || lesson.getCourseSectionEntity() == null
+                || lesson.getCourseSectionEntity().getCourseEntity() == null
+                || !enrollment.getCourseEntity().getId().equals(
+                lesson.getCourseSectionEntity().getCourseEntity().getId())) {
             throw ResourceNotFoundException.of("Lesson", lessonId);
         }
 
@@ -185,7 +225,13 @@ public class StudentLearningService implements IStudentLearningService {
                     .build();
         }
 
+        boolean wasCompleted = progress.getCompletedAt() != null
+                || (progress.getStatus() != null && progress.getStatus() == 1);
+
         if (request.getWatchPercent() != null) {
+            if (request.getWatchPercent() < 0 || request.getWatchPercent() > 100) {
+                throw new BusinessException("Phần trăm xem video phải nằm trong khoảng 0 đến 100.");
+            }
             progress.setProgressPercent(Math.max(progress.getProgressPercent() != null ? progress.getProgressPercent() : 0, request.getWatchPercent()));
         }
         if (request.getLastPositionSec() != null) {
@@ -194,9 +240,20 @@ public class StudentLearningService implements IStudentLearningService {
         if (request.getTimeSpentSec() != null) {
             progress.setTimeSpentSec((progress.getTimeSpentSec() != null ? progress.getTimeSpentSec() : 0) + request.getTimeSpentSec());
         }
+        if (request.getPersonalNote() != null) {
+            progress.setPersonalNote(request.getPersonalNote().trim());
+        }
         progress.setLastAccessedAt(LocalDateTime.now());
 
-        if (Boolean.TRUE.equals(request.getMarkCompleted()) || (progress.getProgressPercent() != null && progress.getProgressPercent() >= 80)) {
+        boolean videoLesson = "VIDEO".equalsIgnoreCase(lesson.getContentType());
+        if (videoLesson && Boolean.TRUE.equals(request.getMarkCompleted())
+                && (progress.getProgressPercent() == null
+                || progress.getProgressPercent() < VIDEO_COMPLETION_PERCENT)) {
+            throw new BusinessException("Bạn cần xem ít nhất 70% thời lượng video trước khi hoàn thành bài học.");
+        }
+        if (Boolean.TRUE.equals(request.getMarkCompleted())
+                || (videoLesson && progress.getProgressPercent() != null
+                && progress.getProgressPercent() >= VIDEO_COMPLETION_PERCENT)) {
             if (progress.getCompletedAt() == null) {
                 progress.setCompletedAt(LocalDateTime.now());
                 progress.setStatus((byte) 1);
@@ -206,10 +263,26 @@ public class StudentLearningService implements IStudentLearningService {
         LessonProgressEntity saved = lessonProgressRepository.save(progress);
 
         if (saved.getCompletedAt() != null) {
+            if (!wasCompleted) {
+                recordLessonCompletion(userId, lessonId);
+                studyGoalService.evaluateUserGoals(userId);
+            }
             recomputeEnrollmentProgress(enrollmentId);
         }
 
         return lessonProgressMapper.toResponse(saved);
+    }
+
+    /** Ghi nhận một hoạt động khi học viên hoàn thành bài học lần đầu. */
+    private void recordLessonCompletion(Long userId, Long lessonId) {
+        learningActivityLogRepository.save(LearningActivityLogEntity.builder()
+                .userId(userId)
+                .eventType("LESSON_COMPLETED")
+                .entityType("LESSON")
+                .entityId(lessonId)
+                .device("WEB")
+                .occurredAt(LocalDateTime.now())
+                .build());
     }
 
     @Override
@@ -218,7 +291,6 @@ public class StudentLearningService implements IStudentLearningService {
         log.info("Completing lesson: lessonId={}, userId={}, enrollmentId={}", lessonId, userId, enrollmentId);
         UpdateProgressRequest req = UpdateProgressRequest.builder()
                 .markCompleted(true)
-                .watchPercent(100)
                 .build();
         return updateLessonProgress(lessonId, userId, enrollmentId, req);
     }
@@ -255,16 +327,26 @@ public class StudentLearningService implements IStudentLearningService {
         courseProgress.setLastAccessedAt(LocalDateTime.now());
         courseProgressRepository.save(courseProgress);
 
+        certificateService.issueIfEligible(enrollmentId);
+
         log.info("Recomputed course progress for enrollment {}: {}% ({}/{})", enrollmentId, percent, completedCount, totalLessons);
     }
 
-    /** Cho phép Admin/giáo viên/trợ giảng/HR xem nội dung để quản trị và soạn thảo. */
-    private boolean isPrivilegedUser() {
+    /** Cho phép quản trị viên xem mọi khóa học; giáo viên/TA chỉ xem khóa được phân công hoặc sở hữu. */
+    private boolean hasStaffPreviewAccess(Long courseId, Long userId, Long createdBy) {
+        if (courseId == null || userId == null) return false;
+        if (Objects.equals(createdBy, userId) || hasManagementContentAccess()) return true;
+        return courseTeacherRepository.existsByCourseEntity_IdAndUserEntity_IdAndStatus(
+                courseId, userId, CourseTeacherStatusEnum.ACTIVE);
+    }
+
+    /** Kiểm tra các vai trò quản trị được phép xem nội dung của toàn bộ khóa học. */
+    private boolean hasManagementContentAccess() {
         var authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) return false;
         return authentication.getAuthorities().stream()
                 .map(item -> item.getAuthority().toUpperCase())
-                .anyMatch(role -> role.equals("ROLE_ADMIN") || role.equals("ROLE_TEACHER")
-                        || role.equals("ROLE_TA") || role.equals("ROLE_HR"));
+                .anyMatch(role -> role.equals("ROLE_ADMIN") || role.equals("ROLE_MANAGER")
+                        || role.equals("ROLE_HR"));
     }
 }

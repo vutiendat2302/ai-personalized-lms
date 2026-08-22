@@ -33,6 +33,15 @@ public interface UserRoleRepository extends BaseRepository<UserRoleEntity, Long>
     """)
     List<String> findAdminAndHrEmails();
 
+    /** Lấy người dùng Admin/HR để nhận thông báo workflow cần xử lý. */
+    @Query("""
+        SELECT DISTINCT ur.userEntity FROM UserRoleEntity ur
+        JOIN ur.roleEntity role
+        WHERE UPPER(role.code) IN ('ADMIN', 'HR', 'ROLE_ADMIN', 'ROLE_HR')
+           OR UPPER(role.name) IN ('ADMIN', 'HR', 'ROLE_ADMIN', 'ROLE_HR', 'NHÂN SỰ')
+        """)
+    List<UserEntity> findAdminAndHrUsers();
+
     @Query("""
         SELECT DISTINCT ur.userEntity FROM UserRoleEntity ur
         JOIN ur.roleEntity role
@@ -52,6 +61,17 @@ public interface UserRoleRepository extends BaseRepository<UserRoleEntity, Long>
           AND (ur.expiredAt IS NULL OR ur.expiredAt > :now)
         """)
     boolean hasActiveTeacherRole(@Param("userId") Long userId, @Param("now") LocalDateTime now);
+
+    /** Kiểm tra người dùng đang có vai trò giáo viên hoặc trợ giảng còn hiệu lực. */
+    @Query("""
+        SELECT CASE WHEN COUNT(ur) > 0 THEN true ELSE false END
+        FROM UserRoleEntity ur
+        WHERE ur.userEntity.id = :userId
+          AND UPPER(ur.roleEntity.code) IN ('TEACHER', 'ROLE_TEACHER', 'TA', 'ROLE_TA')
+          AND (ur.assignedAt IS NULL OR ur.assignedAt <= :now)
+          AND (ur.expiredAt IS NULL OR ur.expiredAt > :now)
+        """)
+    boolean hasActiveInstructorRole(@Param("userId") Long userId, @Param("now") LocalDateTime now);
 
     List<UserRoleEntity> findByRoleEntity_Id(Long roleId);
 

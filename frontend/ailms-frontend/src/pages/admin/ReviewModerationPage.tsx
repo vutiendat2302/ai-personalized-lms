@@ -493,17 +493,11 @@ export const ReviewModerationPage: React.FC = () => {
       {/* Page Title Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-border/30 pb-4">
         <div>
-          <div className="flex items-center gap-2 text-sm font-semibold text-primary mb-1">
-            <Link to="/dashboard" className="flex items-center gap-1 hover:underline">
-              <ArrowLeft className="h-3.5 w-3.5" />
-              <span>Quay lại Tổng quan</span>
-            </Link>
-          </div>
           <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-foreground flex items-center gap-3 mt-2">
             <div className="p-2.5 rounded-2xl bg-amber-500/10 text-amber-500">
               <MessageSquare className="h-7 w-7" />
             </div>
-            <span>Kiểm duyệt & Quản lý Đánh giá</span>
+            <span>Kiểm duyệt đánh giá</span>
           </h1>
         </div>
 
@@ -537,16 +531,12 @@ export const ReviewModerationPage: React.FC = () => {
           </div>
           <CardHeader className="pb-2">
             <CardDescription className="text-xs font-semibold text-muted-foreground uppercase">
-              Tổng số Đánh giá
+              Tổng số đánh giá
             </CardDescription>
             <CardTitle className="text-3xl font-extrabold text-foreground flex items-center gap-2 mt-1">
               <span className="text-primary">{statsLoading ? "..." : totalElements}</span>
-              <span className="text-xs font-semibold text-primary bg-primary/10 px-2.5 py-0.5 rounded-full">Reviews</span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-0">
-            <p className="text-xs text-muted-foreground">Tổng số nhận xét trong hệ thống &rarr;</p>
-          </CardContent>
         </Card>
 
         {/* Card 2: Điểm sao trung bình */}
@@ -556,7 +546,7 @@ export const ReviewModerationPage: React.FC = () => {
           </div>
           <CardHeader className="pb-2">
             <CardDescription className="text-xs font-semibold text-muted-foreground uppercase">
-              Điểm Sao Trung Bình
+              Điểm sao trung bình
             </CardDescription>
             <CardTitle className="text-3xl font-extrabold text-foreground flex items-center gap-2 mt-1">
               <span className="text-amber-500">{statsLoading ? "..." : avgRating.toFixed(1)}</span>
@@ -574,9 +564,6 @@ export const ReviewModerationPage: React.FC = () => {
               </div>
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-0">
-            <p className="text-xs text-muted-foreground">Điểm xếp hạng trung bình toàn hệ thống</p>
-          </CardContent>
         </Card>
 
         {/* Card 3: Đánh giá Công khai */}
@@ -584,25 +571,21 @@ export const ReviewModerationPage: React.FC = () => {
           onClick={() => {
             handleResetFilters();
             setFilterStatus("ACTIVE");
-            showBanner("Đã lọc bài đánh giá Công khai (ACTIVE)!");
+            showBanner("Đã lọc bài đánh giá công khai!");
           }}
-          className="border-border shadow-xs bg-card overflow-hidden relative cursor-pointer hover:border-emerald-500/50 transition-all"
+          className="border-border shadow-xs bg-card overflow-hidden relative cursor-pointer hover:border-success-forest/50 transition-all"
         >
-          <div className="absolute top-0 right-0 p-4 opacity-10 text-emerald-600">
+          <div className="absolute top-0 right-0 p-4 opacity-10 text-success-forest">
             <ShieldCheck className="h-20 w-20" />
           </div>
           <CardHeader className="pb-2">
             <CardDescription className="text-xs font-semibold text-muted-foreground uppercase">
-              Đã duyệt (Công khai)
+              Đã duyệt công khai
             </CardDescription>
-            <CardTitle className="text-3xl font-extrabold text-emerald-600 flex items-center gap-2 mt-1">
+            <CardTitle className="text-3xl font-extrabold text-success-forest flex items-center gap-2 mt-1">
               <span>{activeCount}</span>
-              <span className="text-xs font-semibold bg-emerald-500/10 px-2.5 py-0.5 rounded-full">ACTIVE</span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-0">
-            <p className="text-xs text-muted-foreground">Đánh giá đang hiển thị tới học viên &rarr;</p>
-          </CardContent>
         </Card>
 
         {/* Card 4: Chờ kiểm duyệt */}
@@ -610,7 +593,7 @@ export const ReviewModerationPage: React.FC = () => {
           onClick={() => {
             handleResetFilters();
             setFilterStatus("INACTIVE");
-            showBanner("Đã lọc bài đánh giá Chờ kiểm duyệt (INACTIVE)!");
+            showBanner("Đã lọc bài đánh giá chờ kiểm duyệt!");
           }}
           className="border-border shadow-xs bg-card overflow-hidden relative cursor-pointer hover:border-amber-500/50 transition-all"
         >
@@ -619,16 +602,12 @@ export const ReviewModerationPage: React.FC = () => {
           </div>
           <CardHeader className="pb-2">
             <CardDescription className="text-xs font-semibold text-muted-foreground uppercase">
-              Chờ kiểm duyệt / Đã ẩn
+              Chờ kiểm duyệt
             </CardDescription>
             <CardTitle className="text-3xl font-extrabold text-amber-500 flex items-center gap-2 mt-1">
               <span>{pendingCount}</span>
-              <span className="text-xs font-semibold bg-amber-500/10 px-2.5 py-0.5 rounded-full">INACTIVE</span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="pt-0">
-            <p className="text-xs text-muted-foreground">Đánh giá cần hệ thống rà soát &rarr;</p>
-          </CardContent>
         </Card>
       </div>
 
@@ -656,12 +635,12 @@ export const ReviewModerationPage: React.FC = () => {
                     <SelectValue placeholder="Lọc theo sao" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="ALL">Tất cả số sao ⭐</SelectItem>
-                    <SelectItem value="5">5 Sao ⭐⭐⭐⭐⭐</SelectItem>
-                    <SelectItem value="4">4 Sao ⭐⭐⭐⭐</SelectItem>
-                    <SelectItem value="3">3 Sao ⭐⭐⭐</SelectItem>
-                    <SelectItem value="2">2 Sao ⭐⭐</SelectItem>
-                    <SelectItem value="1">1 Sao ⭐</SelectItem>
+                    <SelectItem value="ALL">Tất cả số sao</SelectItem>
+                    <SelectItem value="5">5 sao</SelectItem>
+                    <SelectItem value="4">4 sao</SelectItem>
+                    <SelectItem value="3">3 sao</SelectItem>
+                    <SelectItem value="2">2 sao</SelectItem>
+                    <SelectItem value="1">1 sao</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -782,9 +761,9 @@ export const ReviewModerationPage: React.FC = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="ALL">Tất cả trạng thái</SelectItem>
-                    <SelectItem value="ACTIVE">ACTIVE (Hiển thị)</SelectItem>
-                    <SelectItem value="INACTIVE">INACTIVE (Chờ duyệt)</SelectItem>
-                    <SelectItem value="REJECTED">REJECTED (Đã ẩn)</SelectItem>
+                    <SelectItem value="ACTIVE">Đã duyệt</SelectItem>
+                    <SelectItem value="INACTIVE">Chờ kiểm duyệt</SelectItem>
+                    <SelectItem value="REJECTED">Đã ẩn</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -988,13 +967,13 @@ export const ReviewModerationPage: React.FC = () => {
                           variant="outline"
                           className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
                             isActive
-                              ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+                              ? "bg-success-forest/10 text-success-forest border-success-forest/20"
                               : isRejected
-                              ? "bg-red-500/10 text-red-600 border-red-500/20"
+                              ? "bg-destructive/10 text-destructive border-destructive/20"
                               : "bg-amber-500/10 text-amber-600 border-amber-500/20"
                           }`}
                         >
-                          {isActive ? "ACTIVE" : isRejected ? "REJECTED" : "INACTIVE"}
+                          {isActive ? "Đã duyệt" : isRejected ? "Đã ẩn" : "Chờ duyệt"}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">

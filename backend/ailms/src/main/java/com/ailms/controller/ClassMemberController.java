@@ -6,6 +6,8 @@ import com.ailms.response.ApiResponse;
 import com.ailms.response.ClassMemberResponse;
 import com.ailms.response.MemberDetailResponse;
 import com.ailms.response.PageResponse;
+import com.ailms.request.ReplaceClassTeacherRequest;
+import jakarta.validation.Valid;
 import com.ailms.service.IClassMemberService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -58,6 +60,16 @@ public class ClassMemberController {
             @PathVariable Long userId) {
         ClassMemberEntity member = classMemberService.rejoin(classId, userId);
         return ResponseEntity.ok(ApiResponse.of("Rejoined class successfully", mapToResponse(member)));
+    }
+
+    /** HR/Admin thay giáo viên lớp atomically sau khi backend kiểm tra trùng lịch. */
+    @PostMapping("/{classId}/teacher/replace")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_HR')")
+    public ResponseEntity<ApiResponse<ClassMemberResponse>> replaceTeacher(
+            @PathVariable Long classId, @Valid @RequestBody ReplaceClassTeacherRequest request) {
+        ClassMemberEntity member = classMemberService.replaceTeacher(
+                classId, request.getNewTeacherUserId(), request.getReason());
+        return ResponseEntity.ok(ApiResponse.of("Teacher replaced successfully", mapToResponse(member)));
     }
 
     @GetMapping("/members/user/{userId}")

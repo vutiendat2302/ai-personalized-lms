@@ -1,10 +1,12 @@
 package com.ailms.service;
 
 import com.ailms.request.CheckoutRequest;
+import com.ailms.request.OneOnOneNeedsRequest;
 import com.ailms.request.RefundRequest;
 import com.ailms.response.CheckoutPaymentResponse;
 import com.ailms.response.OrderResponse;
 import com.ailms.response.OrderStatusResponse;
+import com.ailms.response.TutorScheduleCheckResponse;
 
 import java.util.List;
 
@@ -21,6 +23,9 @@ public interface IOrderService {
      * @return đối tượng chứa thông tin chi tiết kết quả
      */
     CheckoutPaymentResponse checkout(Long userId, CheckoutRequest request);
+
+    /** Kiểm tra lịch 1-1 mong muốn với thời khóa biểu hiện tại trước khi người dùng xác nhận. */
+    TutorScheduleCheckResponse validateTutorScheduleAvailability(Long userId, OneOnOneNeedsRequest needs);
 
     /**
      * Khởi tạo lại PayPal checkout cho đơn hàng PENDING.
@@ -87,4 +92,16 @@ public interface IOrderService {
      * Quét và tự động hủy các đơn hàng chưa thanh toán đã quá hạn.
      */
     void cancelExpiredOrders();
+
+    /**
+     * Hoàn thành đơn hàng PENDING bằng Admin mà không qua PayPal;
+     * chỉ dùng trong môi trường dev/seed — tạo transaction giả, gọi provisionOrder thật.
+     */
+    OrderResponse adminCompleteOrder(Long orderId);
+
+    /**
+     * Overload cho phép truyền backdateAt để seed script đặt ngày mua khác nhau;
+     * khi backdateAt null thì dùng LocalDateTime.now().
+     */
+    OrderResponse adminCompleteOrder(Long orderId, java.time.LocalDateTime backdateAt);
 }

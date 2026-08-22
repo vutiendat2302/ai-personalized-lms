@@ -1680,7 +1680,7 @@ erDiagram
         bigint id PK
         bigint course_id FK
         bigint class_id FK "chỉ có nếu GROUP_CLASS"
-        tinyint delivery_mode "SELF_STUDY/GROUP_CLASS/ONE_ON_ONE/COMBO"
+        tinyint delivery_mode "SELF_STUDY/GROUP_CLASS/ONE_ON_ONE"
         decimal price "GIÁ BÁN CUỐI CÙNG"
         int duration_days
     }
@@ -2330,7 +2330,7 @@ flowchart TD
     A["learning_session đóng<br/>(học viên xem xong 1 lesson)"] --> B["Publish LearningSessionClosedEvent<br/>"]
     B --> C["Listener 1: ghi learning_activity_log<br/>"]
     B --> D["Listener 2: cập nhật lesson_progress"]
-    D --> E["Nếu progress_percent đạt ngưỡng<br/>(VD video xem >= 80%)<br/>→ lesson_progress.status = COMPLETED"]
+    D --> E["Nếu progress_percent đạt ngưỡng<br/>(video xem >= 70%)<br/>→ lesson_progress.status = COMPLETED"]
     E --> F["Publish LessonCompletedEvent"]
     F --> G["Listener 3: Tính toán lại tiến độ của khóa học<br/>(mục 10.3)"]
 ```
@@ -2351,7 +2351,7 @@ flowchart TD
  
     E -->|VIDEO| F["Học viên xem video"]
     F --> G["learning_session đóng → cập nhật<br/>time_spent_sec, last_position_sec,<br/>progress_percent (% thời lượng đã xem)"]
-    G --> H{"progress_percent >= 80%?"}
+    G --> H{"progress_percent >= 70%?"}
     H -->|Có| K["status = COMPLETED, completed_at = now"]
     H -->|Chưa| L["Giữ IN_PROGRESS"]
  
@@ -2897,6 +2897,7 @@ Các API bên dưới yêu cầu JWT có `ROLE_STUDENT`. Backend luôn suy ra h�
 | `GET` | `/api/v1/student/schedule` | Lịch hợp nhất buổi học, hạn bài tập và hạn quiz của đúng enrollment/lớp |
 | `GET` | `/api/v1/student/assignments` | Bài tập và trạng thái bài nộp của khóa/lớp hiện tại |
 | `GET` | `/api/v1/student/quizzes` | Quiz cần làm, deadline, số lượt và kết quả của học viên |
+| `GET` | `/api/v1/student/quizzes/{quizId}` | Câu hỏi Quiz đã mở sau kiểm tra enrollment/lớp; không trả đáp án đúng và explanation |
 | `POST` | `/api/v1/student/quizzes/{quizId}/attempts` | Tạo một lượt làm quiz sau khi kiểm tra enrollment, lớp, deadline và số lượt |
 | `POST` | `/api/v1/student/quiz-attempts/{attemptId}/submit` | Nộp câu trả lời của attempt thuộc chính học viên để backend chấm |
 | `POST` | `/api/v1/student/assignments/{assignmentId}/submissions` | Nộp nội dung/tệp bài tập sau khi kiểm tra enrollment, lớp và deadline |
@@ -2917,7 +2918,7 @@ Các API bên dưới yêu cầu JWT có `ROLE_STUDENT`. Backend luôn suy ra h�
 | `POST` | `/api/v1/student/onboarding` | Hoàn tất mục tiêu và sở thích ban đầu |
 | `GET` | `/api/v1/student/profile` hoặc `/api/v1/student/profile/personalization` | Trình độ học vấn, mục tiêu đến AILMS, nền tảng, trường học, mục tiêu học tập và chủ đề/sở thích đã chọn |
 
-Streak được tính từ các ngày có `learning_activity_log`. Job `StudentStreakRefreshJob` chạy lúc `00:05` theo múi giờ `Asia/Bangkok` để đánh giá và đồng bộ lại các mục tiêu học tập. Catalog cá nhân hóa không trộn khóa học ngoài sở thích; học viên chưa có sở thích hoặc chưa có danh mục khớp sẽ nhận trang rỗng và có thể dùng endpoint `catalog/all`. Trường `deliveryMode` giữ nguyên enum backend: `SELF_STUDY`, `GROUP_CLASS`, `ONE_ON_ONE`, `COMBO`.
+Streak được tính từ các ngày có `learning_activity_log`. Job `StudentStreakRefreshJob` chạy lúc `00:05` theo múi giờ `Asia/Bangkok` để đánh giá và đồng bộ lại các mục tiêu học tập. Catalog cá nhân hóa không trộn khóa học ngoài sở thích; học viên chưa có sở thích hoặc chưa có danh mục khớp sẽ nhận trang rỗng và có thể dùng endpoint `catalog/all`. Trường `deliveryMode` giữ nguyên enum backend: `SELF_STUDY`, `GROUP_CLASS`, `ONE_ON_ONE`.
 
 Các thao tác mua hàng quan trọng phát sinh audit log, gồm thêm/xóa/xóa toàn bộ giỏ, tạo checkout PayPal, capture thành công, hủy/hết hạn/hoàn tiền order và vòng đời reserve/use/release/restore voucher.
 
@@ -2927,7 +2928,7 @@ Các thao tác mua hàng quan trọng phát sinh audit log, gồm thêm/xóa/xó
 
 ### 17.1 Course detail và quyền bài học
 
-`GET /api/v1/courses/{courseId}/detail` là response tổng hợp cho trang công khai: khóa học, danh mục, người tạo/biên soạn, curriculum, gói đang hoạt động, lớp của gói nhóm, enrollment và quyền mua thêm. Gói `GROUP_CLASS` hoặc `COMBO` có sĩ số nhóm nhưng thiếu `classId` được trả `purchasable=false` để frontend chặn trước checkout. Một khóa chỉ công khai khi `ACTIVE`, có gói hoạt động và có ít nhất một `SELF_STUDY` hoạt động. Backend từ chối publish nếu thiếu gói tự học và không cho vô hiệu hóa gói tự học cuối cùng của khóa đang bán.
+`GET /api/v1/courses/{courseId}/detail` là response tổng hợp cho trang công khai: khóa học, danh mục, người tạo/biên soạn, curriculum, gói đang hoạt động, lớp của gói nhóm, enrollment và quyền mua thêm. Gói `GROUP_CLASS` thiếu `classId` được trả `purchasable=false` để frontend chặn trước checkout. Một khóa chỉ công khai khi `ACTIVE`, có gói hoạt động và có ít nhất một `SELF_STUDY` hoạt động. Backend từ chối publish nếu thiếu gói tự học và không cho vô hiệu hóa gói tự học cuối cùng của khóa đang bán.
 
 | Method | Endpoint | Chức năng |
 |---|---|---|
@@ -2939,7 +2940,9 @@ Các thao tác mua hàng quan trọng phát sinh audit log, gồm thêm/xóa/xó
 
 ### 17.2 Checkout PayPal Sandbox
 
-Frontend gọi `POST /api/v1/orders/checkout` cho một gói trực tiếp hoặc nhiều dòng `items` từ giỏ. Backend đọc lại giá/trạng thái, kiểm tra sở hữu và trùng lịch, reserve voucher của đúng học viên, phân bổ `discount_snapshot`, tạo `Order`, `OrderItem`, `PaymentTransaction` ở `PENDING`, rồi trả PayPal approval URL. Nếu trùng lịch lớp nhóm/COMBO, response yêu cầu học viên xác nhận bằng `acceptScheduleConflict=true` trước khi tiếp tục.
+Frontend gọi `POST /api/v1/orders/tutor-schedule/check` để đối chiếu từng cặp thứ/giờ học 1-1 mong muốn với lịch các lớp ACTIVE của học viên trước khi thêm giỏ hoặc thanh toán. Endpoint này chỉ đọc dữ liệu và luôn trả `200` cho kết quả kiểm tra hợp lệ với `data.conflict` cùng `data.message`; frontend dùng thông tin này để hiển thị dialog xác nhận khi trùng lịch.
+
+Frontend gọi `POST /api/v1/orders/checkout` cho một gói trực tiếp hoặc nhiều dòng `items` từ giỏ. Backend đọc lại giá/trạng thái, kiểm tra sở hữu và trùng lịch, reserve voucher của đúng học viên, phân bổ `discount_snapshot`, tạo `Order`, `OrderItem`, `PaymentTransaction` ở `PENDING`, rồi trả PayPal approval URL. Backend kiểm tra lại cả lịch lớp nhóm lẫn lịch 1-1 mong muốn tại checkout; response yêu cầu học viên xác nhận bằng `acceptScheduleConflict=true` trước khi tiếp tục nếu có xung đột.
 
 Sau redirect, frontend dùng `orderId` để khôi phục ngữ cảnh và query `token` như tín hiệu PayPal đã quay về, rồi gọi `POST /api/v1/payments/paypal/capture?orderId={orderId}`. Backend lấy PayPal order ID từ database, kiểm tra chủ đơn, capture qua Orders API, kiểm tra `COMPLETED`, capture ID, amount và currency trước khi chuyển đơn sang `PAID` và cấp quyền. Không dùng query redirect để tự cấp quyền. `paypal_request_id`, gateway order ID, `paypal_capture_id` và `EnrollmentPackage.orderItemId` có unique constraint; xử lý lặp không tạo lại enrollment, class member hay matching request.
 
@@ -2965,10 +2968,10 @@ Postman collection và environment test thủ công nằm tại `docs/postman/AI
 
 ### 17.3 Cấp quyền theo gói
 
-- `SELF_STUDY`: tạo/tái sử dụng enrollment và tạo `EnrollmentPackage`, không tạo `ClassMember`.
-- `GROUP_CLASS`: khóa bản ghi lớp, kiểm tra lớp hoạt động/nhận học viên/đăng ký muộn/sức chứa, sau đó thêm student member và gửi thông báo cho học viên, giáo viên, trợ giảng.
-- `ONE_ON_ONE`: lưu nhu cầu vào order item; chỉ sau PayPal capture thành công mới tạo matching request `WAITING_INSTRUCTOR`. Chưa tạo lớp ở bước thanh toán.
-- `COMBO`: nếu có sĩ số nhóm thì kiểm tra/gắn lớp như `GROUP_CLASS`; nếu có số buổi gia sư thì bắt buộc nhu cầu và tạo matching request như `ONE_ON_ONE`. Hai quyền lợi được cấp độc lập sau capture thành công.
+- `SELF_STUDY`: tạo/tái sử dụng enrollment và tạo `EnrollmentPackage`, không tạo `ClassMember`. Nếu học viên đã có quyền khóa học từ gói group/1-1 còn hiệu lực thì không được mua thêm gói tự học.
+- `GROUP_CLASS`: bao gồm quyền truy cập nội dung tự học; khóa bản ghi lớp, kiểm tra lớp hoạt động/nhận học viên/đăng ký muộn/sức chứa, sau đó thêm student member và gửi thông báo cho học viên, giáo viên, trợ giảng.
+- `ONE_ON_ONE`: bao gồm quyền truy cập nội dung tự học; lưu nhu cầu vào order item và chỉ sau PayPal capture thành công mới tạo matching request `WAITING_INSTRUCTOR`. Chưa tạo lớp ở bước thanh toán.
+Checkout từ chối đơn chứa đồng thời `SELF_STUDY` và gói group/1-1 của cùng khóa học với thông báo yêu cầu bỏ gói tự học, vì quyền này đã nằm trong gói nâng cao.
 
 ### 17.4 State machine 1-1
 
@@ -2976,12 +2979,48 @@ Postman collection và environment test thủ công nằm tại `docs/postman/AI
 WAITING_INSTRUCTOR -> INSTRUCTOR_ACCEPTED -> CONTACTED
 -> TRIAL_SCHEDULED -> TRIAL_COMPLETED -> MATCHED
                                       \-> REMATCHING -> INSTRUCTOR_ACCEPTED
+                     \-> HR_REJECTS_CONNECTION -> REMATCHING
 ```
 
 | Vai trò | API chính |
 |---|---|
-| Học viên | `GET /api/v1/students/one-on-one/requests`, `POST .../{id}/trial-result` |
-| Giáo viên/TA | `GET /api/v1/instructors/one-on-one/suggestions`, `POST .../{id}/accept`, `trial-class`, `trial-session`, `trial-review` |
-| HR | `GET /api/v1/hr/one-on-one/requests`, `POST .../{id}/mark-contacted`, `cancel`, `refund` |
+| Học viên | `GET /api/v1/students/one-on-one/requests`, `POST .../{id}/trial-result`, `POST .../{id}/rematch` |
+| Giáo viên/TA | `GET /api/v1/instructors/one-on-one/suggestions`, `GET .../assigned`, `POST .../{id}/accept`, `trial-session`, `trial-review` |
+| HR | `GET /api/v1/hr/one-on-one/requests`, `POST .../{id}/mark-contacted`, `reject-connection`, `notify-instructors`, `cancel`, `refund`; `GET .../{id}/instructor-candidates` |
 
-Accept và mọi state transition dùng row lock. Chỉ assignee được tạo/hoàn tất buổi thử. Lớp thử có `classKind=ONE_ON_ONE_TRIAL`, buổi thử có `sessionKind=TRIAL`, `countsTowardPackage=false`, `payable=false`. Khi học viên đồng ý, cùng lớp chuyển thành `ONE_ON_ONE/ACTIVE`; khi từ chối, lớp thử đóng, assignee được ghi vào danh sách không nhận lại và request tự quay về `REMATCHING`.
+Accept và mọi state transition dùng row lock. Khi HR phê duyệt kết nối, request đi qua `CONTACTED` và backend tạo ngay lớp cùng buổi thử trong một transaction, sau đó trả `TRIAL_SCHEDULED` và thông báo cả hai bên. HR cũng có thể từ chối người vừa nhận: người này được ghi vào danh sách không nhận lại, request quay về `REMATCHING`, học viên/người bị từ chối nhận thông báo và hệ thống gửi lại cho Teacher/TA ACTIVE khác cùng danh mục. Ở `WAITING_INSTRUCTOR`/`REMATCHING`, HR có thể lấy danh sách ứng viên hợp lệ và gửi thông báo tới một tập người dạy tùy chọn. Lớp thử có `classKind=ONE_ON_ONE_TRIAL`, buổi thử có `sessionKind=TRIAL`, `countsTowardPackage=false`, `payable=false`. Sau khi buổi thử kết thúc, học viên có thể đồng ý để cùng lớp chuyển thành `ONE_ON_ONE/ACTIVE`, hoặc gửi `/rematch` ở bất kỳ trạng thái chưa hủy để cập nhật nhu cầu, đóng lớp/buổi hiện tại, chặn người dạy cũ và tìm người mới.
+
+---
+
+## 18. Phân hệ AI Gateway & Trợ lý Thông minh (AI Copilot Streaming)
+
+### 18.1 Nguyên lý Bảo mật Zero-Trust & Gateway tập trung
+- **Cổng kết nối AI duy nhất:** Mọi yêu cầu gọi AI từ ứng dụng đều đi qua `backend/ailms` (Gateway) và kết nối tới `ai-service` bằng `AiServiceClient` kèm header bí mật nội bộ `X-Internal-Token`.
+- **HMAC Tool Access Token:** Khi Gemini thực hiện Tool Calling gọi ngược về Backend để lấy dữ liệu nghiệp vụ (`POST /api/v1/ai/internal/tools`), Backend xác thực chữ ký HMAC `toolAccessToken` (hết hạn 5 phút) để đảm bảo AI chỉ được truy xuất dữ liệu thuộc phạm vi quyền hạn (RBAC) của người dùng hiện tại.
+- **Lọc dữ liệu nhạy cảm (Data Redaction):** Trước khi trả dữ liệu cho AI sinh câu trả lời, Backend tự động lọc bỏ các trường PII nhạy cảm: mức lương chi tiết, số CCCD/CMND, mật khẩu, số điện thoại cá nhân.
+
+### 18.2 API Chat Streaming & Xử lý Tệp Đính Kèm
+- `POST /api/v1/ai/chat/stream`: Stream token phản hồi theo chuẩn Server-Sent Events (SSE).
+- `POST /api/v1/ai/chat/file/stream`: Nhận tệp đính kèm (Ảnh `PNG/JPEG/WEBP` hoặc Tài liệu `PDF/DOCX/TXT` tối đa 10 MB) kèm câu hỏi để AI phân tích trực tiếp trong phiên chat.
+- `GET /api/v1/ai/conversations`: Phân trang lịch sử chat theo `ownerId` và phân vùng `scope` (`ADMIN_COPILOT`, `EMPLOYEE_COPILOT`, `STUDENT_ASSISTANT`).
+- `PATCH /api/v1/ai/conversations/{id}/title`: Đổi tiêu đề phiên hội thoại.
+- `DELETE /api/v1/ai/conversations/{id}`: Xóa phiên chat.
+- `PUT /api/v1/ai/messages/{messageId}/feedback`: Ghi nhận đánh giá phản hồi (`THUMBS_UP`, `THUMBS_DOWN`).
+- `POST /api/v1/public/ai/chat/stream`: Stream tư vấn công khai trên Landing page có rate limit theo IP.
+
+### 18.3 Cơ chế Tool Calling & Đồng bộ Tri thức RAG
+- `ManagementAiContextService` cung cấp hơn 20 tool nghiệp vụ nội bộ (Nhân sự, Hợp đồng, Chấm công, Học viên, Doanh số, Khóa học).
+- `ManagementKnowledgeSyncService` & `ContractKnowledgeChangedListener`: Tự động đồng bộ các quy chế, mẫu hợp đồng sang `ai-service` để lưu trữ vector trên Qdrant (`management_knowledge`).
+
+### 18.4 AI Assessment từ tài liệu lớp và phát hành Quiz
+
+- `ClassResourceKnowledgeSyncListener` ingest resource after-commit, cập nhật `PENDING/PROCESSING/READY/FAILED` và xóa vector khi resource bị xóa.
+- `LessonResourceKnowledgeSyncListener` ingest resource bài học với metadata `courseId/sectionId/lessonId`.
+- `GET /api/v1/authoring/lessons/{lessonId}/ai-assessment-materials?classId=...` chỉ trả resource cùng lớp/course và trạng thái RAG thật.
+- `POST /api/v1/authoring/lessons/{lessonId}/ai-assessment-drafts` nhận đồng thời `resourceIds` lặp và tối đa 3 file upload.
+- Apply draft nhận Quiz đã review, validate trước khi claim Redis và tạo đầy đủ `question/question_option`.
+- `POST /api/v1/teacher/classes/{classId}/quizzes/{sourceQuizId}/publish` sao chép Quiz thành bản ACTIVE độc lập theo lớp; các endpoint GET/PATCH/close cùng prefix quản lý lịch và trạng thái.
+
+### 18.5 Learning Chat scope
+
+`StudentLearningAiContextService` không tin context quyền từ Frontend. Service kiểm tra enrollment, package ACTIVE còn hạn, course/lesson, membership STUDENT ACTIVE rồi suy ra class. Context `courseId/classId/lessonId/retrievalScope` được lưu vào conversation; dùng lại conversation với context khác bị từ chối. Các scope hợp lệ: `LESSON_ONLY`, `CLASS_MATERIALS`, `COURSE_MATERIALS`, `GENERAL`.

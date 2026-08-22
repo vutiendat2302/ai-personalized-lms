@@ -145,11 +145,13 @@ Hầu hết các bảng dữ liệu chính đều kế thừa từ `BaseEntity`:
 |---|---|---|---|
 | `id` | BIGINT | PK | ID bài học |
 | `section_id` | BIGINT | NOT NULL, FK -> `course_section.id` | Chương chứa bài học |
-| `title` | VARCHAR(255) | NOT NULL | Tiêu đề bài học |
-| `content_type` | VARCHAR(30) | NOT NULL | Loại bài học: `VIDEO`, `DOCUMENT`, `QUIZ`, `ASSIGNMENT` |
-| `duration_seconds` | INT | DEFAULT 0 | Thời lượng (giây) |
+| `name` | VARCHAR(100) | NULLABLE | Tiêu đề bài học |
+| `content_type` | VARCHAR(20) | NULLABLE | Loại bài học: `VIDEO`, `PDF`, `TEXT`, `QUIZ`, `ASSIGNMENT` |
+| `content_url` | VARCHAR(500) | NULLABLE | URL ngoài hoặc object key MinIO của nội dung chính |
+| `description` | TEXT | NULLABLE | Nội dung mô tả hoặc block editor JSON |
+| `duration_min` | INT | NULLABLE | Thời lượng học ước tính, dùng cho nội dung đọc/quiz/bài tập |
+| `duration_sec` | INT | NULLABLE | Thời lượng media thực tế theo giây, dùng cho VIDEO/AUDIO |
 | `order_index` | INT | DEFAULT 0 | Thứ tự bài học |
-| `is_preview` | BOOLEAN | DEFAULT FALSE | Cho phép xem thử miễn phí không |
 | `preview_type` | VARCHAR(30) | NULLABLE | Loại xem thử |
 | `status` | VARCHAR(20) | DEFAULT 'ACTIVE' | `ACTIVE`, `INACTIVE` |
 
@@ -185,6 +187,9 @@ Hầu hết các bảng dữ liệu chính đều kế thừa từ `BaseEntity`:
 | `user_id` | BIGINT | NOT NULL, FK -> `user.id` | Học viên đánh giá |
 | `rating` | INT | NOT NULL | Số sao (1 đến 5) |
 | `comment` | TEXT | NULLABLE | Nội dung nhận xét |
+| `teacher_id` | BIGINT | NULLABLE, FK -> `user.id` | Giáo viên chính được nhận xét trong lượt học |
+| `teacher_rating` | INT | NULLABLE | Số sao dành riêng cho giáo viên (1 đến 5) |
+| `teacher_comment` | TEXT | NULLABLE | Nội dung nhận xét riêng dành cho giáo viên |
 | `status` | VARCHAR(20) | DEFAULT 'ACTIVE' | Trạng thái hiển thị |
 
 ---
@@ -211,6 +216,7 @@ Hầu hết các bảng dữ liệu chính đều kế thừa từ `BaseEntity`:
 | `employee_code` | VARCHAR(50) | NOT NULL, UNIQUE | Mã nhân viên (VD: `EMP001`) |
 | `department_id` | BIGINT | NULLABLE, FK -> `department.id` | Phòng ban trực thuộc |
 | `position` | VARCHAR(100) | NULLABLE | Chức danh công việc |
+| `bio` | TEXT | NULLABLE | Phần giới thiệu công khai của nhân sự/giảng viên |
 | `employment_type` | VARCHAR(30) | NOT NULL | `FULL_TIME`, `PART_TIME`, `CONTRACT`, `INTERNSHIP` |
 | `start_date` | DATETIME | NULLABLE | Ngày bắt đầu làm việc |
 | `end_date` | DATETIME | NULLABLE | Ngày kết thúc hợp đồng |
@@ -392,12 +398,12 @@ Hầu hết các bảng dữ liệu chính đều kế thừa từ `BaseEntity`:
 |---|---|---|---|
 | `id` | BIGINT | PK | ID gói bán |
 | `course_id` | BIGINT | NOT NULL, FK -> `course.id` | Khóa học tương ứng |
-| `class_id` | BIGINT | NULLABLE, FK -> `class.id` | Gán sẵn lớp cho GROUP_CLASS/COMBO; một lớp có thể được nhiều gói tham chiếu |
+| `class_id` | BIGINT | NULLABLE, FK -> `class.id` | Gán sẵn lớp cho `GROUP_CLASS`; một lớp có thể được nhiều gói tham chiếu |
 | `name` | VARCHAR(255) | NOT NULL | Tên gói học (Gói Tự học, Gói Lớp Nhóm, Gói 1-1) |
 | `description` | TEXT | NULLABLE | Mô tả chi tiết quyền lợi gói |
 | `price` | DECIMAL(15,2) | NOT NULL | Giá bán thực tế của gói |
 | `duration_days` | INT | DEFAULT 365 | Thời hạn truy cập (ngày) |
-| `delivery_mode` | VARCHAR(30) | NOT NULL | `SELF_STUDY`, `GROUP_CLASS`, `ONE_ON_ONE`, `COMBO` |
+| `delivery_mode` | VARCHAR(30) | NOT NULL | `SELF_STUDY`, `GROUP_CLASS`, `ONE_ON_ONE` |
 | `status` | VARCHAR(30) | DEFAULT 'ACTIVE' | `ACTIVE`, `INACTIVE` |
 
 ### 6.2 Bảng `cart_item` (Giỏ hàng người dùng)
@@ -426,6 +432,9 @@ Hầu hết các bảng dữ liệu chính đều kế thừa từ `BaseEntity`:
 | `usage_limit` | INT | NULLABLE | Giới hạn tổng số lần sử dụng |
 | `used_count` | INT | DEFAULT 0 | Số lần đã dùng |
 | `status` | VARCHAR(20) | DEFAULT 'ACTIVE' | Trạng thái coupon |
+| `distribution_scope` | VARCHAR(30) | NOT NULL, DEFAULT 'NONE' | `NONE`, `ALL_STUDENTS`, `SELECTED_STUDENTS` |
+
+Coupon có thể áp dụng nhiều khóa học qua bảng liên kết `coupon_course(coupon_id, course_id)`; bảng này dùng khóa chính kép và khóa ngoại tới `coupon`, `course`.
 
 ### 6.4 Bảng `order` & `order_item` (Đơn hàng & Chi tiết đơn hàng)
 * **Khóa chính**: `id` (BIGINT)
@@ -812,11 +821,25 @@ Nguồn migration: `database/v4_course_commerce_momo_one_on_one.sql`, `database/
 
 - `cart_item.one_on_one_needs` lưu draft JSON của form 1-1 theo đúng package trong giỏ.
 - `enrollment_package.status` là nguồn quyết định quyền sau refund/cancel/revoke/expire.
+
+## Support chat
+
+`anonymous_visitor.id` dùng Snowflake `BIGINT`, liên kết với `support_conversation.visitor_id`. Policy guided là tài liệu MinIO trong `policies/`; `file_metadata.usage_type = POLICY` và bản `ACTIVE` mới nhất xác định phiên bản hiện hành.
+
+Ảnh đại diện khóa học được lưu trong MinIO và quản lý qua `file_metadata` với `usage_type = COURSE_THUMBNAIL`, `reference_entity_type = Course` và `reference_entity_id = course.id`.
+
+`support_conversation` lưu riêng `last_hr_message_at`, `last_visitor_message_at`, `close_requested_at` để countdown đóng phiên không phụ thuộc audit `updated_at`.
+
+`support_conversation.full_name` và `email` bắt buộc với yêu cầu mới để supporter nhận diện khách; số điện thoại là tùy chọn và không hiển thị trên card hàng đợi.
+
+`support_chat_message.message_type` có `TEXT`, `QUICK_REPLIES`, `COURSE_RESULTS`, `RESOURCE_CARD`, `ATTACHMENT`, `SYSTEM`. `metadata` JSON lưu card course/category/package đã xác thực hoặc metadata file MinIO; attachment tối đa 10MB và chỉ hợp lệ ở conversation `ACTIVE`. Thay đổi không cần migration mới vì hai cột đã dùng `VARCHAR`/`JSON` từ v14.
+
+`support_hr_presence` là trạng thái hệ thống: heartbeat 30 giây, timeout 90 giây. Workload mở làm trạng thái thành `ONLINE_BUSY`; không có workload là `ONLINE_AVAILABLE`. Ticket ưu tiên người available, sau đó vào hàng đợi cá nhân của người busy có workload thấp nhất; supporter offline làm ticket quay lại queue chung.
 - `class_stream_post` hỗ trợ `QUESTION`, `DISCUSSION`, `ANNOUNCEMENT`, ghim, khóa bình luận và ẩn.
 - `class_stream_comment` lưu bình luận/trả lời có audit và phân trang theo bài đăng.
 
-## Migration v11: Sửa liên kết lớp cho COMBO
+## Migration v23: Chuẩn hóa hình thức gói học
 
-- COMBO có `max_group_size > 1` phải tham chiếu lớp `ACTIVE` thuộc cùng khóa học.
-- Lớp có thể được bán qua cả package `GROUP_CLASS` và `COMBO`; giới hạn chỗ dựa trên `class_member` thay vì số package tham chiếu.
-- COMBO cũ không có lớp được chuẩn hóa thành tự học + 1-1 (`max_group_size = NULL`) và vẫn yêu cầu form nhu cầu nếu có buổi gia sư.
+- Hệ thống chỉ chấp nhận `SELF_STUDY`, `GROUP_CLASS`, `ONE_ON_ONE`.
+- Dữ liệu hình thức cũ có lớp được chuyển sang `GROUP_CLASS`; có buổi gia sư nhưng không có lớp được chuyển sang `ONE_ON_ONE`; phần còn lại chuyển sang `SELF_STUDY`.
+- Sau migration, chỉ package `GROUP_CLASS` được tham chiếu lớp và sức chứa tiếp tục dựa trên `class_member`.

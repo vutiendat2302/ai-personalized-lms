@@ -75,6 +75,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   }, [user, availablePortals]);
 
+  /** Đồng bộ tức thời hồ sơ đang đăng nhập cho header và mọi layout dùng AuthContext. */
+  const updateCurrentUser = useCallback((patch: Partial<AuthUser>) => {
+    setUser((current) => current ? { ...current, ...patch } : current);
+  }, []);
+
   const helperProcessRoles = (roles?: string[]): RoleCode[] => {
     if (!roles || roles.length === 0) return ["STUDENT"];
     return roles.map(role => role.replace("ROLE_", "").toUpperCase() as RoleCode);
@@ -96,7 +101,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             email: res.email || "",
             roles: roleList,
             permissions: res.permissions || [],
-            fullName: res.fullName || res.username || ""
+            fullName: res.fullName || res.username || "",
+            avatarUrl: res.avatarUrl || null,
           });
         }
       } catch (error) {
@@ -124,7 +130,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         email: res.email || "",
         roles: roleList,
         permissions: res.permissions || [],
-        fullName: res.fullName || res.username || ""
+        fullName: res.fullName || res.username || "",
+        avatarUrl: res.avatarUrl || null,
       };
 
       setUser(newUser);
@@ -178,7 +185,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         switchWorkspace,
         setDefaultWorkspace,
         login,
-        logout
+        logout,
+        updateCurrentUser,
       }}
     >
       {children}

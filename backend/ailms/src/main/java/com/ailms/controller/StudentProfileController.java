@@ -24,6 +24,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -147,11 +148,13 @@ public class StudentProfileController {
     }
 
     @GetMapping("/stats/activity-trend")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<ApiResponse<Map<String, Long>>> getActivityTrend() {
         return ResponseEntity.ok(ApiResponse.of("Activity trend 30 days", studentProfileService.getStudentActivityTrend30Days()));
     }
 
     @GetMapping("/stats/activity-logs")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getActivityLogs(
             @RequestParam @org.springframework.format.annotation.DateTimeFormat(iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) LocalDate date) {
         return ResponseEntity.ok(ApiResponse.of("Activity logs by date", studentProfileService.getStudentActivityDetails(date)));

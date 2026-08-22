@@ -5,6 +5,7 @@ import com.ailms.entity.enums.FileTypeEnum;
 import com.ailms.exception.BusinessException;
 import com.ailms.request.BulkFileActionRequest;
 import com.ailms.request.FileSearchRequest;
+import com.ailms.request.UpdateFileMetadataRequest;
 import com.ailms.response.ApiResponse;
 import com.ailms.response.FileExistenceResponse;
 import com.ailms.response.FileManagementSummaryResponse;
@@ -49,15 +50,19 @@ public class FileController {
     // 1. PUBLIC / USER FILE ENDPOINTS
     // ==========================================
 
+    /** Upload object lên MinIO và lưu metadata với tên hiển thị tùy chọn. */
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("#usageType != T(com.ailms.entity.enums.FileUsageTypeEnum).POLICY or hasAnyAuthority('ROLE_ADMIN', 'ROLE_HR')")
     public ResponseEntity<ApiResponse<FileMetadataResponse>> uploadFile(
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "fileType", required = false) FileTypeEnum fileType,
             @RequestParam(value = "usageType", required = false) FileUsageTypeEnum usageType,
             @RequestParam(value = "referenceEntityId", required = false) Long referenceEntityId,
-            @RequestParam(value = "referenceEntityType", required = false) String referenceEntityType) {
+            @RequestParam(value = "referenceEntityType", required = false) String referenceEntityType,
+            @RequestParam(value = "originalName", required = false) String originalName) {
 
-        FileMetadataResponse metadata = fileService.uploadFile(file, fileType, usageType, referenceEntityId, referenceEntityType);
+        FileMetadataResponse metadata = fileService.uploadFile(
+                file, fileType, usageType, referenceEntityId, referenceEntityType, originalName);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.of("File uploaded to MinIO and metadata saved successfully", metadata));
     }
@@ -220,6 +225,16 @@ public class FileController {
     public ResponseEntity<ApiResponse<FileMetadataResponse>> getFileDetail(@PathVariable("id") Long id) {
         FileMetadataResponse detail = fileMetadataService.getById(id);
         return ResponseEntity.ok(ApiResponse.of("Lấy chi tiết file thành công", detail));
+    }
+
+    /** Chỉnh sửa tên hiển thị và module metadata của file. */
+    @PatchMapping("/admin/{id}")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_HR')")
+    public ResponseEntity<ApiResponse<FileMetadataResponse>> updateFileMetadata(
+            @PathVariable("id") Long id,
+            @RequestBody @Valid UpdateFileMetadataRequest request) {
+        FileMetadataResponse updated = fileMetadataService.updateMetadata(id, request);
+        return ResponseEntity.ok(ApiResponse.of("Cập nhật metadata file thành công", updated));
     }
 
     @GetMapping("/admin/{id}/download-url")

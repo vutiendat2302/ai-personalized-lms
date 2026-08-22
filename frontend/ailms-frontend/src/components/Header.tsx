@@ -65,7 +65,7 @@ export const Header: React.FC = () => {
     setNotificationLoading(true);
     try {
       const [page, count] = await Promise.all([
-        notificationApi.getMine(0, 8),
+        notificationApi.getMine(0, 50),
         notificationApi.getUnreadCount(),
       ]);
       setNotifications(page?.content || []);
@@ -169,46 +169,18 @@ export const Header: React.FC = () => {
     }
   }, [auth.accessToken, auth.user, isStudent]);
 
-  // Synchronize searchQuery with URL query parameter when on /explore
-  useEffect(() => {
-    if (location.pathname === "/explore") {
-      const searchParams = new URLSearchParams(location.search);
-      const kw = searchParams.get("keyword") || searchParams.get("q") || "";
-      setSearchQuery(kw);
-    }
-  }, [location.pathname, location.search]);
-
-  // Fetch search history from API (or local user history), max 4 items
+  // Fetch only persisted history from the Backend; anonymous users have no synthetic history.
   useEffect(() => {
     if (searchFocused) {
-      const localHist: SearchHistoryResponse[] = JSON.parse(
-        localStorage.getItem("ailms_local_search_history") || "[]"
-      );
-
       if (auth.accessToken) {
         searchApi
           .getSearchHistory()
           .then((res) => {
-            if (res.data?.success && Array.isArray(res.data?.data) && res.data.data.length > 0) {
-              const apiHist = res.data.data;
-              const merged = [...apiHist];
-              localHist.forEach((lh) => {
-                if (!merged.some((ah) => ah.keyword.toLowerCase() === lh.keyword.toLowerCase())) {
-                  merged.push(lh);
-                }
-              });
-              const finalFour = merged.slice(0, 4);
-              setSearchHistory(finalFour);
-              localStorage.setItem("ailms_local_search_history", JSON.stringify(finalFour));
-            } else {
-              setSearchHistory(localHist.slice(0, 4));
-            }
+            setSearchHistory(res.data?.success && Array.isArray(res.data?.data) ? res.data.data.slice(0, 4) : []);
           })
-          .catch(() => {
-            setSearchHistory(localHist.slice(0, 4));
-          });
+          .catch(() => setSearchHistory([]));
       } else {
-        setSearchHistory(localHist.slice(0, 4));
+        setSearchHistory([]);
       }
     }
   }, [searchFocused, auth.accessToken]);
@@ -267,8 +239,9 @@ export const Header: React.FC = () => {
     if (searchFocused) {
       const localViewed = JSON.parse(
         localStorage.getItem("recently_viewed_courses") || "[]"
-      );
+      ).filter((item: any) => item?.id && item?.name && !/unsplash\.com|dicebear\.com/i.test(item?.image || ""));
       setRecentlyViewedCourses(localViewed);
+      localStorage.setItem("recently_viewed_courses", JSON.stringify(localViewed));
     }
   }, [searchFocused]);
 
@@ -279,8 +252,8 @@ export const Header: React.FC = () => {
       {
         id: String(course.id),
         name: course.name,
-        category: course.category || "Khóa học AILMS",
-        image: course.image || "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=300&auto=format&fit=crop&q=60",
+        ...(course.category ? { category: course.category } : {}),
+        ...(course.image ? { image: course.image } : {}),
       },
       ...filtered,
     ].slice(0, 3);
@@ -292,26 +265,12 @@ export const Header: React.FC = () => {
     if (!keyword.trim()) return;
     const cleanKw = keyword.trim();
 
-    // 1. Update local storage history immediately
-    const localHist: SearchHistoryResponse[] = JSON.parse(
-      localStorage.getItem("ailms_local_search_history") || "[]"
-    );
-    const newHistItem: SearchHistoryResponse = {
-      id: `hist-${Date.now()}`,
-      keyword: cleanKw,
-      courseId: courseId || null,
-      createdAt: new Date().toISOString(),
-    };
-    const filteredLocal = localHist.filter((h) => h.keyword.toLowerCase() !== cleanKw.toLowerCase());
-    const updatedLocal = [newHistItem, ...filteredLocal].slice(0, 4);
-    localStorage.setItem("ailms_local_search_history", JSON.stringify(updatedLocal));
-    setSearchHistory(updatedLocal);
-
-    // 2. Call API if logged in
+    // Persist history only for authenticated accounts through the Backend API.
     if (auth.accessToken) {
-      searchApi.saveSearchHistory({ keyword: cleanKw, courseId: courseId || null }).catch(() => {
-        // Silently catch 403 / unauth errors
-      });
+      searchApi.saveSearchHistory({ keyword: cleanKw, courseId: courseId || null })
+        .then(() => searchApi.getSearchHistory())
+        .then((res) => setSearchHistory(res.data?.success && Array.isArray(res.data?.data) ? res.data.data.slice(0, 4) : []))
+        .catch(() => undefined);
     }
   };
 
@@ -319,16 +278,10 @@ export const Header: React.FC = () => {
     e.stopPropagation();
     const targetId = String(id);
 
-    // 1. Instantly update UI and LocalStorage
-    const localHist: SearchHistoryResponse[] = JSON.parse(
-      localStorage.getItem("ailms_local_search_history") || "[]"
-    );
-    const updatedLocal = localHist.filter((item) => String(item.id) !== targetId).slice(0, 4);
-    localStorage.setItem("ailms_local_search_history", JSON.stringify(updatedLocal));
+    // Remove the persisted item through the Backend and update the visible list immediately.
     setSearchHistory((prev) => prev.filter((item) => String(item.id) !== targetId).slice(0, 4));
 
-    // 2. Call DELETE API only when authenticated and non-synthetic id
-    if (auth.accessToken && !targetId.startsWith("hist-")) {
+    if (auth.accessToken) {
       try {
         await searchApi.deleteSearchHistory(targetId);
       } catch {
@@ -344,7 +297,13 @@ export const Header: React.FC = () => {
       saveHistory(query);
       setSearchFocused(false);
       setSearchQuery("");
-      navigate(`/explore?keyword=${encodeURIComponent(query)}`);
+      const isExplore = location.pathname === "/explore";
+      const existingFrom = (location.state as { from?: string } | null)?.from;
+      const originalFrom = !isExplore ? `${location.pathname}${location.search}${location.hash}` : (existingFrom || "/student/dashboard");
+      navigate(`/explore?keyword=${encodeURIComponent(query)}#courses`, {
+        replace: isExplore,
+        state: { from: originalFrom },
+      });
     }
   };
 
@@ -386,7 +345,13 @@ export const Header: React.FC = () => {
     if (effectiveCourseId) {
       navigate(`/courses/${effectiveCourseId}`);
     } else {
-      navigate(`/explore?keyword=${encodeURIComponent(keyword)}`);
+      const isExplore = location.pathname === "/explore";
+      const existingFrom = (location.state as { from?: string } | null)?.from;
+      const originalFrom = !isExplore ? `${location.pathname}${location.search}${location.hash}` : (existingFrom || "/student/dashboard");
+      navigate(`/explore?keyword=${encodeURIComponent(keyword)}#courses`, {
+        replace: isExplore,
+        state: { from: originalFrom },
+      });
     }
   };
 
@@ -444,7 +409,14 @@ export const Header: React.FC = () => {
     })
   );
 
-  // Ẩn giỏ hàng cho toàn bộ nhóm nhân viên (Admin, HR, Teacher, TA)
+  const isSupport = Boolean(
+    auth.user?.roles?.some((r: any) => {
+      const roleStr = (typeof r === "object" ? (r?.code || r?.name || "") : String(r)).toUpperCase();
+      return roleStr.includes("SUPPORT");
+    })
+  );
+
+  // Ẩn giỏ hàng cho toàn bộ nhóm nhân viên (Admin, HR, Teacher, TA, Support)
   const isEmployee = Boolean(
     auth.user?.roles?.some((r: any) => {
       const roleStr = (typeof r === "object" ? (r?.code || r?.name || "") : String(r)).toUpperCase();
@@ -453,6 +425,7 @@ export const Header: React.FC = () => {
         roleStr.includes("HR") ||
         roleStr.includes("TEACHER") ||
         roleStr.includes("TA") ||
+        roleStr.includes("SUPPORT") ||
         roleStr.includes("EMPLOYEE")
       );
     })
@@ -701,7 +674,7 @@ export const Header: React.FC = () => {
                                 {c.image ? <img src={c.image} alt={c.name} className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300" /> : <div className="flex h-full w-full items-center justify-center bg-primary/5"><BookOpen className="h-6 w-6 text-primary/40" /></div>}
                               </div>
                               <div className="p-2 flex-1 flex flex-col justify-between space-y-1">
-                                <span className="text-[10px] font-extrabold uppercase text-primary tracking-wider">{c.category}</span>
+                                {c.category && <span className="text-[10px] font-extrabold uppercase text-primary tracking-wider">{c.category}</span>}
                                 <h5 className="font-bold text-foreground text-xs leading-tight line-clamp-2 group-hover:text-primary transition-colors">
                                   {c.name}
                                 </h5>
@@ -828,7 +801,7 @@ export const Header: React.FC = () => {
                   className="flex items-center gap-1.5 focus:outline-none focus:ring-2 focus:ring-primary/20 rounded-full p-0.5"
                 >
                 <Avatar className="h-9 w-9 border-2 border-primary/20 hover:border-primary/60 transition-all">
-                  <AvatarImage src={`https://api.dicebear.com/7.x/adventurer/svg?seed=${auth.user.username}`} />
+                  <AvatarImage src={auth.user.avatarUrl || undefined} />
                   <AvatarFallback className="bg-primary/10 text-primary uppercase font-bold text-xs">
                     {auth.user.username.slice(0, 2)}
                   </AvatarFallback>
@@ -843,7 +816,18 @@ export const Header: React.FC = () => {
                     <p className="text-[10px] text-muted-foreground truncate">{auth.user.email}</p>
                   </div>
 
-                  {isAdmin ? (
+                  {isSupport ? (
+                    // Support Menu Items (Chỉ Thông tin cá nhân)
+                    <>
+                      <button
+                        onClick={() => { setDropdownOpen(false); navigate("/profile"); }}
+                        className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
+                      >
+                        <User className="h-4 w-4 text-primary" />
+                        <span>Thông tin cá nhân</span>
+                      </button>
+                    </>
+                  ) : isAdmin ? (
                     // Admin Menu Items
                     <>
                       <button
@@ -859,13 +843,6 @@ export const Header: React.FC = () => {
                       >
                         <Shield className="h-4 w-4 text-primary" />
                         <span>Trung tâm phê duyệt</span>
-                      </button>
-                      <button
-                        onClick={() => { setDropdownOpen(false); navigate("/analytics"); }}
-                        className="flex w-full items-center gap-2 px-3 py-2 rounded-lg text-left text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all"
-                      >
-                        <BarChart className="h-4 w-4 text-primary" />
-                        <span>Báo cáo & Analytics</span>
                       </button>
         
                       <button

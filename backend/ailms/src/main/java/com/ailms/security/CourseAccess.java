@@ -1,7 +1,11 @@
 package com.ailms.security;
 
+import com.ailms.entity.enums.CourseInstructorStatusEnum;
+import com.ailms.entity.enums.CourseTeacherStatusEnum;
+import com.ailms.repository.CourseInstructorRepository;
 import com.ailms.repository.CoursePackageRepository;
 import com.ailms.repository.CourseRepository;
+import com.ailms.repository.CourseTeacherRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
@@ -13,14 +17,22 @@ public class CourseAccess {
 
     private final CourseRepository courseRepository;
     private final CoursePackageRepository coursePackageRepository;
+    private final CourseTeacherRepository courseTeacherRepository;
+    private final CourseInstructorRepository courseInstructorRepository;
 
-    /** Cho phép Admin/HR hoặc đúng người tạo khóa học thay đổi khóa học. */
+    /** Cho phép Admin/HR, người tạo hoặc giảng viên được phân công ACTIVE quản lý khóa học. */
     public boolean canManage(Long courseId, Authentication authentication) {
         if (hasAnyRole(authentication, "ROLE_ADMIN", "ROLE_HR")) return true;
         Long currentUserId = currentUserId(authentication);
-        return currentUserId != null && courseRepository.findById(courseId)
+        if (currentUserId == null) return false;
+        boolean isCreator = courseRepository.findById(courseId)
                 .map(course -> currentUserId.equals(course.getCreatedBy()))
                 .orElse(false);
+        return isCreator
+                || courseTeacherRepository.existsByCourseEntity_IdAndUserEntity_IdAndStatus(
+                        courseId, currentUserId, CourseTeacherStatusEnum.ACTIVE)
+                || courseInstructorRepository.existsByCourseIdAndInstructorIdAndStatus(
+                        courseId, currentUserId, CourseInstructorStatusEnum.ACCEPTED);
     }
 
     /** Kiểm tra quyền thay đổi gói thông qua ownership của khóa học chứa gói. */

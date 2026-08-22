@@ -5,11 +5,19 @@ export type OrderStatusEnum = "PENDING" | "PAID" | "CANCELLED" | "EXPIRED" | "RE
 export type OrderItemTypeEnum = "NEW_PURCHASE" | "UPGRADE" | "RENEWAL";
 export type PaymentMethodEnum = "PAYPAL" | "VNPAY" | "MOMO" | "BANK_TRANSFER" | "MOCK";
 export type PaymentStatusEnum = "PENDING" | "SUCCESS" | "FAILED" | "REFUNDED";
-export type DeliveryModeEnum = "SELF_STUDY" | "GROUP_CLASS" | "ONE_ON_ONE" | "COMBO";
+export type DeliveryModeEnum = "SELF_STUDY" | "GROUP_CLASS" | "ONE_ON_ONE";
 
 export interface SalesKPI {
   todayRevenue: number;
-  revenueChangePercent: number; // e.g. +14.5%
+  revenueChangePercent: number;
+  monthRevenue: number;
+  monthRevenueChangePercent: number;
+  allTimeRevenue: number;
+  successfulOrdersCount: number;
+  refundedOrdersCount: number;
+  refundedAmount: number;
+  failedPaymentsCount: number;
+  averageOrderValue: number;
   pendingOrdersCount: number;
   isPendingWarning: boolean;
   conversionRate: number; // e.g. 68.4%
@@ -185,7 +193,9 @@ export interface CoursePackageDetail {
   createdAt?: string;
   updatedAt?: string;
   createdBy?: string | number;
+  createdByName?: string;
   updatedBy?: string | number;
+  updatedByName?: string;
 }
 
 export interface CoursePackageFormPayload {
@@ -299,55 +309,23 @@ function mapEnrollmentFromBackend(raw: any): EnrollmentItem {
 export const salesApi = {
   // 3.1 Dashboard KPI & Analytics
   getSalesKPI: async (): Promise<SalesKPI> => {
-    try {
-      const res = await httpClient.get<ApiResponse<SalesKPI>>("/v1/sales/dashboard/kpi");
-      return (
-        res.data?.data || {
-          todayRevenue: 0,
-          revenueChangePercent: 0,
-          pendingOrdersCount: 0,
-          isPendingWarning: false,
-          conversionRate: 0,
-          expiringCouponsCount: 0,
-        }
-      );
-    } catch {
-      return {
-        todayRevenue: 0,
-        revenueChangePercent: 0,
-        pendingOrdersCount: 0,
-        isPendingWarning: false,
-        conversionRate: 0,
-        expiringCouponsCount: 0,
-      };
-    }
+    const res = await httpClient.get<ApiResponse<SalesKPI>>("/v1/sales/dashboard/kpi");
+    return res.data.data;
   },
 
   getDailyRevenueStats: async (): Promise<DailyRevenueStat[]> => {
-    try {
-      const res = await httpClient.get<ApiResponse<DailyRevenueStat[]>>("/v1/sales/dashboard/revenue-chart");
-      return res.data?.data || [];
-    } catch {
-      return [];
-    }
+    const res = await httpClient.get<ApiResponse<DailyRevenueStat[]>>("/v1/sales/dashboard/revenue-chart");
+    return res.data.data ?? [];
   },
 
   getTopCoursePackages: async (): Promise<TopCoursePackageStat[]> => {
-    try {
-      const res = await httpClient.get<ApiResponse<TopCoursePackageStat[]>>("/v1/sales/dashboard/top-packages");
-      return res.data?.data || [];
-    } catch {
-      return [];
-    }
+    const res = await httpClient.get<ApiResponse<TopCoursePackageStat[]>>("/v1/sales/dashboard/top-packages");
+    return res.data.data ?? [];
   },
 
   getUrgentTasks: async (): Promise<UrgentTaskItem[]> => {
-    try {
-      const res = await httpClient.get<ApiResponse<UrgentTaskItem[]>>("/v1/sales/dashboard/urgent-tasks");
-      return res.data?.data || [];
-    } catch {
-      return [];
-    }
+    const res = await httpClient.get<ApiResponse<UrgentTaskItem[]>>("/v1/sales/dashboard/urgent-tasks");
+    return res.data.data ?? [];
   },
 
   // 3.2 & 3.3 Orders
@@ -578,20 +556,12 @@ export const salesApi = {
 
   // 3.8 Pending Carts
   getPendingCarts: async (): Promise<PendingUserCart[]> => {
-    try {
-      const res = await httpClient.get<ApiResponse<PendingUserCart[]>>("/v1/sales/pending-carts");
-      return res.data?.data || [];
-    } catch {
-      return [];
-    }
+    const res = await httpClient.get<ApiResponse<PendingUserCart[]>>("/v1/sales/pending-carts");
+    return res.data?.data || [];
   },
 
   sendCartReminder: async (userId: string): Promise<boolean> => {
-    try {
-      await httpClient.post(`/v1/sales/pending-carts/${userId}/reminder`);
-      return true;
-    } catch {
-      return true;
-    }
+    await httpClient.post(`/v1/sales/pending-carts/${userId}/reminder`);
+    return true;
   },
 };

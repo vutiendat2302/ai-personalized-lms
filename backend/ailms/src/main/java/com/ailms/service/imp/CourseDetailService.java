@@ -42,11 +42,12 @@ public class CourseDetailService implements ICourseDetailService {
         Set<Long> ownedPackageIds = owned.stream()
                 .map(item -> item.getCoursePackageEntity().getId())
                 .collect(java.util.stream.Collectors.toSet());
+        boolean hasIncludedSelfStudyAccess = !owned.isEmpty();
 
         List<CoursePackageEntity> activePackages = coursePackageRepository
                 .findByCourseEntity_IdAndStatus(courseId, CoursePackageStatusEnum.ACTIVE);
         List<CourseDetailResponse.PackageItem> packages = activePackages.stream()
-                .map(pkg -> mapPackage(pkg, ownedPackageIds.contains(pkg.getId())))
+                .map(pkg -> mapPackage(pkg, ownedPackageIds.contains(pkg.getId()), hasIncludedSelfStudyAccess))
                 .toList();
         List<Long> purchasableIds = packages.stream()
                 .filter(item -> Boolean.TRUE.equals(item.getPurchasable()))
@@ -94,7 +95,7 @@ public class CourseDetailService implements ICourseDetailService {
         return buildSecuredCurriculum(courseId, currentUserId, hasAccess, enrollment);
     }
 
-    /** Trả chi tiết lớp của gói GROUP_CLASS hoặc COMBO có lớp đang hoạt động. */
+    /** Trả chi tiết lớp của gói GROUP_CLASS đang hoạt động. */
     @Override
     public CourseClassDetailResponse getGroupClassDetail(Long packageId) {
         CoursePackageEntity pkg = coursePackageRepository.findById(packageId)
@@ -121,7 +122,7 @@ public class CourseDetailService implements ICourseDetailService {
     /** Gắn quyền bài học và loại bỏ URL/tài nguyên khỏi response trang giới thiệu. */
     private CourseCurriculumResponse buildSecuredCurriculum(
             Long courseId, Long currentUserId, boolean hasAccess, EnrollmentEntity enrollment) {
-        CourseCurriculumResponse curriculum = courseAuthoringService.getCurriculum(courseId);
+        CourseCurriculumResponse curriculum = courseAuthoringService.getLearningCurriculum(courseId);
         curriculum.setEnrollmentId(hasAccess && enrollment != null ? enrollment.getId() : null);
         if (curriculum.getSections() != null) {
             curriculum.getSections().forEach(section -> {
@@ -161,21 +162,31 @@ public class CourseDetailService implements ICourseDetailService {
         UserEntity creator = userRepository.findById(creatorId).orElse(null);
         if (creator == null) return null;
         EmployeeEntity employee = employeeRepository.findById(creatorId).orElse(null);
+        String code = employee != null && employee.getEmployeeCode() != null ? employee.getEmployeeCode() : creator.getUsername();
         return CourseDetailResponse.Creator.builder()
                 .id(creator.getId())
+                .code(code)
                 .fullName(creator.getFullName())
                 .avatarUrl(creator.getAvatarUrl())
                 .title(employee != null ? employee.getPosition() : null)
-                .bio(null)
+                .bio(employee != null ? employee.getBio() : null)
                 .build();
     }
 
     /** Chuyển gói bán và tính lý do không thể mua ở thời điểm hiện tại. */
-    private CourseDetailResponse.PackageItem mapPackage(CoursePackageEntity pkg, boolean owned) {
+    private CourseDetailResponse.PackageItem mapPackage(
+            CoursePackageEntity pkg, boolean owned, boolean hasIncludedSelfStudyAccess) {
         boolean groupClassRequired = requiresGroupClass(pkg);
         CourseClassDetailResponse classDetail = groupClassRequired && pkg.getClassEntity() != null
                 ? mapClassDetail(pkg.getClassEntity()) : null;
+        boolean selfStudyIncluded = pkg.getDeliveryMode() == DeliveryModeEnum.SELF_STUDY
+                && hasIncludedSelfStudyAccess;
         String unavailableReason = owned ? "Bạn đang sở hữu gói học này."
+                : selfStudyIncluded
+                ? "Bạn đã có quyền tự học từ gói group/1-1 đang sở hữu."
+                : pkg.getDeliveryMode() == DeliveryModeEnum.ONE_ON_ONE
+                        && (pkg.getIncludedTutorSessions() == null || pkg.getIncludedTutorSessions() <= 0)
+                ? "Gói học 1-1 chưa được cấu hình số buổi kèm riêng."
                 : groupClassRequired && pkg.getClassEntity() == null
                 ? "Gói học chưa được gắn với lớp học."
                 : classDetail != null && !Boolean.TRUE.equals(classDetail.getPurchasable())
@@ -192,19 +203,16 @@ public class CourseDetailService implements ICourseDetailService {
                 .includedTutorSessions(pkg.getIncludedTutorSessions())
                 .maxGroupSize(pkg.getMaxGroupSize())
                 .classDetail(classDetail)
-                .owned(owned)
-                .purchasable(!owned && unavailableReason == null
+                .owned(owned || selfStudyIncluded)
+                .purchasable(!owned && !selfStudyIncluded && unavailableReason == null
                         && (!groupClassRequired || Boolean.TRUE.equals(classDetail.getPurchasable())))
                 .unavailableReason(unavailableReason)
                 .build();
     }
 
-    /** Xác định gói có thành phần lớp nhóm bắt buộc phải gắn lớp và kiểm tra lịch. */
+    /** Xác định gói lớp nhóm bắt buộc phải gắn lớp và kiểm tra lịch. */
     private boolean requiresGroupClass(CoursePackageEntity pkg) {
-        return pkg.getDeliveryMode() == DeliveryModeEnum.GROUP_CLASS
-                || (pkg.getDeliveryMode() == DeliveryModeEnum.COMBO
-                && ((pkg.getMaxGroupSize() != null && pkg.getMaxGroupSize() > 1)
-                || pkg.getClassEntity() != null));
+        return pkg.getDeliveryMode() == DeliveryModeEnum.GROUP_CLASS;
     }
 
     /** Tổng hợp giáo viên, trợ giảng, lịch và sức chứa thực tế của lớp nhóm. */

@@ -28,6 +28,7 @@ public class EmployeeContractResponse {
     private String departmentName;
     private String position;
     private String fullName;
+    private String avatarUrl;
 
     @JsonFormat(pattern = "yyyy-MM-dd")
     private LocalDate startDate;

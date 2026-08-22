@@ -17,6 +17,10 @@ public class AiConversationResponse {
     private AiConversationScope scope;
     private String module;
     private String route;
+    private Long courseId;
+    private Long classId;
+    private Long lessonId;
+    private String retrievalScope;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private List<AiMessageResponse> messages;

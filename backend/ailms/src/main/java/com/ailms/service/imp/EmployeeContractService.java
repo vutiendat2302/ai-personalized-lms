@@ -698,6 +698,11 @@ public class EmployeeContractService implements IEmployeeContractService {
     private EmployeeContractResponse enrichDownloadUrl(EmployeeContractEntity entity) {
         if (entity == null) return null;
         EmployeeContractResponse res = employeeContractMapper.toResponse(entity);
+        if ((!StringUtils.hasText(res.getAvatarUrl())) && entity.getEmployee() != null) {
+            if (entity.getEmployee().getUserEntity() != null && StringUtils.hasText(entity.getEmployee().getUserEntity().getAvatarUrl())) {
+                res.setAvatarUrl(entity.getEmployee().getUserEntity().getAvatarUrl());
+            }
+        }
         try {
             if (entity.getFileMetadata() != null && StringUtils.hasText(entity.getFileMetadata().getFileKey())) {
                 res.setDownloadUrl(fileStorageService.getPresignedUrl(entity.getFileMetadata().getFileKey(), Duration.ofHours(24)));

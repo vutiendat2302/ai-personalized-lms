@@ -12,14 +12,26 @@ import com.ailms.entity.enums.BaseStatusEnum;
 
 @Repository
 public interface QuizRepository extends BaseRepository<QuizEntity, Long> {
+    /** Kiểm tra mã quiz tự sinh đã tồn tại hay chưa. */
+    boolean existsByCode(String code);
+
     List<QuizEntity> findByLessonId(Long lessonId);
 
     List<QuizEntity> findByCourseId(Long courseId);
 
     List<QuizEntity> findBySectionId(Long sectionId);
 
+    /** Lấy quiz/bài thi do đúng người dùng hiện tại tạo. */
+    List<QuizEntity> findByCreatedByOrderByCreatedAtDesc(Long createdBy);
+
+    /** Lấy quiz thuộc các lớp hoặc khóa học người dạy đang phụ trách. */
+    List<QuizEntity> findByClassIdInOrCourseIdInOrderByDueAtAsc(List<Long> classIds, List<Long> courseIds);
+
     /** Lấy quiz/bài thi được giao riêng cho một lớp. */
     List<QuizEntity> findByClassIdOrderByDueAtAsc(Long classId);
+
+    /** Chặn tạo trùng một bản phát hành đang hoạt động từ cùng Quiz nguồn trong lớp. */
+    boolean existsByClassIdAndSourceQuizIdAndStatus(Long classId, Long sourceQuizId, BaseStatusEnum status);
 
     /** Lấy deadline quiz chung của các khóa học đang còn quyền truy cập. */
     List<QuizEntity> findByStatusAndClassIdIsNullAndCourseIdInAndDueAtBetweenOrderByDueAtAsc(

@@ -47,6 +47,8 @@ public class EmployeeResponse {
 
     private String position;
 
+    private String bio;
+
     private List<String> roles;
 
     private List<Long> roleIds;

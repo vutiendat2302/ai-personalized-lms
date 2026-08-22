@@ -4,6 +4,7 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { AuthModals } from "@/components/auth/AuthModals";
 import { useAuth } from "@/hooks/useAuth";
+import { PublicAiChatWidget } from "@/components/public/PublicAiChatWidget";
 
 export const MainLayout: React.FC = () => {
   const location = useLocation();
@@ -15,7 +16,8 @@ export const MainLayout: React.FC = () => {
     location.pathname.startsWith("/management") ||
     location.pathname.startsWith("/sales") ||
     location.pathname.startsWith("/student") ||
-    location.pathname.startsWith("/activity-log");
+    location.pathname.startsWith("/activity-log") ||
+    location.pathname.startsWith("/support");
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground transition-colors duration-200">
@@ -24,6 +26,7 @@ export const MainLayout: React.FC = () => {
         <Outlet />
       </main>
       {!auth.accessToken && !isPortalRoute && <Footer />}
+      {!auth.accessToken && !isPortalRoute && <PublicAiChatWidget />}
       {/* Global Auth & Cart Modals */}
       <AuthModals />
     </div>

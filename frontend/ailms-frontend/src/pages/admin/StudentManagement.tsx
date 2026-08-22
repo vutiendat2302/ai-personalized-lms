@@ -85,6 +85,8 @@ import { studentApi, type LearningActivityDetailData, type StudentProfileData } 
 import { interestApi, type InterestResponse } from "@/api/interests/interestApi";
 
 import { StudentDetailModal } from "@/components/admin/student/StudentDetailModal";
+import { useAuth } from "@/hooks/useAuth";
+import { resolveAvatarUrl } from "@/utils/avatarUrl";
 
 const ROLE_COLORS = ["#7b2525", "#ba6a4c", "#ff97d0", "#fe7f2d", "#2b5748", "#4e220f"];
 const GOAL_COLORS = ["#2563eb", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899"];
@@ -110,6 +112,11 @@ const getPageNumbers = (currentPage: number, total: number) => {
 export const StudentManagement: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { auth } = useAuth();
+  const currentRoles = (auth.user?.roles || []).map((role: any) =>
+    (typeof role === "object" ? role?.code || role?.name || "" : String(role)).replace("ROLE_", "").toUpperCase()
+  );
+  const isHrOnly = currentRoles.includes("HR") && !currentRoles.includes("ADMIN");
 
   // Data States
   const [students, setStudents] = useState<StudentProfileData[]>([]);
@@ -303,7 +310,7 @@ export const StudentManagement: React.FC = () => {
         studentApi.getOnboardingStats(),
         studentApi.getGoalTypeStats(),
         studentApi.getStreakLeaderboard(),
-        studentApi.getActivityTrend(),
+        isHrOnly ? Promise.resolve({}) : studentApi.getActivityTrend(),
         studentApi.getInactiveWarningCount(inactiveDaysConfig),
         studentApi.getTopInterests()
       ]);
@@ -330,7 +337,10 @@ export const StudentManagement: React.FC = () => {
 
       setGoalTypeStats(goals.status === "fulfilled" ? Object.entries(goals.value).map(([name, value]) => ({ name, value: Number(value) })) : []);
       setLeaderboardData(leaderboard.status === "fulfilled" ? leaderboard.value : { currentStreakTop: [], longestStreakTop: [] });
-      if (trend.status === "fulfilled") {
+      if (isHrOnly) {
+        setActivityTrendData([]);
+        setActivityTrendError("");
+      } else if (trend.status === "fulfilled") {
         setActivityTrendData(Object.entries(trend.value || {}).map(([name, value]) => ({ name, value: Number(value) || 0 })));
         setActivityTrendError("");
       } else {
@@ -353,6 +363,7 @@ export const StudentManagement: React.FC = () => {
   };
 
   const openActivityDetails = async (date: string) => {
+    if (isHrOnly) return;
     setActivityDate(date); setActivityLogPage(0); setActivityDialogOpen(true); setActivityLogs([]); setActivityLogsError(""); setActivityLogsLoading(true);
     try { setActivityLogs(await studentApi.getActivityLogsByDate(date)); }
     catch (err: any) { setActivityLogsError(err.message || "Không thể tải nhật ký hoạt động học tập."); }
@@ -627,12 +638,6 @@ export const StudentManagement: React.FC = () => {
       {/* Page Title Header (Exact UserManagement typography) */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b border-border/30 pb-4">
         <div>
-          <div className="flex items-center gap-2 text-sm font-semibold text-primary mb-1">
-            <Link to="/dashboard" className="flex items-center gap-1 hover:underline">
-              <ArrowLeft className="h-3.5 w-3.5" />
-              <span>Quay lại Tổng quan</span>
-            </Link>
-          </div>
           <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-foreground flex items-center gap-3 mt-2">
             <div className="p-2.5 rounded-2xl bg-primary/10 text-primary">
               <GraduationCap className="h-7 w-7" />
@@ -668,7 +673,7 @@ export const StudentManagement: React.FC = () => {
               }`}
             >
               <BarChart3 className="h-4 w-4" />
-              <span>Thống kê & Phân tích (6.8.1)</span>
+              <span>Thống kê &amp; Phân tích</span>
             </button>
 
             <button
@@ -680,17 +685,17 @@ export const StudentManagement: React.FC = () => {
               }`}
             >
               <GraduationCap className="h-4 w-4" />
-              <span>Danh sách Học viên (6.8.3)</span>
+              <span>Danh sách học viên</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* SECTION 1: 6.8.1 OVERVIEW SECTION (7 CHARTS/KPI CARDS) */}
+      {/* SECTION 1: OVERVIEW SECTION */}
       <section id="statistics" className="space-y-8 scroll-mt-36">
-        {statsError && <div className="flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-600"><AlertCircle className="h-4 w-4" />{statsError}</div>}
+        {statsError && <div className="flex items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm font-semibold text-destructive"><AlertCircle className="h-4 w-4" />{statsError}</div>}
         
-        {/* 1. KPI Cards (Nhóm 3 số) */}
+        {/* KPI Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           <Card className="border-border shadow-xs bg-card overflow-hidden relative">
             <div className="absolute top-0 right-0 p-4 opacity-10 text-primary">
@@ -702,14 +707,12 @@ export const StudentManagement: React.FC = () => {
               </CardDescription>
               <CardTitle className="text-3xl font-extrabold text-foreground flex items-center gap-2 mt-1">
                 <span className="text-primary">{statsLoading ? "..." : totalActiveStudents.toLocaleString()}</span>
-                <span className="text-xs font-semibold text-primary bg-primary/10 px-2.5 py-0.5 rounded-full">Students</span>
               </CardTitle>
             </CardHeader>
-            <CardContent className="pt-0"><p className="text-xs text-muted-foreground">Tài khoản học viên đang hoạt động</p></CardContent>
           </Card>
 
           <Card className="border-border shadow-xs bg-card overflow-hidden relative">
-            <div className="absolute top-0 right-0 p-4 opacity-10 text-emerald-500">
+            <div className="absolute top-0 right-0 p-4 opacity-10 text-success-forest">
               <TrendingUp className="h-20 w-20" />
             </div>
             <CardHeader className="pb-2">
@@ -717,42 +720,34 @@ export const StudentManagement: React.FC = () => {
                 Học viên mới trong tháng
               </CardDescription>
               <CardTitle className="text-3xl font-extrabold text-foreground flex items-center gap-2 mt-1">
-                <span className="text-emerald-600">+{newStudentsThisMonth}</span>
-                <span className="text-xs font-semibold text-emerald-600 bg-emerald-500/10 px-2.5 py-0.5 rounded-full">Tháng này</span>
+                <span className="text-success-forest">+{newStudentsThisMonth}</span>
               </CardTitle>
             </CardHeader>
-            <CardContent className="pt-0"><p className="text-xs text-muted-foreground">Số học viên đăng ký mới trong tháng</p></CardContent>
           </Card>
 
-          {/* Card thứ 3 có màu cảnh báo vì thiếu guardian */}
           <Card
-            onClick={() => { setFilterIsMinor("TRUE"); setFilterHasEnrollment("FALSE"); setPage(0); scrollToSection("management"); showBanner("Đã lọc học viên vị thành niên chưa có khóa học."); }}
-            className="border-2 border-red-500/40 bg-linear-to-br from-red-500/10 via-card to-card shadow-xs cursor-pointer group flex flex-col justify-between"
+            onClick={() => { setFilterIsMinor("TRUE"); setFilterHasEnrollment("FALSE"); setPage(0); scrollToSection("management"); showBanner("Đã lọc học viên vị thành niên chưa nhập thông tin phụ huynh"); }}
+            className="border border-destructive/40 bg-destructive/5 shadow-xs cursor-pointer group flex flex-col justify-between"
           >
             <CardHeader className="pb-2">
-              <CardDescription className="text-xs font-extrabold text-red-600 uppercase flex items-center justify-between">
-                <span className="flex items-center gap-1"><ShieldAlert className="h-4 w-4" /> Minor Chưa Có Khóa Học</span>
-                <span className="px-2 py-0.5 rounded-full bg-red-600 text-white text-[10px] font-black">CẢNH BÁO</span>
+              <CardDescription className="text-xs font-extrabold text-destructive uppercase flex items-center gap-1">
+                <ShieldAlert className="h-4 w-4" />
+                <span>Vị thành niên chưa nhập thông tin phụ huynh</span>
               </CardDescription>
-              <CardTitle className="text-3xl font-extrabold text-red-600 flex items-center gap-2 mt-1">
+              <CardTitle className="text-3xl font-extrabold text-destructive flex items-center gap-2 mt-1">
                 <span>{minorWithoutEnrollment}</span>
-                <span className="text-xs font-semibold text-red-600 bg-red-500/10 px-2 py-0.5 rounded-full">Thiếu thông tin</span>
               </CardTitle>
             </CardHeader>
-            <CardContent className="pt-0 flex justify-between items-center">
-              <p className="text-xs text-muted-foreground">Click để xem học viên vị thành niên chưa ghi danh khóa học &rarr;</p>
-            </CardContent>
           </Card>
         </div>
 
         {/* 2 & 3: Donut Onboarding & Bar Goal Types */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-5">
           
-          {/* 2. Donut Onboarding */}
+          {/* Donut Onboarding */}
           <Card className="lg:col-span-5 border-border shadow-xs bg-card group">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-semibold">2. Tỷ lệ hoàn tất Onboarding (has_goal)</CardTitle>
-              <CardDescription className="text-xs">Click phần false để filter học viên chưa onboarding</CardDescription>
+              <CardTitle className="text-sm font-semibold">Tỷ lệ hoàn tất giới thiệu ban đầu</CardTitle>
             </CardHeader>
             <CardContent className="min-h-50 flex items-center justify-center">
               <ResponsiveContainer width="100%" height={170}>
@@ -769,11 +764,10 @@ export const StudentManagement: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* 3. Bar Goal Types */}
+          {/* Bar Goal Types */}
           <Card className="lg:col-span-7 border-border shadow-xs bg-card">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-semibold">3. Phân bổ Học viên theo Goal Type đang theo đuổi</CardTitle>
-              <CardDescription className="text-xs">Đếm theo goal (ACTIVE), 1 học viên có thể có nhiều goal</CardDescription>
+              <CardTitle className="text-sm font-semibold">Phân bổ học viên theo mục tiêu học tập</CardTitle>
             </CardHeader>
             <CardContent className="min-h-50 flex items-center justify-center">
               <ResponsiveContainer width="100%" height={170}>
@@ -790,26 +784,26 @@ export const StudentManagement: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* 4. Leaderboard Streak (Top Current & Longest) */}
+          {/* Leaderboard Streak */}
           <Card className="lg:col-span-6 border-border shadow-xs bg-card flex flex-col justify-between">
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
                   <Flame className="h-4 w-4 text-amber-500 fill-amber-500" />
-                  <span>4. Leaderboard Top Học viên Streak</span>
+                  <span>Top học viên duy trì chuỗi học tập</span>
                 </CardTitle>
                 <div className="flex bg-muted p-0.5 rounded-lg text-xs">
                   <button
                     onClick={() => setLeaderboardTab("current")}
                     className={`px-2.5 py-1 rounded-md font-bold transition-all ${leaderboardTab === "current" ? "bg-background text-foreground shadow-xs" : "text-muted-foreground"}`}
                   >
-                    Streak Hiện Tại
+                    Streak hiện tại
                   </button>
                   <button
                     onClick={() => setLeaderboardTab("longest")}
                     className={`px-2.5 py-1 rounded-md font-bold transition-all ${leaderboardTab === "longest" ? "bg-background text-foreground shadow-xs" : "text-muted-foreground"}`}
                   >
-                    Streak Kỷ Lục
+                    Streak kỷ kỷ
                   </button>
                 </div>
               </div>
@@ -836,14 +830,13 @@ export const StudentManagement: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* 5. Line Chart Activity Trend 30 Days */}
-          <Card className="lg:col-span-6 border-border shadow-xs bg-card">
+          {/* Line Chart Activity Trend */}
+          {!isHrOnly && <Card className="lg:col-span-6 border-border shadow-xs bg-card">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                <Activity className="h-4 w-4 text-emerald-600" />
-                <span>5. Xu hướng Hoạt động Học tập 30 Ngày gần nhất</span>
+                <Activity className="h-4 w-4 text-success-forest" />
+                <span>Xu hướng hoạt động học tập</span>
               </CardTitle>
-              <CardDescription className="text-xs">Số sự kiện theo ngày · Click vào điểm dữ liệu để xem nhật ký chi tiết</CardDescription>
             </CardHeader>
             <CardContent className="min-h-50 flex items-center justify-center">
               {activityTrendError ? (
@@ -868,17 +861,17 @@ export const StudentManagement: React.FC = () => {
                 </LineChart>
               </ResponsiveContainer>}
             </CardContent>
-          </Card>
+          </Card>}
 
-          {/* 6. KPI Card Cảnh báo Không hoạt động > N ngày (Configurable N) */}
+          {/* KPI Card Cảnh báo Không hoạt động */}
           <Card
             onClick={() => { setFilterActivityLevel("INACTIVE"); setPage(0); scrollToSection("management"); showBanner(`Đã lọc học viên không hoạt động từ thời điểm hiện tại lùi ${inactiveDaysConfig} ngày.`); }}
-            className="lg:col-span-6 border-2 border-amber-500/40 bg-linear-to-br from-amber-500/10 via-card to-card shadow-xs cursor-pointer flex flex-col justify-between"
+            className="lg:col-span-6 border border-brand-cobalt/30 bg-brand-cobalt/5 shadow-xs cursor-pointer flex flex-col justify-between"
           >
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-extrabold text-amber-600 flex items-center gap-1.5">
-                  <ShieldAlert className="h-4 w-4" /> 6. Học viên không hoạt động &gt; N ngày
+                <CardTitle className="text-sm font-extrabold text-brand-cobalt flex items-center gap-1.5">
+                  <ShieldAlert className="h-4 w-4" /> Học viên không hoạt động
                 </CardTitle>
                 <div className="flex items-center gap-1 text-xs" onClick={e => e.stopPropagation()}>
                   <span className="font-bold text-muted-foreground">Ngưỡng N ngày:</span>
@@ -892,24 +885,22 @@ export const StudentManagement: React.FC = () => {
                   />
                 </div>
               </div>
-              <CardDescription className="text-xs">Click card để filter trực tiếp danh sách học viên có nguy cơ bỏ học</CardDescription>
             </CardHeader>
             <CardContent className="py-2 flex items-center justify-between">
-              <div className="text-4xl font-extrabold text-amber-600">{inactiveWarningCount} <span className="text-xs font-semibold text-muted-foreground">học viên</span></div>
-              <Button size="sm" className="bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs gap-1">
-                Filter Rủi ro &rarr;
+              <div className="text-4xl font-extrabold text-brand-cobalt">{inactiveWarningCount} <span className="text-xs font-semibold text-muted-foreground">học viên</span></div>
+              <Button size="sm" className="bg-brand-cobalt hover:bg-brand-cobalt/90 text-white font-semibold text-xs gap-1 cursor-pointer">
+                Lọc rủi ro &rarr;
               </Button>
             </CardContent>
           </Card>
 
-          {/* 7. Horizontal bars work better than a donut when there are many long labels */}
+          {/* Top Interests Bar Chart */}
           <Card className="lg:col-span-6 border-border shadow-xs bg-card">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                <Heart className="h-4 w-4 text-pink-500" />
-                <span>7. Phân bổ Sở thích học viên</span>
+                <Heart className="h-4 w-4 text-primary" />
+                <span>Phân bổ sở thích học viên</span>
               </CardTitle>
-              <CardDescription className="text-xs">Toàn bộ sở thích trong hệ thống, kể cả nhóm chưa có lượt chọn</CardDescription>
             </CardHeader>
             <CardContent className="min-h-50">
               {topInterestsData.length === 0 ? <p className="py-16 text-center text-xs text-muted-foreground">Chưa có dữ liệu phân bổ sở thích.</p> : <div className="max-h-90 overflow-y-auto pr-2">
@@ -920,21 +911,20 @@ export const StudentManagement: React.FC = () => {
                   <YAxis type="category" dataKey="name" width={110} style={{ fontSize: "10px" }} tick={{ fill: "currentColor" }} />
                   <Tooltip formatter={(value: any) => [`${value} lượt chọn`, "Học viên"]} />
                   <Bar dataKey="value" radius={[0, 6, 6, 0]} minPointSize={2} label={{ position: "right", fontSize: 10 }}>
-                    {topInterestsData.map((_, idx) => <Cell key={idx} fill={ROLE_COLORS[idx % ROLE_COLORS.length]} />)}
+                    {topInterestsData.map((_, idx) => <Cell key={idx} fill={GOAL_COLORS[idx % GOAL_COLORS.length]} />)}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer></div>}
             </CardContent>
           </Card>
 
-          {/* 8. Line Chart — Học viên Mới Theo Tháng Trong 1 Năm */}
+          {/* Line Chart — Học viên Mới Theo Tháng */}
           <Card className="lg:col-span-12 border-border shadow-xs bg-card">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
                 <TrendingUp className="h-4 w-4 text-primary" />
-                <span>8. Tăng trưởng Học viên Mới Theo Tháng Trong Năm (12 Tháng)</span>
+                <span>Tăng trưởng học viên mới theo tháng</span>
               </CardTitle>
-              <CardDescription className="text-xs">Số lượng học viên đăng ký mới hàng tháng từ Tháng 1 đến Tháng 12</CardDescription>
             </CardHeader>
             <CardContent className="min-h-55 flex items-center justify-center">
               <ResponsiveContainer width="100%" height={200}>
@@ -952,14 +942,13 @@ export const StudentManagement: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* 9. Donut Chart — Phân Bổ Theo Giới Tính */}
+          {/* Donut Chart — Phân Bổ Theo Giới Tính */}
           <Card className="lg:col-span-6 border-border shadow-xs bg-card">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                <Users className="h-4 w-4 text-blue-600" />
-                <span>9. Biểu đồ Phân bổ theo Giới tính</span>
+                <Users className="h-4 w-4 text-primary" />
+                <span>Phân bổ theo giới tính</span>
               </CardTitle>
-              <CardDescription className="text-xs">Tỷ lệ Nam, Nữ và Khác trong hệ thống học viên</CardDescription>
             </CardHeader>
             <CardContent className="min-h-50 flex items-center justify-center">
               <ResponsiveContainer width="100%" height={170}>
@@ -974,7 +963,7 @@ export const StudentManagement: React.FC = () => {
                     dataKey="value"
                   >
                     <Cell fill="#2563eb" />
-                    <Cell fill="#ec4899" />
+                    <Cell fill="#0284c7" />
                     <Cell fill="#94a3b8" />
                   </Pie>
                   <Tooltip formatter={(v: any) => [`${v} Học viên`, "Số lượng"]} />
@@ -984,14 +973,13 @@ export const StudentManagement: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* 10. Donut Chart — Phân Bổ Theo Trạng Thái Tài Khoản */}
+          {/* Donut Chart — Phân Bổ Theo Trạng Thái Tài Khoản */}
           <Card className="lg:col-span-6 border-border shadow-xs bg-card">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                <ShieldCheck className="h-4 w-4 text-emerald-600" />
-                <span>10. Biểu đồ Phân bổ theo Trạng thái Tài khoản</span>
+                <ShieldCheck className="h-4 w-4 text-success-forest" />
+                <span>Phân bổ theo trạng thái tài khoản</span>
               </CardTitle>
-              <CardDescription className="text-xs">Tỷ lệ học viên Hoạt động (ACTIVE) vs Đã khóa (LOCKED)</CardDescription>
             </CardHeader>
             <CardContent className="min-h-50 flex items-center justify-center">
               <ResponsiveContainer width="100%" height={170}>
@@ -1027,11 +1015,8 @@ export const StudentManagement: React.FC = () => {
           <CardHeader className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 pb-4 border-b border-border/30 bg-card">
             <div>
               <CardTitle className="text-xl font-semibold tracking-tight font-heading flex items-center gap-2">
-                <span>Danh sách Học viên</span>
+                <span>Danh sách học viên</span>
               </CardTitle>
-              <CardDescription className="text-sm text-muted-foreground mt-0.5">
-                Tìm kiếm, lọc nâng cao 6.8.2, quản lý vị thành niên, người giám hộ và theo dõi streak.
-              </CardDescription>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -1309,7 +1294,11 @@ export const StudentManagement: React.FC = () => {
                       <TableCell>
                         <div className="flex items-center gap-2.5">
                           <div className="h-8 w-8 rounded-full bg-primary/10 text-primary font-semibold flex items-center justify-center text-xs shrink-0 border border-primary/20 overflow-hidden">
-                            {student.fullName ? student.fullName.charAt(0).toUpperCase() : "S"}
+                            {resolveAvatarUrl(student.avatarUrl) ? (
+                              <img src={resolveAvatarUrl(student.avatarUrl)} alt={student.fullName} className="h-full w-full object-cover" />
+                            ) : (
+                              student.fullName ? student.fullName.charAt(0).toUpperCase() : "S"
+                            )}
                           </div>
                           <div className="text-left">
                             <p onClick={() => handleOpenDetailModal(student)} className="font-semibold text-foreground hover:text-primary cursor-pointer transition-colors text-sm">
@@ -1450,7 +1439,7 @@ export const StudentManagement: React.FC = () => {
         </Card>
       </section>
 
-      <Dialog open={activityDialogOpen} onOpenChange={setActivityDialogOpen}>
+      {!isHrOnly && <Dialog open={activityDialogOpen} onOpenChange={setActivityDialogOpen}>
         <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden p-0 gap-0">
           <DialogHeader className="px-5 py-4 border-b bg-muted/20">
             <DialogTitle className="flex items-center gap-2"><Activity className="h-5 w-5 text-emerald-600" /> Nhật ký hoạt động học tập</DialogTitle>
@@ -1476,7 +1465,7 @@ export const StudentManagement: React.FC = () => {
               </div>}
           </div>
         </DialogContent>
-      </Dialog>
+      </Dialog>}
 
       <Dialog open={studentFormOpen} onOpenChange={open => { setStudentFormOpen(open); if (!open) setNewStudentErrors({}); }}>
         <DialogContent className="max-w-lg">

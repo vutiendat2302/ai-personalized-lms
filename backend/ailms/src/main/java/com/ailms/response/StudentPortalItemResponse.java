@@ -22,11 +22,15 @@ public final class StudentPortalItemResponse {
 
     @Getter @Builder @NoArgsConstructor @AllArgsConstructor
     public static class CourseCard {
-        private Long id; private String title; private String courseCode; private String courseLink;
+        private Long id; private Long enrollmentId; private String title; private String courseCode; private String courseLink;
         private String description; private String level; private String categoryName; private String coverImage;
         private DeliveryModeEnum deliveryMode;
         private Integer progressPercent; private LocalDateTime expiresAt; private boolean expired;
         private String status; private LocalDateTime lastAccessedAt;
+        private Long teacherId; private String teacherName; private String teacherAvatarUrl;
+        private Long reviewId; private Integer courseRating; private String courseComment;
+        private Integer teacherRating; private String teacherComment;
+        private Long certificateId; private String certificateCode; private String certificateStatus;
     }
 
     @Getter @Builder @NoArgsConstructor @AllArgsConstructor
@@ -44,7 +48,8 @@ public final class StudentPortalItemResponse {
     @Getter @Builder @NoArgsConstructor @AllArgsConstructor
     public static class QuizItem {
         private Long id; private String title; private Long courseId; private Long classId; private String courseName;
-        private LocalDateTime dueAt; private Integer timeLimitMin; private Integer maxAttempts;
+        private LocalDateTime availableFrom; private LocalDateTime dueAt; private Integer timeLimitMin; private Integer maxAttempts;
+        private Boolean showResultAfterSubmit; private Boolean canStart;
         private String status; private Integer attemptsUsed; private BigDecimal bestScore; private Boolean passed;
     }
 
@@ -83,6 +88,7 @@ public final class StudentPortalItemResponse {
     public static class OrderItem {
         private Long id; private List<OrderLine> items; private BigDecimal totalAmount; private BigDecimal discountAmount;
         private BigDecimal finalAmount; private String couponCode; private OrderStatusEnum status;
+        private String refundRequestStatus;
         private LocalDateTime createdAt; private LocalDateTime expiredAt; private boolean eligibleForRefund;
     }
 

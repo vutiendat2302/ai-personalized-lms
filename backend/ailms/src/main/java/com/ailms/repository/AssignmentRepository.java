@@ -17,6 +17,12 @@ public interface AssignmentRepository extends BaseRepository<AssignmentEntity, L
 
     List<AssignmentEntity> findBySectionId(Long sectionId);
 
+    /** Lấy các bài tập do đúng người dùng hiện tại tạo. */
+    List<AssignmentEntity> findByCreatedByOrderByCreatedAtDesc(Long createdBy);
+
+    /** Lấy bài tập thuộc các lớp hoặc khóa học người dạy đang phụ trách. */
+    List<AssignmentEntity> findByClassIdInOrCourseIdInOrderByDueDateAsc(List<Long> classIds, List<Long> courseIds);
+
     /** Lấy bài tập được giao riêng cho một lớp. */
     List<AssignmentEntity> findByClassIdOrderByDueDateAsc(Long classId);
 

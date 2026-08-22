@@ -24,6 +24,7 @@ import com.ailms.mapper.ClassScheduleMapper;
 import com.ailms.repository.ClassRepository;
 import com.ailms.repository.CourseRepository;
 import com.ailms.repository.ClassScheduleRepository;
+import com.ailms.repository.ClassOnlineRepository;
 import com.ailms.repository.EnrollmentPackageRepository;
 import com.ailms.response.ClassResponse;
 import com.ailms.response.ClassScheduleResponse;
@@ -39,32 +40,55 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.time.LocalDateTime;
+import java.time.LocalDate;
+import java.time.DayOfWeek;
+import java.time.LocalTime;
 import java.util.Set;
 import java.util.HashSet;
+
+import com.ailms.search.MeilisearchClassService;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 @Transactional(readOnly = true)
 public class ClassService implements IClassService {
+
     private final ApplicationEventPublisher applicationEventPublisher;
     private final ClassRepository classRepository;
     private final CourseRepository courseRepository;
     private final ClassMemberRepository classMemberRepository;
     private final ClassMapper classMapper;
     private final ClassScheduleRepository classScheduleRepository;
+    private final ClassOnlineRepository classOnlineRepository;
     private final ClassScheduleMapper classScheduleMapper;
     private final EnrollmentPackageRepository enrollmentPackageRepository;
+    private final MeilisearchClassService meilisearchClassService;
 
     private static final String RESOURCE_NAME = "Class";
 
     @Override
     public PageResponse<ClassResponse> search(ClassSearchRequest request) {
+        PageResponse<ClassResponse> indexedResult = meilisearchClassService.search(request);
+        if (indexedResult != null) {
+            return indexedResult;
+        }
+
         log.info("Searching Class via specification");
         Specification<ClassEntity> spec = ClassSpecification.filterAndSearch(request);
         Pageable pageable = request.toPageable();
         Page<ClassEntity> page = classRepository.findAll(spec, pageable);
         return PageResponse.from(page.map(this::enrichClassResponse));
+    }
+
+    /** Khởi tạo cấu hình và đồng bộ lại index lớp học sau khi ứng dụng sẵn sàng. */
+    @EventListener(ApplicationReadyEvent.class)
+    public void initializeClassSearchIndex() {
+        if (!meilisearchClassService.isEnabled()) return;
+        classRepository.findAll().forEach(meilisearchClassService::index);
+        meilisearchClassService.configureIndex();
     }
 
     private ClassResponse enrichClassResponse(ClassEntity entity) {
@@ -178,7 +202,33 @@ public class ClassService implements IClassService {
                 classScheduleRepository.save(schedule);
             }
         }
+        generateRecurringSessions(classEntity);
         return classScheduleMapper.toResponseList(classScheduleRepository.findByClassEntity_Id(classId));
+    }
+
+    /** Sinh các buổi online lặp theo khung tuần đến ngày kết thúc lớp, tránh tạo trùng. */
+    private void generateRecurringSessions(ClassEntity classEntity) {
+        if (classEntity.getStartDate() == null || classEntity.getEndDate() == null) return;
+        var teacher = classMemberRepository.findById_ClassId(classEntity.getId()).stream()
+                .filter(item -> item.getStatus() == ClassMemberStatusEnum.ACTIVE)
+                .filter(item -> item.getRoleInClass() == ClassMemberRole.TEACHER).findFirst()
+                .map(ClassMemberEntity::getUserEntity).orElse(null);
+        LocalDate cursor = classEntity.getStartDate().toLocalDate();
+        LocalDate end = classEntity.getEndDate().toLocalDate();
+        while (!cursor.isAfter(end)) {
+            for (ClassScheduleEntity slot : classScheduleRepository.findByClassEntity_Id(classEntity.getId())) {
+                DayOfWeek target = DayOfWeek.of(slot.getDayOfWeek());
+                if (cursor.getDayOfWeek() != target) continue;
+                LocalDateTime at = cursor.atTime(slot.getStartTime());
+                boolean exists = classOnlineRepository.findByClassEntity_Id(classEntity.getId()).stream()
+                        .anyMatch(item -> at.equals(item.getScheduledAt()));
+                if (!exists) classOnlineRepository.save(com.ailms.entity.ClassOnlineEntity.builder()
+                        .classEntity(classEntity).teacherEntity(teacher).title("Buổi học - " + classEntity.getName())
+                        .scheduledAt(at).durationMin((int) java.time.Duration.between(slot.getStartTime(), slot.getEndTime()).toMinutes())
+                        .status(BaseStatusEnum.ACTIVE).code(CodeGenerator.generate("BT", classOnlineRepository::existsByCode)).build());
+            }
+            cursor = cursor.plusDays(1);
+        }
     }
 
     @Transactional
@@ -192,6 +242,7 @@ public class ClassService implements IClassService {
         entity.setCode(CodeGenerator.generate("LH", classRepository::existsByCode));
 
         ClassEntity saved = classRepository.save(entity);
+        meilisearchClassService.index(saved);
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CREATE", "CLASS", saved.getId(), null, saved));
         return enrichClassResponse(saved);
     }
@@ -205,6 +256,7 @@ public class ClassService implements IClassService {
         classMapper.updateFromRequest(request, existing);
 
         ClassEntity updated = classRepository.save(existing);
+        meilisearchClassService.index(updated);
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "UPDATE", "CLASS", id, oldValue, updated));
         return enrichClassResponse(updated);
     }
@@ -216,6 +268,7 @@ public class ClassService implements IClassService {
             throw ResourceNotFoundException.of(RESOURCE_NAME, id);
         }
         classRepository.deleteById(id);
+        meilisearchClassService.delete(id);
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "DELETE", "CLASS", id, id, null));
     }
 }

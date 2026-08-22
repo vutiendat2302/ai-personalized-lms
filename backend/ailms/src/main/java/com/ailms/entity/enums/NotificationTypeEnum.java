@@ -37,5 +37,26 @@ public enum NotificationTypeEnum {
     LEAVE_REQUEST_APPROVED,
 
     /** Loại thông báo chung, không thuộc nhóm cụ thể. */
-    GENERAL
+    GENERAL,
+
+    /** Học viên vừa tham gia một lớp do người nhận phụ trách. */
+    CLASS_STUDENT_JOINED,
+
+    /** Học viên vừa nộp assignment cần người nhận theo dõi/chấm. */
+    ASSIGNMENT_SUBMITTED,
+
+    /** Học viên vừa nộp quiz hoặc bài thi. */
+    QUIZ_SUBMITTED,
+
+    /** Buổi dạy vừa kết thúc và có thể cần nhận xét. */
+    TEACHING_SESSION_COMPLETED,
+
+    /** Người dạy vừa hoàn tất nhận xét một buổi học. */
+    SESSION_REVIEWED,
+
+    /** Lớp vừa được đặt thêm một buổi học. */
+    CLASS_SESSION_SCHEDULED,
+
+    /** Một buổi học của lớp vừa bị hủy. */
+    CLASS_SESSION_CANCELLED
 }

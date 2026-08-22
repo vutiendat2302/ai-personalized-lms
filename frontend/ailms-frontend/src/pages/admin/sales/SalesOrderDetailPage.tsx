@@ -470,7 +470,7 @@ export const SalesOrderDetailPage: React.FC = () => {
               {order.couponCode && (
                 <div className="flex items-center justify-between text-xs pt-1">
                   <span className="text-muted-foreground">Mã áp dụng:</span>
-                  <Link to="/sales/coupons" className="px-2 py-0.5 bg-indigo-50 text-indigo-700 font-mono font-bold rounded">
+                  <Link to="/admin/coupons" className="px-2 py-0.5 bg-indigo-50 text-indigo-700 font-mono font-bold rounded">
                     {order.couponCode}
                   </Link>
                 </div>

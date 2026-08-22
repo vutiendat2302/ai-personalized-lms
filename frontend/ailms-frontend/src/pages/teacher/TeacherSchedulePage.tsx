@@ -1,59 +1,109 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { teacherApi, type OnlineClassSession } from "@/api/teacher/teacherApi";
 import { CountdownRing } from "@/components/teacher/CountdownRing";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/useToast";
 import {
   Calendar as CalendarIcon,
-  Clock,
   Video,
-  AlertTriangle,
   X,
   ChevronLeft,
   ChevronRight,
   Filter,
-  CheckCircle2,
   CalendarDays,
   Columns,
   ListOrdered,
 } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 
 type CalendarViewMode = "WEEK" | "MONTH" | "TIMELINE";
 
 export const TeacherSchedulePage: React.FC = () => {
   const { success } = useToast();
+  const [searchParams] = useSearchParams();
   const [sessions, setSessions] = useState<OnlineClassSession[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [viewMode, setViewMode] = useState<CalendarViewMode>("WEEK");
   const [selectedSession, setSelectedSession] = useState<OnlineClassSession | null>(null);
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [classFilter, setClassFilter] = useState<string>("ALL");
+  const [anchorDate, setAnchorDate] = useState(() => new Date());
+  const linkedSessionHandled = useRef(false);
 
   // Review Form state
   const [interactionRating, setInteractionRating] = useState<number>(5);
   const [sessionNote, setSessionNote] = useState("");
 
-  const daysOfWeekLabels = [
-    { dayIdx: 0, label: "Thứ 2", dateStr: "03/08", isoDate: "2026-08-03" },
-    { dayIdx: 1, label: "Thứ 3", dateStr: "04/08", isoDate: "2026-08-04" },
-    { dayIdx: 2, label: "Thứ 4", dateStr: "05/08", isoDate: "2026-08-05" },
-    { dayIdx: 3, label: "Thứ 5", dateStr: "06/08", isoDate: "2026-08-06" },
-    { dayIdx: 4, label: "Thứ 6", dateStr: "07/08", isoDate: "2026-08-07" },
-    { dayIdx: 5, label: "Thứ 7", dateStr: "08/08", isoDate: "2026-08-08" },
-    { dayIdx: 6, label: "Chủ Nhật", dateStr: "09/08", isoDate: "2026-08-09" },
-  ];
+  const weekStart = useMemo(() => {
+    const value = new Date(anchorDate);
+    const day = value.getDay() || 7;
+    value.setHours(0, 0, 0, 0);
+    value.setDate(value.getDate() - day + 1);
+    return value;
+  }, [anchorDate]);
 
-  const timeSlots = ["08:00", "10:00", "14:00", "16:00", "19:00", "20:00"];
+  const daysOfWeekLabels = useMemo(() => Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(weekStart);
+    date.setDate(date.getDate() + index);
+    return {
+      dayIdx: index,
+      label: index === 6 ? "Chủ Nhật" : `Thứ ${String(index + 2)}`,
+      dateStr: new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "2-digit" }).format(date),
+      isoDate: toDateKey(date),
+    };
+  }), [weekStart]);
+
+  const monthCells = useMemo(() => {
+    const year = anchorDate.getFullYear();
+    const month = anchorDate.getMonth();
+    const firstOffset = (new Date(year, month, 1).getDay() + 6) % 7;
+    const days = new Date(year, month + 1, 0).getDate();
+    return [...Array.from({ length: firstOffset }, () => null),
+      ...Array.from({ length: days }, (_, index) => new Date(year, month, index + 1))];
+  }, [anchorDate]);
 
   useEffect(() => {
-    teacherApi.getOnlineSessions().then((res) => {
+    const from = viewMode === "MONTH"
+      ? new Date(anchorDate.getFullYear(), anchorDate.getMonth(), 1)
+      : weekStart;
+    const to = viewMode === "MONTH"
+      ? new Date(anchorDate.getFullYear(), anchorDate.getMonth() + 1, 0)
+      : daysOfWeekLabels[6].isoDate;
+    teacherApi.getOnlineSessions(
+      toDateKey(from), typeof to === "string" ? to : toDateKey(to),
+    ).then((res) => {
+      setLoadError("");
       setSessions(res);
-      setLoading(false);
-    });
-  }, []);
+      const linked = linkedSessionHandled.current
+        ? undefined : res.find((item) => item.id === searchParams.get("sessionId"));
+      if (linked) {
+        linkedSessionHandled.current = true;
+        setSelectedSession(linked);
+        setClassFilter(linked.classId);
+        setViewMode("TIMELINE");
+        if (linked.status === "UNREVIEWED") setShowReviewModal(true);
+      }
+    }).catch(() => {
+      setSessions([]);
+      setLoadError("Không thể tải lịch dạy trong khoảng thời gian này.");
+    }).finally(() => { setLoading(false); });
+  }, [anchorDate, daysOfWeekLabels, searchParams, viewMode, weekStart]);
 
-  const availableClasses = React.useMemo(() => {
+  /** Chuyển tuần hoặc tháng đang hiển thị và tải lại đúng khoảng dữ liệu. */
+  const movePeriod = (direction: number) => {
+    setAnchorDate((current) => {
+      const next = new Date(current);
+      if (viewMode === "MONTH") next.setMonth(next.getMonth() + direction);
+      else next.setDate(next.getDate() + direction * 7);
+      return next;
+    });
+  };
+
+  const availableClasses = useMemo(() => {
     const map = new Map<string, string>();
     sessions.forEach((s) => {
       if (s.classId && s.className) {
@@ -73,15 +123,21 @@ export const TeacherSchedulePage: React.FC = () => {
     return firstIndex === index;
   });
 
+  /** Mở biểu mẫu nhận xét cho đúng buổi dạy được chọn. */
   const handleOpenReview = (sess: OnlineClassSession) => {
     setSelectedSession(sess);
     setShowReviewModal(true);
   };
 
-  const handleSubmitReview = async (e: React.FormEvent) => {
+  /** Gửi nhận xét buổi dạy thật và cập nhật trạng thái tại chỗ. */
+  const handleSubmitReview = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!selectedSession) return;
-    await teacherApi.submitSessionReview(selectedSession.id, [], sessionNote);
+    if (selectedSession.trialRequestId) {
+      await teacherApi.submitOneOnOneTrialReview(selectedSession.trialRequestId, sessionNote);
+    } else {
+      await teacherApi.submitSessionReview(selectedSession.id, [], sessionNote);
+    }
     success("Đã hoàn thành nhận xét buổi dạy! Trạng thái thù lao đã chuyển sang PENDING chờ HR duyệt.");
     setShowReviewModal(false);
     setSessions((prev) =>
@@ -97,6 +153,8 @@ export const TeacherSchedulePage: React.FC = () => {
       </div>
     );
   }
+
+  if (loadError) return <Card className="p-10 text-center text-sm text-destructive">{loadError}</Card>;
 
   return (
     <div className="space-y-6 pb-16">
@@ -114,73 +172,71 @@ export const TeacherSchedulePage: React.FC = () => {
 
         {/* View Switcher Controls */}
         <div className="flex items-center gap-2 bg-card border border-border/40 p-1.5 rounded-xl shadow-xs">
-          <button
-            onClick={() => setViewMode("WEEK")}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition cursor-pointer ${
-              viewMode === "WEEK"
-                ? "bg-primary text-primary-foreground shadow-xs"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted"
-            }`}
+          <Button
+            type="button"
+            variant={viewMode === "WEEK" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => { setViewMode("WEEK"); }}
+            className="text-xs font-bold"
           >
             <Columns className="h-3.5 w-3.5" />
             Week View
-          </button>
-          <button
-            onClick={() => setViewMode("MONTH")}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition cursor-pointer ${
-              viewMode === "MONTH"
-                ? "bg-primary text-primary-foreground shadow-xs"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted"
-            }`}
+          </Button>
+          <Button
+            type="button"
+            variant={viewMode === "MONTH" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => { setViewMode("MONTH"); }}
+            className="text-xs font-bold"
           >
             <CalendarDays className="h-3.5 w-3.5" />
             Month View
-          </button>
-          <button
-            onClick={() => setViewMode("TIMELINE")}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg transition cursor-pointer ${
-              viewMode === "TIMELINE"
-                ? "bg-primary text-primary-foreground shadow-xs"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted"
-            }`}
+          </Button>
+          <Button
+            type="button"
+            variant={viewMode === "TIMELINE" ? "default" : "ghost"}
+            size="sm"
+            onClick={() => { setViewMode("TIMELINE"); }}
+            className="text-xs font-bold"
           >
             <ListOrdered className="h-3.5 w-3.5" />
             Timeline View
-          </button>
+          </Button>
         </div>
       </div>
 
       {/* Filter & Date Navigation Bar */}
       <Card className="bg-card border-border/40 p-4 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xs">
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="h-8 text-xs border-border text-foreground hover:bg-muted cursor-pointer">
+          <Button variant="outline" size="sm" onClick={() => { movePeriod(-1); }} className="h-8 text-xs border-border text-foreground hover:bg-muted cursor-pointer">
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <span className="text-xs font-bold text-foreground px-2">
-            {viewMode === "MONTH" ? "Tháng 08 / 2026" : "03/08/2026 - 09/08/2026"}
+            {viewMode === "MONTH"
+              ? new Intl.DateTimeFormat("vi-VN", { month: "long", year: "numeric" }).format(anchorDate)
+              : `${daysOfWeekLabels[0].dateStr}/${String(weekStart.getFullYear())} - ${daysOfWeekLabels[6].dateStr}/${daysOfWeekLabels[6].isoDate.slice(0, 4)}`}
           </span>
-          <Button variant="outline" size="sm" className="h-8 text-xs border-border text-foreground hover:bg-muted cursor-pointer">
+          <Button variant="outline" size="sm" onClick={() => { movePeriod(1); }} className="h-8 text-xs border-border text-foreground hover:bg-muted cursor-pointer">
             <ChevronRight className="h-4 w-4" />
           </Button>
-          <Button variant="outline" size="sm" className="h-8 text-xs border-border text-primary font-bold hover:bg-muted cursor-pointer ml-2">
+          <Button variant="outline" size="sm" onClick={() => { setAnchorDate(new Date()); }} className="h-8 text-xs border-border text-primary font-bold hover:bg-muted cursor-pointer ml-2">
             Hôm nay
           </Button>
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto">
           <Filter className="h-3.5 w-3.5 text-muted-foreground" />
-          <select
-            value={classFilter}
-            onChange={(e) => setClassFilter(e.target.value)}
-            className="bg-background border border-border rounded-xl px-3 py-1.5 text-xs text-foreground w-full sm:w-60"
-          >
-            <option value="ALL">Tất cả các lớp</option>
+          <Select value={classFilter} onValueChange={setClassFilter}>
+            <SelectTrigger className="w-full text-xs sm:w-60"><SelectValue /></SelectTrigger>
+            <SelectContent>
+            <SelectItem value="ALL">Tất cả các lớp</SelectItem>
             {availableClasses.map((cls) => (
-              <option key={cls.id} value={cls.id}>
+              <SelectItem key={cls.id} value={cls.id}>
                 {cls.name}
-              </option>
+              </SelectItem>
             ))}
-          </select>
+            </SelectContent>
+          </Select>
         </div>
       </Card>
 
@@ -202,13 +258,7 @@ export const TeacherSchedulePage: React.FC = () => {
             <div className="grid grid-cols-7 gap-2 pt-3 min-h-[420px]">
               {daysOfWeekLabels.map((d) => {
                 const daySessionsRaw = filteredSessions.filter((s) => {
-                  if (s.dateStr) {
-                    const formattedDate = s.dateStr.includes("-")
-                      ? s.dateStr.split("-").slice(1).reverse().join("/")
-                      : s.dateStr;
-                    return formattedDate === d.dateStr || s.dateStr === d.isoDate;
-                  }
-                  return s.dayOfWeek === d.dayIdx;
+                  return s.dateStr === d.isoDate;
                 });
 
                 const daySessions = daySessionsRaw;
@@ -222,7 +272,7 @@ export const TeacherSchedulePage: React.FC = () => {
                       daySessions.map((sess) => (
                         <div
                           key={sess.id}
-                          onClick={() => setSelectedSession(sess)}
+                          onClick={() => { setSelectedSession(sess); }}
                           className={`p-2.5 rounded-lg border text-xs space-y-2 cursor-pointer transition shadow-xs ${
                             sess.status === "UNREVIEWED"
                               ? "bg-amber-50 dark:bg-amber-950/40 border-amber-400 shadow-md animate-pulse"
@@ -254,7 +304,7 @@ export const TeacherSchedulePage: React.FC = () => {
                               href={sess.roomUrl}
                               target="_blank"
                               rel="noreferrer"
-                              onClick={(e) => e.stopPropagation()}
+                              onClick={(e) => { e.stopPropagation(); }}
                               className="w-full flex items-center justify-center gap-1 py-1 bg-primary text-primary-foreground text-[10px] font-bold rounded"
                             >
                               <Video className="h-3 w-3" />
@@ -286,22 +336,23 @@ export const TeacherSchedulePage: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-7 gap-1 text-xs">
-            {Array.from({ length: 31 }).map((_, idx) => {
-              const dayNum = idx + 1;
-              const dateString = `2026-08-${dayNum < 10 ? "0" + dayNum : dayNum}`;
+            {monthCells.map((date, idx) => {
+              if (!date) return <div key={`blank-${String(idx)}`} className="min-h-[90px]" />;
+              const dayNum = date.getDate();
+              const dateString = toDateKey(date);
               const daySessionsRaw = filteredSessions.filter((s) => s.dateStr === dateString);
               const daySessions = daySessionsRaw;
 
               return (
                 <div
-                  key={idx}
+                  key={dateString}
                   className="min-h-[90px] p-2 bg-background border border-border/40 rounded-xl space-y-1 hover:border-primary/50 transition cursor-pointer"
                 >
                   <span className="text-[11px] font-extrabold text-muted-foreground block">{dayNum}</span>
                   {daySessions.map((s) => (
                     <div
                       key={s.id}
-                      onClick={() => setSelectedSession(s)}
+                      onClick={() => { setSelectedSession(s); }}
                       className={`p-1 rounded text-[10px] font-bold truncate ${
                         s.status === "UNREVIEWED"
                           ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-400"
@@ -326,7 +377,9 @@ export const TeacherSchedulePage: React.FC = () => {
           </div>
 
           <div className="space-y-4">
-            {filteredSessions.map((sess) => (
+            {filteredSessions.length === 0 ? (
+              <p className="py-12 text-center text-sm text-muted-foreground">Không có buổi dạy trong khoảng thời gian này.</p>
+            ) : filteredSessions.map((sess) => (
               <div key={sess.id} className="p-4 bg-background border border-border/40 rounded-xl space-y-2">
                 <div className="flex items-center justify-between">
                   <div>
@@ -342,7 +395,7 @@ export const TeacherSchedulePage: React.FC = () => {
                     className={`absolute h-full rounded-lg flex items-center px-3 text-[10px] font-bold ${
                       sess.status === "UNREVIEWED" ? "bg-amber-500 text-white animate-pulse" : "bg-primary text-primary-foreground"
                     }`}
-                    style={{ left: `${((sess.startHour - 8) / 14) * 100}%`, width: `${((sess.endHour - sess.startHour) / 14) * 100}%` }}
+                    style={{ left: `${String(((sess.startHour - 8) / 14) * 100)}%`, width: `${String(((sess.endHour - sess.startHour) / 14) * 100)}%` }}
                   >
                     {sess.startTime} - {sess.endTime}
                   </div>
@@ -362,9 +415,9 @@ export const TeacherSchedulePage: React.FC = () => {
                 <h3 className="text-base font-bold text-foreground">{selectedSession.className}</h3>
                 <p className="text-xs text-muted-foreground">{selectedSession.courseName}</p>
               </div>
-              <button onClick={() => setSelectedSession(null)} className="text-muted-foreground hover:text-foreground">
+              <Button type="button" variant="ghost" size="icon" onClick={() => { setSelectedSession(null); }} className="text-muted-foreground hover:text-foreground">
                 <X className="h-5 w-5" />
-              </button>
+              </Button>
             </div>
 
             <div className="space-y-2 text-xs text-foreground bg-muted/30 p-3 rounded-xl border border-border/40">
@@ -374,12 +427,12 @@ export const TeacherSchedulePage: React.FC = () => {
             </div>
 
             <div className="flex flex-col gap-2 pt-2 border-t border-border/40">
-              {selectedSession.status === "UNREVIEWED" ? (
+              {selectedSession.status === "UNREVIEWED" || (Boolean(selectedSession.trialRequestId) && selectedSession.status !== "REVIEWED") ? (
                 <Button
-                  onClick={() => setShowReviewModal(true)}
+                  onClick={() => { setShowReviewModal(true); }}
                   className="bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-lg cursor-pointer"
                 >
-                  Nhận xét 24h (Kích hoạt thù lao)
+                {selectedSession?.trialRequestId ? "Nhận xét học thử (24h)" : "Nhận xét 24h (Kích hoạt thù lao)"}
                 </Button>
               ) : (
                 <a
@@ -406,12 +459,12 @@ export const TeacherSchedulePage: React.FC = () => {
                 <h3 className="text-base font-bold text-foreground">Nhận xét buổi dạy (Hạn chót 24h)</h3>
                 <p className="text-xs text-muted-foreground">{selectedSession.className}</p>
               </div>
-              <button onClick={() => setShowReviewModal(false)} className="text-muted-foreground hover:text-foreground">
+              <Button type="button" variant="ghost" size="icon" onClick={() => { setShowReviewModal(false); }} className="text-muted-foreground hover:text-foreground">
                 <X className="h-5 w-5" />
-              </button>
+              </Button>
             </div>
 
-            <form onSubmit={handleSubmitReview} className="space-y-4">
+            <form onSubmit={(event) => { void handleSubmitReview(event); }} className="space-y-4">
               <div>
                 <label className="text-xs text-foreground font-semibold block mb-1">Mức độ tương tác của học viên (1 - 5 ⭐):</label>
                 <input
@@ -419,7 +472,7 @@ export const TeacherSchedulePage: React.FC = () => {
                   min={1}
                   max={5}
                   value={interactionRating}
-                  onChange={(e) => setInteractionRating(Number(e.target.value))}
+                  onChange={(e) => { setInteractionRating(Number(e.target.value)); }}
                   className="w-full"
                 />
                 <span className="text-xs font-bold text-amber-500 block text-right">{interactionRating} / 5 ⭐</span>
@@ -427,11 +480,11 @@ export const TeacherSchedulePage: React.FC = () => {
 
               <div>
                 <label className="text-xs text-foreground font-semibold block mb-1">Ghi chú & Nhận xét buổi học:</label>
-                <textarea
+                <Textarea
                   rows={3}
                   placeholder="Nhập nội dung đã giảng dạy, các câu hỏi học viên cần ôn tập..."
                   value={sessionNote}
-                  onChange={(e) => setSessionNote(e.target.value)}
+                  onChange={(e) => { setSessionNote(e.target.value); }}
                   className="w-full bg-background border border-border rounded-xl p-3 text-xs text-foreground"
                   required
                 />
@@ -441,13 +494,13 @@ export const TeacherSchedulePage: React.FC = () => {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setShowReviewModal(false)}
+                  onClick={() => { setShowReviewModal(false); }}
                   className="text-xs border-border text-foreground cursor-pointer"
                 >
                   Hủy
                 </Button>
                 <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold cursor-pointer">
-                  Gửi nhận xét & Kích hoạt thù lao
+                  {selectedSession.trialRequestId ? "Gửi nhận xét học thử" : "Gửi nhận xét & Kích hoạt thù lao"}
                 </Button>
               </div>
             </form>
@@ -457,3 +510,6 @@ export const TeacherSchedulePage: React.FC = () => {
     </div>
   );
 };
+
+/** Chuẩn hóa ngày local thành yyyy-MM-dd để gọi API và ghép session vào lịch. */
+const toDateKey = (date: Date) => `${String(date.getFullYear())}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;

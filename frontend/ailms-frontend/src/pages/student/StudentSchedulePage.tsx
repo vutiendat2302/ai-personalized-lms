@@ -1,9 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { studentApi, type ScheduleEventItem, type StudentOneOnOneRequest } from "@/api/student/studentApi";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { StudentPageSkeleton } from "@/components/student/StudentPageSkeleton";
+import { useToast } from "@/hooks/useToast";
 import {
   Calendar as CalendarIcon,
   CalendarDays,
@@ -15,6 +22,7 @@ import {
   ListOrdered,
   Video,
   X,
+  RefreshCcw,
 } from "lucide-react";
 
 type CalendarViewMode = "WEEK" | "MONTH" | "TIMELINE";
@@ -22,6 +30,7 @@ type CalendarViewMode = "WEEK" | "MONTH" | "TIMELINE";
 /** Giữ bố cục lịch cũ và hiển thị sự kiện thật thuộc học viên hiện tại. */
 export const StudentSchedulePage = () => {
   const navigate = useNavigate();
+  const { success, error: showError } = useToast();
   const [events, setEvents] = useState<ScheduleEventItem[]>([]);
   const [matchingRequests, setMatchingRequests] = useState<StudentOneOnOneRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,6 +39,13 @@ export const StudentSchedulePage = () => {
   const [selectedEvent, setSelectedEvent] = useState<ScheduleEventItem | null>(null);
   const [typeFilter, setTypeFilter] = useState<string>("ALL");
   const [anchorDate, setAnchorDate] = useState(() => new Date());
+  const [trialResultTarget, setTrialResultTarget] = useState<StudentOneOnOneRequest | null>(null);
+  const [rematchTarget, setRematchTarget] = useState<StudentOneOnOneRequest | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [rematchForm, setRematchForm] = useState({
+    reason: "", availablePeriod: "", availableDays: "", preferredTimes: "", currentLevel: "",
+    learningSituation: "", learningGoals: "", weakAreas: "", instructorPreferences: "", additionalNotes: "",
+  });
 
   /** Tải lịch đã được backend giới hạn theo enrollment và membership của JWT. */
   useEffect(() => {
@@ -46,6 +62,11 @@ export const StudentSchedulePage = () => {
     () => events.filter((event) => typeFilter === "ALL" || event.type === typeFilter),
     [events, typeFilter],
   );
+
+  const rematchFormValid = [
+    rematchForm.reason, rematchForm.availablePeriod, rematchForm.availableDays, rematchForm.preferredTimes,
+    rematchForm.currentLevel, rematchForm.learningSituation, rematchForm.learningGoals, rematchForm.weakAreas,
+  ].every((value) => value.trim().length > 0);
 
   const weekStart = useMemo(() => {
     const value = new Date(anchorDate);
@@ -77,10 +98,6 @@ export const StudentSchedulePage = () => {
     ];
   }, [anchorDate]);
 
-  const pendingMatching = matchingRequests.some((request) =>
-    ["WAITING_INSTRUCTOR", "REMATCHING", "INSTRUCTOR_ACCEPTED", "CONTACTED", "TRIAL_SCHEDULED"].includes(request.status),
-  );
-
   /** Hiển thị trạng thái matching dễ hiểu thay cho mã enum backend. */
   const matchingStatusLabel = (status: StudentOneOnOneRequest["status"]) => ({
     WAITING_INSTRUCTOR: "Đang tìm người dạy phù hợp",
@@ -92,6 +109,56 @@ export const StudentSchedulePage = () => {
     MATCHED: "Đã ghép người dạy chính thức",
     CANCELLED: "Đã hủy",
   }[status]);
+
+  /** Mở biểu mẫu đổi thông tin và ghép lại bằng dữ liệu hiện có của học viên. */
+  const openRematch = (request: StudentOneOnOneRequest) => {
+    setRematchTarget(request);
+    setRematchForm({
+      reason: "", availablePeriod: request.availablePeriod ?? "", availableDays: request.availableDays ?? "",
+      preferredTimes: request.preferredTimes ?? "", currentLevel: request.currentLevel ?? "",
+      learningSituation: request.learningSituation ?? "", learningGoals: request.learningGoals ?? "",
+      weakAreas: request.weakAreas ?? "", instructorPreferences: request.instructorPreferences ?? "",
+      additionalNotes: request.additionalNotes ?? "",
+    });
+  };
+
+  /** Gửi nhu cầu mới và thay response tại chỗ sau khi backend mở REMATCHING. */
+  const submitRematch = async () => {
+    if (!rematchTarget || !rematchForm.reason.trim()) return;
+    setActionLoading(true);
+    try {
+      const updated = await studentApi.rematchOneOnOne(rematchTarget.id, rematchForm.reason.trim(), {
+        availablePeriod: rematchForm.availablePeriod.trim(), availableDays: rematchForm.availableDays.trim(),
+        preferredTimes: rematchForm.preferredTimes.trim(), currentLevel: rematchForm.currentLevel.trim(),
+        learningSituation: rematchForm.learningSituation.trim(), learningGoals: rematchForm.learningGoals.trim(),
+        weakAreas: rematchForm.weakAreas.trim(), instructorPreferences: rematchForm.instructorPreferences.trim(),
+        additionalNotes: rematchForm.additionalNotes.trim(),
+      });
+      setMatchingRequests((current) => current.map((item) => item.id === updated.id ? updated : item));
+      setRematchTarget(null);
+      success("Đã cập nhật thông tin và mở lại quá trình ghép người dạy.");
+    } catch {
+      showError("Không thể đổi thông tin hoặc ghép lại lúc này.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  /** Chấp nhận người dạy sau khi buổi thử kết thúc. */
+  const acceptTrialInstructor = async () => {
+    if (!trialResultTarget) return;
+    setActionLoading(true);
+    try {
+      const updated = await studentApi.submitOneOnOneTrialResult(trialResultTarget.id, true);
+      setMatchingRequests((current) => current.map((item) => item.id === updated.id ? updated : item));
+      setTrialResultTarget(null);
+      success("Đã chấp nhận giáo viên và kích hoạt lớp 1-1 chính thức.");
+    } catch {
+      showError("Chỉ có thể xác nhận sau khi buổi học thử kết thúc.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   /** Dịch mốc hiển thị một tuần hoặc một tháng theo chế độ hiện tại. */
   const movePeriod = (direction: number) => {
@@ -155,12 +222,18 @@ export const StudentSchedulePage = () => {
         </div>
       </div>
 
-      {pendingMatching && (
+      {matchingRequests.length > 0 && (
         <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-700 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
           <div className="flex items-center gap-3"><Info className="h-5 w-5 shrink-0" /><div><strong className="block">Đang ghép người dạy 1-1 cho gói học của bạn</strong><span>Lịch học sẽ xuất hiện sau khi yêu cầu matching có lịch chính thức.</span></div></div>
           {matchingRequests.map((request) => <div key={request.id} className="rounded-lg border border-amber-200/70 bg-background/60 p-3 dark:border-amber-800/70">
             <div className="flex flex-wrap items-center justify-between gap-2"><strong>{request.courseName} · {request.packageName}</strong><span className="font-semibold">{matchingStatusLabel(request.status)}</span></div>
             <p className="mt-1">{request.includedTutorSessions ?? 0} buổi chính thức · {request.assignedInstructorName ? `Người dạy: ${request.assignedInstructorName}` : "Chưa phân công người dạy"}</p>
+            {request.trialStartAt && <p className="mt-1">Học thử: {new Date(request.trialStartAt).toLocaleString("vi-VN")}{request.trialEndAt ? ` - ${new Date(request.trialEndAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}` : ""}</p>}
+            <div className="mt-3 flex flex-wrap gap-2">
+              {request.trialMeetingUrl?.startsWith("http") && <a className={buttonVariants({ size: "sm", variant: "secondary" })} href={request.trialMeetingUrl} target="_blank" rel="noreferrer"><Video className="mr-1.5 h-3.5 w-3.5" />Vào buổi học thử</a>}
+              {(request.status === "TRIAL_SCHEDULED" || request.status === "TRIAL_COMPLETED") && <Button size="sm" onClick={() => { setTrialResultTarget(request); }}>Chấp nhận giáo viên</Button>}
+              {request.status !== "CANCELLED" && <Button size="sm" variant="outline" onClick={() => { openRematch(request); }}><RefreshCcw className="mr-1.5 h-3.5 w-3.5" />{request.status === "MATCHED" || request.assignedInstructorName ? "Đổi giáo viên" : "Đổi thông tin ghép"}</Button>}
+            </div>
           </div>)}
         </div>
       )}
@@ -179,12 +252,15 @@ export const StudentSchedulePage = () => {
 
         <div className="flex w-full items-center gap-2 sm:w-auto">
           <Filter className="h-3.5 w-3.5 text-muted-foreground" />
-          <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} className="w-full rounded-xl border border-border bg-background px-3 py-1.5 text-xs text-foreground sm:w-60">
-            <option value="ALL">Tất cả loại sự kiện</option>
-            <option value="ONLINE_CLASS">Buổi học Online</option>
-            <option value="ASSIGNMENT_DEADLINE">Hạn nộp Bài tập</option>
-            <option value="QUIZ_DEADLINE">Hạn làm Quiz</option>
-          </select>
+          <Select value={typeFilter} onValueChange={setTypeFilter}>
+            <SelectTrigger className="w-full text-xs sm:w-60"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Tất cả loại sự kiện</SelectItem>
+              <SelectItem value="ONLINE_CLASS">Buổi học Online</SelectItem>
+              <SelectItem value="ASSIGNMENT_DEADLINE">Hạn nộp Bài tập</SelectItem>
+              <SelectItem value="QUIZ_DEADLINE">Hạn làm Quiz</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </Card>
 
@@ -251,6 +327,27 @@ export const StudentSchedulePage = () => {
           </div>
         </div>
       )}
+
+      <ConfirmDialog open={Boolean(trialResultTarget)} onOpenChange={(open) => { if (!open) setTrialResultTarget(null); }} title="Chấp nhận giáo viên" description={`Xác nhận tiếp tục học với ${trialResultTarget?.assignedInstructorName ?? "giáo viên hiện tại"}? Lớp thử sẽ chuyển thành lớp 1-1 chính thức.`} confirmText="Chấp nhận giáo viên" loading={actionLoading} onConfirm={() => { void acceptTrialInstructor(); }} />
+
+      <Dialog open={Boolean(rematchTarget)} onOpenChange={(open) => { if (!open && !actionLoading) setRematchTarget(null); }}>
+        <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+          <DialogHeader><DialogTitle>Đổi thông tin và ghép lại</DialogTitle><DialogDescription>Vòng ghép/lớp hiện tại sẽ được hủy. Người dạy cũ không được nhận lại cùng yêu cầu này.</DialogDescription></DialogHeader>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5 sm:col-span-2"><Label>Lý do đổi *</Label><Textarea value={rematchForm.reason} onChange={(event) => { setRematchForm((value) => ({ ...value, reason: event.target.value })); }} rows={2} /></div>
+            <div className="space-y-1.5"><Label>Khoảng thời gian có thể học *</Label><Input value={rematchForm.availablePeriod} onChange={(event) => { setRematchForm((value) => ({ ...value, availablePeriod: event.target.value })); }} /></div>
+            <div className="space-y-1.5"><Label>Ngày có thể học *</Label><Input value={rematchForm.availableDays} onChange={(event) => { setRematchForm((value) => ({ ...value, availableDays: event.target.value })); }} /></div>
+            <div className="space-y-1.5 sm:col-span-2"><Label>Khung giờ mong muốn *</Label><Input value={rematchForm.preferredTimes} onChange={(event) => { setRematchForm((value) => ({ ...value, preferredTimes: event.target.value })); }} /></div>
+            <div className="space-y-1.5 sm:col-span-2"><Label>Trình độ hiện tại *</Label><Input value={rematchForm.currentLevel} onChange={(event) => { setRematchForm((value) => ({ ...value, currentLevel: event.target.value })); }} /></div>
+            <div className="space-y-1.5"><Label>Tình hình học tập *</Label><Textarea value={rematchForm.learningSituation} onChange={(event) => { setRematchForm((value) => ({ ...value, learningSituation: event.target.value })); }} /></div>
+            <div className="space-y-1.5"><Label>Mục tiêu học tập *</Label><Textarea value={rematchForm.learningGoals} onChange={(event) => { setRematchForm((value) => ({ ...value, learningGoals: event.target.value })); }} /></div>
+            <div className="space-y-1.5 sm:col-span-2"><Label>Nội dung cần hỗ trợ *</Label><Textarea value={rematchForm.weakAreas} onChange={(event) => { setRematchForm((value) => ({ ...value, weakAreas: event.target.value })); }} /></div>
+            <div className="space-y-1.5"><Label>Mong muốn về giáo viên</Label><Textarea value={rematchForm.instructorPreferences} onChange={(event) => { setRematchForm((value) => ({ ...value, instructorPreferences: event.target.value })); }} /></div>
+            <div className="space-y-1.5"><Label>Ghi chú thêm</Label><Textarea value={rematchForm.additionalNotes} onChange={(event) => { setRematchForm((value) => ({ ...value, additionalNotes: event.target.value })); }} /></div>
+          </div>
+          <DialogFooter><Button variant="outline" onClick={() => { setRematchTarget(null); }} disabled={actionLoading}>Đóng</Button><Button onClick={() => { void submitRematch(); }} disabled={actionLoading || !rematchFormValid}>{actionLoading && <RefreshCcw className="mr-2 h-4 w-4 animate-spin" />}Hủy ghép và tìm người mới</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

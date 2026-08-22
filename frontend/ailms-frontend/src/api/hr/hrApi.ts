@@ -41,6 +41,7 @@ export interface EmployeeContractResponse {
   employeeId: string;
   employeeCode?: string;
   fullName?: string;
+  avatarUrl?: string | null;
   departmentName?: string;
   position?: string;
   contractType?: ContractType | string;
@@ -128,7 +129,91 @@ export interface LeaveRequestResponse {
   createdAt: string;
 }
 
+export type OneOnOneRequestStatus =
+  | "WAITING_INSTRUCTOR"
+  | "INSTRUCTOR_ACCEPTED"
+  | "CONTACTED"
+  | "TRIAL_SCHEDULED"
+  | "TRIAL_COMPLETED"
+  | "MATCHED"
+  | "REMATCHING"
+  | "CANCELLED";
+
+export interface HrOneOnOneRequestResponse {
+  id: string;
+  categoryId?: string | null;
+  categoryName?: string | null;
+  studentName: string;
+  courseName: string;
+  packageName: string;
+  status: OneOnOneRequestStatus;
+  assignedInstructorName?: string | null;
+  assignedInstructorId?: string | null;
+  availablePeriod?: string | null;
+  availableDays?: string | null;
+  preferredTimes?: string | null;
+  trialStartAt?: string | null;
+  trialEndAt?: string | null;
+  trialClassId?: string | null;
+  trialSessionId?: string | null;
+  createdAt: string;
+}
+
+export interface HrInstructorCandidateResponse {
+  instructorId: string;
+  instructorName: string;
+  employeeCode: string;
+  role: string;
+}
+
+export interface OneOnOneTrialSchedulePayload {
+  className: string;
+  startAt?: string;
+  endAt?: string;
+  learningMode: string;
+  linkOrLocation?: string;
+  notes?: string;
+}
+
 export const hrApi = {
+  /** Lấy các yêu cầu học 1-1 để HR theo dõi và xác nhận kết nối. */
+  getOneOnOneRequests: async () =>
+    httpClient.get<ApiResponse<HrOneOnOneRequestResponse[]>>("/v1/hr/one-on-one/requests"),
+
+  /** Kết nối hai bên và tạo lớp cùng buổi học thử trong một transaction. */
+  markOneOnOneContacted: async (requestId: string, payload: OneOnOneTrialSchedulePayload) =>
+    httpClient.post<ApiResponse<HrOneOnOneRequestResponse>>(
+      `/v1/hr/one-on-one/requests/${requestId}/mark-contacted`,
+      payload,
+    ),
+
+  /** HR đổi lịch buổi học thử đã tạo, vẫn kiểm tra trùng lịch ở backend. */
+  rescheduleOneOnOneTrial: async (requestId: string, payload: OneOnOneTrialSchedulePayload) =>
+    httpClient.put<ApiResponse<HrOneOnOneRequestResponse>>(
+      `/v1/hr/one-on-one/requests/${requestId}/trial-class`,
+      payload,
+    ),
+
+  /** Từ chối người đang nhận lớp và mở lại matching cho người dạy khác. */
+  rejectOneOnOneConnection: async (requestId: string, reason: string) =>
+    httpClient.post<ApiResponse<HrOneOnOneRequestResponse>>(
+      `/v1/hr/one-on-one/requests/${requestId}/reject-connection`,
+      { reason },
+    ),
+
+  /** Lấy Teacher/TA ACTIVE thuộc đúng danh mục và chưa bị loại khỏi yêu cầu. */
+  getOneOnOneInstructorCandidates: async (requestId: string) =>
+    httpClient.get<ApiResponse<HrInstructorCandidateResponse[]>>(
+      `/v1/hr/one-on-one/requests/${requestId}/instructor-candidates`,
+    ),
+
+  /** Gửi thông báo lớp 1-1 tới các Teacher/TA do HR lựa chọn. */
+  notifyOneOnOneInstructors: async (requestId: string, instructorIds: string[]) =>
+    httpClient.post<ApiResponse<void>>(
+      `/v1/hr/one-on-one/requests/${requestId}/notify-instructors`,
+      { instructorIds },
+    ),
+
   // Employees
   getEmployees: (params?: any) =>
     httpClient.get<ApiResponse<EmployeeResponse[]>>("/v1/employees", { params }),
@@ -202,5 +287,7 @@ export const hrApi = {
     httpClient.post<ApiResponse<LeaveRequestResponse>>("/v1/leave-requests", payload),
 
   approveLeaveRequest: (id: string, status: "APPROVED" | "REJECTED", reason?: string) =>
-    httpClient.post<ApiResponse<LeaveRequestResponse>>(`/v1/leave-requests/${id}/approve`, { status, reason }),
+    httpClient.post<ApiResponse<LeaveRequestResponse>>(`/v1/leave-requests/${id}/approve`, null, {
+      params: { approve: status === "APPROVED", rejectionReason: reason },
+    }),
 };

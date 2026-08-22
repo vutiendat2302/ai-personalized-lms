@@ -42,6 +42,8 @@ public interface CourseMapper {
     @Mapping(target = "viewCount", ignore = true)
     @Mapping(target = "enrollmentCount", ignore = true)
     @Mapping(target = "trendingScore", ignore = true)
+    @Mapping(target = "status", ignore = true)
+    @Mapping(target = "rejectionReason", ignore = true)
     void updateEntityFromRequest(UpdateCourseRequest request, @MappingTarget CourseEntity entity);
 
     /** Chuyển entity khóa học thành response kèm thông tin danh mục. */

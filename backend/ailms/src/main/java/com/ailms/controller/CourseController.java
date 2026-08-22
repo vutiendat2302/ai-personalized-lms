@@ -51,7 +51,7 @@ public class CourseController {
             @RequestParam Long teacherUserId,
             @Valid @RequestBody CreateCourseRequest request) {
         CourseResponse response = courseService.createCourseByTeacher(teacherUserId, request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of("Course created by teacher (PENDING_APPROVAL)", response));
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of("Teacher course draft created successfully", response));
     }
 
     @PostMapping("/{id}/approve")
@@ -61,6 +61,15 @@ public class CourseController {
             @Valid @RequestBody CourseApprovalRequest request) {
         CourseResponse response = courseService.approveCourse(id, request);
         return ResponseEntity.ok(ApiResponse.of("Course approval processed", response));
+    }
+
+    /** Trả danh sách khóa học PENDING thật để trung tâm phê duyệt xử lý. */
+    @GetMapping("/pending-approvals")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_HR')")
+    public ResponseEntity<ApiResponse<PageResponse<CourseResponse>>> getPendingApprovalCourses(
+            BaseSearchRequest request) {
+        return ResponseEntity.ok(ApiResponse.of("Pending approval courses retrieved successfully",
+                courseService.getPendingApprovalCourses(request)));
     }
 
     @GetMapping("/suggested-classes")
@@ -88,7 +97,7 @@ public class CourseController {
     }
 
     @PatchMapping("/{id}/status")
-    @PreAuthorize("@courseAccess.canManage(#id, authentication)")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN', 'ROLE_HR')")
     public ResponseEntity<ApiResponse<CourseResponse>> updateStatus(
             @PathVariable Long id,
             @Valid @RequestBody CourseStatusRequest request) {

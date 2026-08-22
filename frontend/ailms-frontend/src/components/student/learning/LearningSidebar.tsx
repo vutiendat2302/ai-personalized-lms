@@ -17,6 +17,17 @@ export const LearningSidebar: React.FC<LearningSidebarProps> = ({
   onLockedLesson,
   isCanBypassLock = false,
 }) => {
+  /** Hiển thị thời lượng media thật cho video và thời lượng học ước tính cho nội dung khác. */
+  const formatLessonDuration = (lesson: LessonCurriculumItem): string | null => {
+    if (lesson.contentType?.toUpperCase() === "VIDEO" && lesson.durationSec) {
+      if (lesson.durationSec < 60) return `${lesson.durationSec} giây`;
+      const minutes = Math.floor(lesson.durationSec / 60);
+      const seconds = lesson.durationSec % 60;
+      return seconds > 0 ? `${minutes}:${String(seconds).padStart(2, "0")}` : `${minutes} phút`;
+    }
+    return lesson.durationMin ? `${lesson.durationMin} phút` : null;
+  };
+
   const getIcon = (type: string) => {
     switch (type?.toUpperCase()) {
       case "VIDEO":
@@ -53,6 +64,7 @@ export const LearningSidebar: React.FC<LearningSidebarProps> = ({
                 const isActive = activeLessonId === lesson.id;
                 const isCompleted = lesson.completed;
                 const isLocked = !isCanBypassLock && Boolean(lesson.locked);
+                const durationLabel = formatLessonDuration(lesson);
 
                 return (
                   <div
@@ -77,9 +89,9 @@ export const LearningSidebar: React.FC<LearningSidebarProps> = ({
                       <span className="truncate">{lesson.name}</span>
                     </div>
 
-                    {lesson.durationMin && (
+                    {durationLabel && (
                       <span className="text-[10px] text-gray-400 font-medium shrink-0">
-                        {lesson.durationMin} phút
+                        {durationLabel}
                       </span>
                     )}
                   </div>

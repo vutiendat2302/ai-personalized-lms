@@ -17,6 +17,16 @@ public interface ClassOnlineRepository extends BaseRepository<ClassOnlineEntity,
     List<ClassOnlineEntity> findByTeacherEntity_Id(Long teacherId);
     boolean existsByCode(String code);
 
+    /** Khóa buổi học để hai yêu cầu hủy đồng thời không phát thông báo trùng. */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT session FROM ClassOnlineEntity session WHERE session.id = :id")
+    java.util.Optional<ClassOnlineEntity> findByIdForUpdate(@Param("id") Long id);
+
+    /** Lấy lịch dạy của nhiều lớp trong một khoảng thời gian, đã nạp thông tin lớp và khóa học. */
+    @EntityGraph(attributePaths = {"classEntity", "classEntity.courseEntity", "teacherEntity"})
+    List<ClassOnlineEntity> findByClassEntity_IdInAndScheduledAtGreaterThanEqualAndScheduledAtLessThanOrderByScheduledAtAsc(
+            List<Long> classIds, LocalDateTime from, LocalDateTime to);
+
     @EntityGraph(attributePaths = {"classEntity", "classEntity.courseEntity", "teacherEntity"})
     List<ClassOnlineEntity> findByScheduledAtGreaterThanEqualAndScheduledAtLessThanOrderByScheduledAtAsc(
             LocalDateTime from, LocalDateTime to);

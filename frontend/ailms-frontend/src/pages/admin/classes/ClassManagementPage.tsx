@@ -116,9 +116,6 @@ export const ClassManagementPage: React.FC = () => {
         })
       );
 
-      const currentUserId = String(auth.user?.id || "");
-      const currentUsername = String(auth.user?.username || "").toLowerCase();
-
       const parsedClasses = classRows.map((item: any, index: number) => {
         const members = memberRows[index] || [];
         const teacherMember = members.find(
@@ -134,9 +131,6 @@ export const ClassManagementPage: React.FC = () => {
         const waitlisted = members.filter((member: any) => member.status === "WAITLISTED");
 
         const realCode = item.code || item.classCode || String(item.id || "");
-        const memberUserIds = members.map((m: any) => String(m.userId));
-        const memberUsernames = members.map((m: any) => String(m.username || "").toLowerCase());
-
         return {
           id: String(item.id),
           code: String(realCode),
@@ -161,23 +155,11 @@ export const ClassManagementPage: React.FC = () => {
           members: activeStudents,
           waitlist: waitlisted,
           sessions: [],
-          _allMemberUserIds: memberUserIds,
-          _allMemberUsernames: memberUsernames,
         } as any;
       });
 
-      let userClasses = parsedClasses;
-      if (!isAdminOrHR) {
-        userClasses = parsedClasses.filter((c: any) => {
-          const isMainTeacherId = currentUserId && String(c.teacher.id) === currentUserId;
-          const isMainTeacherName = currentUsername && c.teacher.name.toLowerCase().includes(currentUsername);
-          const isMemberUserId = currentUserId && c._allMemberUserIds.includes(currentUserId);
-          const isMemberUsername = currentUsername && c._allMemberUsernames.includes(currentUsername);
-
-          return isMainTeacherId || isMainTeacherName || isMemberUserId || isMemberUsername;
-        });
-
-      }
+      // API teaching/me đã giới hạn bằng user trong JWT; không lọc lại để tránh loại nhầm lớp hợp lệ.
+      const userClasses = parsedClasses;
 
       const visibleCategoryNames = new Set(
         isAdminOrHR
@@ -233,7 +215,7 @@ export const ClassManagementPage: React.FC = () => {
 
   // Pagination
   const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(6);
+  const [pageSize, setPageSize] = useState(8);
   const [jumpPageInput, setJumpPageInput] = useState("1");
 
   useEffect(() => {
@@ -321,21 +303,21 @@ export const ClassManagementPage: React.FC = () => {
     switch (status) {
       case "OPEN":
         return (
-          <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 font-medium">
-            ● Đang Mở Học (OPEN)
+          <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 font-semibold">
+            Open
           </Badge>
         );
       case "READY":
         return (
-          <Badge className="bg-blue-500/10 text-blue-600 border-blue-500/20 font-medium">
-            ● Sẵn Sàng Bán (READY)
+          <Badge className="bg-blue-500/10 text-blue-600 border-blue-500/20 font-semibold">
+            READY
           </Badge>
         );
       case "CLOSED":
       default:
         return (
-          <Badge className="bg-slate-500/10 text-slate-600 border-slate-500/20 font-medium">
-            ● Đã Đóng (CLOSED)
+          <Badge className="bg-slate-500/10 text-slate-600 border-slate-500/20 font-semibold">
+            CLOSED
           </Badge>
         );
     }
@@ -346,14 +328,14 @@ export const ClassManagementPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-            <Users className="h-6 w-6 text-blue-600" />
+          <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
+            <Users className="h-6 w-6 text-foreground" />
             {isAdminOrHR ? "Quản Lý Lớp Học" : "Lớp Học Đảm Nhận"}
           </h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <p className="text-sm text-foreground/80 mt-1">
             {isAdminOrHR
-              ? "Quản lý sĩ số, kho tài liệu, trao đổi lớp học và vận hành các lớp học online"
-              : "Danh sách các lớp học nhóm & 1-1 được phân công cho bạn đảm nhận (Giảng viên / Trợ giảng)"}
+              ? "Quản lý và vận hành các lớp học online"
+              : "Danh sách các lớp học được phân công cho bạn đảm nhận"}
           </p>
         </div>
 
@@ -365,26 +347,26 @@ export const ClassManagementPage: React.FC = () => {
               onClick={() => setViewMode("grid")}
               className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
                 viewMode === "grid"
-                  ? "bg-white text-slate-900 shadow-xs font-bold"
-                  : "text-slate-500 hover:text-slate-900"
+                  ? "bg-foreground text-white shadow-xs font-semibold"
+                  : "text-foreground/80 hover:bg-foreground/20 hover:text-foreground"
               }`}
               title="Giao diện Dạng Lưới (Grid)"
             >
               <LayoutGrid className="w-4 h-4" />
-              <span className="hidden sm:inline">Dạng Lưới</span>
+              <span className="hidden sm:inline">Lưới</span>
             </button>
             <button
               type="button"
               onClick={() => setViewMode("table")}
-              className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+              className={`p-2 rounded-lg m-1 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
                 viewMode === "table"
-                  ? "bg-white text-slate-900 shadow-xs font-bold"
-                  : "text-slate-500 hover:text-slate-900"
+                  ? "bg-foreground text-white shadow-xs font-semibold"
+                  : "text-foreground/80 hover:bg-foreground/20 hover:text-foreground"
               }`}
               title="Giao diện Dạng Bảng (Table)"
             >
               <List className="w-4 h-4" />
-              <span className="hidden sm:inline">Dạng Bảng</span>
+              <span className="hidden sm:inline">Bảng</span>
             </button>
           </div>
 
@@ -475,7 +457,7 @@ export const ClassManagementPage: React.FC = () => {
                   <Button
                     variant="outline"
                     type="button"
-                    className="h-10 w-full justify-between rounded-xl font-normal text-xs bg-white border-input cursor-pointer"
+                    className="h-10 w-full justify-between rounded-xl text-xs text-foreground/80 bg-white border-input cursor-pointer"
                   >
                     <span className="truncate">{selectedCategoryName}</span>
                     <ChevronDown className="h-4 w-4 opacity-50 ml-2 shrink-0" />
@@ -504,8 +486,8 @@ export const ClassManagementPage: React.FC = () => {
                       setSelectedCategoryName("Tất cả danh mục");
                       setCategoryPopoverOpen(false);
                     }}
-                    className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-between transition-colors ${
-                      selectedCategory === "ALL" ? "bg-primary/10 text-primary font-bold" : "hover:bg-muted"
+                    className={`w-full text-left px-2.5 py-1.5 rounded-lg text-sm flex items-center justify-between transition-colors ${
+                      selectedCategory === "ALL" ? "bg-foreground text-white" : "hover:bg-foreground"
                     }`}
                   >
                     <span>Tất cả danh mục</span>
@@ -523,8 +505,8 @@ export const ClassManagementPage: React.FC = () => {
                           setSelectedCategoryName(c.name);
                           setCategoryPopoverOpen(false);
                         }}
-                        className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs flex items-center justify-between transition-colors ${
-                          isSel ? "bg-primary/10 text-primary font-bold" : "hover:bg-muted"
+                        className={`w-full text-left px-2.5 py-1.5 rounded-lg text-sm flex items-center justify-between transition-colors ${
+                          isSel ? "bg-foreground text-white" : "hover:bg-foreground"
                         }`}
                       >
                         <span className="truncate pr-2">{c.name}</span>
@@ -569,8 +551,8 @@ export const ClassManagementPage: React.FC = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">Tất cả loại lớp</SelectItem>
-                <SelectItem value="GROUP_CLASS">Lớp Nhóm (GROUP_CLASS)</SelectItem>
-                <SelectItem value="ONE_ON_ONE">1 Kèm 1 (ONE_ON_ONE)</SelectItem>
+                <SelectItem value="GROUP_CLASS">Lớp Nhóm</SelectItem>
+                <SelectItem value="ONE_ON_ONE">1 Kèm 1</SelectItem>
               </SelectContent>
             </Select>
 
@@ -581,9 +563,9 @@ export const ClassManagementPage: React.FC = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ALL">Tất cả trạng thái</SelectItem>
-                <SelectItem value="OPEN">Đang mở (OPEN)</SelectItem>
-                <SelectItem value="READY">Sẵn sàng (READY)</SelectItem>
-                <SelectItem value="CLOSED">Đã đóng (CLOSED)</SelectItem>
+                <SelectItem value="OPEN">Đang mở</SelectItem>
+                <SelectItem value="READY">Sẵn sàng</SelectItem>
+                <SelectItem value="CLOSED">Đã đóng</SelectItem>
               </SelectContent>
             </Select>
 
@@ -707,7 +689,7 @@ export const ClassManagementPage: React.FC = () => {
 
       {/* VIEW MODE 1: GRID VIEW */}
       {!loading && !error && filteredClasses.length > 0 && viewMode === "grid" && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
           {displayedClasses.map((cls) => {
             const capacityRatio = cls.maxCapacity ? cls.currentCapacity / cls.maxCapacity : 0;
             const isNearFull = cls.type === "GROUP_CLASS" && capacityRatio >= 0.8;
@@ -715,48 +697,41 @@ export const ClassManagementPage: React.FC = () => {
             return (
               <Card
                 key={cls.id}
-                className="border-slate-200 shadow-2xs hover:shadow-md hover:border-primary/40 transition-all rounded-3xl overflow-hidden flex flex-col justify-between"
+                className="border border-border/30 bg-brand-sky/10 hover:-translate-y-2 shadow-2xs hover:shadow-md transition-all rounded-3xl overflow-hidden flex flex-col justify-between"
               >
                 <CardContent className="p-5 space-y-4">
                   {/* Card Header: Code & Type & Status */}
                   <div className="flex items-start justify-between gap-2">
                     <div className="space-y-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <code className="text-xs font-mono font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-lg border border-primary/20">
+                        <code className="text-xs font-semibold text-white bg-primary px-1.5 py-0.5 rounded-xl">
                           {cls.code}
                         </code>
                         {cls.type === "GROUP_CLASS" ? (
-                          <Badge className="bg-blue-50 text-blue-700 border-blue-200 font-semibold text-[10px]">
-                            Lớp Nhóm
+                          <Badge className="bg-primary text-white border-border/30 py-0.5 font-semibold text-xs">
+                            Nhóm
                           </Badge>
                         ) : (
-                          <Badge className="bg-purple-50 text-purple-700 border-purple-200 font-semibold text-[10px]">
-                            1 Kèm 1
+                          <Badge className="bg-foreground text-white border-border/30 font-semibold text-xs">
+                            1-1
                           </Badge>
                         )}
                       </div>
-                      <h3
-                        onClick={() => navigate(classDetailPath(cls.id))}
-                        className="font-bold text-base text-slate-900 hover:text-blue-600 cursor-pointer line-clamp-1"
-                      >
-                        {cls.name}
-                      </h3>
                     </div>
 
                     {getStatusBadge(cls.status)}
                   </div>
 
                   {/* Course & Category */}
-                  <div className="space-y-1 text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                    <p className="truncate">
-                      Khóa học: <span className="font-bold text-slate-800">{cls.courseName}</span>
+                  <div className="space-y-1 text-xs text-foreground bg-white/80 p-2.5 rounded-xl">
+                    <p className="truncate text-lg text-foreground/80" onClick={() => navigate(classDetailPath(cls.id))}>
+                      Khóa học: <span className="font-bold text-foreground">{cls.courseName}</span>
                     </p>
-                    <p className="text-[11px] text-slate-500">Danh mục: {cls.categoryName}</p>
+                    <p className="text-sm text-foreground/80">Danh mục: {cls.categoryName}</p>
                   </div>
 
                   {/* Teacher Info */}
                   <div className="flex items-center justify-between text-xs pt-1">
-                    <span className="text-slate-500 font-medium">Giáo viên phụ trách:</span>
                     <div className="flex items-center gap-2">
                       {cls.teacher.avatar ? (
                         <img
@@ -765,18 +740,18 @@ export const ClassManagementPage: React.FC = () => {
                           className="w-6 h-6 rounded-full object-cover"
                         />
                       ) : (
-                        <div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[9px] font-bold">
+                        <div className="w-6 h-6 rounded-full bg-blue-100 text-foreground/80 flex items-center justify-center text-xs font-bold">
                           {cls.teacher.name.substring(0, 2).toUpperCase()}
                         </div>
                       )}
-                      <span className="font-bold text-slate-800">{cls.teacher.name}</span>
+                      <span className="font-semibold text-foreground/80">{cls.teacher.name}</span>
                     </div>
                   </div>
 
                   {/* Capacity Progress Bar */}
                   <div className="space-y-1.5 pt-1">
                     <div className="flex items-center justify-between text-xs font-semibold">
-                      <span className={isNearFull ? "text-amber-600 font-bold" : "text-slate-700"}>
+                      <span className={isNearFull ? "text-accent/80 font-bold" : "text-foreground/80"}>
                         Sĩ số: {cls.currentCapacity} / {cls.maxCapacity || "1"}
                       </span>
                       {cls.waitlistCount > 0 ? (
@@ -797,8 +772,8 @@ export const ClassManagementPage: React.FC = () => {
 
                   {/* Schedule dates if present */}
                   {cls.startDate && (
-                    <div className="text-[11px] text-slate-500 flex items-center gap-1.5">
-                      <Calendar className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
+                    <div className="text-xs text-foreground/80 flex items-center gap-1.5">
+                      <Calendar className="h-3.5 w-3.5 text-foreground shrink-0" />
                       <span>
                         Khai giảng: {formatDateDisplay(cls.startDate)}
                       </span>
@@ -1045,15 +1020,15 @@ export const ClassManagementPage: React.FC = () => {
       {/* RoleManagement Style Pagination Footer Bar */}
       {!loading && !error && filteredClasses.length > 0 && (
         <div className="px-5 py-3.5 rounded-2xl border border-border/40 bg-card flex flex-col md:flex-row items-center justify-between gap-4 text-xs font-medium shadow-xs">
-          <div className="text-muted-foreground">
-            Hiển thị <span className="font-bold text-foreground">{totalElements === 0 ? 0 : page * pageSize + 1}</span> đến{" "}
+          <div className="text-foreground/80 text-xs font-semibold">
+            Hiển thị <span className="font-semibold text-foreground/80">{totalElements === 0 ? 0 : page * pageSize + 1}</span> đến{" "}
             <span className="font-bold text-foreground">{Math.min((page + 1) * pageSize, totalElements)}</span> trên{" "}
             <span className="font-bold text-foreground">{totalElements}</span> lớp học
           </div>
 
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2">
-              <span className="text-muted-foreground">Số lớp/trang:</span>
+              <span className="text-foreground/80 text-xs">Số lớp/trang:</span>
               <Select
                 value={String(pageSize)}
                 onValueChange={(val) => {
@@ -1061,12 +1036,14 @@ export const ClassManagementPage: React.FC = () => {
                   setPage(0);
                 }}
               >
-                <SelectTrigger className="h-8 w-16 text-xs bg-background border border-border rounded-xl font-bold cursor-pointer">
+                <SelectTrigger className="h-8 w-16 text-xs text-foreground/80 bg-background border border-border/30 rounded-xl font-bold cursor-pointer">
                   <SelectValue placeholder={String(pageSize)} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="6">6</SelectItem>
+                  <SelectItem value="4">4</SelectItem>
+                  <SelectItem value="8">8</SelectItem>
                   <SelectItem value="12">12</SelectItem>
+                  <SelectItem value="16">16</SelectItem>
                   <SelectItem value="24">24</SelectItem>
                 </SelectContent>
               </Select>
@@ -1087,7 +1064,7 @@ export const ClassManagementPage: React.FC = () => {
                 max={totalPages || 1}
                 value={jumpPageInput}
                 onChange={(e) => setJumpPageInput(e.target.value)}
-                className="h-8 w-14 text-center text-xs font-bold bg-background border border-border rounded-xl"
+                className="h-8 w-14 text-center text-foreground/80 text-xs font-semibold bg-background border border-border/30 rounded-xl"
               />
             </form>
 

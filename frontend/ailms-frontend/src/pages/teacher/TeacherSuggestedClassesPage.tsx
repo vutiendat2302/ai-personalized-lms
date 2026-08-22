@@ -47,7 +47,7 @@ export const TeacherSuggestedClassesPage: React.FC = () => {
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
           <Sparkles className="h-6 w-6 text-purple-600 dark:text-purple-400" />
-          Lớp gợi ý (Matching & Nhận lớp)
+          Lớp gợi ý
         </h1>
         <p className="text-xs text-muted-foreground mt-1">
           Các yêu cầu học 1-1 đã thanh toán phù hợp với danh mục chuyên môn của bạn.

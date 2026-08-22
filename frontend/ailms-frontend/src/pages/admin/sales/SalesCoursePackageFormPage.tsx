@@ -42,19 +42,18 @@ const formatVND = (val?: number | string) => {
   return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(num);
 };
 
-// Exact DeliveryModeEnum from Backend: SELF_STUDY, GROUP_CLASS, ONE_ON_ONE, COMBO
+// Exact DeliveryModeEnum from Backend: SELF_STUDY, GROUP_CLASS, ONE_ON_ONE
 const DELIVERY_MODES: { value: DeliveryModeEnum; label: string; desc: string }[] = [
-  { value: "SELF_STUDY", label: "Gói Tự Học (Self-Study)", desc: "Học viên tự học theo tiến độ cá nhân qua video & tài liệu tự do" },
-  { value: "GROUP_CLASS", label: "Lớp Học Nhóm (Group Class)", desc: "Lớp nhóm tương tác sĩ số cố định (Bắt buộc đính kèm Lớp học)" },
-  { value: "ONE_ON_ONE", label: "Gia Sư 1 Kèm 1 (One-on-One)", desc: "Kèm riêng 1-on-1 (Sĩ số cố định = 1, không bắt buộc gắn lớp)" },
-  { value: "COMBO", label: "Gói Combo Hỗn Hợp (Combo)", desc: "Kết hợp Tự học + Lớp học. Nếu sĩ số = 1 (kèm 1-1 + tự học), không cần đính kèm lớp; nếu sĩ số > 1 bắt buộc đính kèm lớp" },
+  { value: "SELF_STUDY", label: "Gói Tự Học", desc: "Học viên tự học theo tiến độ cá nhân qua video & tài liệu tự do" },
+  { value: "GROUP_CLASS", label: "Lớp Học Nhóm", desc: "Lớp nhóm tương tác sĩ số cố định (Bắt buộc đính kèm Lớp học)" },
+  { value: "ONE_ON_ONE", label: "Gia Sư 1 Kèm 1", desc: "Kèm riêng 1-on-1 (Sĩ số cố định = 1, không bắt buộc gắn lớp)" },
 ];
 
 // Exact CoursePackageStatusEnum from Backend: ACTIVE, INACTIVE, OUT_OF_STOCK
 const STATUS_OPTIONS = [
-  { value: "ACTIVE", label: "Đang hoạt động (ACTIVE - Có thể đăng ký)", color: "text-emerald-600" },
-  { value: "INACTIVE", label: "Không hoạt động (INACTIVE - Ẩn khỏi shop)", color: "text-zinc-500" },
-  { value: "OUT_OF_STOCK", label: "Hết chỗ (OUT_OF_STOCK - Lớp liên kết đã hết chỗ)", color: "text-rose-600" },
+  { value: "ACTIVE", label: "Đang hoạt động", color: "text-emerald-600" },
+  { value: "INACTIVE", label: "Đã ẩn / Tạm dừng", color: "text-zinc-500" },
+  { value: "OUT_OF_STOCK", label: "Hết chỗ", color: "text-rose-600" },
 ] as const;
 
 export const SalesCoursePackageFormPage: React.FC = () => {
@@ -212,10 +211,7 @@ export const SalesCoursePackageFormPage: React.FC = () => {
   };
 
   // 🌟 QUY ĐỊNH LỚP HỌC ĐÍNH KÈM (CLASS ATTACHMENT LOGIC) 🌟
-  const numMaxGroupSize = Number(maxGroupSize) || 0;
-  const isGroupRequired =
-    deliveryMode === "GROUP_CLASS" ||
-    (deliveryMode === "COMBO" && numMaxGroupSize > 1);
+  const isGroupRequired = deliveryMode === "GROUP_CLASS";
 
   // 🌟 SHADCN FORM VALIDATION FUNCTION 🌟
   const validateForm = (): boolean => {
@@ -263,8 +259,10 @@ export const SalesCoursePackageFormPage: React.FC = () => {
     }
 
     // 5. Tutor sessions validation
-    if (deliveryMode === "GROUP_CLASS" || deliveryMode === "ONE_ON_ONE" || deliveryMode === "COMBO") {
-      if (includedTutorSessions !== "" && includedTutorSessions != null) {
+    if (deliveryMode === "GROUP_CLASS" || deliveryMode === "ONE_ON_ONE") {
+      if (deliveryMode === "ONE_ON_ONE" && (includedTutorSessions === "" || Number(includedTutorSessions) <= 0)) {
+        errs.includedTutorSessions = "Gói 1-1 phải có ít nhất một buổi kèm riêng!";
+      } else if (includedTutorSessions !== "" && includedTutorSessions != null) {
         const numTutor = Number(includedTutorSessions);
         if (isNaN(numTutor) || numTutor < 0) {
           errs.includedTutorSessions = "Số buổi kèm riêng phải lớn hơn hoặc bằng 0!";
@@ -279,10 +277,6 @@ export const SalesCoursePackageFormPage: React.FC = () => {
       }
       if (!classId) {
         errs.classId = "Gói Lớp Nhóm bắt buộc phải chọn Lớp học đính kèm!";
-      }
-    } else if (deliveryMode === "COMBO") {
-      if (numMaxGroupSize > 1 && !classId) {
-        errs.classId = "Gói Combo có sĩ số > 1 bắt buộc phải chọn Lớp học đính kèm!";
       }
     }
 
@@ -551,7 +545,7 @@ export const SalesCoursePackageFormPage: React.FC = () => {
               })}
             </div>
 
-            {/* Class Selection logic for GROUP_CLASS / COMBO */}
+            {/* Class Selection logic for GROUP_CLASS */}
             {isGroupRequired ? (
               <div className={cn(
                 "p-4 rounded-2xl border space-y-3 transition-all",
@@ -563,12 +557,10 @@ export const SalesCoursePackageFormPage: React.FC = () => {
                   <div>
                     <p className="font-bold text-xs text-foreground flex items-center gap-1.5">
                       <Users className="h-4 w-4 text-amber-600" />
-                      Lớp học đính kèm <span className="text-rose-500">* (Bắt buộc cho Lớp nhóm / Combo)</span>
+                      Lớp học đính kèm <span className="text-rose-500">* (Bắt buộc cho Lớp nhóm)</span>
                     </p>
                     <p className="text-[11px] text-muted-foreground mt-0.5">
-                      {deliveryMode === "COMBO"
-                        ? "Gói Combo có sĩ số > 1 bắt buộc phải chọn Lớp học đính kèm"
-                        : "Gói Lớp Nhóm bắt buộc phải chọn hoặc tạo mới Lớp học đính kèm"}
+                      Gói Lớp Nhóm bắt buộc phải chọn hoặc tạo mới Lớp học đính kèm
                     </p>
                   </div>
 
@@ -634,11 +626,7 @@ export const SalesCoursePackageFormPage: React.FC = () => {
             ) : (
               <div className="p-3 rounded-xl bg-muted/40 text-muted-foreground text-xs flex items-center gap-2">
                 <Info className="h-4 w-4 shrink-0 text-blue-500" />
-                <span>
-                  {deliveryMode === "COMBO" && numMaxGroupSize === 1
-                    ? "Gói Combo có sĩ số = 1 được hiểu là Gói 1-1 + Tự học, KHÔNG bắt buộc gắn Lớp học."
-                    : "Hình thức này không yêu cầu gắn Lớp học đính kèm."}
-                </span>
+                <span>Hình thức này không yêu cầu gắn Lớp học đính kèm.</span>
               </div>
             )}
 
@@ -671,17 +659,11 @@ export const SalesCoursePackageFormPage: React.FC = () => {
                         fieldErrors.maxGroupSize && "border-rose-500 bg-rose-500/5 focus-visible:ring-rose-500"
                       )}
                     />
-                    {fieldErrors.maxGroupSize ? (
+                    {fieldErrors.maxGroupSize && (
                       <p className="text-[11px] font-semibold text-rose-500 flex items-center gap-1 mt-1 animate-in fade-in">
                         <AlertCircle className="h-3 w-3 shrink-0" />
                         {fieldErrors.maxGroupSize}
                       </p>
-                    ) : (
-                      deliveryMode === "COMBO" && (
-                        <p className="text-[10px] text-amber-600 dark:text-amber-400">
-                          Nếu sĩ số = 1: Combo 1-1 + Tự học (không gắn lớp). Nếu sĩ số &gt; 1: Combo Lớp nhóm (bắt buộc gắn lớp).
-                        </p>
-                      )
                     )}
                   </div>
                 )}
@@ -704,8 +686,8 @@ export const SalesCoursePackageFormPage: React.FC = () => {
                   </div>
                 )}
 
-                {/* 🌟 Hỗ trợ số buổi kèm riêng cho GROUP_CLASS, ONE_ON_ONE và COMBO 🌟 */}
-                {(deliveryMode === "GROUP_CLASS" || deliveryMode === "ONE_ON_ONE" || deliveryMode === "COMBO") && (
+                {/* Hỗ trợ số buổi kèm riêng cho GROUP_CLASS và ONE_ON_ONE. */}
+                {(deliveryMode === "GROUP_CLASS" || deliveryMode === "ONE_ON_ONE") && (
                   <div className="space-y-1.5">
                     <Label className="font-bold text-foreground text-xs flex items-center gap-1.5">
                       <Clock className="h-3.5 w-3.5 text-purple-500" />

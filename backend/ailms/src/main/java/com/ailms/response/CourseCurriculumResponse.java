@@ -1,5 +1,6 @@
 package com.ailms.response;
 
+import com.ailms.entity.enums.DeliveryModeEnum;
 import lombok.*;
 
 import java.util.List;
@@ -26,6 +27,8 @@ public class CourseCurriculumResponse {
     private Integer totalLessons;
     private Integer totalDurationMin;
     private Long enrollmentId;
+    private Boolean staffPreviewAccess;
+    private DeliveryModeEnum deliveryMode;
 
     @Getter
     @Setter
@@ -55,6 +58,7 @@ public class CourseCurriculumResponse {
         private String contentUrl;
         private String description;
         private Integer durationMin;
+        private Integer durationSec;
         private Integer duration;
         private Integer orderIndex;
         private String previewType;
@@ -65,6 +69,7 @@ public class CourseCurriculumResponse {
         private Boolean completed;
         private Integer progressPercent;
         private Integer lastPositionSec;
+        private String personalNote;
         private Boolean preview;
         private Boolean accessible;
         private Boolean locked;

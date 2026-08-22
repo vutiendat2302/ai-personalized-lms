@@ -33,11 +33,15 @@ export interface SubmissionBlock {
 interface LearningAssignmentPanelProps {
   assignment: AssignmentResponseDTO;
   onComplete: () => void;
+  persistSubmission?: boolean;
+  deliveryMode?: "SELF_STUDY" | "GROUP_CLASS" | "ONE_ON_ONE";
 }
 
 export const LearningAssignmentPanel: React.FC<LearningAssignmentPanelProps> = ({
   assignment,
   onComplete,
+  persistSubmission = true,
+  deliveryMode,
 }) => {
   const toast = useToast();
   const [fileUrl, setFileUrl] = useState("");
@@ -81,6 +85,12 @@ export const LearningAssignmentPanel: React.FC<LearningAssignmentPanelProps> = (
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (!persistSubmission) {
+      setFileUrl(file.name);
+      toast.success("Đã chọn tệp để mô phỏng trong chế độ preview.");
+      return;
+    }
+
     try {
       setUploading(true);
       const res = await fileAdminApi.uploadFile(file, "DOCUMENT", "ASSIGNMENT_SUBMISSION");
@@ -121,8 +131,9 @@ export const LearningAssignmentPanel: React.FC<LearningAssignmentPanelProps> = (
   };
 
   const { instructions, submissionMode } = parseAssignmentMeta();
+  const isSelfStudy = deliveryMode === "SELF_STUDY";
 
-  /** Gửi bài làm thật lên backend rồi mới đánh dấu đã nộp trên giao diện. */
+  /** Gửi bài thật lên backend hoặc chỉ mô phỏng cục bộ trong chế độ preview. */
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submissionMode === "FILE_UPLOAD" && !fileUrl) {
@@ -135,6 +146,11 @@ export const LearningAssignmentPanel: React.FC<LearningAssignmentPanelProps> = (
         toast.error("Vui lòng soạn thảo ít nhất 1 block bài làm.");
         return;
       }
+    }
+    if (!persistSubmission) {
+      setSubmitted(true);
+      toast.success("Preview bài nộp thành công; hệ thống không lưu kết quả.");
+      return;
     }
     setSubmitting(true);
     try {
@@ -191,7 +207,11 @@ export const LearningAssignmentPanel: React.FC<LearningAssignmentPanelProps> = (
         <div>
           {submitted ? (
             <Badge className="bg-amber-100 text-amber-900 border-amber-300 font-bold px-3 py-1 text-xs">
-              ⏳ Đã nộp bài • Đang chờ Giảng viên chấm điểm
+              {!persistSubmission
+                ? "Preview • Không lưu bài nộp"
+                : isSelfStudy
+                  ? "✓ Đã lưu bài tự luyện"
+                  : "⏳ Đã nộp bài • Đang chờ Giảng viên chấm điểm"}
             </Badge>
           ) : (
             <Badge variant="outline" className="text-purple-700 border-purple-300 font-bold px-3 py-1 text-xs">
@@ -215,9 +235,15 @@ export const LearningAssignmentPanel: React.FC<LearningAssignmentPanelProps> = (
         <div className="p-8 bg-emerald-50/70 border border-emerald-200 rounded-2xl text-center space-y-4 shadow-2xs">
           <CheckCircle2 className="w-14 h-14 text-emerald-600 mx-auto" />
           <div>
-            <h4 className="text-lg font-bold text-emerald-950">Đã nộp bài tập tự luận thành công!</h4>
+            <h4 className="text-lg font-bold text-emerald-950">
+              {persistSubmission ? "Đã nộp bài tập tự luận thành công!" : "Mô phỏng nộp bài thành công!"}
+            </h4>
             <p className="text-xs text-emerald-700 mt-1 max-w-md mx-auto">
-              Bài nộp của bạn đã được ghi nhận. Giảng viên phụ trách sẽ kiểm tra, chấm điểm và gửi phản hồi chi tiết cho bạn.
+              {!persistSubmission
+                ? "Đây là kết quả preview cục bộ; không có bài nộp hoặc tiến độ nào được ghi vào hệ thống."
+                : isSelfStudy
+                  ? "Bài làm được lưu trong lịch sử tự học của bạn; gói tự học không phân công giảng viên chấm trực tiếp."
+                  : "Bài nộp của bạn đã được ghi nhận. Giảng viên phụ trách sẽ kiểm tra, chấm điểm và gửi phản hồi chi tiết cho bạn."}
             </p>
           </div>
 
@@ -245,12 +271,11 @@ export const LearningAssignmentPanel: React.FC<LearningAssignmentPanelProps> = (
             </div>
           )}
 
-          <button
-            onClick={onComplete}
-            className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs cursor-pointer"
-          >
-            Hoàn thành bài học
-          </button>
+          {persistSubmission && (
+            <Button type="button" onClick={onComplete}>
+              Hoàn thành bài học
+            </Button>
+          )}
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-6 pt-2">
@@ -397,14 +422,20 @@ export const LearningAssignmentPanel: React.FC<LearningAssignmentPanelProps> = (
             </div>
           )}
 
-          <button
+          <Button
             type="submit"
             disabled={submitting || uploading}
-            className="w-full py-3.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-md cursor-pointer transition"
+            className="w-full py-3.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-md"
           >
             {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-            {submitting ? "Đang nộp bài..." : "Nộp bài tập cho giảng viên"}
-          </button>
+            {submitting
+              ? "Đang nộp bài..."
+              : persistSubmission
+                ? isSelfStudy
+                  ? "Lưu bài tự luyện"
+                  : "Nộp bài tập cho giảng viên"
+                : "Mô phỏng nộp bài (không lưu)"}
+          </Button>
         </form>
       )}
     </div>

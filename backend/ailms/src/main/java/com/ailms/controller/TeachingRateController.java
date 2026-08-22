@@ -16,6 +16,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import com.ailms.repository.ClassRepository;
+import com.ailms.exception.BusinessException;
 
 @RestController
 @RequestMapping("${api.prefix}/teaching-rates")
@@ -23,11 +28,27 @@ import java.util.List;
 public class TeachingRateController {
 
     private final ITeachingRateService teachingRateService;
+    private final ClassRepository classRepository;
 
     @PostMapping
     public ResponseEntity<ApiResponse<TeachingRateResponse>> create(@Valid @RequestBody CreateTeachingRateRequest request) {
         TeachingRateResponse response = teachingRateService.create(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of("Teaching rate created successfully", response));
+    }
+
+    /** Tương thích form HR cũ: đổi tên lớp thành classId rồi tạo rate hiệu lực ngay. */
+    @PostMapping("/update")
+    public ResponseEntity<ApiResponse<TeachingRateResponse>> updateFromEmployeeForm(@RequestBody Map<String, Object> body) {
+        Object employee = body.get("teacherId");
+        Object className = body.get("className");
+        Object rate = body.get("rate");
+        if (employee == null || className == null || rate == null) throw new BusinessException("Thiếu giáo viên, lớp hoặc đơn giá.");
+        Long classId = classRepository.findFirstByNameIgnoreCase(String.valueOf(className).trim())
+                .orElseThrow(() -> new BusinessException("Không tìm thấy lớp có tên: " + className)).getId();
+        CreateTeachingRateRequest request = CreateTeachingRateRequest.builder()
+                .employeeId(Long.valueOf(String.valueOf(employee))).classId(classId)
+                .rate(new BigDecimal(String.valueOf(rate))).effectiveFrom(LocalDateTime.now()).build();
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of("Teaching rate created successfully", teachingRateService.create(request)));
     }
 
     @PutMapping("/{id}")

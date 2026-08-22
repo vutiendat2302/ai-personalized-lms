@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -17,7 +18,10 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
 import java.time.Duration;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
@@ -103,13 +107,18 @@ public class MinioFileStorageService implements IFileStorageService {
                             .bucket(bucketName)
                             .object(fileKey)
                             .stream(inputStream, size, -1)
-                            .contentType(contentType)
+                            .contentType(resolveContentType(contentType))
                             .build()
             );
         } catch (Exception e) {
             log.error("Failed to upload stream file to MinIO: {}", fileKey, e);
             throw new FileStorageException("Failed to upload file to storage");
         }
+    }
+
+    /** Dùng MIME type tổng quát khi multipart client không gửi Content-Type của file. */
+    static String resolveContentType(String contentType) {
+        return StringUtils.hasText(contentType) ? contentType : MediaType.APPLICATION_OCTET_STREAM_VALUE;
     }
 
     @Override
@@ -151,8 +160,10 @@ public class MinioFileStorageService implements IFileStorageService {
                     if (isAllowed) {
                         String scheme = request.getHeader("X-Forwarded-Proto");
                         if (!StringUtils.hasText(scheme)) scheme = "http";
-                        if ("https".equalsIgnoreCase(scheme) || hostOnly.contains("ts.net") || hostOnly.contains("taile")) {
-                            targetEndpoint = scheme + "://" + hostOnly;
+                        if ("https".equalsIgnoreCase(scheme) || hostOnly.contains("trycloudflare.com") || hostOnly.contains("ts.net") || hostOnly.contains("taile")) {
+                            targetEndpoint = (hostOnly.contains("trycloudflare.com") || "https".equalsIgnoreCase(scheme))
+                                    ? "https://" + hostOnly
+                                    : scheme + "://" + hostOnly;
                         } else {
                             targetEndpoint = scheme + "://" + hostOnly + ":9000";
                         }
@@ -209,6 +220,33 @@ public class MinioFileStorageService implements IFileStorageService {
             return true;
         } catch (Exception e) {
             return false;
+        }
+    }
+
+    /** Đối chiếu batch file key bằng danh sách object theo từng thư mục MinIO. */
+    @Override
+    public Set<String> findExistingKeys(Collection<String> fileKeys) {
+        if (fileKeys == null || fileKeys.isEmpty()) return Set.of();
+
+        Set<String> requestedKeys = new HashSet<>(fileKeys);
+        requestedKeys.removeIf(key -> key == null || key.isBlank());
+        Set<String> existingKeys = new HashSet<>();
+        Set<String> prefixes = requestedKeys.stream()
+                .map(key -> key.substring(0, key.indexOf('/') + 1))
+                .collect(java.util.stream.Collectors.toSet());
+
+        try {
+            for (String prefix : prefixes) {
+                for (Result<io.minio.messages.Item> result : minioClient.listObjects(
+                        ListObjectsArgs.builder().bucket(bucketName).prefix(prefix).recursive(true).build())) {
+                    String objectName = result.get().objectName();
+                    if (requestedKeys.contains(objectName)) existingKeys.add(objectName);
+                }
+            }
+            return Set.copyOf(existingKeys);
+        } catch (Exception exception) {
+            log.error("Failed to verify physical objects in MinIO", exception);
+            throw new FileStorageException("Failed to verify files in storage");
         }
     }
 }

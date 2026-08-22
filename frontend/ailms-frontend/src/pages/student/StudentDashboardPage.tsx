@@ -11,9 +11,9 @@ import {
 } from "@/api/student/studentApi";
 import { courseApi } from "@/api/courses/courseApi";
 import type { CategoryResponse } from "@/types/admin";
-import { OnboardingModal } from "@/components/student/OnboardingModal";
-import { useToast } from "@/hooks/useToast";
 import { useAuth } from "@/hooks/useAuth";
+import { formatCourseLevel } from "@/utils/searchUtils";
+import { resolveAvatarUrl } from "@/utils/avatarUrl";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
@@ -23,6 +23,8 @@ import {
   Star,
   BookOpen,
   Sparkles,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { CourseScrollContainer } from "@/components/courses/CourseScrollContainer";
 
@@ -30,7 +32,6 @@ export const StudentDashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const { auth } = useAuth();
   const { user } = auth;
-  const { success } = useToast();
 
   const [metrics, setMetrics] = useState<StudentDashboardMetrics | null>(null);
   const [myCourses, setMyCourses] = useState<StudentCourseCard[]>([]);
@@ -41,13 +42,13 @@ export const StudentDashboardPage: React.FC = () => {
   const [nextLessonTitle, setNextLessonTitle] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
-  const [showOnboarding, setShowOnboarding] = useState(false);
 
   // Category states from Landing page
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
   const [loadingCats, setLoadingCats] = useState(false);
   const [catPage, setCatPage] = useState(0);
   const [hasMoreCats, setHasMoreCats] = useState(true);
+  const [isExpandedCats, setIsExpandedCats] = useState(false);
 
   // Featured course states from Landing page
   const [outstandingCourses, setOutstandingCourses] = useState<any[]>([]);
@@ -66,7 +67,7 @@ export const StudentDashboardPage: React.FC = () => {
   const fetchCategories = async (page: number) => {
     try {
       setLoadingCats(true);
-      const res = await courseApi.searchCategories({ page, size: 6, status: "ACTIVE" });
+      const res = await courseApi.searchCategories({ page, size: 8, status: "ACTIVE" });
       if (res.data.success) {
         const pageData = res.data.data;
         const newCats = pageData.content || [];
@@ -164,15 +165,14 @@ export const StudentDashboardPage: React.FC = () => {
     }
   };
 
-  const handleLoadMoreCats = () => {
-    const nextPage = catPage + 1;
-    setCatPage(nextPage);
-    void fetchCategories(nextPage);
-  };
-
-  const handleCollapseCats = () => {
-    setCatPage(0);
-    void fetchCategories(0);
+  /** Chuyển đổi mở rộng / thu gọn các chủ đề học tập nổi bật. */
+  const handleToggleExpandCats = async () => {
+    if (!isExpandedCats && hasMoreCats) {
+      const nextPage = catPage + 1;
+      setCatPage(nextPage);
+      await fetchCategories(nextPage);
+    }
+    setIsExpandedCats((prev) => !prev);
   };
 
   useEffect(() => {
@@ -190,9 +190,6 @@ export const StudentDashboardPage: React.FC = () => {
 
         if (metricsData) {
           setMetrics(metricsData);
-          if (!metricsData.hasSetGoals) {
-            setShowOnboarding(true);
-          }
         }
 
         setMyCourses(coursesData || []);
@@ -226,12 +223,6 @@ export const StudentDashboardPage: React.FC = () => {
 
     void loadDashboardData();
   }, []);
-
-  const handleOnboardingComplete = async (goal: any, interests: string[]) => {
-    await studentApi.submitOnboarding(goal, interests);
-    success("Đã hoàn tất thiết lập mục tiêu & sở thích cá nhân hóa!");
-    setShowOnboarding(false);
-  };
 
   if (loading) {
     return (
@@ -270,13 +261,6 @@ export const StudentDashboardPage: React.FC = () => {
 
   return (
     <div className="w-full bg-background text-foreground space-y-0 pb-16">
-      {/* Onboarding Stepper Modal */}
-      <OnboardingModal
-        isOpen={showOnboarding}
-        onComplete={handleOnboardingComplete}
-        onSkipAll={() => setShowOnboarding(false)}
-      />
-
       {/* ==========================================
           [SECTION 1] Welcome + Streak + Goals (FULL-WIDTH BACK VÀNG #f3e8d8)
           ========================================== */}
@@ -392,8 +376,9 @@ export const StudentDashboardPage: React.FC = () => {
       {/* ==========================================
           [SECTION 2] Continue Learning (Course đang học dở)
           ========================================== */}
-      <section className="w-full bg-[#e8f5f0] dark:bg-emerald-950/20 py-10 border-b border-emerald-100 dark:border-emerald-900/30">
-        <div className="max-w-6xl mx-auto px-6 space-y-4">
+      <section className="w-full bg-[#e8f5f0] dark:bg-emerald-950/20 py-6 md:py-8 border-b border-emerald-100 dark:border-emerald-900/30">
+        <div className="max-w-6xl mx-auto px-6 space-y-3">
+
           
           {activeCourse ? (
             <>
@@ -420,60 +405,61 @@ export const StudentDashboardPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Card bài học */}
-              <div className="grid grid-cols-1 md:grid-cols-2 rounded-2xl overflow-hidden shadow-md bg-white dark:bg-card border border-emerald-100 dark:border-emerald-900/40">
-                {/* Nửa trái */}
-                <div className="p-6 md:p-8 flex flex-col justify-between space-y-4">
-                  <div className="space-y-2">
-                    <span className="text-xs font-extrabold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider block">
+              {/* Card bài học - Compact Layout */}
+              <div className="grid grid-cols-1 md:grid-cols-12 rounded-xl overflow-hidden shadow-xs bg-white dark:bg-card border border-emerald-100 dark:border-emerald-900/40 md:h-[160px]">
+                {/* Nửa trái (Thông tin bài học) */}
+                <div className="md:col-span-7 lg:col-span-8 p-5 flex flex-col justify-between space-y-2">
+                  <div className="space-y-1">
+                    <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider block">
                       Bài học tiếp theo:
                     </span>
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-foreground line-clamp-2">
+                    <h3 className="text-base md:text-lg font-bold text-gray-900 dark:text-foreground line-clamp-1">
                       {nextLessonTitle || activeCourse.title}
                     </h3>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 font-medium line-clamp-1">
                       Danh mục: {activeCourse.categoryName || "Khóa học AILMS"}
                     </p>
                   </div>
 
-                  <button
+                  <Button
                     onClick={() => navigate(`/student/courses/${activeCourse.id}`)}
-                    className="bg-indigo-700 hover:bg-indigo-800 text-white px-6 py-3 rounded-xl font-medium shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer w-fit"
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 h-9 rounded-lg font-medium text-xs shadow-xs transition-all flex items-center justify-center gap-1.5 w-fit cursor-pointer"
                   >
                     <span>Tiếp tục bài học</span>
-                    <ArrowRight className="h-4 w-4" />
-                  </button>
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Button>
                 </div>
 
-                {/* Nửa phải: Ảnh thumbnail bài học */}
-                <div className="relative min-h-[220px] bg-muted overflow-hidden">
+                {/* Nửa phải: Ảnh thumbnail bài học (Cố định tỷ lệ, không bị kéo giãn) */}
+                <div className="md:col-span-5 lg:col-span-4 relative h-36 md:h-full bg-muted overflow-hidden">
                   {activeCourse.coverImage ? (
                     <img
-                      src={activeCourse.coverImage}
+                      src={resolveAvatarUrl(activeCourse.coverImage)}
                       alt={activeCourse.title}
-                      className="object-cover w-full h-full min-h-[220px]"
+                      className="absolute inset-0 w-full h-full object-cover"
                     />
                   ) : (
-                    <div className="w-full h-full min-h-[220px] bg-gradient-to-br from-emerald-500/20 to-indigo-500/20 flex items-center justify-center">
-                      <BookOpen className="h-12 w-12 text-emerald-600/40" />
+                    <div className="w-full h-full bg-gradient-to-br from-emerald-500/20 to-indigo-500/20 flex items-center justify-center">
+                      <BookOpen className="h-8 w-8 text-emerald-600/40" />
                     </div>
                   )}
                 </div>
+
               </div>
             </>
-          ) : (
-            <div className="bg-white dark:bg-card rounded-2xl p-8 text-center space-y-3 border border-emerald-100 dark:border-border/40 shadow-sm">
-              <BookOpen className="h-10 w-10 text-emerald-600 mx-auto" />
-              <h3 className="text-lg font-bold text-foreground">Bạn chưa tham gia khóa học nào</h3>
+        ) : (
+            <div className="bg-white dark:bg-card rounded-xl p-6 text-center space-y-3 border border-emerald-100 dark:border-border/40 shadow-xs">
+              <BookOpen className="h-8 w-8 text-emerald-600 mx-auto" />
+              <h3 className="text-base font-bold text-foreground">Bạn chưa tham gia khóa học nào</h3>
               <p className="text-xs text-muted-foreground max-w-md mx-auto">
                 Hãy bắt đầu hành trình học tập bằng cách chọn khóa học ưa thích trong Danh mục sản phẩm!
               </p>
-              <button
+              <Button
                 onClick={() => navigate("/student/catalog")}
-                className="bg-indigo-700 hover:bg-indigo-800 text-white px-6 py-2.5 rounded-xl font-medium text-xs shadow-sm transition-all cursor-pointer"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 h-9 rounded-lg font-medium text-xs shadow-xs transition-all cursor-pointer"
               >
                 Khám phá khóa học ngay
-              </button>
+              </Button>
             </div>
           )}
 
@@ -513,9 +499,9 @@ export const StudentDashboardPage: React.FC = () => {
                   className="flex flex-col bg-card rounded-2xl border border-border/70 shadow-sm hover:shadow-lg hover:border-primary/40 hover:-translate-y-1.5 cursor-pointer overflow-hidden group transition-all duration-300"
                 >
                   <div className="relative aspect-video overflow-hidden bg-muted">
-                    {course.thumbnailUrl ? (
+                    {course.thumbnailUrl || course.image || course.coverImage || course.imageUrl ? (
                       <img
-                        src={course.thumbnailUrl}
+                        src={resolveAvatarUrl(course.thumbnailUrl || course.image || course.coverImage || course.imageUrl)}
                         alt={course.title}
                         className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300"
                       />
@@ -524,7 +510,7 @@ export const StudentDashboardPage: React.FC = () => {
                     )}
                     {course.level && (
                       <div className="absolute top-3 left-3 bg-card/90 backdrop-blur-sm px-2.5 py-1 rounded-lg text-sm font-bold text-primary shadow">
-                        {course.level}
+                        {formatCourseLevel(course.level)}
                       </div>
                     )}
                   </div>
@@ -563,51 +549,50 @@ export const StudentDashboardPage: React.FC = () => {
           [SECTION 3] CHỦ ĐỀ HỌC TẬP NỔI BẬT (ÁP ĐÚNG LANDING PAGE)
           ========================================== */}
       <section className="py-10 text-center border-t border-border/40 space-y-6 max-w-6xl mx-auto px-6">
-        <h3 className="text-3xl font-extrabold uppercase tracking-wider text-muted-foreground mb-6 mt-6">
+        <h3 className="text-3xl font-extrabold uppercase tracking-wider text-muted-foreground mb-6 mt-6 text-center">
           Chủ đề học tập nổi bật
         </h3>
 
-        <div className="flex flex-wrap justify-center gap-3 max-w-4xl mx-auto">
-          {categories.map((cat) => (
+        <div className="flex flex-wrap justify-center gap-3 sm:gap-4 max-w-5xl mx-auto px-4">
+          {(isExpandedCats ? categories : categories.slice(0, 4)).map((cat) => (
             <Link
               key={cat.id}
               to={`/categories/${cat.id}`}
-              className="px-4 py-2 cursor-pointer hover:scale-105 rounded-full border border-border/70 bg-card text-sm font-bold text-foreground hover:border-primary hover:text-primary transition-all shadow-sm animate-in fade-in duration-200 focus:outline-none focus:ring-2 focus:ring-primary/50"
+              className="inline-flex items-center justify-center px-5 py-2.5 sm:px-6 sm:py-3 cursor-pointer hover:scale-105 rounded-2xl border border-border/70 bg-card text-sm font-bold text-foreground hover:border-primary hover:text-primary transition-all shadow-xs animate-in fade-in duration-200 focus:outline-none focus:ring-2 focus:ring-primary/50"
             >
               {cat.name}
             </Link>
           ))}
         </div>
 
-        <div className="flex justify-center gap-3 pt-2">
-          {hasMoreCats && (
+        {(categories.length > 4 || hasMoreCats) && (
+          <div className="flex justify-center pt-2">
             <Button
-              onClick={handleLoadMoreCats}
-              disabled={loadingCats}
+              type="button"
               variant="outline"
-              size="sm"
-              className="rounded-full px-6 py-2 text-sm font-bold border-border/60 hover:bg-neutral-soft-gray/50 hover:text-primary transition-all duration-200 cursor-pointer"
+              onClick={handleToggleExpandCats}
+              className="rounded-xl px-5 py-2 text-xs font-bold border-border/60 hover:bg-muted text-foreground inline-flex items-center gap-1.5 cursor-pointer shadow-xs"
             >
-              {loadingCats ? "Đang tải..." : "Xem thêm chủ đề"}
+              {isExpandedCats ? (
+                <>
+                  Thu gọn
+                  <ChevronUp className="h-4 w-4" />
+                </>
+              ) : (
+                <>
+                  Xem thêm
+                  <ChevronDown className="h-4 w-4" />
+                </>
+              )}
             </Button>
-          )}
-          {categories.length > 6 && !loadingCats && (
-            <Button
-              onClick={handleCollapseCats}
-              variant="outline"
-              size="sm"
-              className="rounded-full px-6 py-2 text-sm font-bold border-border/60 hover:bg-neutral-soft-gray/50 hover:text-primary transition-all duration-200 cursor-pointer"
-            >
-              Thu gọn
-            </Button>
-          )}
-        </div>
+          </div>
+        )}
       </section>
 
       {/* ==========================================
           [SECTION 4] KHÓA HỌC NỔI BẬT (ÁP ĐÚNG LANDING PAGE WITH TABS)
           ========================================== */}
-      <section id="courses" className="py-16 border-t border-border/40 max-w-6xl mx-auto px-6">
+      <section id="courses" className="py-16 border-t border-border/40 max-w-6xl mx-auto px-6 sm:px-12 md:px-16">
         <div className="text-center max-w-2xl mx-auto mb-10">
           <h2 className="text-3xl uppercase font-extrabold text-foreground tracking-tight">
             Khóa học nổi bật
@@ -675,9 +660,9 @@ export const StudentDashboardPage: React.FC = () => {
                           className="flex-none w-65 sm:w-72.5 snap-start flex flex-col bg-card rounded-2xl border border-border/70 shadow-sm hover:shadow-lg hover:border-primary/40 hover:-translate-y-1.5 cursor-pointer overflow-hidden group transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-primary/50"
                         >
                           <div className="relative aspect-video overflow-hidden bg-muted">
-                            {course.image ? (
+                            {course.thumbnailUrl || course.image || course.coverImage || course.imageUrl ? (
                               <img
-                                src={course.image}
+                                src={resolveAvatarUrl(course.thumbnailUrl || course.image || course.coverImage || course.imageUrl)}
                                 alt={course.name || course.title}
                                 className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300"
                               />
@@ -686,7 +671,7 @@ export const StudentDashboardPage: React.FC = () => {
                             )}
                             {course.level && (
                               <div className="absolute top-3 left-3 bg-card/90 backdrop-blur-sm px-2.5 py-1 rounded-lg text-sm font-bold text-primary shadow">
-                                {course.level}
+                                {formatCourseLevel(course.level)}
                               </div>
                             )}
                           </div>

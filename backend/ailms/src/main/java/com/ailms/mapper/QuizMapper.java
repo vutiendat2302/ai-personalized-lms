@@ -18,6 +18,7 @@ public interface QuizMapper {
     List<QuizResponse> toResponseList(List<QuizEntity> list);
 
     @Mapping(target = "id", ignore = true)
+    @Mapping(target = "code", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
@@ -25,6 +26,7 @@ public interface QuizMapper {
     QuizEntity toEntity(QuizRequest request);
 
     @Mapping(target = "id", ignore = true)
+    @Mapping(target = "code", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)

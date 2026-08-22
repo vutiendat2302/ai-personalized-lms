@@ -1,5 +1,5 @@
 import httpClient from "@/api/httpClient";
-import type { ApiResponse } from "@/types/base";
+import type { ApiResponse, PageResponse } from "@/types/base";
 
 export type StreamPostType = "QUESTION" | "DISCUSSION" | "ANNOUNCEMENT";
 
@@ -30,6 +30,40 @@ export interface StreamPostItem {
   commentCount: number;
 }
 
+export interface ClassSessionUsage {
+  classId: string;
+  totalSessions: number | null;
+  reviewedSessions: number;
+  scheduledSessions: number;
+  remainingSessions: number | null;
+  packageLimitConfigured: boolean;
+  classStatus: string;
+}
+
+export interface ScheduleClassSessionPayload {
+  title?: string;
+  meetingUrl?: string;
+  meetingProvider?: string;
+  scheduledAt: string;
+  durationMin: number;
+}
+
+export interface ClassResourceApiItem {
+  id: string;
+  title: string;
+  fileKey: string;
+  fileName?: string | null;
+  fileType?: string | null;
+  fileSize?: number | null;
+  fileUrl?: string | null;
+  uploadedByName?: string | null;
+  createdAt?: string | null;
+  ragStatus?: "PENDING" | "PROCESSING" | "READY" | "FAILED";
+  ragChunksCount?: number | null;
+  ragError?: string | null;
+  canUseForAi?: boolean;
+}
+
 export const adminCourseClassApi = {
   getCourses: async () => (await httpClient.get<ApiResponse<any[]>>("/v1/courses")).data.data || [],
   searchCourses: async (params?: { keyword?: string; status?: string; page?: number; size?: number }) =>
@@ -50,7 +84,22 @@ export const adminCourseClassApi = {
   updateClass: async (id: string, payload: any) => (await httpClient.put<ApiResponse<any>>(`/v1/classes/${id}`, payload)).data.data,
   deleteClass: async (id: string) => httpClient.delete(`/v1/classes/${id}`),
   getClassSessions: async (classId: string) => (await httpClient.get<ApiResponse<any[]>>(`/v1/class-online/class/${classId}`)).data.data || [],
+  /** Lấy quota buổi học, trong đó buổi đã dùng phải có nhận xét. */
+  getClassSessionUsage: async (classId: string) =>
+    (await httpClient.get<ApiResponse<ClassSessionUsage>>(`/v1/classes/${classId}/session-usage`)).data.data,
+  /** Đặt một buổi học mới cho lớp bằng danh tính trong JWT. */
+  scheduleClassSession: async (classId: string, payload: ScheduleClassSessionPayload) =>
+    (await httpClient.post<ApiResponse<any>>(`/v1/classes/${classId}/sessions`, payload)).data.data,
+  /** Hủy buổi học với lý do bắt buộc. */
+  cancelClassSession: async (classId: string, sessionId: string, reason: string) =>
+    (await httpClient.post<ApiResponse<any>>(`/v1/classes/${classId}/sessions/${sessionId}/cancel`, { reason })).data.data,
   getClassMembers: async (classId: string) => (await httpClient.get<ApiResponse<any[]>>(`/v1/classes/${classId}/members`)).data.data || [],
+  /** Đổi giáo viên lớp atomically; backend kiểm tra trùng lịch và phát thông báo. */
+  replaceClassTeacher: async (classId: string, newTeacherUserId: string, reason: string) =>
+    (await httpClient.post<ApiResponse<any>>(`/v1/classes/${classId}/teacher/replace`, {
+      newTeacherUserId,
+      reason,
+    })).data.data,
   getClassSchedules: async (classId: string) => (await httpClient.get<ApiResponse<any[]>>(`/v1/classes/${classId}/schedules`)).data.data || [],
   updateClassSchedules: async (classId: string, schedules: any[]) => (await httpClient.put<ApiResponse<any[]>>(`/v1/classes/${classId}/schedules`, schedules)).data.data || [],
   getCourseTeachers: async (courseId: string) => (await httpClient.get<ApiResponse<any[]>>(`/v1/course-teachers/course/${courseId}`)).data.data || [],
@@ -100,11 +149,14 @@ export const adminCourseClassApi = {
 
   // Class Resources API
   getClassResources: async (classId: string, params?: { keyword?: string; page?: number; size?: number }) =>
-    (await httpClient.get<ApiResponse<any>>(`/v1/classes/${classId}/resources`, { params })).data.data,
+    (await httpClient.get<ApiResponse<PageResponse<ClassResourceApiItem>>>(`/v1/classes/${classId}/resources`, { params })).data.data,
   createClassResource: async (classId: string, payload: any) =>
     (await httpClient.post<ApiResponse<any>>(`/v1/classes/${classId}/resources`, payload)).data.data,
   deleteClassResource: async (classId: string, resourceId: string) =>
     httpClient.delete(`/v1/classes/${classId}/resources/${resourceId}`),
+  /** Yêu cầu Backend ingest lại resource vào RAG. */
+  retryClassResourceRag: async (classId: string, resourceId: string) =>
+    httpClient.post(`/v1/classes/${classId}/resources/${resourceId}/rag/retry`),
 
   // Member Detail & Paged API
   getMemberDetail: async (classId: string, userId: string) =>

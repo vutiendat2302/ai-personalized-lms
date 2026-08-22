@@ -112,14 +112,12 @@ export const FileDetailDrawer: React.FC<FileDetailDrawerProps> = ({
   const getEntityRoute = () => {
     if (!file.referenceEntityType || !file.referenceEntityId) return null;
     switch (file.referenceEntityType) {
-      case "EmployeeContract":
+      case "CONTRACT":
         return `/admin/contracts?id=${file.referenceEntityId}`;
-      case "LessonResource":
-        return `/admin/courses`;
-      case "Submission":
-        return `/admin/assignments`;
-      case "User":
-        return `/admin/users`;
+      case "COURSE":
+        return `/admin/courses?id=${file.referenceEntityId}`;
+      case "DEPARTMENT":
+        return `/admin/departments?id=${file.referenceEntityId}`;
       default:
         return null;
     }
@@ -127,18 +125,19 @@ export const FileDetailDrawer: React.FC<FileDetailDrawerProps> = ({
 
   const entityRoute = getEntityRoute();
 
+  /** Trả về Icon tương ứng với định dạng tệp tin theo token màu index.css */
   const renderFileIcon = () => {
     switch (file.fileType) {
       case "IMAGE":
-        return <FileImage className="h-12 w-12 text-blue-500" />;
+        return <FileImage className="h-12 w-12 text-brand-cobalt" />;
       case "VIDEO":
-        return <FileVideo className="h-12 w-12 text-purple-500" />;
+        return <FileVideo className="h-12 w-12 text-primary" />;
       case "AUDIO":
-        return <FileAudio className="h-12 w-12 text-emerald-500" />;
+        return <FileAudio className="h-12 w-12 text-success-forest" />;
       case "DOCUMENT":
-        return <FileText className="h-12 w-12 text-amber-500" />;
+        return <FileText className="h-12 w-12 text-brand-cobalt" />;
       default:
-        return <FileCode className="h-12 w-12 text-gray-500" />;
+        return <FileCode className="h-12 w-12 text-muted-foreground" />;
     }
   };
 
@@ -159,7 +158,7 @@ export const FileDetailDrawer: React.FC<FileDetailDrawerProps> = ({
               <p className="text-[11px] text-muted-foreground font-mono truncate">ID: {file.id}</p>
             </div>
           </div>
-          <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full h-8 w-8">
+          <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full h-8 w-8 cursor-pointer">
             <X className="h-4 w-4" />
           </Button>
         </div>
@@ -176,15 +175,15 @@ export const FileDetailDrawer: React.FC<FileDetailDrawerProps> = ({
               />
             ) : file.fileType === "DOCUMENT" && downloadUrl ? (
               <div className="flex flex-col items-center gap-3 py-4">
-                <FileText className="h-16 w-16 text-amber-500 stroke-[1.5]" />
-                <span className="text-xs font-semibold text-muted-foreground">{file.contentType || "Tài liệu PDF / Document"}</span>
+                <FileText className="h-16 w-16 text-brand-cobalt stroke-[1.5]" />
+                <span className="text-xs font-semibold text-muted-foreground">{file.contentType || "Tài liệu PDF"}</span>
                 <Button
                   size="sm"
                   variant="outline"
-                  className="mt-2 text-xs gap-1.5 rounded-lg border-amber-500/40 hover:bg-amber-50 dark:hover:bg-amber-950/30 text-amber-600"
+                  className="mt-2 text-xs gap-1.5 rounded-lg border-brand-cobalt/40 hover:bg-brand-cobalt/10 text-brand-cobalt cursor-pointer"
                   onClick={handleDownload}
                 >
-                  <Eye className="h-3.5 w-3.5" /> Xem trước file
+                  <Eye className="h-3.5 w-3.5" /> Xem trước tệp tin
                 </Button>
               </div>
             ) : (
@@ -206,7 +205,7 @@ export const FileDetailDrawer: React.FC<FileDetailDrawerProps> = ({
           {/* Section 2: Basic Metadata */}
           <div className="space-y-3">
             <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-              <HardDrive className="h-3.5 w-3.5" /> Thông tin cơ bản
+              <HardDrive className="h-3.5 w-3.5 text-primary" /> Thông tin cơ bản
             </h4>
             <div className="grid grid-cols-2 gap-3 text-xs bg-muted/20 p-3.5 rounded-xl border border-border/40">
               <div>
@@ -220,7 +219,7 @@ export const FileDetailDrawer: React.FC<FileDetailDrawerProps> = ({
                 </span>
               </div>
               <div className="col-span-2">
-                <span className="text-muted-foreground block text-[11px]">Mã lưu trữ fileKey (Debug):</span>
+                <span className="text-muted-foreground block text-[11px]">Mã khóa tệp tin (File Key):</span>
                 <span className="font-mono text-[10px] text-muted-foreground/80 break-all select-all block bg-background p-1.5 rounded border border-border/40 mt-0.5">
                   {file.fileKey}
                 </span>
@@ -228,30 +227,30 @@ export const FileDetailDrawer: React.FC<FileDetailDrawerProps> = ({
             </div>
           </div>
 
-          {/* Section 3: Business Information (Quan trọng nhất) */}
+          {/* Section 3: Business Information */}
           <div className="space-y-3">
             <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-              <Link2 className="h-3.5 w-3.5" /> Thông tin nghiệp vụ & Tham chiếu
+              <Link2 className="h-3.5 w-3.5 text-primary" /> Thông tin nghiệp vụ & Tham chiếu
             </h4>
             <div className="bg-muted/20 p-4 rounded-xl border border-border/40 space-y-3 text-xs">
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Thuộc module:</span>
+                <span className="text-muted-foreground">Phân loại mục đích:</span>
                 {getUsageTypeBadge(file.usageType)}
               </div>
 
               <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Trạng thái file:</span>
+                <span className="text-muted-foreground">Trạng thái tệp tin:</span>
                 {getStatusBadge(file.status)}
               </div>
 
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Tham chiếu hệ thống:</span>
                 {isOrphaned ? (
-                  <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-500/30 text-[10px] font-bold gap-1">
-                    <AlertTriangle className="h-3 w-3" /> Mồ côi
+                  <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/30 text-[10px] font-bold gap-1">
+                    <AlertTriangle className="h-3 w-3" /> Chưa liên kết
                   </Badge>
                 ) : (
-                  <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30 text-[10px] font-bold gap-1">
+                  <Badge variant="outline" className="bg-success-forest/10 text-success-forest border-success-forest/30 text-[10px] font-bold gap-1">
                     <FileCheck className="h-3 w-3" /> Đang sử dụng
                   </Badge>
                 )}
@@ -263,19 +262,8 @@ export const FileDetailDrawer: React.FC<FileDetailDrawerProps> = ({
                   {file.referenceEntityType && file.referenceEntityId ? (
                     <div className="flex items-center gap-1">
                       <span className="font-semibold text-primary">
-                        {file.referenceEntityType} #{file.referenceEntityId}
+                        {file.referenceEntityType} {file.referenceEntityId}
                       </span>
-                      {entityRoute && (
-                        <a
-                          href={entityRoute}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-primary hover:underline p-0.5 inline-flex items-center"
-                          title="Đi tới bản ghi gốc"
-                        >
-                          <ExternalLink className="h-3.5 w-3.5" />
-                        </a>
-                      )}
                     </div>
                   ) : (
                     <span className="text-muted-foreground italic">Không có tham chiếu</span>
@@ -288,7 +276,7 @@ export const FileDetailDrawer: React.FC<FileDetailDrawerProps> = ({
           {/* Section 4: Audit Info */}
           <div className="space-y-3">
             <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-              <Clock className="h-3.5 w-3.5" /> Lịch sử & Audit
+              <Clock className="h-3.5 w-3.5 text-primary" /> Lịch sử thay đổi
             </h4>
             <div className="grid grid-cols-2 gap-3 text-xs bg-muted/20 p-3.5 rounded-xl border border-border/40">
               <div className="flex items-start gap-2">
@@ -296,7 +284,7 @@ export const FileDetailDrawer: React.FC<FileDetailDrawerProps> = ({
                 <div>
                   <span className="text-muted-foreground block text-[11px]">Người tải lên:</span>
                   <span className="font-semibold text-foreground">
-                    {file.createdByName || (file.createdBy ? `User #${file.createdBy}` : "Hệ thống")}
+                    {file.createdByName || (file.createdBy ? `ID: ${file.createdBy}` : "Hệ thống")}
                   </span>
                 </div>
               </div>
@@ -322,9 +310,9 @@ export const FileDetailDrawer: React.FC<FileDetailDrawerProps> = ({
         {/* Section 5: Action Bar Footer */}
         <div className="p-4 border-t border-border/60 bg-card space-y-2">
           {!isOrphaned && (
-            <div className="flex items-center gap-1.5 p-2 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-400 text-[11px]">
+            <div className="flex items-center gap-1.5 p-2 rounded-lg bg-chart-1/10 text-chart-1 text-[11px]">
               <ShieldAlert className="h-3.5 w-3.5 shrink-0" />
-              <span>Nút Xoá bị khóa vì file đang được sử dụng bởi {file.referenceEntityType} #{file.referenceEntityId}</span>
+              <span>Nút Xóa bị khóa vì tệp tin đang được sử dụng bởi {file.referenceEntityType} ID {file.referenceEntityId}</span>
             </div>
           )}
 
@@ -334,9 +322,9 @@ export const FileDetailDrawer: React.FC<FileDetailDrawerProps> = ({
               size="sm"
               onClick={handleDownload}
               disabled={!downloadUrl}
-              className="flex-1 text-xs gap-1.5 h-9"
+              className="flex-1 text-xs gap-1.5 h-9 cursor-pointer"
             >
-              <Download className="h-3.5 w-3.5 text-primary" /> Tải file
+              <Download className="h-3.5 w-3.5 text-primary" /> Tải tệp tin
             </Button>
 
             {file.status === "ACTIVE" && (
@@ -345,9 +333,9 @@ export const FileDetailDrawer: React.FC<FileDetailDrawerProps> = ({
                 size="sm"
                 onClick={handleArchive}
                 disabled={actionLoading}
-                className="text-xs gap-1.5 h-9 border-blue-500/30 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/20"
+                className="text-xs gap-1.5 h-9 border-brand-cobalt/30 text-brand-cobalt hover:bg-brand-cobalt/10 cursor-pointer"
               >
-                <Archive className="h-3.5 w-3.5" /> Archive
+                <Archive className="h-3.5 w-3.5" /> Lưu trữ
               </Button>
             )}
 
@@ -356,10 +344,10 @@ export const FileDetailDrawer: React.FC<FileDetailDrawerProps> = ({
               size="sm"
               onClick={handleDelete}
               disabled={actionLoading || !isOrphaned}
-              title={!isOrphaned ? `Không thể xoá — file đang được sử dụng` : "Xoá mềm file mồ côi này"}
-              className="text-xs gap-1.5 h-9 border-red-500/30 text-red-600 hover:bg-red-50 dark:hover:bg-red-950/20 disabled:opacity-50"
+              title={!isOrphaned ? `Không thể xóa — tệp tin đang được sử dụng` : "Xóa mềm tệp tin này"}
+              className="text-xs gap-1.5 h-9 border-destructive/30 text-destructive hover:bg-destructive/10 disabled:opacity-50 cursor-pointer"
             >
-              <Trash2 className="h-3.5 w-3.5" /> Xoá
+              <Trash2 className="h-3.5 w-3.5" /> Xóa tệp tin
             </Button>
           </div>
 

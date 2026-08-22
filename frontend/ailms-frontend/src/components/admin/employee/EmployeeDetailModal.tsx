@@ -61,11 +61,14 @@ import type {
   EmployeeAuditLogItem,
 } from "@/types/employee";
 import { employeeApi } from "@/api/employees/employeeApi";
+import { adminCourseClassApi } from "@/api/courses/adminCourseClassApi";
 import { DatePickerInput, formatDateDisplay } from "@/components/ui/DatePickerInput";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { departmentApi, type DepartmentResponse } from "@/api/departments/departmentApi";
 import { NewContractWizardModal } from "@/components/admin/contract/NewContractWizardModal";
 import { DetailAuditLogModal } from "@/components/admin/audit/DetailAuditLogModal";
+import { useAuth } from "@/hooks/useAuth";
+import { resolveAvatarUrl } from "@/utils/avatarUrl";
 
 const formatCurrency = (amount?: number | null): string => {
   if (amount === undefined || amount === null || isNaN(Number(amount))) return "0";
@@ -95,6 +98,11 @@ const EmployeeDetailModalContent: React.FC<EmployeeDetailContentProps> = ({
   onUpdateEmployee,
   onShowBanner,
 }) => {
+  const { auth } = useAuth();
+  const currentRoles = (auth.user?.roles || []).map((role: any) =>
+    (typeof role === "object" ? role?.code || role?.name || "" : String(role)).replace("ROLE_", "").toUpperCase()
+  );
+  const isHrOnly = currentRoles.includes("HR") && !currentRoles.includes("ADMIN");
   const isFullTime = employee.employmentType === "FULL_TIME";
   const isPartTime = employee.employmentType === "PART_TIME";
   const isTeacherOrTA = (employee.roles || []).some(r =>
@@ -296,6 +304,7 @@ const EmployeeDetailModalContent: React.FC<EmployeeDetailContentProps> = ({
 
   // Thông tin mức lương mới
   const [targetClassForRate, setTargetClassForRate] = useState("");
+  const [availableClassesForRate, setAvailableClassesForRate] = useState<any[]>([]);
   const [newRateValue, setNewRateValue] = useState(400000);
 
   const [selectedSalaryPeriod, setSelectedSalaryPeriod] = useState<SalaryPeriodItem | null>(null);
@@ -307,6 +316,14 @@ const EmployeeDetailModalContent: React.FC<EmployeeDetailContentProps> = ({
       }
     }).catch((e) => console.warn("Failed to fetch departments", e));
   }, []);
+
+  /** Tải danh sách lớp thật để HR chọn lớp, tránh nhập sai tên khi cấu hình đơn giá. */
+  useEffect(() => {
+    if (!open || !employee || !isTeacherOrTA) return;
+    adminCourseClassApi.getMyTeachingClasses().then((rows) => {
+      setAvailableClassesForRate((rows || []).filter((item: any) => item.status === "ACTIVE"));
+    }).catch(() => { setAvailableClassesForRate([]); });
+  }, [open, employee, isTeacherOrTA]);
 
   useEffect(() => {
     if (employee) {
@@ -332,7 +349,8 @@ const EmployeeDetailModalContent: React.FC<EmployeeDetailContentProps> = ({
       employeeApi.getSalariesByEmployeeId(employee.id).then(setSalaries);
       employeeApi.getLeaveRequestsByEmployeeId(employee.id).then(setLeaveRequests);
       employeeApi.getApprovalRequestsByUserId(employee.userId).then(setApprovals);
-      employeeApi.getEmployeeAuditLogs(employee.id).then(setAuditLogs);
+      if (!isHrOnly) employeeApi.getEmployeeAuditLogs(employee.id).then(setAuditLogs);
+      else setAuditLogs([]);
     }
   }, [employee]);
 
@@ -388,7 +406,7 @@ const EmployeeDetailModalContent: React.FC<EmployeeDetailContentProps> = ({
       });
       setIsEditingInline(false);
       setValidationErrors({});
-      setAuditLogs(await employeeApi.getEmployeeAuditLogs(employee.id));
+      if (!isHrOnly) setAuditLogs(await employeeApi.getEmployeeAuditLogs(employee.id));
       showBanner("Đã lưu thông tin chung thành công!");
     } catch (e: any) {
       showBanner(e.message || "Lỗi lưu thông tin nhân viên", true);
@@ -519,8 +537,12 @@ const EmployeeDetailModalContent: React.FC<EmployeeDetailContentProps> = ({
         {/* FIXED HEADER (Avatar, Name, Code, Status Badge, Quick Actions) */}
         <div className="p-5 bg-muted/40 border-b border-border/40 flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0">
           <div className="flex items-center gap-4">
-            <div className="h-14 w-14 rounded-2xl bg-primary/10 text-primary font-black text-2xl flex items-center justify-center border border-primary/20 shadow-xs">
-              {employee.fullName ? employee.fullName.charAt(0).toUpperCase() : "E"}
+            <div className="h-14 w-14 rounded-2xl bg-primary/10 text-primary font-black text-2xl flex items-center justify-center border border-primary/20 shadow-xs overflow-hidden">
+              {resolveAvatarUrl(employee.avatarUrl) ? (
+                <img src={resolveAvatarUrl(employee.avatarUrl)} alt={employee.fullName} className="h-full w-full object-cover" />
+              ) : (
+                employee.fullName ? employee.fullName.charAt(0).toUpperCase() : "E"
+              )}
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -613,7 +635,7 @@ const EmployeeDetailModalContent: React.FC<EmployeeDetailContentProps> = ({
               activeTab === "general" ? "border-primary text-primary bg-background rounded-t-xl shadow-2xs" : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
-            Tab 1 — Thông tin chung
+            Thông tin chung
           </button>
 
           <button
@@ -622,39 +644,39 @@ const EmployeeDetailModalContent: React.FC<EmployeeDetailContentProps> = ({
               activeTab === "contracts" ? "border-primary text-primary bg-background rounded-t-xl shadow-2xs" : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
-            Tab 2 — Hợp đồng ({contracts.length})
+            Hợp đồng
           </button>
 
           {isFullTime && (
             <button
               onClick={() => setActiveTab("attendance")}
-              className={`px-4 py-3 text-xs font-extrabold border-b-2 transition-all shrink-0 text-blue-600 ${
-                activeTab === "attendance" ? "border-blue-600 text-blue-600 bg-background rounded-t-xl shadow-2xs" : "border-transparent text-muted-foreground hover:text-foreground"
+              className={`px-4 py-3 text-xs font-extrabold border-b-2 transition-all shrink-0 ${
+                activeTab === "attendance" ? "border-primary text-primary bg-background rounded-t-xl shadow-2xs" : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
             >
-              Tab 3 — Chấm công (FULL_TIME)
+              Chấm công
             </button>
           )}
 
           {isTeacherOrTA && (
             <button
               onClick={() => setActiveTab("rates")}
-              className={`px-4 py-3 text-xs font-extrabold border-b-2 transition-all shrink-0 text-purple-600 ${
-                activeTab === "rates" ? "border-purple-600 text-purple-600 bg-background rounded-t-xl shadow-2xs" : "border-transparent text-muted-foreground hover:text-foreground"
+              className={`px-4 py-3 text-xs font-extrabold border-b-2 transition-all shrink-0 ${
+                activeTab === "rates" ? "border-brand-cobalt text-brand-cobalt bg-background rounded-t-xl shadow-2xs" : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
             >
-              Tab 4 — Đơn giá dạy (Teacher/TA)
+              Đơn giá giảng dạy
             </button>
           )}
 
           {isPartTime && (
             <button
               onClick={() => setActiveTab("sessions")}
-              className={`px-4 py-3 text-xs font-extrabold border-b-2 transition-all shrink-0 text-amber-600 ${
-                activeTab === "sessions" ? "border-amber-600 text-amber-600 bg-background rounded-t-xl shadow-2xs" : "border-transparent text-muted-foreground hover:text-foreground"
+              className={`px-4 py-3 text-xs font-extrabold border-b-2 transition-all shrink-0 ${
+                activeTab === "sessions" ? "border-success-forest text-success-forest bg-background rounded-t-xl shadow-2xs" : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
             >
-              Tab 5 — Buổi dạy (PART_TIME)
+              Danh sách buổi dạy
             </button>
           )}
 
@@ -664,7 +686,7 @@ const EmployeeDetailModalContent: React.FC<EmployeeDetailContentProps> = ({
               activeTab === "salary" ? "border-primary text-primary bg-background rounded-t-xl shadow-2xs" : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
-            Tab 6 — Lương
+            Phiếu lương
           </button>
 
           <button
@@ -673,7 +695,7 @@ const EmployeeDetailModalContent: React.FC<EmployeeDetailContentProps> = ({
               activeTab === "leaves" ? "border-primary text-primary bg-background rounded-t-xl shadow-2xs" : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
-            Tab 7 — Nghỉ phép ({leaveRequests.length})
+            Nghỉ phép
           </button>
 
           <button
@@ -682,17 +704,17 @@ const EmployeeDetailModalContent: React.FC<EmployeeDetailContentProps> = ({
               activeTab === "approvals" ? "border-primary text-primary bg-background rounded-t-xl shadow-2xs" : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
-            Tab 8 — Phê duyệt ({approvals.toApprove.length})
+            Phê duyệt
           </button>
 
-          <button
+          {!isHrOnly && <button
             onClick={() => setActiveTab("audit")}
             className={`px-4 py-3 text-xs font-extrabold border-b-2 transition-all shrink-0 ${
               activeTab === "audit" ? "border-primary text-primary bg-background rounded-t-xl shadow-2xs" : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
-            Tab 9 — Audit log ({auditLogs.length})
-          </button>
+            Lịch sử thay đổi
+          </button>}
         </div>
 
         {/* TAB CONTENTS (Scrollable area) */}
@@ -1363,7 +1385,12 @@ const EmployeeDetailModalContent: React.FC<EmployeeDetailContentProps> = ({
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <Label className="text-xs font-bold text-muted-foreground">Tên lớp / Môn học</Label>
-                      <Input value={targetClassForRate} onChange={e => setTargetClassForRate(e.target.value)} placeholder="Ví dụ: Python AI Advanced" className="h-8 text-xs bg-background" />
+                      <Select value={targetClassForRate} onValueChange={setTargetClassForRate}>
+                        <SelectTrigger className="h-8 text-xs bg-background"><SelectValue placeholder="Chọn lớp giáo viên đang phụ trách" /></SelectTrigger>
+                        <SelectContent>
+                          {availableClassesForRate.map((item) => <SelectItem key={String(item.id)} value={String(item.name)}>{item.name} ({item.code || item.id})</SelectItem>)}
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div>
                       <Label className="text-xs font-bold text-muted-foreground">Đơn giá mới (đ/h)</Label>
@@ -1462,7 +1489,7 @@ const EmployeeDetailModalContent: React.FC<EmployeeDetailContentProps> = ({
                     <TableHead>Bảo hiểm</TableHead>
                     <TableHead>Thuế TNCN</TableHead>
                     <TableHead>Khấu trừ / Phạt</TableHead>
-                    <TableHead>Thực lãnh (Net)</TableHead>
+                    <TableHead>Thực lãnh</TableHead>
                     <TableHead>Trạng thái</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1474,13 +1501,13 @@ const EmployeeDetailModalContent: React.FC<EmployeeDetailContentProps> = ({
                       <TableCell>{formatCurrency(sal?.grossSalary)} đ</TableCell>
                       <TableCell>{formatCurrency(sal?.insuranceDeduction)} đ</TableCell>
                       <TableCell>{formatCurrency(sal?.taxDeduction)} đ</TableCell>
-                      <TableCell className="text-red-500">{formatCurrency(sal?.penaltyDeduction)} đ</TableCell>
-                      <TableCell className="font-extrabold text-emerald-600">{formatCurrency(sal?.netSalary)} đ</TableCell>
+                      <TableCell className="text-destructive">{formatCurrency(sal?.penaltyDeduction)} đ</TableCell>
+                      <TableCell className="font-extrabold text-success-forest">{formatCurrency(sal?.netSalary)} đ</TableCell>
                       <TableCell>
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          sal.status === "PAID" ? "bg-emerald-500 text-white" : "bg-amber-500/10 text-amber-600"
+                          sal.status === "PAID" ? "bg-success-forest text-white" : "bg-brand-cobalt/10 text-brand-cobalt"
                         }`}>
-                          {sal.status}
+                          {sal.status === "PAID" ? "Đã chi trả" : sal.status}
                         </span>
                       </TableCell>
                     </TableRow>
@@ -1489,29 +1516,29 @@ const EmployeeDetailModalContent: React.FC<EmployeeDetailContentProps> = ({
               </Table>
 
               {selectedSalaryPeriod && (
-                <div className="p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/20 space-y-2">
-                  <h4 className="text-xs font-extrabold text-emerald-700">Chi tiết breakdown kỳ lương {selectedSalaryPeriod.period} (Luồng 5.7)</h4>
+                <div className="p-4 rounded-2xl bg-success-forest/5 border border-success-forest/20 space-y-2">
+                  <h4 className="text-xs font-extrabold text-success-forest">Chi tiết bảng lương kỳ {selectedSalaryPeriod.period}</h4>
                   <div className="grid grid-cols-3 gap-2 text-xs">
-                    <div>Gross: <strong>{formatCurrency(selectedSalaryPeriod?.grossSalary)} đ</strong></div>
+                    <div>Tổng lương (Gross): <strong>{formatCurrency(selectedSalaryPeriod?.grossSalary)} đ</strong></div>
                     <div>BHXH (10.5%): <strong>{formatCurrency(selectedSalaryPeriod?.insuranceDeduction)} đ</strong></div>
                     <div>Thuế TNCN: <strong>{formatCurrency(selectedSalaryPeriod?.taxDeduction)} đ</strong></div>
                     <div>Khấu trừ: <strong>{formatCurrency(selectedSalaryPeriod?.penaltyDeduction)} đ</strong></div>
-                    <div className="col-span-2 text-emerald-600 font-extrabold">Thực nhận Net: {formatCurrency(selectedSalaryPeriod?.netSalary)} đ</div>
+                    <div className="col-span-2 text-success-forest font-extrabold">Thực nhận: {formatCurrency(selectedSalaryPeriod?.netSalary)} đ</div>
                   </div>
                 </div>
               )}
             </div>
           )}
 
-          {/* TAB 7: NGHỈ PHÉP (LEAVE REQUESTS) */}
+          {/* TAB 7: NGHỈ PHÉP */}
           {activeTab === "leaves" && (
             <div className="space-y-6 animate-in fade-in duration-200">
               <div className="flex items-center justify-between border-b border-border/30 pb-3">
                 <h3 className="text-sm font-extrabold text-foreground flex items-center gap-2">
                   <Calendar className="h-4 w-4 text-primary" />
-                  <span>Quản lý nghỉ phép (Leave Requests)</span>
+                  <span>Quản lý nghỉ phép</span>
                 </h3>
-                <div className="text-xs font-bold text-amber-600 bg-amber-500/10 px-3 py-1 rounded-xl">{leaveRequests.filter(item => item.status === "PENDING").length} đơn đang chờ</div>
+                <div className="text-xs font-bold text-brand-cobalt bg-brand-cobalt/10 px-3 py-1 rounded-xl">{leaveRequests.filter(item => item.status === "PENDING").length} đơn đang chờ</div>
               </div>
 
               <Table className="border border-border/50 rounded-xl overflow-hidden text-xs">
@@ -1533,19 +1560,19 @@ const EmployeeDetailModalContent: React.FC<EmployeeDetailContentProps> = ({
                       <TableCell>{lv.reason}</TableCell>
                       <TableCell>
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          lv.status === "APPROVED" ? "bg-emerald-500 text-white" :
-                          lv.status === "PENDING" ? "bg-amber-500/10 text-amber-600" : "bg-red-500 text-white"
+                          lv.status === "APPROVED" ? "bg-success-forest text-white" :
+                          lv.status === "PENDING" ? "bg-brand-cobalt/10 text-brand-cobalt" : "bg-destructive text-white"
                         }`}>
-                          {lv.status}
+                          {lv.status === "APPROVED" ? "Đã duyệt" : lv.status === "PENDING" ? "Chờ duyệt" : "Từ chối"}
                         </span>
                       </TableCell>
                       <TableCell className="text-right">
                         {lv.status === "PENDING" && (
                           <div className="flex items-center justify-end gap-1">
-                            <Button size="sm" variant="default" onClick={() => handleApproveLeave(lv.id, "APPROVED")} className="h-7 px-2 text-[10px] font-bold bg-emerald-600">
+                            <Button size="sm" variant="default" onClick={() => handleApproveLeave(lv.id, "APPROVED")} className="h-7 px-2 text-[10px] font-bold bg-success-forest hover:bg-success-forest/90 text-white cursor-pointer">
                               Duyệt
                             </Button>
-                            <Button size="sm" variant="destructive" onClick={() => handleApproveLeave(lv.id, "REJECTED")} className="h-7 px-2 text-[10px] font-bold">
+                            <Button size="sm" variant="destructive" onClick={() => handleApproveLeave(lv.id, "REJECTED")} className="h-7 px-2 text-[10px] font-bold cursor-pointer">
                               Từ chối
                             </Button>
                           </div>
@@ -1567,30 +1594,30 @@ const EmployeeDetailModalContent: React.FC<EmployeeDetailContentProps> = ({
               </h3>
 
               <div className="grid grid-cols-2 gap-3">
-                {metricCard("Đã gửi", approvals.requested.length, "Nhân sự là requester", "text-blue-600")}
-                {metricCard("Cần xử lý", approvals.toApprove.length, "Nhân sự là approver", "text-amber-600")}
+                {metricCard("Đã gửi", approvals.requested.length, "Yêu cầu khởi tạo bởi nhân sự", "text-primary")}
+                {metricCard("Cần xử lý", approvals.toApprove.length, "Yêu cầu đang chờ phê duyệt", "text-brand-cobalt")}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Card className="border border-border p-4 space-y-3">
                   <h4 className="text-xs font-extrabold text-foreground flex items-center justify-between">
-                    <span>1. Đã yêu cầu (Requester)</span>
-                    <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full">{approvals.requested.length}</span>
+                    <span>1. Đã gửi yêu cầu</span>
+                    <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold">{approvals.requested.length}</span>
                   </h4>
                   {approvals.requested.length === 0 && <div className="rounded-xl border border-dashed p-7 text-center text-xs text-muted-foreground">Chưa có yêu cầu nào do nhân sự này gửi.</div>}
                   {approvals.requested.map(item => (
                     <div key={item.id} className="p-2.5 rounded-xl bg-muted/30 border border-border/40 text-xs space-y-1">
                       <div className="font-bold">{item.objectType}</div>
                       <div className="text-muted-foreground text-[10px]">Người duyệt: {item.approverName} &bull; {item.createdAt}</div>
-                      <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-amber-500/10 text-amber-600">{item.status}</span>
+                      <span className="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-brand-cobalt/10 text-brand-cobalt">{item.status}</span>
                     </div>
                   ))}
                 </Card>
 
                 <Card className="border border-border p-4 space-y-3">
                   <h4 className="text-xs font-extrabold text-foreground flex items-center justify-between">
-                    <span>2. Cần duyệt (Approver)</span>
-                    <span className="text-[10px] bg-emerald-500/10 text-emerald-600 px-2 py-0.5 rounded-full">{approvals.toApprove.length}</span>
+                    <span>2. Cần phê duyệt</span>
+                    <span className="text-[10px] bg-success-forest/10 text-success-forest px-2 py-0.5 rounded-full font-bold">{approvals.toApprove.length}</span>
                   </h4>
                   {approvals.toApprove.length === 0 && <div className="rounded-xl border border-dashed p-7 text-center text-xs text-muted-foreground">Không có yêu cầu nào đang chờ nhân sự này duyệt.</div>}
                   {approvals.toApprove.map(item => (
@@ -1606,7 +1633,7 @@ const EmployeeDetailModalContent: React.FC<EmployeeDetailContentProps> = ({
           )}
 
           {/* TAB 9: AUDIT LOG */}
-          {activeTab === "audit" && (
+          {!isHrOnly && activeTab === "audit" && (
             <div className="space-y-4 animate-in fade-in duration-200">
               <div className="flex items-center justify-between border-b border-border/30 pb-3">
                 <h4 className="text-sm font-extrabold text-foreground flex items-center gap-2">
@@ -1743,11 +1770,11 @@ const EmployeeDetailModalContent: React.FC<EmployeeDetailContentProps> = ({
         </div>
       )}
       {/* DETAIL AUDIT LOG MODAL */}
-      <DetailAuditLogModal
+      {!isHrOnly && <DetailAuditLogModal
         open={auditDetailModalOpen}
         onClose={() => setAuditDetailModalOpen(false)}
         log={selectedAuditLog}
-      />
+      />}
     </div>
   );
 };

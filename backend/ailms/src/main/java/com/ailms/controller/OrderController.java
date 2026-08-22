@@ -1,11 +1,13 @@
 package com.ailms.controller;
 
 import com.ailms.request.CheckoutRequest;
+import com.ailms.request.OneOnOneNeedsRequest;
 import com.ailms.request.RefundRequest;
 import com.ailms.response.ApiResponse;
 import com.ailms.response.CheckoutPaymentResponse;
 import com.ailms.response.OrderResponse;
 import com.ailms.response.OrderStatusResponse;
+import com.ailms.response.TutorScheduleCheckResponse;
 import com.ailms.security.CustomUserDetails;
 import com.ailms.exception.UnauthorizedException;
 import com.ailms.service.IOrderService;
@@ -16,6 +18,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.access.prepost.PreAuthorize;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -41,6 +46,17 @@ public class OrderController {
         CheckoutPaymentResponse response = orderService.checkout(userId, request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.of("PayPal Sandbox checkout created successfully", response));
+    }
+
+    /** Kiểm tra trước lịch mong muốn 1-1 có trùng với lớp hiện tại của học viên hay không. */
+    @PostMapping("/tutor-schedule/check")
+    @PreAuthorize("hasAnyAuthority('ROLE_STUDENT', 'ROLE_ADMIN')")
+    public ResponseEntity<ApiResponse<TutorScheduleCheckResponse>> checkTutorSchedule(
+            @AuthenticationPrincipal CustomUserDetails currentUser,
+            @Valid @RequestBody OneOnOneNeedsRequest request) {
+        TutorScheduleCheckResponse response = orderService.validateTutorScheduleAvailability(
+                requireUserId(currentUser), request);
+        return ResponseEntity.ok(ApiResponse.of("Tutor schedule checked successfully", response));
     }
 
     /** Trả trạng thái đáng tin cậy sau redirect, chỉ cho chủ đơn hàng. */
@@ -126,6 +142,28 @@ public class OrderController {
     public ResponseEntity<ApiResponse<Void>> cleanupExpired() {
         orderService.cancelExpiredOrders();
         return ResponseEntity.ok(ApiResponse.message("Cleanup completed"));
+    }
+
+    /**
+     * Hoàn thành đơn hàng PENDING bằng Admin mà không cần PayPal.
+     * Chỉ dùng trong môi trường dev/seed để cấp quyền học đúng nghiệp vụ BE.
+     * backdateAt (optional, ISO format yyyy-MM-ddTHH:mm:ss): cho phép seed script đặt ngày mua khác nhau.
+     */
+    @PostMapping("/{id}/admin-complete")
+    @PreAuthorize("hasAnyAuthority('ROLE_ADMIN')")
+    public ResponseEntity<ApiResponse<OrderResponse>> adminComplete(
+            @PathVariable Long id,
+            @RequestParam(required = false) String backdateAt) {
+        LocalDateTime backdateDateTime = null;
+        if (backdateAt != null && !backdateAt.isBlank()) {
+            try {
+                backdateDateTime = LocalDateTime.parse(backdateAt, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+            } catch (DateTimeParseException ignored) {
+                // Nếu parse lỗi, bỏ qua — dùng now()
+            }
+        }
+        OrderResponse response = orderService.adminCompleteOrder(id, backdateDateTime);
+        return ResponseEntity.ok(ApiResponse.of("Order completed by admin", response));
     }
 
     /** Lấy ID người dùng đã xác thực cho các API checkout và trạng thái. */

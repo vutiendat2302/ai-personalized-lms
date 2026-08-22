@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 import {
   Menu,
   LayoutDashboard,
@@ -41,10 +42,17 @@ interface SidebarGroup {
 }
 
 export const AdminSidebar: React.FC = () => {
+  const { auth } = useAuth();
   const location = useLocation();
   const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
     return localStorage.getItem("ailms_admin_sidebar_collapsed") === "true";
   });
+
+  const user = auth.user;
+  const rolesUpper = user?.roles?.map((r: any) => (typeof r === "object" ? (r?.code || r?.name || "") : String(r)).toUpperCase()) || [];
+  const isAdmin = rolesUpper.some(r => r.includes("ADMIN") || r.includes("QUẢN TRỊ"));
+  const isHR = rolesUpper.some(r => r.includes("HR") || r.includes("HUMAN") || r.includes("NHÂN SỰ") || r.includes("NHAN SU"));
+  const isHrOnly = isHR && !isAdmin;
 
   const toggleCollapse = () => {
     setIsCollapsed((prev) => {
@@ -99,23 +107,21 @@ export const AdminSidebar: React.FC = () => {
     {
       title: "QUẢN LÝ BÁN HÀNG",
       items: [
-        { label: "Sales Dashboard", path: "/sales/dashboard", icon: TrendingUp },
+        { label: "Tổng quan bán hàng", path: "/sales/dashboard", icon: TrendingUp },
         { label: "Đơn hàng", path: "/sales/orders", icon: ShoppingBag },
-        { label: "Thanh toán & Đối soát", path: "/sales/payments", icon: Receipt },
-        { label: "Mã giảm giá (Coupon)", path: "/sales/coupons", icon: Tag },
-        { label: "Gói học (Packages)", path: "/sales/course-packages", icon: Package },
+        { label: "Mã giảm giá", path: "/admin/coupons", icon: Tag },
+        { label: "Gói học", path: "/sales/course-packages", icon: Package },
         { label: "Ghi danh & Kích hoạt", path: "/sales/enrollments", icon: UserCheck },
-        { label: "Giỏ hàng đang treo", path: "/sales/carts", icon: ShoppingCart, badge: "2" },
-      ],
-    },
-
-    {
-      title: "BÁO CÁO & GIÁM SÁT",
-      items: [
-        { label: "Thống kê & Analytics", path: "/analytics", icon: BarChart3 }, 
+        { label: "Giỏ hàng đang treo", path: "/sales/carts", icon: ShoppingCart },
       ],
     },
   ];
+
+  const displayedMenuGroups = menuGroups
+    .filter((group) => !isHrOnly || group.title === "NHÂN SỰ & VẬN HÀNH")
+    .map((group) => isHrOnly
+      ? { ...group, items: group.items.filter((item) => item.path !== "/admin/category-teachers") }
+      : group);
 
   return (
     <aside
@@ -134,8 +140,8 @@ export const AdminSidebar: React.FC = () => {
               />
             </div>
             <div className="truncate">
-              <h3 className="text-base font-semibold uppercase tracking-wider text-primary truncate">Management</h3>
-              <p className="text-xs text-muted-foreground font-medium truncate">Bảng điều khiển Quản trị</p>
+              <h3 className="text-base font-semibold uppercase tracking-wider text-primary truncate">{isHrOnly ? "HR Portal" : "Management"}</h3>
+              <p className="text-xs text-muted-foreground font-medium truncate">{isHrOnly ? "Bảng điều khiển Nhân sự" : "Bảng điều khiển Quản trị"}</p>
             </div>
           </div>
         )}
@@ -151,7 +157,7 @@ export const AdminSidebar: React.FC = () => {
 
       {/* Navigation Links */}
       <nav className="flex-1 overflow-y-auto p-2.5 space-y-5 scrollbar-thin">
-        {menuGroups.map((group, idx) => (
+        {displayedMenuGroups.map((group, idx) => (
           <div key={idx} className="space-y-1.5">
             {!isCollapsed && (
               <h4 className="px-3 text-[10px] font-black uppercase tracking-wider text-muted-foreground/70 truncate">

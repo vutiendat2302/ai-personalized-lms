@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, BookOpen, Users, User, Layers, Plus, Loader2, Save, ExternalLink, Info, DollarSign, Clock, Check } from "lucide-react";
+import { AlertCircle, BookOpen, Plus, Loader2, Save, ExternalLink, Info, DollarSign, Clock, Check } from "lucide-react";
 import type { DeliveryMode, CoursePackage } from "@/types/adminCourseClass";
 import { adminCourseClassApi } from "@/api/courses/adminCourseClassApi";
 import { cn } from "@/lib/utils";
@@ -121,10 +121,7 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
 
   const readyClasses = classes.filter((c) => c.status === "ACTIVE" || c.status === "READY");
 
-  const numMaxGroupSize = Number(maxGroupSize) || 0;
-  const isGroupRequired =
-    deliveryMode === "GROUP_CLASS" ||
-    (deliveryMode === "COMBO" && numMaxGroupSize > 1);
+  const isGroupRequired = deliveryMode === "GROUP_CLASS";
 
   // 🌟 SHADCN FORM VALIDATION FUNCTION 🌟
   const validateForm = (): boolean => {
@@ -179,7 +176,7 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
     }
 
     // 5. Tutor sessions validation
-    if (deliveryMode === "GROUP_CLASS" || deliveryMode === "ONE_ON_ONE" || deliveryMode === "COMBO") {
+    if (deliveryMode === "GROUP_CLASS" || deliveryMode === "ONE_ON_ONE") {
       if (includedTutorSessions.trim()) {
         const numTutor = Number(includedTutorSessions);
         if (isNaN(numTutor) || numTutor < 0) {
@@ -195,10 +192,6 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
       }
       if (!selectedClassId && !isEdit) {
         errs.classId = "Gói Lớp Nhóm bắt buộc phải chọn hoặc tạo mới Lớp học đính kèm!";
-      }
-    } else if (deliveryMode === "COMBO") {
-      if (numMaxGroupSize > 1 && !selectedClassId && !isEdit) {
-        errs.classId = "Gói Combo có sĩ số > 1 bắt buộc phải chọn Lớp học đính kèm!";
       }
     }
 
@@ -320,28 +313,28 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl p-6 sm:p-8 max-h-[90vh] overflow-y-auto">
-        <DialogHeader className="space-y-1 text-left border-b border-slate-100 pb-3">
-          <DialogTitle className="text-xl font-bold text-slate-900 flex items-center gap-2">
-            <BookOpen className="h-5 w-5 text-blue-600" />
+        <DialogHeader className="space-y-1 text-left border-b border-border pb-3">
+          <DialogTitle className="text-xl font-bold text-foreground flex items-center gap-2">
+            <BookOpen className="h-5 w-5 text-primary" />
             {isEdit ? "Chỉnh sửa Gói Bán Khóa Học" : "Tạo Gói Bán Khóa Học Mới"}
           </DialogTitle>
-          <DialogDescription className="text-slate-500 text-xs">
-            Khóa học áp dụng: <span className="font-bold text-slate-800">{courseName}</span>
+          <DialogDescription className="text-muted-foreground text-xs">
+            Khóa học áp dụng: <span className="font-bold text-foreground">{courseName}</span>
           </DialogDescription>
         </DialogHeader>
 
         {/* 🌟 FORM WITH NOVALIDATE FOR SHADCN UI VALIDATION 🌟 */}
         <form noValidate onSubmit={handleSubmit} className="space-y-5 py-2">
           {fieldErrors.general && (
-            <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700 flex items-center gap-2 font-semibold">
-              <AlertCircle className="h-4 w-4 shrink-0 text-red-600" />
+            <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive flex items-center gap-2 font-semibold">
+              <AlertCircle className="h-4 w-4 shrink-0 text-destructive" />
               <span>{fieldErrors.general}</span>
             </div>
           )}
 
           {/* 1. Delivery Mode cards */}
           <div className="space-y-2">
-            <Label className="text-xs font-bold text-slate-800">
+            <Label className="text-xs font-bold text-foreground">
               1. Chọn Hình Thức Đào Tạo (DeliveryModeEnum) *
             </Label>
             <div className="grid grid-cols-2 gap-2.5">
@@ -350,8 +343,8 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
                 className={cn(
                   "cursor-pointer border-2 rounded-xl p-3 transition-all flex flex-col justify-between",
                   deliveryMode === "SELF_STUDY"
-                    ? "border-emerald-600 bg-emerald-50/60 shadow-xs font-medium"
-                    : "border-slate-200 hover:border-slate-300 bg-white"
+                    ? "border-primary bg-primary/10 shadow-xs font-medium"
+                    : "border-border hover:border-muted-foreground/40 bg-card"
                 )}
                 onClick={() => {
                   if (isEdit) return;
@@ -360,10 +353,10 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
                 }}
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="font-bold text-xs text-slate-900">Gói Tự Học (Self-Study)</span>
-                  {deliveryMode === "SELF_STUDY" && <Check className="h-4 w-4 text-emerald-600" />}
+                  <span className="font-bold text-xs text-foreground">Gói Tự Học (Self-Study)</span>
+                  {deliveryMode === "SELF_STUDY" && <Check className="h-4 w-4 text-primary" />}
                 </div>
-                <p className="text-[11px] text-slate-500">
+                <p className="text-[11px] text-muted-foreground">
                   Học viên tự học qua bài giảng video & tài liệu tự do.
                 </p>
               </div>
@@ -373,8 +366,8 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
                 className={cn(
                   "cursor-pointer border-2 rounded-xl p-3 transition-all flex flex-col justify-between",
                   deliveryMode === "GROUP_CLASS"
-                    ? "border-blue-600 bg-blue-50/60 shadow-xs font-medium"
-                    : "border-slate-200 hover:border-slate-300 bg-white"
+                    ? "border-primary bg-primary/10 shadow-xs font-medium"
+                    : "border-border hover:border-muted-foreground/40 bg-card"
                 )}
                 onClick={() => {
                   if (isEdit) return;
@@ -383,10 +376,10 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
                 }}
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="font-bold text-xs text-slate-900">Lớp Học Nhóm (Group Class)</span>
-                  {deliveryMode === "GROUP_CLASS" && <Check className="h-4 w-4 text-blue-600" />}
+                  <span className="font-bold text-xs text-foreground">Lớp Học Nhóm (Group Class)</span>
+                  {deliveryMode === "GROUP_CLASS" && <Check className="h-4 w-4 text-primary" />}
                 </div>
-                <p className="text-[11px] text-slate-500">
+                <p className="text-[11px] text-muted-foreground">
                   Học tương tác sĩ số cố định (Bắt buộc gắn Lớp).
                 </p>
               </div>
@@ -396,8 +389,8 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
                 className={cn(
                   "cursor-pointer border-2 rounded-xl p-3 transition-all flex flex-col justify-between",
                   deliveryMode === "ONE_ON_ONE"
-                    ? "border-purple-600 bg-purple-50/60 shadow-xs font-medium"
-                    : "border-slate-200 hover:border-slate-300 bg-white"
+                    ? "border-primary bg-primary/10 shadow-xs font-medium"
+                    : "border-border hover:border-muted-foreground/40 bg-card"
                 )}
                 onClick={() => {
                   if (isEdit) return;
@@ -406,43 +399,21 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
                 }}
               >
                 <div className="flex items-center justify-between mb-1">
-                  <span className="font-bold text-xs text-slate-900">Gia Sư 1 Kèm 1 (One-on-One)</span>
-                  {deliveryMode === "ONE_ON_ONE" && <Check className="h-4 w-4 text-purple-600" />}
+                  <span className="font-bold text-xs text-foreground">Gia Sư 1 Kèm 1 (One-on-One)</span>
+                  {deliveryMode === "ONE_ON_ONE" && <Check className="h-4 w-4 text-primary" />}
                 </div>
-                <p className="text-[11px] text-slate-500">
+                <p className="text-[11px] text-muted-foreground">
                   Kèm riêng 1-on-1 theo thời khóa biểu cá nhân.
                 </p>
               </div>
 
-              {/* COMBO */}
-              <div
-                className={cn(
-                  "cursor-pointer border-2 rounded-xl p-3 transition-all flex flex-col justify-between",
-                  deliveryMode === "COMBO"
-                    ? "border-amber-600 bg-amber-50/60 shadow-xs font-medium"
-                    : "border-slate-200 hover:border-slate-300 bg-white"
-                )}
-                onClick={() => {
-                  if (isEdit) return;
-                  setDeliveryMode("COMBO");
-                  setFieldErrors((prev) => ({ ...prev, classId: "", maxGroupSize: "", includedTutorSessions: "" }));
-                }}
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="font-bold text-xs text-slate-900">Gói Combo Hỗn Hợp (Combo)</span>
-                  {deliveryMode === "COMBO" && <Check className="h-4 w-4 text-amber-600" />}
-                </div>
-                <p className="text-[11px] text-slate-500">
-                  Kết hợp bài giảng Tự học + Lớp nhóm/Kèm 1-1.
-                </p>
-              </div>
             </div>
           </div>
 
           {/* 2. Package details */}
           <div className="space-y-3">
             <div className="space-y-1">
-              <Label className="text-xs font-bold text-slate-800">Tên Gói Bán Sản Phẩm *</Label>
+              <Label className="text-xs font-bold text-foreground">Tên Gói Bán Sản Phẩm *</Label>
               <Input
                 placeholder="VD: Java Fullstack Pro - Lớp Nhóm K12"
                 value={packageName}
@@ -451,12 +422,12 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
                   setFieldErrors((prev) => ({ ...prev, packageName: "" }));
                 }}
                 className={cn(
-                  "h-9 text-xs rounded-xl font-semibold",
-                  fieldErrors.packageName && "border-rose-500 bg-rose-500/5 focus-visible:ring-rose-500"
+                  "h-9 text-xs rounded-xl font-semibold border-border bg-background text-foreground",
+                  fieldErrors.packageName && "border-destructive bg-destructive/10 text-destructive focus-visible:ring-destructive"
                 )}
               />
               {fieldErrors.packageName && (
-                <p className="text-[11px] font-semibold text-rose-500 flex items-center gap-1 mt-1">
+                <p className="text-[11px] font-semibold text-destructive flex items-center gap-1 mt-1">
                   <AlertCircle className="h-3 w-3 shrink-0" />
                   {fieldErrors.packageName}
                 </p>
@@ -465,7 +436,7 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label className="text-xs font-bold text-slate-800">Giá bán thực tế (VNĐ) *</Label>
+                <Label className="text-xs font-bold text-foreground">Giá bán thực tế (VNĐ) *</Label>
                 <Input
                   type="number"
                   placeholder="VD: 3500000"
@@ -475,14 +446,14 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
                     setFieldErrors((prev) => ({ ...prev, price: "" }));
                   }}
                   className={cn(
-                    "h-9 text-xs rounded-xl font-mono font-bold",
+                    "h-9 text-xs rounded-xl font-mono font-bold bg-background",
                     (fieldErrors.price || isPriceInvalid)
-                      ? "border-rose-500 bg-rose-500/5 text-rose-600 focus-visible:ring-rose-500"
-                      : "text-blue-700"
+                      ? "border-destructive bg-destructive/10 text-destructive focus-visible:ring-destructive"
+                      : "text-primary border-border"
                   )}
                 />
                 {fieldErrors.price && (
-                  <p className="text-[11px] font-semibold text-rose-500 flex items-center gap-1 mt-1">
+                  <p className="text-[11px] font-semibold text-destructive flex items-center gap-1 mt-1">
                     <AlertCircle className="h-3 w-3 shrink-0" />
                     {fieldErrors.price}
                   </p>
@@ -490,7 +461,7 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
               </div>
 
               <div className="space-y-1">
-                <Label className="text-xs font-bold text-slate-800">Giá niêm yết gốc (VNĐ) *</Label>
+                <Label className="text-xs font-bold text-foreground">Giá niêm yết gốc (VNĐ) *</Label>
                 <Input
                   type="number"
                   placeholder="VD: 4500000"
@@ -500,12 +471,12 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
                     setFieldErrors((prev) => ({ ...prev, originalPrice: "", price: "" }));
                   }}
                   className={cn(
-                    "h-9 text-xs rounded-xl font-mono font-bold text-slate-600",
-                    fieldErrors.originalPrice && "border-rose-500 bg-rose-500/5 focus-visible:ring-rose-500"
+                    "h-9 text-xs rounded-xl font-mono font-bold text-muted-foreground border-border bg-background",
+                    fieldErrors.originalPrice && "border-destructive bg-destructive/10 focus-visible:ring-destructive"
                   )}
                 />
                 {fieldErrors.originalPrice && (
-                  <p className="text-[11px] font-semibold text-rose-500 flex items-center gap-1 mt-1">
+                  <p className="text-[11px] font-semibold text-destructive flex items-center gap-1 mt-1">
                     <AlertCircle className="h-3 w-3 shrink-0" />
                     {fieldErrors.originalPrice}
                   </p>
@@ -515,7 +486,7 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
 
             {/* Price Alert */}
             {isPriceInvalid && !fieldErrors.price && (
-              <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-600 text-xs font-bold flex items-center gap-2">
+              <div className="p-2.5 rounded-xl bg-destructive/10 border border-destructive/30 text-destructive text-xs font-bold flex items-center gap-2">
                 <AlertCircle className="h-4 w-4 shrink-0" />
                 <span>
                   Lỗi: Giá bán thực tế ({formatVND(Number(price))}) không được lớn hơn Giá niêm yết gốc ({formatVND(Number(originalPrice))})!
@@ -524,7 +495,7 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
             )}
 
             <div className="space-y-1">
-              <Label className="text-xs font-bold text-slate-800">Thời Hạn Truy Cập (Ngày)</Label>
+              <Label className="text-xs font-bold text-foreground">Thời Hạn Truy Cập (Ngày)</Label>
               <Input
                 type="number"
                 placeholder="VD: 365"
@@ -534,12 +505,12 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
                   setFieldErrors((prev) => ({ ...prev, durationDays: "" }));
                 }}
                 className={cn(
-                  "h-9 text-xs rounded-xl font-semibold",
-                  fieldErrors.durationDays && "border-rose-500 bg-rose-500/5 focus-visible:ring-rose-500"
+                  "h-9 text-xs rounded-xl font-semibold border-border bg-background text-foreground",
+                  fieldErrors.durationDays && "border-destructive bg-destructive/10 text-destructive focus-visible:ring-destructive"
                 )}
               />
               {fieldErrors.durationDays && (
-                <p className="text-[11px] font-semibold text-rose-500 flex items-center gap-1 mt-1">
+                <p className="text-[11px] font-semibold text-destructive flex items-center gap-1 mt-1">
                   <AlertCircle className="h-3 w-3 shrink-0" />
                   {fieldErrors.durationDays}
                 </p>
@@ -549,15 +520,15 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
 
           {/* 3. Capacity & Tutor Sessions */}
           {deliveryMode === "SELF_STUDY" ? (
-            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2">
+            <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 text-xs flex items-center gap-2 font-medium">
               <Info className="h-4 w-4 shrink-0 text-emerald-600" />
               <span>Gói Tự Học (Self-Study) không giới hạn sĩ số và không có buổi kèm riêng đính kèm.</span>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-100">
+            <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border">
               {deliveryMode !== "ONE_ON_ONE" && (
                 <div className="space-y-1">
-                  <Label className="text-xs font-bold text-slate-800">Sĩ số tối đa (maxGroupSize)</Label>
+                  <Label className="text-xs font-bold text-foreground">Sĩ số tối đa (maxGroupSize)</Label>
                   <Input
                     type="number"
                     placeholder="VD: 20"
@@ -567,12 +538,12 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
                       setFieldErrors((prev) => ({ ...prev, maxGroupSize: "" }));
                     }}
                     className={cn(
-                      "h-9 text-xs rounded-xl font-semibold",
-                      fieldErrors.maxGroupSize && "border-rose-500 bg-rose-500/5 focus-visible:ring-rose-500"
+                      "h-9 text-xs rounded-xl font-semibold border-border bg-background text-foreground",
+                      fieldErrors.maxGroupSize && "border-destructive bg-destructive/10 text-destructive focus-visible:ring-destructive"
                     )}
                   />
                   {fieldErrors.maxGroupSize && (
-                    <p className="text-[11px] font-semibold text-rose-500 flex items-center gap-1 mt-1">
+                    <p className="text-[11px] font-semibold text-destructive flex items-center gap-1 mt-1">
                       <AlertCircle className="h-3 w-3 shrink-0" />
                       {fieldErrors.maxGroupSize}
                     </p>
@@ -582,14 +553,14 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
 
               {deliveryMode === "ONE_ON_ONE" && (
                 <div className="space-y-1">
-                  <Label className="text-xs font-bold text-slate-800">Sĩ số tối đa</Label>
-                  <Input type="number" disabled value={1} className="h-9 text-xs rounded-xl bg-slate-100 font-semibold" />
+                  <Label className="text-xs font-bold text-foreground">Sĩ số tối đa</Label>
+                  <Input type="number" disabled value={1} className="h-9 text-xs rounded-xl bg-muted font-semibold text-muted-foreground border-border" />
                 </div>
               )}
 
-              {(deliveryMode === "GROUP_CLASS" || deliveryMode === "ONE_ON_ONE" || deliveryMode === "COMBO") && (
+              {(deliveryMode === "GROUP_CLASS" || deliveryMode === "ONE_ON_ONE") && (
                 <div className="space-y-1">
-                  <Label className="text-xs font-bold text-slate-800">Số buổi kèm (includedTutorSessions)</Label>
+                  <Label className="text-xs font-bold text-foreground">Số buổi kèm (includedTutorSessions)</Label>
                   <Input
                     type="number"
                     placeholder="VD: 8 buổi"
@@ -599,12 +570,12 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
                       setFieldErrors((prev) => ({ ...prev, includedTutorSessions: "" }));
                     }}
                     className={cn(
-                      "h-9 text-xs rounded-xl font-semibold",
-                      fieldErrors.includedTutorSessions && "border-rose-500 bg-rose-500/5 focus-visible:ring-rose-500"
+                      "h-9 text-xs rounded-xl font-semibold border-border bg-background text-foreground",
+                      fieldErrors.includedTutorSessions && "border-destructive bg-destructive/10 text-destructive focus-visible:ring-destructive"
                     )}
                   />
                   {fieldErrors.includedTutorSessions && (
-                    <p className="text-[11px] font-semibold text-rose-500 flex items-center gap-1 mt-1">
+                    <p className="text-[11px] font-semibold text-destructive flex items-center gap-1 mt-1">
                       <AlertCircle className="h-3 w-3 shrink-0" />
                       {fieldErrors.includedTutorSessions}
                     </p>
@@ -614,27 +585,27 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
             </div>
           )}
 
-          {/* 4. Class Selection for GROUP_CLASS / COMBO */}
+          {/* 4. Class Selection for GROUP_CLASS */}
           {isGroupRequired && (
             <div className={cn(
-              "space-y-3 pt-2 border-t border-slate-100 p-3 rounded-xl border",
-              fieldErrors.classId ? "border-rose-500 bg-rose-50/50" : "border-amber-200 bg-amber-50/30"
+              "space-y-3 pt-2 border-t border-border p-3 rounded-xl border bg-card",
+              fieldErrors.classId ? "border-destructive bg-destructive/10" : "border-amber-500/30 bg-amber-500/5"
             )}>
               <div className="flex items-center justify-between">
-                <Label className="text-xs font-bold text-slate-800">
+                <Label className="text-xs font-bold text-foreground">
                   Lớp Học Đính Kèm * (Trạng thái READY)
                 </Label>
                 <button
                   type="button"
                   onClick={handleNavigateToCreateClass}
-                  className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1 cursor-pointer"
+                  className="text-xs font-bold text-primary hover:underline flex items-center gap-1 cursor-pointer"
                 >
                   [+ Tạo Lớp Học Mới Ngay] <ExternalLink className="h-3 w-3" />
                 </button>
               </div>
 
               {readyClasses.length === 0 ? (
-                <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800 space-y-1">
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-600 space-y-1 font-medium">
                   <p className="font-bold flex items-center gap-1.5">
                     <AlertCircle className="h-4 w-4 text-amber-600 shrink-0" />
                     Chưa có lớp học nào khả dụng cho khóa học này.
@@ -660,23 +631,23 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
                         className={cn(
                           "p-2.5 rounded-xl border flex items-center justify-between text-xs transition-all",
                           isAttached
-                            ? "bg-slate-100 border-slate-200 opacity-60 cursor-not-allowed"
+                            ? "bg-muted border-border opacity-60 cursor-not-allowed text-muted-foreground"
                             : isSelected
-                            ? "border-blue-600 bg-blue-50/90 font-bold cursor-pointer shadow-xs"
-                            : "border-slate-200 hover:bg-slate-50 cursor-pointer"
+                            ? "border-primary bg-primary/10 font-bold cursor-pointer shadow-xs text-foreground"
+                            : "border-border hover:bg-muted/50 cursor-pointer text-foreground"
                         )}
                       >
                         <div className="truncate pr-2">
-                          <p className="font-bold text-slate-900 truncate">{cls.name}</p>
-                          <p className="text-[10px] text-slate-500 font-mono">
+                          <p className="font-bold text-foreground truncate">{cls.name}</p>
+                          <p className="text-[10px] text-muted-foreground font-mono">
                             Mã: {classCode} • Sĩ số: {cls.currentMemberCount || 0}/{cls.maxMembers || 20}
                           </p>
                           {isAttached && (
-                            <p className="text-[10px] text-amber-700 font-semibold">🔒 Đã gán gói: {attachedPkg?.name}</p>
+                            <p className="text-[10px] text-amber-600 font-semibold">🔒 Đã gán gói: {attachedPkg?.name}</p>
                           )}
                         </div>
 
-                        {isSelected && <Check className="h-4 w-4 text-blue-600 shrink-0" />}
+                        {isSelected && <Check className="h-4 w-4 text-primary shrink-0" />}
                       </div>
                     );
                   })}
@@ -684,7 +655,7 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
               )}
 
               {fieldErrors.classId && (
-                <p className="text-[11px] font-semibold text-rose-500 flex items-center gap-1 mt-1">
+                <p className="text-[11px] font-semibold text-destructive flex items-center gap-1 mt-1">
                   <AlertCircle className="h-3 w-3 shrink-0" />
                   {fieldErrors.classId}
                 </p>
@@ -692,18 +663,19 @@ export const CreatePackageDialog: React.FC<CreatePackageDialogProps> = ({
             </div>
           )}
 
-          <DialogFooter className="pt-4 border-t border-slate-100 flex items-center justify-between">
+          <DialogFooter className="pt-4 border-t border-border flex items-center justify-between">
             <Button
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
+              className="cursor-pointer"
             >
               Hủy
             </Button>
             <Button
               type="submit"
               disabled={submitting || isPriceInvalid}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-bold cursor-pointer"
+              className="bg-primary text-primary-foreground hover:bg-primary/90 font-bold cursor-pointer"
             >
               {submitting ? (
                 <Loader2 className="w-4 h-4 mr-1.5 animate-spin" />

@@ -1,5 +1,5 @@
 import React from "react";
-import { Bot, Sparkles, Trash2, Minimize2, History, Plus } from "lucide-react";
+import { Bot, Sparkles, Trash2, Minimize2, Maximize2, History, Plus } from "lucide-react";
 import type { UserSystemRole } from "@/types/ai";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,8 @@ interface ChatHeaderProps {
   onClearHistory: () => void;
   onToggleHistory: () => void;
   onNewConversation: () => void;
+  isFullscreen: boolean;
+  onToggleFullscreen: () => void;
   onClose: () => void;
 }
 
@@ -19,6 +21,8 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   onClearHistory,
   onToggleHistory,
   onNewConversation,
+  isFullscreen,
+  onToggleFullscreen,
   onClose,
 }) => {
   const subtitle = userRoleLabel === "STUDENT"
@@ -62,6 +66,14 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
           title="Cuộc trò chuyện mới"
         >
           <Plus className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          onClick={onToggleFullscreen}
+          title={isFullscreen ? "Thu nhỏ khung chat" : "Mở chat toàn màn hình"}
+        >
+          {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
         </Button>
         {hasMessages && (
           <Button

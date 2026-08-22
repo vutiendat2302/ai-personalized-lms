@@ -25,11 +25,13 @@ public interface AuditLogRepository extends BaseRepository<AuditLogEntity, Long>
     @Query("""
             SELECT a FROM AuditLogEntity a
             WHERE a.user.id = :userId
+              AND (a.entityType IS NULL OR UPPER(a.entityType) NOT IN :learningEntityTypes)
               AND (:action IS NULL OR LOWER(a.action) LIKE LOWER(CONCAT('%', :action, '%')))
               AND (:fromTime IS NULL OR a.occurredAt >= :fromTime)
               AND (:toTime IS NULL OR a.occurredAt <= :toTime)
             ORDER BY a.occurredAt DESC""")
     Page<AuditLogEntity> searchByUserId(@Param("userId") Long userId,
+            @Param("learningEntityTypes") List<String> learningEntityTypes,
             @Param("action") String action, @Param("fromTime") java.time.LocalDateTime fromTime,
             @Param("toTime") java.time.LocalDateTime toTime, Pageable pageable);
     /** Lấy một nhật ký hệ thống thuộc đúng người dùng. */

@@ -23,6 +23,9 @@ public interface IAiChatService {
     /** Stream phân tích ảnh trong chat sau khi Backend đã kiểm soát file upload. */
     Flux<String> chatImageStream(AiChatRequest request, MultipartFile image, CustomUserDetails currentUser);
 
+    /** Stream phân tích tài liệu (PDF, Word, TXT) hoặc hình ảnh đính kèm trong chat. */
+    Flux<String> chatFileStream(AiChatRequest request, MultipartFile file, CustomUserDetails currentUser);
+
     /** Liệt kê lịch sử hội thoại thuộc user hiện tại. */
     Page<AiConversationSummaryResponse> listConversations(
             Pageable pageable, CustomUserDetails currentUser);

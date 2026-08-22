@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { BookOpen, Calendar, Layers, Play, RefreshCcw, Sparkles, UserCheck, Users } from "lucide-react";
+import { BookOpen, Calendar, Play, RefreshCcw, Sparkles, UserCheck, Users } from "lucide-react";
 import { studentApi, type StudentCourseCard } from "@/api/student/studentApi";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CourseCompletionActions } from "@/components/student/CourseCompletionActions";
 
 type CourseTab = "ACTIVE" | "COMPLETED" | "EXPIRED";
 
@@ -22,16 +23,16 @@ export const StudentMyCoursesPage: React.FC = () => {
   /** Chuyển route chi tiết cũ sang không gian học tập và tải danh sách từ API. */
   useEffect(() => {
     if (id) {
-      navigate(`/learn/courses/${id}`, { replace: true });
+      void navigate(`/learn/courses/${id}`, { replace: true });
       return;
     }
     studentApi.getCourses().then(setCourses)
-      .catch(() => setError("Không thể tải khóa học của bạn."))
-      .finally(() => setLoading(false));
+      .catch(() => { setError("Không thể tải khóa học của bạn."); })
+      .finally(() => { setLoading(false); });
   }, [id, navigate]);
 
   const visibleCourses = useMemo(() => courses.filter((course) => course.status === activeTab)
-    .sort((left, right) => new Date(right.lastAccessedAt || 0).getTime() - new Date(left.lastAccessedAt || 0).getTime()),
+    .sort((left, right) => new Date(right.lastAccessedAt).getTime() - new Date(left.lastAccessedAt).getTime()),
   [activeTab, courses]);
 
   /** Định dạng thời hạn quyền học. */
@@ -43,8 +44,12 @@ export const StudentMyCoursesPage: React.FC = () => {
   const deliveryMeta = (mode: StudentCourseCard["deliveryMode"]) => {
     if (mode === "GROUP_CLASS") return { label: "Lớp học nhóm", icon: Users };
     if (mode === "ONE_ON_ONE") return { label: "Kèm riêng 1-1", icon: UserCheck };
-    if (mode === "COMBO") return { label: "Gói kết hợp", icon: Layers };
     return { label: "Tự học", icon: BookOpen };
+  };
+
+  /** Đồng bộ review hoặc chứng chỉ vừa tạo vào đúng thẻ khóa học. */
+  const updateCourse = (courseId: string, changes: Partial<StudentCourseCard>) => {
+    setCourses((current) => current.map((course) => course.id === courseId ? { ...course, ...changes } : course));
   };
 
   if (loading) return <div className="space-y-6" aria-label="Đang tải khóa học của bạn"><Skeleton className="h-16 w-full" /><Skeleton className="h-10 w-80 max-w-full" /><div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">{[0, 1, 2].map((item) => <Skeleton key={item} className="h-80" />)}</div></div>;
@@ -61,7 +66,7 @@ export const StudentMyCoursesPage: React.FC = () => {
         </p>
       </div>
 
-      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as CourseTab)}>
+      <Tabs value={activeTab} onValueChange={(value) => { setActiveTab(value as CourseTab); }}>
         <TabsList>
           <TabsTrigger value="ACTIVE">Đang học ({courses.filter((item) => item.status === "ACTIVE").length})</TabsTrigger>
           <TabsTrigger value="COMPLETED">Hoàn thành ({courses.filter((item) => item.status === "COMPLETED").length})</TabsTrigger>
@@ -74,17 +79,17 @@ export const StudentMyCoursesPage: React.FC = () => {
           <BookOpen className="mx-auto mb-3 h-10 w-10 text-muted-foreground/50" />
           <h2 className="font-bold text-foreground">Không có khóa học ở trạng thái này</h2>
           <p className="mt-1 text-sm text-muted-foreground">Các khóa học bạn sở hữu sẽ được hiển thị theo trạng thái quyền học.</p>
-          <Button className="mt-4" size="sm" onClick={() => navigate("/student/catalog")}>Khám phá khóa học</Button>
+          <Button className="mt-4" size="sm" onClick={() => { void navigate("/student/catalog"); }}>Khám phá khóa học</Button>
         </Card>
       ) : (
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
           {visibleCourses.map((course) => {
-            const progress = Math.min(100, Math.max(0, course.progressPercent ?? 0));
+            const progress = Math.min(100, Math.max(0, course.progressPercent));
             const meta = deliveryMeta(course.deliveryMode);
             const ModeIcon = meta.icon;
             return (
               <Card key={course.id} className="group overflow-hidden border-border/60 p-0 transition hover:-translate-y-1 hover:border-primary/40 hover:shadow-xl">
-                <button type="button" onClick={() => navigate(`/learn/courses/${course.id}`)} className="block w-full text-left">
+                <button type="button" onClick={() => { void navigate(`/learn/courses/${course.id}`); }} className="block w-full text-left">
                   <div className="relative aspect-video overflow-hidden bg-muted">
                     {course.coverImage ? (
                       <img src={course.coverImage} alt={course.title} className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
@@ -100,21 +105,25 @@ export const StudentMyCoursesPage: React.FC = () => {
                   <div>
                     {course.categoryName && <p className="text-[10px] font-black uppercase tracking-wider text-primary">{course.categoryName}</p>}
                     <h2 className="mt-1 line-clamp-2 min-h-10 font-bold leading-5 text-foreground">{course.title}</h2>
+                    {course.teacherName && <p className="mt-1 text-xs text-muted-foreground">Giảng viên: {course.teacherName}</p>}
                   </div>
 
                   <div className="space-y-2">
                     <div className="flex justify-between text-xs"><span className="text-muted-foreground">Tiến độ học</span><strong>{progress}%</strong></div>
-                    <div className="h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary" style={{ width: `${progress}%` }} /></div>
+                    <div className="h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary" style={{ width: `${String(progress)}%` }} /></div>
                   </div>
 
                   <div className="flex items-center justify-between gap-3 border-t pt-3">
                     <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground"><Calendar className="h-3.5 w-3.5" />{formatExpiryDate(course.expiresAt)}</span>
                     {course.status === "EXPIRED" ? (
-                      <Button size="sm" variant="outline" className="gap-1" onClick={() => navigate(`/courses/${course.id}`)}><RefreshCcw className="h-3.5 w-3.5" />Mua thêm gói</Button>
+                      <Button size="sm" variant="outline" className="gap-1" onClick={() => { void navigate(`/courses/${course.id}`); }}><RefreshCcw className="h-3.5 w-3.5" />Mua thêm gói</Button>
                     ) : (
-                      <Button size="sm" className="gap-1" onClick={() => navigate(`/learn/courses/${course.id}`)}><Play className="h-3.5 w-3.5" />Vào học</Button>
+                      <Button size="sm" className="gap-1" onClick={() => { void navigate(`/learn/courses/${course.id}`); }}><Play className="h-3.5 w-3.5" />Vào học</Button>
                     )}
                   </div>
+                  {course.status === "COMPLETED" && (
+                    <CourseCompletionActions course={course} onCourseUpdated={updateCourse} />
+                  )}
                 </div>
               </Card>
             );

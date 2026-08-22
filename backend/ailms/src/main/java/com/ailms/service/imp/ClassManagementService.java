@@ -14,6 +14,7 @@ import com.ailms.response.CoursePackageResponse;
 import com.ailms.service.IClassManagementService;
 import com.ailms.service.ICoursePackageService;
 import com.ailms.service.IEmailService;
+import com.ailms.service.INotificationService;
 import com.ailms.service.ITeacherMatchingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -47,6 +48,7 @@ public class ClassManagementService implements IClassManagementService {
     private final ClassMapper classMapper;
     private final ICoursePackageService coursePackageService;
     private final IEmailService emailService;
+    private final INotificationService notificationService;
     private final ApplicationEventPublisher applicationEventPublisher;
 
     private static final String RESOURCE_NAME = "Class";
@@ -121,6 +123,10 @@ public class ClassManagementService implements IClassManagementService {
                     .joinedAt(LocalDateTime.now())
                     .build();
             classMemberRepository.save(member);
+            notificationService.createSystemNotification(teacherEmp.getUserEntity(), NotificationTypeEnum.GENERAL,
+                    "Phân công lớp mới",
+                    "Bạn vừa được phân công phụ trách lớp " + savedClass.getName() + ".",
+                    savedClass.getId(), "/teacher/classes/" + savedClass.getId());
         }
 
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CREATE_GROUP_CLASS", "CLASS", savedClass.getId(), null, savedClass));

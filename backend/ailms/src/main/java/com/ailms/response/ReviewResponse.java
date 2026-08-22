@@ -30,6 +30,16 @@ public class ReviewResponse {
 
     private String comment;
 
+    private Long teacherId;
+
+    private String teacherName;
+
+    private String teacherAvatarUrl;
+
+    private Integer teacherRating;
+
+    private String teacherComment;
+
     private ReviewStatusEnum status;
 
     private LocalDateTime createdAt;

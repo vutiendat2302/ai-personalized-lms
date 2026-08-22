@@ -81,6 +81,7 @@ UserService implements IUserService {
     private final IFileService fileService;
     private final IFileStorageService fileStorageService;
     private final EntityManager entityManager;
+    private final com.ailms.search.MeilisearchUserService meilisearchUserService;
 
     @Value("${app.frontend.set-password:http://localhost:5173/set-password}")
     private String setPasswordUrl;
@@ -89,9 +90,28 @@ UserService implements IUserService {
     @Transactional(readOnly = true)
     @Override
     public PageResponse<UserResponse> getUsers(UserSearchRequest request) {
+        // Các endpoint lọc theo vai trò phải đọc DB để không trả index Meilisearch đã thiếu role.
+        if (request != null && org.springframework.util.StringUtils.hasText(request.getRoleType())) {
+            Specification<UserEntity> spec = UserSpecification.filterAndSearch(request);
+            Page<UserEntity> page = userRepository.findAll(spec, request.toPageable());
+            return PageResponse.from(page.map(this::mapToUserResponse));
+        }
+        PageResponse<UserResponse> indexedResult = meilisearchUserService.search(request);
+        if (indexedResult != null) {
+            return indexedResult;
+        }
+
         Specification<UserEntity> spec = UserSpecification.filterAndSearch(request);
         Page<UserEntity> page = userRepository.findAll(spec, request.toPageable());
         return PageResponse.from(page.map(this::mapToUserResponse));
+    }
+
+    /** Khởi tạo cấu hình và đồng bộ lại index người dùng sau khi ứng dụng sẵn sàng. */
+    @org.springframework.context.event.EventListener(org.springframework.boot.context.event.ApplicationReadyEvent.class)
+    public void initializeUserSearchIndex() {
+        if (!meilisearchUserService.isEnabled()) return;
+        userRepository.findAll().forEach(meilisearchUserService::index);
+        meilisearchUserService.configureIndex();
     }
 
     @Override
@@ -101,11 +121,12 @@ UserService implements IUserService {
                 .toList();
     }
 
+    @Transactional
     @Override
     public UserResponse getUserById(Long id) {
         UserEntity user = userRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of("User", id));
-
+        ensureSupportEmployeeProfile(user, getRoleCodes(id));
         return mapToUserResponse(user);
     }
 
@@ -143,6 +164,8 @@ UserService implements IUserService {
         }
 
         eventPublisher.publishEvent(new AuditLogEvent(this, "create_user", "user", adminId, null, user));
+
+        meilisearchUserService.index(user);
 
         return mapToUserResponse(user);
     }
@@ -186,7 +209,8 @@ UserService implements IUserService {
         Set<String> roles = getRoleCodes(userId);
         UserEntity oldUser = userMapper.cloneUser(user);
 
-        boolean isStaff = roles.stream().anyMatch(role -> Set.of("ADMIN", "HR", "TEACHER", "TA").contains(role));
+        boolean isStaff = roles.stream().anyMatch(role -> Set.of("ADMIN", "HR", "TEACHER", "TA", "SUPPORT").contains(role));
+        ensureSupportEmployeeProfile(user, roles);
         if (roles.contains("STUDENT") && !isStaff) {
             StudentProfileEntity profile = studentProfileRepository.findById(userId)
                     .orElseGet(() -> StudentProfileEntity.builder()
@@ -226,6 +250,9 @@ UserService implements IUserService {
             }
             if (request.getAddress() != null) {
                 employee.setAddress(request.getAddress());
+            }
+            if (request.getBio() != null) {
+                employee.setBio(request.getBio().trim());
             }
             employeeRepository.save(employee);
         }
@@ -288,6 +315,7 @@ UserService implements IUserService {
 
         userMapper.updateUserEntity(user, request);
         user = userRepository.save(user);
+        meilisearchUserService.index(user);
 
         // Log audit
         eventPublisher.publishEvent(new AuditLogEvent(this, "update_user", "user", id, null, user));
@@ -299,6 +327,8 @@ UserService implements IUserService {
     public void deleteUser(Long id) {
         UserEntity user = userRepository.findById(id)
                 .orElseThrow(() -> ResourceNotFoundException.of("User", id));
+
+        meilisearchUserService.delete(id);
 
         String oldState = SimpleJsonWriter.toJson(user);
         if (user.getStatus() == UserStatusEnum.DELETED) {
@@ -833,7 +863,7 @@ UserService implements IUserService {
                 .map(code -> code.toUpperCase(Locale.ROOT).replace("ROLE_", ""))
                 .collect(Collectors.toSet());
 
-        boolean isStaff = roleCodes.stream().anyMatch(role -> Set.of("ADMIN", "HR", "TEACHER", "TA").contains(role));
+        boolean isStaff = roleCodes.stream().anyMatch(role -> Set.of("ADMIN", "HR", "TEACHER", "TA", "SUPPORT").contains(role));
         if (roleCodes.contains("STUDENT") && !isStaff) {
             studentProfileRepository.findById(user.getId()).ifPresent(profile -> {
                 attrs.put("studentCode", profile.getStudentCode());
@@ -898,6 +928,18 @@ UserService implements IUserService {
         value.put("email", guardian.getEmail());
         value.put("address", guardian.getAddress());
         return value;
+    }
+
+    /** Bảo đảm tài khoản SUPPORT cũ cũng có EmployeeEntity như HR và các staff khác. */
+    private void ensureSupportEmployeeProfile(UserEntity user, Set<String> roleCodes) {
+        if (user == null || user.getId() == null || roleCodes == null || !roleCodes.contains("SUPPORT")
+                || employeeRepository.existsById(user.getId())) return;
+        EmployeeEntity employee = EmployeeEntity.builder().userEntity(user)
+                .employeeCode(CodeGenerator.generate("EP", employeeRepository::existsByEmployeeCode))
+                .position("Nhân viên hỗ trợ").employmentTypeEnum(EmploymentTypeEnum.FULL_TIME)
+                .startDate(LocalDateTime.now()).status(EmployeeStatusEnum.ACTIVE).build();
+        employeeRepository.save(employee);
+        log.info("Auto-provisioned EmployeeEntity for SUPPORT user {}", user.getId());
     }
 
     private void replaceGuardians(StudentProfileEntity profile, List<ProfileGuardianRequest> guardians) {

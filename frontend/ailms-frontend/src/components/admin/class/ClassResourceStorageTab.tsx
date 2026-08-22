@@ -21,6 +21,7 @@ import {
 import { adminCourseClassApi } from "@/api/courses/adminCourseClassApi";
 import httpClient from "@/api/httpClient";
 import { fileAdminApi } from "@/api/file/fileAdminApi";
+import { Badge } from "@/components/ui/badge";
 
 export interface ClassResourceItem {
   id: string;
@@ -32,6 +33,9 @@ export interface ClassResourceItem {
   fileUrl: string;
   uploadedByName: string;
   createdAt: string;
+  ragStatus?: "PENDING" | "PROCESSING" | "READY" | "FAILED";
+  ragChunksCount?: number;
+  ragError?: string;
 }
 
 interface ClassResourceStorageTabProps {
@@ -75,23 +79,22 @@ export const ClassResourceStorageTab: React.FC<ClassResourceStorageTabProps> = (
         size: 100,
       });
 
-      if (res && res.content) {
-        setResources(
-          res.content.map((r: any) => ({
-            id: String(r.id),
-            title: r.title,
-            fileKey: r.fileKey,
-            fileName: r.fileName,
-            fileType: r.fileType,
-            fileSize: r.fileSize,
-            fileUrl: r.fileUrl || `/api/v1/files/download?fileKey=${encodeURIComponent(r.fileKey)}`,
-            uploadedByName: r.uploadedByName || "Giảng viên",
-            createdAt: r.createdAt ? new Date(r.createdAt).toLocaleDateString("vi-VN") : "Hôm nay",
-          }))
-        );
-      } else {
-        setResources([]);
-      }
+      setResources(
+        res.content.map((r) => ({
+          id: r.id,
+          title: r.title,
+          fileKey: r.fileKey,
+          fileName: r.fileName ?? undefined,
+          fileType: r.fileType ?? undefined,
+          fileSize: r.fileSize ?? undefined,
+          fileUrl: r.fileUrl ?? `/api/v1/files/download?fileKey=${encodeURIComponent(r.fileKey)}`,
+          uploadedByName: r.uploadedByName ?? "Giảng viên",
+          createdAt: r.createdAt ? new Date(r.createdAt).toLocaleDateString("vi-VN") : "Hôm nay",
+          ragStatus: r.ragStatus,
+          ragChunksCount: r.ragChunksCount ?? undefined,
+          ragError: r.ragError ?? undefined,
+        })),
+      );
     } catch (err) {
       console.warn("Could not fetch class resources:", err);
       setResources([]);
@@ -100,9 +103,22 @@ export const ClassResourceStorageTab: React.FC<ClassResourceStorageTabProps> = (
     }
   };
 
+  /** Yêu cầu ingest lại tài liệu lỗi và tải mới trạng thái từ Backend. */
+  const handleRetryRag = async (resourceId: string) => {
+    try {
+      await adminCourseClassApi.retryClassResourceRag(classId, resourceId);
+      showToast("Đã đưa tài liệu vào hàng đợi xử lý AI.");
+      await fetchResources();
+    } catch {
+      showToast("Không thể xử lý lại tài liệu lúc này.");
+    }
+  };
+
   const showToast = (msg: string) => {
     setToastMsg(msg);
-    setTimeout(() => setToastMsg(""), 4000);
+    setTimeout(() => {
+      setToastMsg("");
+    }, 4000);
   };
 
   const canPreviewInBrowser = (fileType?: string, fileName?: string) => {
@@ -394,6 +410,16 @@ export const ClassResourceStorageTab: React.FC<ClassResourceStorageTabProps> = (
                     <p className="text-[10px] text-slate-400 mt-0.5">
                       Đăng bởi: <span className="font-semibold text-slate-600">{item.uploadedByName}</span> • {item.createdAt}
                     </p>
+                    {item.ragStatus && (
+                      <div className="mt-1 flex items-center gap-2">
+                        <Badge variant={item.ragStatus === "READY" ? "default" : item.ragStatus === "FAILED" ? "destructive" : "secondary"} className="text-[9px]">
+                          AI: {item.ragStatus}{item.ragStatus === "READY" ? ` (${String(item.ragChunksCount ?? 0)} chunks)` : ""}
+                        </Badge>
+                        {item.ragStatus === "FAILED" && canManageResources && (
+                          <Button type="button" variant="ghost" size="xs" onClick={() => void handleRetryRag(item.id)}>Thử lại</Button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -402,7 +428,9 @@ export const ClassResourceStorageTab: React.FC<ClassResourceStorageTabProps> = (
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleViewResource(item)}
+                      onClick={() => {
+                        void handleViewResource(item);
+                      }}
                       className="h-8 w-8 p-0 text-indigo-600 hover:bg-indigo-50 rounded-xl"
                       title="Xem"
                     >

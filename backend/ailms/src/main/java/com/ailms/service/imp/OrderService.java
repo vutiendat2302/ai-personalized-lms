@@ -1,6 +1,8 @@
 package com.ailms.service.imp;
 
 import com.ailms.client.PaypalClient;
+import com.ailms.config.PaypalProperties;
+
 import com.ailms.entity.*;
 import com.ailms.entity.enums.*;
 import com.ailms.event.AuditLogEvent;
@@ -25,6 +27,8 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.format.DateTimeParseException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -59,6 +63,8 @@ public class OrderService implements IOrderService {
     private final OrderMapper orderMapper;
     private final ObjectMapper objectMapper;
     private final PaypalClient paypalClient;
+    private final PaypalProperties paypalProperties;
+
 
     /** Tạo order, order item, transaction PENDING rồi lấy approval URL PayPal Sandbox. */
     @Override
@@ -67,6 +73,10 @@ public class OrderService implements IOrderService {
         UserEntity user = userRepository.findByIdForUpdate(userId)
                 .orElseThrow(() -> ResourceNotFoundException.of("User", userId));
         List<CheckoutLine> lines = resolveCheckoutLines(request);
+        List<Long> requestedPackageIds = lines.stream().map(CheckoutLine::packageId).toList();
+        // Hủy các PENDING order cũ còn hiệu lực cho cùng gói trước khi validate,
+        // tránh block checkout mới (đặc biệt với voucher 100%).
+        cancelStaleActivePendingOrders(userId, requestedPackageIds);
         List<CoursePackageEntity> packages = new ArrayList<>();
         Set<Long> uniquePackageIds = new HashSet<>();
         for (CheckoutLine line : lines) {
@@ -78,15 +88,85 @@ public class OrderService implements IOrderService {
             validateCheckout(userId, pkg, line.needs(), Boolean.TRUE.equals(request.getAcceptScheduleConflict()));
             packages.add(pkg);
         }
+        validateIncludedSelfStudyBenefit(packages);
 
         BigDecimal totalAmount = packages.stream().map(CoursePackageEntity::getPrice)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         UserCouponEntity ownedVoucher = reserveVoucher(userId, request.getCouponCode(), packages);
         BigDecimal discountAmount = calculateDiscount(
                 ownedVoucher != null ? ownedVoucher.getCouponEntity() : null, packages);
-        BigDecimal finalAmount = totalAmount.subtract(discountAmount);
-        if (finalAmount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new BusinessException("Voucher làm giá trị đơn bằng 0; luồng cấp quyền miễn phí chưa được hỗ trợ.");
+        BigDecimal calculatedFinal = totalAmount.subtract(discountAmount);
+        BigDecimal finalAmount = calculatedFinal.compareTo(BigDecimal.ZERO) < 0 ? BigDecimal.ZERO : calculatedFinal;
+
+        // Xử lý đơn hàng miễn phí 0đ (Voucher 100%): Cấp quyền học ngay, không tạo giao dịch PayPal
+        if (finalAmount.compareTo(BigDecimal.ZERO) == 0) {
+            LocalDateTime now = LocalDateTime.now();
+            OrderEntity order = OrderEntity.builder()
+                    .userEntity(user)
+                    .status(OrderStatusEnum.PAID)
+                    .totalAmount(totalAmount)
+                    .discountAmount(discountAmount)
+                    .finalAmount(BigDecimal.ZERO)
+                    .couponCode(ownedVoucher != null ? ownedVoucher.getCouponEntity().getCode() : null)
+                    .userCouponEntity(ownedVoucher)
+                    .paidAt(now)
+                    .expiredAt(null)
+                    .build();
+            List<BigDecimal> allocatedDiscounts = allocateDiscount(discountAmount, ownedVoucher, packages);
+            List<OrderItemEntity> items = new ArrayList<>();
+            for (int index = 0; index < packages.size(); index++) {
+                CoursePackageEntity pkg = packages.get(index);
+                BigDecimal lineDiscount = allocatedDiscounts.get(index);
+                CheckoutLine line = lines.get(index);
+                items.add(OrderItemEntity.builder().orderEntity(order).coursePackageEntity(pkg)
+                        .priceSnapshot(pkg.getPrice()).discountSnapshot(lineDiscount)
+                        .finalPrice(BigDecimal.ZERO)
+                        .itemType(line.itemType() != null ? line.itemType() : OrderItemTypeEnum.NEW_PURCHASE)
+                        .oneOnOneNeeds(serializeNeeds(pkg, line.needs())).build());
+            }
+            order.setItems(items);
+            OrderEntity savedOrder = orderRepository.save(order);
+
+            // Ghi reservedOrderId cho voucher để markVoucherUsed kiểm tra đúng
+            if (ownedVoucher != null) {
+                ownedVoucher.setReservedOrderId(savedOrder.getId());
+                ownedVoucher.setReservedAt(LocalDateTime.now());
+                userCouponRepository.save(ownedVoucher);
+            }
+
+            provisionOrder(savedOrder);
+            if (ownedVoucher != null) {
+                markVoucherUsed(savedOrder);
+            }
+
+            PaymentTransactionEntity transaction = PaymentTransactionEntity.builder()
+                    .orderEntity(savedOrder)
+                    .paymentMethod("FREE_VOUCHER")
+                    .amount(BigDecimal.ZERO)
+                    .status(PaymentTransactionStatusEnum.SUCCESS)
+                    .gatewayOrderId("FREE-" + savedOrder.getId())
+                    .transactionRef("FREE-" + savedOrder.getId())
+                    .paidAt(now)
+                    .build();
+            PaymentTransactionEntity savedTransaction = paymentTransactionRepository.save(transaction);
+
+            notificationService.createSystemNotification(savedOrder.getUserEntity(), NotificationTypeEnum.GENERAL,
+                    "Đăng ký khóa học thành công",
+                    "Đơn hàng " + savedOrder.getId() + " áp dụng voucher 100% thành công. Quyền học đã được kích hoạt.",
+                    savedOrder.getId(), "/student/orders");
+            removePurchasedPackagesFromCart(savedOrder);
+            eventPublisher.publishEvent(new AuditLogEvent(
+                    this, "FREE_VOUCHER_ORDER_PAID", "ORDER", savedOrder.getId(), null, savedOrder));
+            eventPublisher.publishEvent(new OrderInvoiceGenerationEvent(this, savedOrder.getId(), false));
+
+            String returnUrl = sanitizeRedirectUrl(paypalProperties.getReturnUrl());
+            String resultUrl = returnUrl + (returnUrl.contains("?") ? "&" : "?") + "orderId=" + savedOrder.getId() + "&free=true";
+
+            return CheckoutPaymentResponse.builder()
+                    .orderId(savedOrder.getId())
+                    .paymentTransactionId(savedTransaction.getId())
+                    .payUrl(resultUrl)
+                    .build();
         }
 
         OrderEntity order = OrderEntity.builder()
@@ -125,6 +205,7 @@ public class OrderService implements IOrderService {
 
         return createPaypalCheckout(savedOrder);
     }
+
 
     /** Tạo lại PayPal order cho order PENDING thuộc đúng người dùng hiện tại. */
     @Override
@@ -181,6 +262,10 @@ public class OrderService implements IOrderService {
         order.setPaidAt(now);
         paymentTransactionRepository.save(transaction);
         orderRepository.save(order);
+        notificationService.createSystemNotification(order.getUserEntity(), NotificationTypeEnum.GENERAL,
+                "Thanh toán thành công",
+                "Đơn hàng " + order.getId() + " đã được thanh toán và quyền học đã được kích hoạt.",
+                order.getId(), "/student/orders");
         removePurchasedPackagesFromCart(order);
         eventPublisher.publishEvent(new AuditLogEvent(
                 this, "PAYPAL_CAPTURE_ORDER_PAID", "ORDER", order.getId(), null, order));
@@ -441,6 +526,25 @@ public class OrderService implements IOrderService {
                 item.getCoursePackageId(), item.getItemType(), item.getOneOnOneNeeds())).toList();
     }
 
+    /**
+     * Hủy tất cả PENDING order còn hiệu lực của user chứa ít nhất một trong danh sách gói trước khi tạo checkout mới.
+     * Giải phóng voucher đã reserved, tránh block checkout (đặc biệt voucher 100%).
+     */
+    private void cancelStaleActivePendingOrders(Long userId, List<Long> packageIds) {
+        if (packageIds == null || packageIds.isEmpty()) return;
+        List<OrderEntity> staleOrders = orderRepository.findActivePendingOrdersByUserAndPackages(
+                userId, packageIds, LocalDateTime.now());
+        for (OrderEntity stale : staleOrders) {
+            stale.setStatus(OrderStatusEnum.CANCELLED);
+            releaseReservedVoucher(stale);
+            OrderEntity saved = orderRepository.save(stale);
+            eventPublisher.publishEvent(new AuditLogEvent(
+                    this, "AUTO_CANCEL_STALE_PENDING_ORDER", "ORDER", saved.getId(),
+                    OrderStatusEnum.PENDING, OrderStatusEnum.CANCELLED));
+            log.info("Auto-cancelled stale PENDING order {} for userId={} before new checkout", saved.getId(), userId);
+        }
+    }
+
     /** Kiểm tra lại khóa học, gói, sở hữu, nhu cầu 1-1 và sức chứa lớp. */
     private void validateCheckout(
             Long userId, CoursePackageEntity pkg, OneOnOneNeedsRequest needs, boolean acceptScheduleConflict) {
@@ -453,6 +557,12 @@ public class OrderService implements IOrderService {
         }
         if (enrollmentPackageRepository.existsActiveOwnedPackage(userId, pkg.getId(), LocalDateTime.now())) {
             throw new BusinessException("Bạn đang sở hữu gói học này và không thể mua lại khi còn hiệu lực.");
+        }
+        if (pkg.getDeliveryMode() == DeliveryModeEnum.SELF_STUDY
+                && enrollmentPackageRepository.existsActiveCourseAccess(
+                userId, course.getId(), LocalDateTime.now())) {
+            throw new BusinessException(
+                    "Bạn đã có quyền tự học của khóa học này từ gói đang sở hữu, không cần mua thêm gói tự học.");
         }
         if (orderItemRepository.existsActivePendingCheckout(userId, pkg.getId(), LocalDateTime.now())) {
             throw new BusinessException("Bạn đã có một giao dịch đang chờ thanh toán cho gói học này.");
@@ -470,11 +580,28 @@ public class OrderService implements IOrderService {
                 throw new BusinessException("Gói có gia sư phải cấu hình số buổi chính thức.");
             }
             requireOneOnOneNeeds(needs);
+            validateTutorScheduleConflict(userId, needs, acceptScheduleConflict);
         }
         if (requiresGroupClass(pkg)) {
             validateAndLockGroupClass(pkg);
             validateStudentScheduleConflict(userId, pkg.getClassEntity(), acceptScheduleConflict);
         }
+    }
+
+    /** Chặn chọn SELF_STUDY cùng gói group/1-1 vì các gói nâng cao đã bao gồm quyền tự học. */
+    private void validateIncludedSelfStudyBenefit(List<CoursePackageEntity> packages) {
+        Map<Long, List<CoursePackageEntity>> byCourse = packages.stream()
+                .collect(Collectors.groupingBy(pkg -> pkg.getCourseEntity().getId()));
+        byCourse.values().forEach(coursePackages -> {
+            boolean hasSelfStudy = coursePackages.stream()
+                    .anyMatch(pkg -> pkg.getDeliveryMode() == DeliveryModeEnum.SELF_STUDY);
+            boolean hasEnhancedPackage = coursePackages.stream()
+                    .anyMatch(pkg -> pkg.getDeliveryMode() != DeliveryModeEnum.SELF_STUDY);
+            if (hasSelfStudy && hasEnhancedPackage) {
+                throw new BusinessException(
+                        "Gói group/1-1 đã bao gồm quyền tự học. Vui lòng bỏ gói tự học khỏi đơn hàng.");
+            }
+        });
     }
 
     /** Báo trùng lịch định kỳ với các lớp học viên đang tham gia trước khi tạo payment. */
@@ -499,6 +626,94 @@ public class OrderService implements IOrderService {
         }
     }
 
+    /** Báo khung giờ 1-1 mong muốn trùng với lịch lớp đang hoạt động của học viên. */
+    private void validateTutorScheduleConflict(Long userId, OneOnOneNeedsRequest needs, boolean accepted) {
+        String conflictMessage = findTutorScheduleConflict(userId, needs);
+        if (!accepted && conflictMessage != null) {
+            throw new BusinessException(conflictMessage + " Gửi acceptScheduleConflict=true để xác nhận.");
+        }
+    }
+
+    /** Tìm mô tả xung đột lịch 1-1 để dùng chung cho kiểm tra trước và checkout. */
+    private String findTutorScheduleConflict(Long userId, OneOnOneNeedsRequest needs) {
+        List<TutorScheduleSlot> requestedSlots = parseTutorScheduleSlots(needs);
+        List<Long> existingClassIds = classMemberRepository.findById_UserId(userId).stream()
+                .filter(member -> member.getStatus() == ClassMemberStatusEnum.ACTIVE
+                        && member.getRoleInClass() == ClassMemberRole.STUDENT)
+                .map(ClassMemberEntity::getClassEntity)
+                .filter(Objects::nonNull)
+                .filter(clazz -> clazz.getStatus() == BaseStatusEnum.ACTIVE)
+                .filter(clazz -> clazz.getEndDate() == null || clazz.getEndDate().isAfter(LocalDateTime.now()))
+                .map(ClassEntity::getId).distinct().toList();
+        if (existingClassIds.isEmpty()) return null;
+        Optional<ClassScheduleEntity> conflict = classScheduleRepository.findByClassEntity_IdIn(existingClassIds).stream()
+                .filter(slot -> slot.getStatus() == BaseStatusEnum.ACTIVE)
+                .filter(existing -> requestedSlots.stream().anyMatch(requested -> schedulesOverlap(requested, existing)))
+                .findFirst();
+        if (conflict.isEmpty()) return null;
+        ClassScheduleEntity existing = conflict.get();
+        TutorScheduleSlot requested = requestedSlots.stream()
+                .filter(slot -> schedulesOverlap(slot, existing)).findFirst().orElseThrow();
+        return "Khung giờ mong muốn " + dayName(requested.dayOfWeek()) + " ("
+                + requested.startTime() + " - " + requested.endTime() + ") bị trùng với lớp \""
+                + existing.getClassEntity().getName() + "\" (" + existing.getStartTime() + " - "
+                + existing.getEndTime() + "). Bạn chắc chắn muốn tiếp tục chứ?";
+    }
+
+    /** Đọc các cặp thứ và thời gian do bộ chọn lịch 1-1 gửi lên theo cùng thứ tự. */
+    private List<TutorScheduleSlot> parseTutorScheduleSlots(OneOnOneNeedsRequest needs) {
+        String[] days = needs.getAvailableDays().trim().split("\\s*;\\s*");
+        String[] timeRanges = needs.getPreferredTimes().trim().split("\\s*;\\s*");
+        if (days.length != timeRanges.length || days.length == 0 || days.length > 14) {
+            throw new BusinessException("Danh sách ngày học và khung giờ mong muốn không hợp lệ.");
+        }
+        List<TutorScheduleSlot> slots = new ArrayList<>();
+        for (int index = 0; index < days.length; index++) {
+            String[] times = timeRanges[index].split("\\s*[-–]\\s*");
+            if (times.length != 2) {
+                throw new BusinessException("Khung giờ mong muốn phải có giờ bắt đầu và giờ kết thúc.");
+            }
+            try {
+                LocalTime startTime = LocalTime.parse(times[0]);
+                LocalTime endTime = LocalTime.parse(times[1]);
+                if (!startTime.isBefore(endTime)) {
+                    throw new BusinessException("Giờ kết thúc phải sau giờ bắt đầu trong từng khung lịch.");
+                }
+                slots.add(new TutorScheduleSlot(parseDayOfWeek(days[index]), startTime, endTime));
+            } catch (DateTimeParseException exception) {
+                throw new BusinessException("Khung giờ mong muốn phải dùng định dạng 24 giờ HH:mm.");
+            }
+        }
+        boolean overlaps = slots.stream().anyMatch(left -> slots.stream().anyMatch(right -> left != right
+                && left.dayOfWeek() == right.dayOfWeek()
+                && left.startTime().isBefore(right.endTime()) && right.startTime().isBefore(left.endTime())));
+        if (overlaps) throw new BusinessException("Các khung giờ mong muốn trong cùng một ngày không được trùng nhau.");
+        return slots;
+    }
+
+    /** Chuyển nhãn ngày tiếng Việt đã chuẩn hóa thành thứ ISO từ 1 đến 7. */
+    private int parseDayOfWeek(String value) {
+        String normalized = value.trim().toLowerCase(Locale.ROOT);
+        if (normalized.equals("chủ nhật")) return 7;
+        if (normalized.matches("thứ\\s*[2-7]")) {
+            return Integer.parseInt(normalized.replaceAll("\\D", "")) - 1;
+        }
+        throw new BusinessException("Ngày có thể học không hợp lệ: " + value + ".");
+    }
+
+    /** Hiển thị thứ ISO bằng nhãn tiếng Việt trong cảnh báo xung đột. */
+    private String dayName(int dayOfWeek) {
+        return dayOfWeek == 7 ? "Chủ nhật" : "Thứ " + (dayOfWeek + 1);
+    }
+
+    /** Kiểm tra một khung lịch mong muốn có giao với lịch lớp đang tồn tại hay không. */
+    private boolean schedulesOverlap(TutorScheduleSlot requested, ClassScheduleEntity existing) {
+        return Objects.equals(requested.dayOfWeek(), existing.getDayOfWeek())
+                && existing.getStartTime() != null && existing.getEndTime() != null
+                && requested.startTime().isBefore(existing.getEndTime())
+                && existing.getStartTime().isBefore(requested.endTime());
+    }
+
     /** Kiểm tra hai khung lịch định kỳ có cùng ngày và giao nhau hay không. */
     private boolean schedulesOverlap(ClassScheduleEntity left, ClassScheduleEntity right) {
         return Objects.equals(left.getDayOfWeek(), right.getDayOfWeek())
@@ -506,6 +721,10 @@ public class OrderService implements IOrderService {
                 && right.getStartTime() != null && right.getEndTime() != null
                 && left.getStartTime().isBefore(right.getEndTime())
                 && right.getStartTime().isBefore(left.getEndTime());
+    }
+
+    /** Khung lịch 1-1 đã được chuẩn hóa để so sánh với lịch lớp. */
+    private record TutorScheduleSlot(int dayOfWeek, LocalTime startTime, LocalTime endTime) {
     }
 
     /** Chỉ coi lịch định kỳ là trùng khi thời gian hoạt động của hai lớp cũng giao nhau. */
@@ -557,28 +776,50 @@ public class OrderService implements IOrderService {
         }
     }
 
-    /** Xác định package có thành phần lớp nhóm cần khóa chỗ và kiểm tra trùng lịch. */
+    /** Xác định package lớp nhóm cần khóa chỗ và kiểm tra trùng lịch. */
     private boolean requiresGroupClass(CoursePackageEntity pkg) {
-        return pkg.getDeliveryMode() == DeliveryModeEnum.GROUP_CLASS
-                || (pkg.getDeliveryMode() == DeliveryModeEnum.COMBO
-                && ((pkg.getMaxGroupSize() != null && pkg.getMaxGroupSize() > 1)
-                || pkg.getClassEntity() != null));
+        return pkg.getDeliveryMode() == DeliveryModeEnum.GROUP_CLASS;
     }
 
     /** Xác định package cần lưu nhu cầu và tạo yêu cầu tìm gia sư sau thanh toán. */
     private boolean requiresTutorNeeds(CoursePackageEntity pkg) {
-        return pkg.getDeliveryMode() == DeliveryModeEnum.ONE_ON_ONE
-                || (pkg.getDeliveryMode() == DeliveryModeEnum.COMBO
-                && pkg.getIncludedTutorSessions() != null && pkg.getIncludedTutorSessions() > 0);
+        return pkg.getDeliveryMode() == DeliveryModeEnum.ONE_ON_ONE;
     }
 
-    /** Khóa và giữ voucher thuộc học viên cho order sắp tạo. */
+    /** Đảm bảo URL redirect về localhost không bị ép https gây lỗi SSL protocol trong local dev. */
+    private String sanitizeRedirectUrl(String url) {
+        if (url == null) return "http://localhost:5173/payment/result";
+        if (url.startsWith("https://localhost:") || url.startsWith("https://127.0.0.1:")) {
+            return "http://" + url.substring(8);
+        }
+        return url;
+    }
+
+    /** Khóa và giữ voucher thuộc học viên cho order sắp tạo, hỗ trợ tự động gán voucher toàn hệ thống. */
     private UserCouponEntity reserveVoucher(
             Long userId, String couponCode, List<CoursePackageEntity> packages) {
         if (couponCode == null || couponCode.isBlank()) return null;
-        UserCouponEntity owned = userCouponRepository
-                .findAvailableByUserAndCodeForUpdate(userId, couponCode.trim())
-                .orElseThrow(() -> new BusinessException("Voucher không thuộc tài khoản hoặc đang được sử dụng."));
+        String cleanCode = couponCode.trim();
+        Optional<UserCouponEntity> ownedOpt = userCouponRepository
+                .findAvailableByUserAndCodeForUpdate(userId, cleanCode);
+        UserCouponEntity owned;
+        if (ownedOpt.isPresent()) {
+            owned = ownedOpt.get();
+        } else {
+            CouponEntity globalCoupon = couponRepository.findByCode(cleanCode)
+                    .orElseThrow(() -> new BusinessException("Voucher không tồn tại hoặc không hợp lệ."));
+            if (globalCoupon.getDistributionScope() == CouponDistributionScopeEnum.ALL_STUDENTS) {
+                UserEntity student = userRepository.findById(userId)
+                        .orElseThrow(() -> ResourceNotFoundException.of("User", userId));
+                owned = userCouponRepository.save(UserCouponEntity.builder()
+                        .userEntity(student)
+                        .couponEntity(globalCoupon)
+                        .status(UserCouponStatusEnum.AVAILABLE)
+                        .build());
+            } else {
+                throw new BusinessException("Voucher không thuộc tài khoản hoặc đang được sử dụng.");
+            }
+        }
         CouponEntity coupon = couponRepository.findByIdForUpdate(owned.getCouponEntity().getId())
                 .orElseThrow(() -> ResourceNotFoundException.of("Coupon", owned.getCouponEntity().getId()));
         validateCouponForCheckout(coupon, packages);
@@ -586,6 +827,7 @@ public class OrderService implements IOrderService {
         owned.setStatus(UserCouponStatusEnum.RESERVED);
         return owned;
     }
+
 
     /** Kiểm tra hiệu lực, hạn mức và phạm vi khóa học của coupon tại checkout. */
     private void validateCouponForCheckout(CouponEntity coupon, List<CoursePackageEntity> packages) {
@@ -765,6 +1007,20 @@ public class OrderService implements IOrderService {
                 .build();
     }
 
+    /** Kiểm tra trước lịch 1-1 mong muốn mà không tạo đơn hàng hay thay đổi dữ liệu. */
+    @Override
+    public TutorScheduleCheckResponse validateTutorScheduleAvailability(Long userId, OneOnOneNeedsRequest needs) {
+        if (!userRepository.existsById(userId)) {
+            throw ResourceNotFoundException.of("User", userId);
+        }
+        requireOneOnOneNeeds(needs);
+        String conflictMessage = findTutorScheduleConflict(userId, needs);
+        return TutorScheduleCheckResponse.builder()
+                .conflict(conflictMessage != null)
+                .message(conflictMessage)
+                .build();
+    }
+
     /** Dọn các gói vừa thanh toán khỏi giỏ, kể cả order được tạo trực tiếp từ CourseDetail. */
     private void removePurchasedPackagesFromCart(OrderEntity order) {
         Set<Long> purchasedPackageIds = order.getItems().stream()
@@ -940,4 +1196,65 @@ public class OrderService implements IOrderService {
 
     /** Dòng checkout đã chuẩn hóa cho thanh toán trực tiếp và giỏ hàng. */
     private record CheckoutLine(Long packageId, OrderItemTypeEnum itemType, OneOnOneNeedsRequest needs) {}
+
+    /**
+     * Hoàn thành đơn hàng PENDING không qua PayPal; chỉ dùng cho seed/dev.
+     * Tạo payment transaction giả trạng thái SUCCESS rồi gọi provisionOrder thật
+     * để tăng enrollment_count, tạo OneOnOneRequest và gán lớp nhóm đúng logic BE.
+     */
+    @Override
+    @Transactional
+    public OrderResponse adminCompleteOrder(Long orderId) {
+        /** Delegate sang overload với backdateAt=null để dùng thời điểm hiện tại. */
+        return adminCompleteOrder(orderId, null);
+    }
+
+    /**
+     * Hoàn thành đơn hàng PENDING bằng Admin với ngày tuỳ chọn (seed backdate).
+     * backdateAt null → dùng LocalDateTime.now(); khác null → đặt paid_at theo giá trị truyền vào.
+     */
+    @Override
+    @Transactional
+    public OrderResponse adminCompleteOrder(Long orderId, LocalDateTime backdateAt) {
+        OrderEntity order = orderRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() -> ResourceNotFoundException.of("Order", orderId));
+        if (order.getStatus() == OrderStatusEnum.PAID) {
+            return orderMapper.toResponse(order);
+        }
+        if (order.getStatus() != OrderStatusEnum.PENDING) {
+            throw new BusinessException("Chỉ đơn hàng PENDING mới có thể được Admin hoàn thành.");
+        }
+
+        LocalDateTime effectiveAt = (backdateAt != null) ? backdateAt : LocalDateTime.now();
+
+        // Tạo transaction giả SUCCESS để đáp ứng refund flow sau này nếu cần
+        PaymentTransactionEntity tx = PaymentTransactionEntity.builder()
+                .orderEntity(order)
+                .paymentMethod("ADMIN_COMPLETE")
+                .amount(order.getFinalAmount())
+                .status(PaymentTransactionStatusEnum.SUCCESS)
+                .paypalRequestId("ADMIN-" + UUID.randomUUID().toString().replace("-", ""))
+                .transactionRef("ADMIN-SEED-" + orderId)
+                .paidAt(effectiveAt)
+                .build();
+        paymentTransactionRepository.save(tx);
+
+        // Cấp quyền học thật — tăng enrollment_count, tạo 1-1 request, gán lớp nhóm
+        provisionOrder(order);
+        markVoucherUsed(order);
+
+        order.setStatus(OrderStatusEnum.PAID);
+        order.setPaidAt(effectiveAt);
+        orderRepository.save(order);
+
+        notificationService.createSystemNotification(order.getUserEntity(), NotificationTypeEnum.GENERAL,
+                "Thanh toán thành công",
+                "Đơn hàng " + order.getId() + " đã được kích hoạt bởi Admin.",
+                order.getId(), "/student/orders");
+        removePurchasedPackagesFromCart(order);
+        eventPublisher.publishEvent(new AuditLogEvent(
+                this, "ADMIN_COMPLETE_ORDER", "ORDER", order.getId(), OrderStatusEnum.PENDING, order));
+        eventPublisher.publishEvent(new OrderInvoiceGenerationEvent(this, order.getId(), false));
+        return orderMapper.toResponse(order);
+    }
 }

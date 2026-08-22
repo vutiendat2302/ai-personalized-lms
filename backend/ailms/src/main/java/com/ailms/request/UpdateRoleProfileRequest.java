@@ -25,6 +25,9 @@ public class UpdateRoleProfileRequest {
     @Size(max = 100, message = "Position must not exceed 100 characters")
     private String position;
 
+    @Size(max = 2000, message = "Bio must not exceed 2000 characters")
+    private String bio;
+
     private EmploymentTypeEnum employmentTypeEnum;
 
     @JsonFormat(pattern = "yyyy-MM-dd")

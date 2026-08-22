@@ -54,7 +54,6 @@ import {
   GraduationCap,
   Sparkles,
   Radio,
-  Layers,
   BadgePercent,
   LayoutGrid,
   List,
@@ -80,17 +79,16 @@ type SortOrder = "asc" | "desc";
 // Shared Option Lists at the top of file
 export const DELIVERY_MODE_OPTIONS = [
   { value: "ALL", label: "Tất cả hình thức" },
-  { value: "SELF_STUDY", label: "Gói Tự Học (Self-Study)" },
-  { value: "GROUP_CLASS", label: "Lớp Học Nhóm (Group Class)" },
-  { value: "ONE_ON_ONE", label: "Gia Sư 1 Kèm 1 (One-on-One)" },
-  { value: "COMBO", label: "Gói Combo Hỗn Hợp (Combo)" },
+  { value: "SELF_STUDY", label: "Gói Tự Học" },
+  { value: "GROUP_CLASS", label: "Lớp Học Nhóm" },
+  { value: "ONE_ON_ONE", label: "Gia Sư 1 Kèm 1" },
 ] as const;
 
 export const STATUS_OPTIONS = [
   { value: "ALL", label: "Tất cả trạng thái" },
   { value: "ACTIVE", label: "Đang hoạt động" },
   { value: "INACTIVE", label: "Đã ẩn / Tạm dừng" },
-  { value: "OUT_OF_STOCK", label: "Hết chỗ (Out of Stock)" },
+  { value: "OUT_OF_STOCK", label: "Hết chỗ" },
 ] as const;
 
 const formatVND = (val?: number | string) => {
@@ -137,48 +135,31 @@ const renderDeliveryBadge = (mode: DeliveryModeEnum | string) => {
   switch (mode) {
     case "ONE_ON_ONE":
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-extrabold uppercase rounded-full bg-purple-100/90 text-purple-800 border border-purple-300/80 dark:bg-purple-950/80 dark:text-purple-300 dark:border-purple-800 shadow-2xs">
-          <Sparkles className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-extrabold uppercase rounded-full bg-secondary text-secondary-foreground border border-border shadow-2xs">
+          <Sparkles className="w-3.5 h-3.5 text-secondary-foreground" />
           Kèm 1-1
         </span>
       );
     case "GROUP_CLASS":
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-extrabold uppercase rounded-full bg-amber-100/90 text-amber-800 border border-amber-300/80 dark:bg-amber-950/80 dark:text-amber-300 dark:border-amber-800 shadow-2xs">
-          <Users className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-extrabold uppercase rounded-full bg-primary/10 text-primary border border-primary/20 shadow-2xs">
+          <Users className="w-3.5 h-3.5 text-primary" />
           Lớp Nhóm
-        </span>
-      );
-    case "COMBO":
-      return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-extrabold uppercase rounded-full bg-blue-100/90 text-blue-800 border border-blue-300/80 dark:bg-blue-950/80 dark:text-blue-300 dark:border-blue-800 shadow-2xs">
-          <Layers className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-          Combo
         </span>
       );
     case "SELF_STUDY":
     default:
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-extrabold uppercase rounded-full bg-emerald-100/90 text-emerald-800 border border-emerald-300/80 dark:bg-emerald-950/80 dark:text-emerald-300 dark:border-emerald-800 shadow-2xs">
-          <GraduationCap className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-extrabold uppercase rounded-full bg-muted text-muted-foreground border border-border shadow-2xs">
+          <GraduationCap className="w-3.5 h-3.5 text-muted-foreground" />
           Tự Học
         </span>
       );
   }
 };
 
-const getDeliveryGradient = (mode: DeliveryModeEnum | string) => {
-  switch (mode) {
-    case "ONE_ON_ONE":
-      return "from-purple-500 via-indigo-500 to-violet-500";
-    case "COMBO":
-      return "from-blue-500 via-sky-500 to-cyan-500";
-    case "GROUP_CLASS":
-      return "from-amber-500 via-orange-500 to-yellow-500";
-    case "SELF_STUDY":
-    default:
-      return "from-emerald-500 via-teal-500 to-green-500";
-  }
+const getDeliveryGradient = (_mode: DeliveryModeEnum | string) => {
+  return "bg-border";
 };
 
 const getDiscountPercent = (original?: number | string, selling?: number | string) => {
@@ -232,7 +213,7 @@ export const SalesCoursePackageListPage: React.FC = () => {
   // View Mode & Pagination State (DEFAULT: GRID VIEW as requested)
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(9);
+  const [pageSize, setPageSize] = useState(8);
   const [totalElements, setTotalElements] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [jumpPageInput, setJumpPageInput] = useState("1");
@@ -500,7 +481,7 @@ export const SalesCoursePackageListPage: React.FC = () => {
 
       {/* 2. KPI Cards Row (4 Cards including outOfStockPackages) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="border border-border/40 bg-card overflow-hidden transition-all hover:shadow-xs relative">
+        <Card className="border border-border/50 bg-card overflow-hidden transition-all hover:shadow-xs relative">
           {statsLoading && (
             <div className="absolute inset-0 bg-background/50 backdrop-blur-2xs flex items-center justify-center z-10">
               <Loader2 className="h-4 w-4 animate-spin text-primary" />
@@ -508,11 +489,10 @@ export const SalesCoursePackageListPage: React.FC = () => {
           )}
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold text-muted-foreground">Tổng số gói bán</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Tổng số gói bán</p>
               <p className="text-2xl font-extrabold tracking-tight text-foreground mt-1 font-mono">
                 {stats.totalPackages}
               </p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">Tổng số gói trong hệ thống</p>
             </div>
             <div className="rounded-xl bg-primary/10 p-3 text-primary">
               <Package className="h-6 w-6" />
@@ -520,61 +500,58 @@ export const SalesCoursePackageListPage: React.FC = () => {
           </CardContent>
         </Card>
 
-        <Card className="border border-emerald-500/20 bg-emerald-500/5 overflow-hidden transition-all hover:shadow-xs relative">
+        <Card className="border border-border/50 bg-card overflow-hidden transition-all hover:shadow-xs relative">
           {statsLoading && (
             <div className="absolute inset-0 bg-background/50 backdrop-blur-2xs flex items-center justify-center z-10">
-              <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
             </div>
           )}
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold text-emerald-800 dark:text-emerald-400">Đang hoạt động</p>
-              <p className="text-2xl font-extrabold tracking-tight text-emerald-600 dark:text-emerald-400 mt-1 font-mono">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Đang hoạt động</p>
+              <p className="text-2xl font-extrabold tracking-tight text-primary mt-1 font-mono">
                 {stats.activePackages}
               </p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">Sẵn sàng mở bán cho học viên</p>
             </div>
-            <div className="rounded-xl bg-emerald-500/10 p-3 text-emerald-600 dark:text-emerald-400">
+            <div className="rounded-xl bg-primary/10 p-3 text-primary">
               <CheckCircle2 className="h-6 w-6" />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border border-amber-500/20 bg-amber-500/5 overflow-hidden transition-all hover:shadow-xs relative">
+        <Card className="border border-border/50 bg-card overflow-hidden transition-all hover:shadow-xs relative">
           {statsLoading && (
             <div className="absolute inset-0 bg-background/50 backdrop-blur-2xs flex items-center justify-center z-10">
-              <Loader2 className="h-4 w-4 animate-spin text-amber-600" />
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
             </div>
           )}
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold text-amber-800 dark:text-amber-400">Đã ẩn / Tạm dừng</p>
-              <p className="text-2xl font-extrabold tracking-tight text-amber-600 dark:text-amber-400 mt-1 font-mono">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Đã ẩn / Tạm dừng</p>
+              <p className="text-2xl font-extrabold tracking-tight text-foreground mt-1 font-mono">
                 {stats.inactivePackages}
               </p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">Tạm dừng phân phối sản phẩm</p>
             </div>
-            <div className="rounded-xl bg-amber-500/10 p-3 text-amber-600 dark:text-amber-400">
+            <div className="rounded-xl bg-muted p-3 text-muted-foreground">
               <ShieldAlert className="h-6 w-6" />
             </div>
           </CardContent>
         </Card>
 
-        <Card className="border border-rose-500/20 bg-rose-500/5 overflow-hidden transition-all hover:shadow-xs relative">
+        <Card className="border border-border/50 bg-card overflow-hidden transition-all hover:shadow-xs relative">
           {statsLoading && (
             <div className="absolute inset-0 bg-background/50 backdrop-blur-2xs flex items-center justify-center z-10">
-              <Loader2 className="h-4 w-4 animate-spin text-rose-600" />
+              <Loader2 className="h-4 w-4 animate-spin text-destructive" />
             </div>
           )}
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold text-rose-800 dark:text-rose-400">Hết chỗ (Out of Stock)</p>
-              <p className="text-2xl font-extrabold tracking-tight text-rose-600 dark:text-rose-400 mt-1 font-mono">
+              <p className="text-xs font-semibold text-destructive uppercase tracking-wider">Hết chỗ</p>
+              <p className="text-2xl font-extrabold tracking-tight text-destructive mt-1 font-mono">
                 {stats.outOfStockPackages}
               </p>
-              <p className="text-[11px] text-muted-foreground mt-0.5">Đã đủ số lượng học viên</p>
             </div>
-            <div className="rounded-xl bg-rose-500/10 p-3 text-rose-600 dark:text-rose-400">
+            <div className="rounded-xl bg-destructive/10 p-3 text-destructive">
               <PackageX className="h-6 w-6" />
             </div>
           </CardContent>
@@ -603,6 +580,7 @@ export const SalesCoursePackageListPage: React.FC = () => {
               onChange={(val) => handleFilterChange(setCourseFilter, val)}
               placeholder="Chọn Khóa học"
               allLabel="Tất cả khóa học"
+              onlyPackagedCourses
               className="w-full sm:w-56"
             />
 
@@ -769,8 +747,8 @@ export const SalesCoursePackageListPage: React.FC = () => {
               </p>
             </div>
           ) : viewMode === "grid" ? (
-            /* ─── GRID VIEW (CARD GRID - DEFAULT) ─── */
-            <div className="p-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            /* ─── GRID VIEW (CARD GRID - 4 CARDS PER ROW) ─── */
+            <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {packages.map((pkg) => {
                 const { sellingPrice, originalPrice } = extractPackagePrices(pkg);
                 const discountPct = getDiscountPercent(originalPrice, sellingPrice);
@@ -844,7 +822,7 @@ export const SalesCoursePackageListPage: React.FC = () => {
                               {pkg.includedTutorSessions ? `${pkg.includedTutorSessions} buổi kèm` : "1-1 Mentor"}
                             </p>
                           </div>
-                        ) : pkg.deliveryMode === "GROUP_CLASS" || pkg.deliveryMode === "COMBO" ? (
+                        ) : pkg.deliveryMode === "GROUP_CLASS" ? (
                           <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200/60 dark:border-amber-800 space-y-0.5">
                             <p className="text-[10px] text-amber-700 dark:text-amber-300 font-semibold uppercase leading-none">Sĩ số lớp</p>
                             <p className="text-xs font-bold text-amber-800 dark:text-amber-200 truncate mt-0.5 font-mono">
@@ -1162,10 +1140,11 @@ export const SalesCoursePackageListPage: React.FC = () => {
                       <SelectValue placeholder={String(pageSize)} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="9">9</SelectItem>
-                      <SelectItem value="18">18</SelectItem>
-                      <SelectItem value="27">27</SelectItem>
-                      <SelectItem value="45">45</SelectItem>
+                      <SelectItem value="8">8</SelectItem>
+                      <SelectItem value="16">16</SelectItem>
+                      <SelectItem value="24">24</SelectItem>
+                      <SelectItem value="32">32</SelectItem>
+                      <SelectItem value="48">48</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -1236,15 +1215,15 @@ export const SalesCoursePackageListPage: React.FC = () => {
         </Card>
       </section>
 
-      {/* 🌟 6. FULL RESPONSE DETAIL MODAL (Matching CoursePackageResponse) 🌟 */}
+      {/* 🌟 6. FULL RESPONSE DETAIL MODAL 🌟 */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-base font-bold">
+            <DialogTitle className="flex items-center gap-2 text-base font-medium">
               <Info className="h-4 w-4 text-primary" />
-              Chi tiết Gói bán Khóa học (CoursePackageResponse)
+              Chi tiết Gói bán Khóa học
             </DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground">
+            <DialogDescription className="text-xs text-muted-foreground font-medium">
               Thông số chi tiết đầy đủ các trường thuộc tính từ máy chủ
             </DialogDescription>
           </DialogHeader>
@@ -1263,24 +1242,24 @@ export const SalesCoursePackageListPage: React.FC = () => {
             <div className="space-y-4 py-2 text-xs">
               {/* Header Title & Badges */}
               <div className="space-y-2 pb-3 border-b border-border/40">
-                <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-2 flex-wrap font-medium">
                   {renderDeliveryBadge(detail.deliveryMode)}
                   <StatusBadge status={detail.status} size="sm" />
-                  <span className="px-2.5 py-1 rounded-lg bg-primary/10 text-primary border border-primary/20 font-mono font-bold">
+                  <span className="px-2.5 py-1 rounded-lg bg-primary/10 text-primary border border-primary/20 font-mono font-medium">
                     Mã code: {detail.code || detail.id}
                   </span>
-                  <span className="px-2.5 py-1 rounded-lg bg-muted text-muted-foreground border border-border/60 font-mono">
+                  <span className="px-2.5 py-1 rounded-lg bg-muted text-muted-foreground border border-border/60 font-mono font-medium">
                     ID: {detail.id}
                   </span>
                 </div>
-                <h2 className="text-lg font-extrabold text-foreground tracking-tight">{detail.name}</h2>
+                <h2 className="text-lg font-medium text-foreground tracking-tight">{detail.name}</h2>
               </div>
 
               {/* Description */}
               {detail.description && (
                 <div className="space-y-1">
-                  <p className="font-bold text-muted-foreground uppercase text-[10px]">Mô tả sản phẩm</p>
-                  <p className="text-xs text-foreground bg-muted/40 rounded-xl p-3 leading-relaxed border border-border/40">
+                  <p className="font-medium text-muted-foreground uppercase text-[10px]">Mô tả sản phẩm</p>
+                  <p className="text-xs text-foreground bg-muted/40 rounded-xl p-3 leading-relaxed border border-border/40 font-medium">
                     {detail.description}
                   </p>
                 </div>
@@ -1289,39 +1268,39 @@ export const SalesCoursePackageListPage: React.FC = () => {
               {/* Grid 1: Course & Class Info */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="bg-muted/30 rounded-xl p-3 space-y-1 border border-border/40">
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">
-                    <BookOpen className="h-3 w-3 text-indigo-500" /> Khóa học gốc (Course)
+                  <p className="text-[10px] font-medium text-muted-foreground uppercase flex items-center gap-1">
+                    <BookOpen className="h-3 w-3 text-indigo-500" /> Khóa học gốc
                   </p>
-                  <p className="font-bold text-foreground text-sm">{detail.courseName || "Chưa xác định"}</p>
-                  <p className="text-[10px] font-mono text-muted-foreground">courseId: {detail.courseId || "—"}</p>
+                  <p className="font-medium text-foreground text-sm">{detail.courseName || "Chưa xác định"}</p>
+                  <p className="text-[10px] font-mono text-muted-foreground font-medium">Mã KH: {detail.courseId || "—"}</p>
                 </div>
 
                 <div className="bg-muted/30 rounded-xl p-3 space-y-1 border border-border/40">
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">
-                    <GraduationCap className="h-3 w-3 text-purple-500" /> Lớp học đính kèm (Class)
+                  <p className="text-[10px] font-medium text-muted-foreground uppercase flex items-center gap-1">
+                    <GraduationCap className="h-3 w-3 text-purple-500" /> Lớp học đính kèm
                   </p>
-                  <p className="font-bold text-foreground text-sm">{detail.className || "Không có (Chưa gắn lớp)"}</p>
-                  <p className="text-[10px] font-mono text-muted-foreground">classId: {detail.classId || "—"}</p>
+                  <p className="font-medium text-foreground text-sm">{detail.className || "Không có (Chưa gắn lớp)"}</p>
+                  <p className="text-[10px] font-mono text-muted-foreground font-medium">Mã Lớp: {detail.classId || "—"}</p>
                 </div>
               </div>
 
               {/* Grid 2: Pricing & Discount */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="bg-primary/5 rounded-xl p-3 space-y-1 border border-primary/20">
-                  <p className="text-[10px] font-bold text-primary uppercase">Giá bán thực tế (price)</p>
-                  <p className="text-lg font-black font-mono text-primary">{formatVND(detail.price)}</p>
+                  <p className="text-[10px] font-medium text-primary uppercase">Giá bán thực tế</p>
+                  <p className="text-lg font-semibold font-mono text-primary">{formatVND(detail.price)}</p>
                 </div>
 
                 <div className="bg-muted/30 rounded-xl p-3 space-y-1 border border-border/40">
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Giá niêm yết (originalPrice)</p>
-                  <p className="text-base font-bold font-mono text-muted-foreground line-through">
+                  <p className="text-[10px] font-medium text-muted-foreground uppercase">Giá niêm yết</p>
+                  <p className="text-base font-semibold font-mono text-muted-foreground line-through">
                     {formatVND(detail.originalPrice)}
                   </p>
                 </div>
 
                 <div className="bg-rose-500/10 rounded-xl p-3 space-y-1 border border-rose-500/20">
-                  <p className="text-[10px] font-bold text-rose-700 dark:text-rose-400 uppercase">Ưu đãi (discountPercentage)</p>
-                  <p className="text-base font-black font-mono text-rose-600 dark:text-rose-400">
+                  <p className="text-[10px] font-medium text-rose-700 dark:text-rose-400 uppercase">Ưu đãi</p>
+                  <p className="text-base font-medium font-mono text-rose-600 dark:text-rose-400">
                     {detail.discountPercentage != null ? `${detail.discountPercentage}%` : "0%"}
                   </p>
                 </div>
@@ -1330,29 +1309,29 @@ export const SalesCoursePackageListPage: React.FC = () => {
               {/* Grid 3: Capacities, Sessions & Duration */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div className="bg-muted/30 rounded-xl p-2.5 space-y-0.5 border border-border/40">
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Sĩ số hiện tại</p>
-                  <p className="font-mono font-bold text-foreground">
+                  <p className="text-[10px] font-medium text-muted-foreground uppercase">Sĩ số hiện tại</p>
+                  <p className="font-mono font-medium text-foreground">
                     {detail.currentMemberCount != null ? detail.currentMemberCount : "—"}
                   </p>
                 </div>
 
                 <div className="bg-muted/30 rounded-xl p-2.5 space-y-0.5 border border-border/40">
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Sĩ số tối đa (maxMembers)</p>
-                  <p className="font-mono font-bold text-foreground">
+                  <p className="text-[10px] font-medium text-muted-foreground uppercase">Sĩ số tối đa</p>
+                  <p className="font-mono font-medium text-foreground">
                     {detail.maxMembers != null ? detail.maxMembers : detail.maxGroupSize != null ? detail.maxGroupSize : "—"}
                   </p>
                 </div>
 
                 <div className="bg-muted/30 rounded-xl p-2.5 space-y-0.5 border border-border/40">
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Buổi kèm (tutorSessions)</p>
-                  <p className="font-mono font-bold text-foreground">
+                  <p className="text-[10px] font-medium text-muted-foreground uppercase">Buổi kèm</p>
+                  <p className="font-mono font-semibold text-foreground">
                     {detail.includedTutorSessions != null ? detail.includedTutorSessions : 0} buổi
                   </p>
                 </div>
 
                 <div className="bg-muted/30 rounded-xl p-2.5 space-y-0.5 border border-border/40">
-                  <p className="text-[10px] font-bold text-muted-foreground uppercase">Thời hạn (durationDays)</p>
-                  <p className="font-mono font-bold text-foreground">
+                  <p className="text-[10px] font-medium text-muted-foreground uppercase">Thời hạn</p>
+                  <p className="font-mono font-medium text-foreground">
                     {detail.durationDays ? `${detail.durationDays} ngày` : "Vô hạn"}
                   </p>
                 </div>
@@ -1361,20 +1340,24 @@ export const SalesCoursePackageListPage: React.FC = () => {
               {/* Grid 4: Timestamps & Audit Info */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-border/40 text-[11px]">
                 <div>
-                  <p className="text-[10px] text-muted-foreground font-semibold">Thời gian tạo (createdAt)</p>
-                  <p className="font-mono font-bold">{formatDate(detail.createdAt)}</p>
+                  <p className="text-[10px] text-muted-foreground font-medium">Thời gian tạo</p>
+                  <p className="font-mono font-medium">{formatDate(detail.createdAt)}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-muted-foreground font-semibold">Cập nhật (updatedAt)</p>
-                  <p className="font-mono font-bold">{formatDate(detail.updatedAt)}</p>
+                  <p className="text-[10px] text-muted-foreground font-medium">Cập nhật</p>
+                  <p className="font-mono font-medium">{formatDate(detail.updatedAt)}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-muted-foreground font-semibold">Người tạo (createdBy)</p>
-                  <p className="font-mono font-bold">{detail.createdBy != null ? detail.createdBy : "—"}</p>
+                  <p className="text-[10px] text-muted-foreground font-medium">Người tạo</p>
+                  <p className="font-medium text-foreground truncate" title={detail.createdByName || String(detail.createdBy || "")}>
+                    {detail.createdByName || (detail.createdBy ? `Admin #${detail.createdBy}` : "—")}
+                  </p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-muted-foreground font-semibold">Người cập nhật (updatedBy)</p>
-                  <p className="font-mono font-bold">{detail.updatedBy != null ? detail.updatedBy : "—"}</p>
+                  <p className="text-[10px] text-muted-foreground font-medium">Người cập nhật</p>
+                  <p className="font-medium text-foreground truncate" title={detail.updatedByName || String(detail.updatedBy || "")}>
+                    {detail.updatedByName || (detail.updatedBy ? `Admin #${detail.updatedBy}` : "—")}
+                  </p>
                 </div>
               </div>
 
@@ -1384,7 +1367,7 @@ export const SalesCoursePackageListPage: React.FC = () => {
                   variant="outline"
                   size="sm"
                   onClick={() => setDetailOpen(false)}
-                  className="rounded-xl text-xs font-semibold cursor-pointer"
+                  className="rounded-xl text-xs font-medium cursor-pointer"
                 >
                   Đóng
                 </Button>

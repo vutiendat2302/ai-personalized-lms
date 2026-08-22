@@ -41,6 +41,7 @@ public class ApprovalRequestService implements IApprovalRequestService {
     private final UserRoleRepository userRoleRepository;
     private final INotificationService notificationService;
     private final IOrderService orderService;
+    private final ClassMemberRepository classMemberRepository;
 
     private Long getCurrentUserId() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -216,6 +217,20 @@ public class ApprovalRequestService implements IApprovalRequestService {
     }
 
     private void notifyCreator(ApprovalRequestEntity request, boolean approved, String comment) {
+        // Luồng duyệt nghỉ lớp đã gửi thông báo chi tiết; khi từ chối vẫn báo đúng trang giáo viên.
+        if ("CLASS_TEACHER_LEAVE_REQUEST".equalsIgnoreCase(request.getTargetType())) {
+            if (approved || request.getCreatedBy() == null) return;
+            userRepository.findById(request.getCreatedBy()).ifPresent(creator ->
+                    notificationService.createSystemNotification(
+                            creator,
+                            NotificationTypeEnum.GENERAL,
+                            "Yêu cầu nghỉ lớp đã bị từ chối",
+                            "Yêu cầu nghỉ lớp #" + request.getTargetId() + " đã bị từ chối. Lý do: " + comment,
+                            request.getTargetId(),
+                            "/teacher/leave-requests"
+                    ));
+            return;
+        }
         if (request.getCreatedBy() == null) return;
         userRepository.findById(request.getCreatedBy()).ifPresent(creator ->
                 notificationService.createSystemNotification(
@@ -364,6 +379,8 @@ public class ApprovalRequestService implements IApprovalRequestService {
                         .reason(request.getRequestReason())
                         .build());
             }
+        } else if ("CLASS_TEACHER_LEAVE_REQUEST".equalsIgnoreCase(targetType)) {
+            finalizeTeacherClassWithdrawal(request, approved);
         } else if ("CONTRACT".equalsIgnoreCase(targetType)) {
             EmployeeContractEntity contract = employeeContractRepository.findById(targetId)
                     .orElseThrow(() -> ResourceNotFoundException.of("EmployeeContract", targetId));
@@ -388,5 +405,33 @@ public class ApprovalRequestService implements IApprovalRequestService {
             leave.setStatus(approved ? LeaveStatusEnum.APPROVED : LeaveStatusEnum.REJECTED);
             leaveRequestRepository.save(leave);
         }
+    }
+
+    /** Khi được duyệt mới gỡ phân công và thông báo cho người dạy cùng học viên trong lớp. */
+    private void finalizeTeacherClassWithdrawal(ApprovalRequestEntity request, boolean approved) {
+        if (!approved || request.getCreatedBy() == null) return;
+        ClassMemberEntity member = classMemberRepository.findById_ClassIdAndId_UserId(
+                        request.getTargetId(), request.getCreatedBy())
+                .orElseThrow(() -> new BusinessException("Không còn phân công người dạy trong lớp cần xử lý."));
+        if (member.getStatus() != ClassMemberStatusEnum.ACTIVE
+                || (member.getRoleInClass() != ClassMemberRole.TEACHER
+                && member.getRoleInClass() != ClassMemberRole.TA)) {
+            throw new BusinessException("Phân công người dạy không còn hiệu lực.");
+        }
+        member.setStatus(ClassMemberStatusEnum.REMOVED);
+        member.setLeftAt(LocalDateTime.now());
+        classMemberRepository.save(member);
+        notificationService.createSystemNotification(member.getUserEntity(), NotificationTypeEnum.GENERAL,
+                "Yêu cầu nghỉ lớp đã được duyệt",
+                "Bạn không còn phụ trách lớp " + member.getClassEntity().getName() + ".",
+                request.getTargetId(), "/teacher/classes");
+        classMemberRepository.findById_ClassIdAndRoleInClassAndStatus(
+                        request.getTargetId(), ClassMemberRole.STUDENT, ClassMemberStatusEnum.ACTIVE)
+                .forEach(student -> notificationService.createSystemNotification(
+                        student.getUserEntity(), NotificationTypeEnum.GENERAL,
+                        "Lớp đang được phân công lại người dạy",
+                        "Người dạy của lớp " + member.getClassEntity().getName()
+                                + " đã được duyệt nghỉ. HR đang phân công người thay thế.",
+                        request.getTargetId(), "/student/classes/" + request.getTargetId()));
     }
 }

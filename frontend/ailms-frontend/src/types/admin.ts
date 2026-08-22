@@ -144,17 +144,25 @@ export interface PermissionRequest {
 export interface CreateCourseRequest {
   categoryId: string;
   name: string;
-  link: string;
-  description: string;
-  level: string;
+  link?: string;
+  description?: string;
+  thumbnailUrl?: string;
+  learningObjectives?: string;
+  prerequisites?: string;
+  suggestedPrice?: number;
+  level?: string;
 }
 
 export interface UpdateCourseRequest {
-  categoryId: string;
-  name: string;
-  link: string;
-  description: string;
-  level: string;
+  categoryId?: string;
+  name?: string;
+  link?: string;
+  description?: string;
+  thumbnailUrl?: string;
+  learningObjectives?: string;
+  prerequisites?: string;
+  suggestedPrice?: number;
+  level?: string;
 }
 
 export interface StudentProfileResponse {

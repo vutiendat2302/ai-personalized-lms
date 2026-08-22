@@ -6,6 +6,8 @@ export interface QuizSearchRequest {
   courseId?: string | number;
   lessonId?: string | number;
   sectionId?: string | number;
+  classId?: string | number;
+  sourceQuizId?: string | number;
   status?: string;
   page?: number;
   size?: number;
@@ -14,17 +16,17 @@ export interface QuizSearchRequest {
 
 export interface QuizQuestionOption {
   id?: string | number;
-  optionText: string;
+  content: string;
   isCorrect: boolean;
-  explanation?: string;
+  orderIndex?: number;
 }
 
 export interface QuizQuestionItem {
   id?: string | number;
-  questionText: string;
-  questionType?: "MULTIPLE_CHOICE" | "SINGLE_CHOICE" | "TRUE_FALSE" | "FILL_BLANK" | "ESSAY";
+  content: string;
+  questionType: "MULTIPLE_CHOICE" | "SINGLE_CHOICE" | "TRUE_FALSE" | "SHORT_ANSWER" | "ESSAY" | "MATCHING";
   points?: number;
-  options?: QuizQuestionOption[];
+  options: QuizQuestionOption[];
   explanation?: string;
 }
 
@@ -33,6 +35,8 @@ export interface QuizResponseItem {
   lessonId?: string | number;
   courseId?: string | number;
   sectionId?: string | number;
+  classId?: string | number;
+  sourceQuizId?: string | number;
   code?: string;
   title: string;
   description?: string;
@@ -66,4 +70,24 @@ export const quizApi = {
 
   deleteQuiz: (id: string | number) =>
     httpClient.delete<ApiResponse<void>>(`/v1/quizzes/${id}`),
+
+  /** Tìm kiếm quiz do chính Teacher/TA đang đăng nhập tạo. */
+  searchAuthoredQuizzes: (params?: QuizSearchRequest) =>
+    httpClient.get<ApiResponse<PageResponse<QuizResponseItem>>>("/v1/teacher/assessment-library/quizzes/search", { params }),
+
+  /** Lấy quiz chi tiết kèm câu hỏi nếu thuộc người tạo hiện tại. */
+  getAuthoredQuizById: (id: string | number) =>
+    httpClient.get<ApiResponse<QuizResponseItem>>(`/v1/teacher/assessment-library/quizzes/${id}`),
+
+  /** Tạo quiz trong thư viện cá nhân của Teacher/TA. */
+  createAuthoredQuiz: (data: any) =>
+    httpClient.post<ApiResponse<QuizResponseItem>>("/v1/teacher/assessment-library/quizzes", data),
+
+  /** Sửa quiz thuộc quyền sở hữu của Teacher/TA. */
+  updateAuthoredQuiz: (id: string | number, data: any) =>
+    httpClient.put<ApiResponse<QuizResponseItem>>(`/v1/teacher/assessment-library/quizzes/${id}`, data),
+
+  /** Xóa quiz thuộc quyền sở hữu của Teacher/TA. */
+  deleteAuthoredQuiz: (id: string | number) =>
+    httpClient.delete<ApiResponse<void>>(`/v1/teacher/assessment-library/quizzes/${id}`),
 };

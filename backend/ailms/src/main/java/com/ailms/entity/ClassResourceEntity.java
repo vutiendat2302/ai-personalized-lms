@@ -1,8 +1,10 @@
 package com.ailms.entity;
 
 import com.ailms.common.snowflake.SnowflakeId;
+import com.ailms.entity.enums.RagProcessingStatusEnum;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -48,4 +50,19 @@ public class ClassResourceEntity extends BaseEntity {
 
     @Column(name = "uploaded_by_user_id", nullable = false)
     private Long uploadedByUserId;
+
+    /** Trạng thái xử lý embedding để UI chỉ cho chọn nguồn đã sẵn sàng. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "rag_status", nullable = false, length = 20)
+    @Builder.Default
+    private RagProcessingStatusEnum ragStatus = RagProcessingStatusEnum.PENDING;
+
+    /** Số chunk đã được upsert vào Qdrant cho resource hiện tại. */
+    @Column(name = "rag_chunks_count", nullable = false)
+    @Builder.Default
+    private Integer ragChunksCount = 0;
+
+    /** Thông báo lỗi ingestion rút gọn, không chứa nội dung tài liệu. */
+    @Column(name = "rag_error", length = 500)
+    private String ragError;
 }

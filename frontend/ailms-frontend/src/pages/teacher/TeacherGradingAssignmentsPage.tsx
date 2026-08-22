@@ -5,12 +5,16 @@ import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/useToast";
 import { ClipboardList, CheckCircle2 } from "lucide-react";
 
+/**
+ * Component quản lý trang chấm bài tập tự luận dành cho Giảng viên & Trợ giảng.
+ */
 export const TeacherGradingAssignmentsPage: React.FC = () => {
   const { success } = useToast();
   const [submissions, setSubmissions] = useState<SubmissionItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"UNGRADED" | "GRADED">("UNGRADED");
 
+  /** Tải danh sách các bài tập chờ chấm của học viên. */
   useEffect(() => {
     teacherApi.getAssignmentSubmissions().then((res) => {
       setSubmissions(res);
@@ -18,6 +22,7 @@ export const TeacherGradingAssignmentsPage: React.FC = () => {
     });
   }, []);
 
+  /** Xử lý chấm điểm và gửi nhận xét cho bài nộp của học viên. */
   const handleGrade = async (sub: SubmissionItem, score: number, feedback: string) => {
     await teacherApi.gradeSubmission(sub.id, score, feedback);
     success(`Đã chấm điểm ${score}/${sub.maxScore} cho ${sub.studentName}!`);
