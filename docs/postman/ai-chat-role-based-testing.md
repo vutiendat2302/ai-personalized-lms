@@ -154,6 +154,51 @@ Tạo **Environment** trong Postman với các biến:
   ```
 - **Kỳ vọng:** AI tóm tắt các điểm trọng tâm của bài học và liệt kê tài liệu tham khảo.
 
+### 4.4. Scoped RAG theo Lesson / Lớp / Course
+
+Frontend chỉ gửi `courseId`, `lessonId` và `retrievalScope`. Backend tự kiểm tra enrollment và suy ra `classId`; không chấp nhận `classId` từ client như một quyền truy cập.
+
+```http
+POST {{baseUrl}}/ai/chat/stream
+Authorization: Bearer {{studentToken}}
+Content-Type: application/json
+
+{
+  "question": "Tài liệu giải thích khái niệm này như thế nào?",
+  "module": "TRAINING",
+  "route": "/learn/courses/{{courseId}}/lessons/{{lessonId}}",
+  "courseId": "{{courseId}}",
+  "lessonId": "{{lessonId}}",
+  "retrievalScope": "LESSON_ONLY"
+}
+```
+
+Chạy lại với:
+
+- `CLASS_MATERIALS`: cần `courseId`; Backend suy ra lớp ACTIVE của enrollment.
+- `COURSE_MATERIALS`: chỉ truy xuất source cùng `courseId`, `visibility=COURSE` và role; không lấy tài liệu riêng của lớp khác.
+- `GENERAL`: không gọi Qdrant, metadata phải có `sources: []`.
+
+Với RAG có kết quả, event metadata cuối stream phải chỉ chứa source cùng scope:
+
+```text
+event: metadata
+data: {"route":"KNOWLEDGE","grounding":"REQUIRED","sources":[{"sourceId":"class-resource-...","courseId":"...","classId":"...","lessonId":"..."}]}
+```
+
+### 4.5. Test chống truy cập chéo
+
+| Trường hợp | Kết quả mong đợi |
+|---|---|
+| `courseId` chưa ghi danh | `403` trước khi gọi AI Service |
+| `lessonId` thuộc course khác | `403` |
+| `CLASS_MATERIALS` nhưng enrollment không có lớp | `400` |
+| Membership lớp không còn ACTIVE/STUDENT | `403` |
+| Enrollment bị hủy | `403` |
+| Dùng lại `conversationId` với lesson/scope khác | `400`, không trộn lịch sử |
+| `GENERAL` dù router chọn KNOWLEDGE | Không retrieve Qdrant |
+| Không có chunk và grounding REQUIRED | Stream thông báo chưa có tài liệu, source rỗng |
+
 ---
 
 ## 5. PHÂN HỆ 3: GIẢNG VIÊN & TRỢ GIẢNG (TEACHER / TA COPILOT)

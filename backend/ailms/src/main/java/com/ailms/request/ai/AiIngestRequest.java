@@ -20,4 +20,7 @@ public class AiIngestRequest {
     private String domain;
     private List<String> allowedRoles;
     private Map<String, Object> metadata;
+    private String courseId;
+    private String sectionId;
+    private String lessonId;
 }

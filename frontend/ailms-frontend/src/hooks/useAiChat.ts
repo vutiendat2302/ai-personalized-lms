@@ -11,14 +11,16 @@ import {
 
 /** Sinh ID tạm cho message chỉ dùng để render phía frontend. */
 const generateId = (prefix: string): string => {
-  const value = typeof crypto !== "undefined" && crypto.randomUUID
-    ? crypto.randomUUID()
-    : `${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const value = crypto.randomUUID();
   return `${prefix}_${value}`;
 };
 
 /** Quản lý stream, persistence và thao tác lịch sử Admin Copilot. */
-export function useAiChat(route: string, module: string) {
+export function useAiChat(
+  route: string,
+  module: string,
+  learningContext?: Pick<AiChatRequestPayload, "courseId" | "lessonId" | "retrievalScope">,
+) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [conversations, setConversations] = useState<AiConversation[]>([]);
   const [input, setInput] = useState("");
@@ -44,7 +46,12 @@ export function useAiChat(route: string, module: string) {
   }, []);
 
   useEffect(() => {
-    void refreshConversations();
+    const timer = window.setTimeout(() => {
+      void refreshConversations();
+    }, 0);
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, [refreshConversations]);
 
   /** Gộp các chunk đang chờ vào message assistant để render mượt. */
@@ -81,13 +88,14 @@ export function useAiChat(route: string, module: string) {
       question,
       route,
       module,
+      ...learningContext,
     };
     try {
       await streamChat(payload, {
         signal: controller.signal,
         onConversationId: setConversationId,
         onMetadata: (metadata) => {
-          if (metadata?.sources) {
+          if (metadata.sources) {
             setMessages((previous) => previous.map((message) =>
               message.id === assistantMessage.id
                 ? { ...message, sources: metadata.sources, route: metadata.route }
@@ -97,12 +105,10 @@ export function useAiChat(route: string, module: string) {
         },
         onChunk: (chunk) => {
           pendingBufferRef.current += chunk;
-          if (animFrameRef.current === null) {
-            animFrameRef.current = requestAnimationFrame(() => {
+          animFrameRef.current ??= requestAnimationFrame(() => {
               animFrameRef.current = null;
               flushPendingBuffer(assistantMessage.id);
             });
-          }
         },
         onComplete: () => {
           flushPendingBuffer(assistantMessage.id);
@@ -111,17 +117,23 @@ export function useAiChat(route: string, module: string) {
           ));
           void refreshConversations();
         },
-        onError: (error) => setMessages((previous) => previous.map((message) =>
-          message.id === assistantMessage.id
-            ? { ...message, content: message.content || error.message || "Không thể kết nối AI lúc này.", status: "error" }
-            : message
-        )),
+        onError: (error) => {
+          setMessages((previous) => previous.map((message) => message.id === assistantMessage.id
+            ? {
+                ...message,
+                content: message.content.length > 0
+                  ? message.content
+                  : error.message.length > 0 ? error.message : "Không thể kết nối AI lúc này.",
+                status: "error",
+              }
+            : message));
+        },
       });
     } catch (error) {
       if (!(error instanceof DOMException && error.name === "AbortError")) {
         setMessages((previous) => previous.map((message) =>
           message.id === assistantMessage.id
-            ? { ...message, content: message.content || "Có lỗi kết nối.", status: "error" }
+            ? { ...message, content: message.content.length > 0 ? message.content : "Có lỗi kết nối.", status: "error" }
             : message
         ));
       }
@@ -129,17 +141,19 @@ export function useAiChat(route: string, module: string) {
       setIsStreaming(false);
       abortControllerRef.current = null;
     }
-  }, [conversationId, flushPendingBuffer, input, isStreaming, module, refreshConversations, route]);
+  }, [conversationId, flushPendingBuffer, input, isStreaming, learningContext, module, refreshConversations, route]);
 
   /** Gửi câu hỏi kèm tệp tài liệu hoặc hình ảnh để AI phân tích. */
   const sendFileMessage = useCallback(async (file: File, customText?: string) => {
-    if (!file || isStreaming) return;
+    if (isStreaming) return;
     const question = (typeof customText === "string" ? customText : input).trim();
     const isImage = file.type.startsWith("image/");
     const imageUrl = isImage ? URL.createObjectURL(file) : undefined;
     const userMessage: ChatMessage = {
       id: generateId("msg"), role: "user",
-      content: question || (isImage ? "Phân tích hình ảnh này" : `Phân tích tài liệu: ${file.name}`),
+      content: question.length > 0
+        ? question
+        : isImage ? "Phân tích hình ảnh này" : `Phân tích tài liệu: ${file.name}`,
       imageUrl,
       fileName: file.name,
       fileType: file.type,
@@ -157,15 +171,16 @@ export function useAiChat(route: string, module: string) {
     try {
       await streamChatWithImage({
         image: file,
-        question: question || undefined,
-        conversationId: conversationId || undefined,
+        question: question.length > 0 ? question : undefined,
+        conversationId: conversationId ?? undefined,
         route,
         module,
+        ...learningContext,
       }, {
         signal: controller.signal,
         onConversationId: setConversationId,
         onMetadata: (metadata) => {
-          if (metadata?.sources) {
+          if (metadata.sources) {
             setMessages((previous) => previous.map((message) =>
               message.id === assistantMessage.id
                 ? { ...message, sources: metadata.sources, route: metadata.route }
@@ -175,12 +190,10 @@ export function useAiChat(route: string, module: string) {
         },
         onChunk: (chunk: string) => {
           pendingBufferRef.current += chunk;
-          if (animFrameRef.current === null) {
-            animFrameRef.current = requestAnimationFrame(() => {
+          animFrameRef.current ??= requestAnimationFrame(() => {
               animFrameRef.current = null;
               flushPendingBuffer(assistantMessage.id);
             });
-          }
         },
         onComplete: () => {
           flushPendingBuffer(assistantMessage.id);
@@ -189,17 +202,21 @@ export function useAiChat(route: string, module: string) {
           ));
           void refreshConversations();
         },
-        onError: () => setMessages((previous) => previous.map((message) =>
-          message.id === assistantMessage.id
-            ? { ...message, content: message.content || "Không thể phân tích tệp lúc này.", status: "error" }
-            : message
-        )),
+        onError: () => {
+          setMessages((previous) => previous.map((message) => message.id === assistantMessage.id
+            ? {
+                ...message,
+                content: message.content.length > 0 ? message.content : "Không thể phân tích tệp lúc này.",
+                status: "error",
+              }
+            : message));
+        },
       });
     } catch (error) {
       if (!(error instanceof DOMException && error.name === "AbortError")) {
         setMessages((previous) => previous.map((message) =>
           message.id === assistantMessage.id
-            ? { ...message, content: message.content || "Có lỗi phân tích tệp.", status: "error" }
+            ? { ...message, content: message.content.length > 0 ? message.content : "Có lỗi phân tích tệp.", status: "error" }
             : message
         ));
       }
@@ -207,10 +224,34 @@ export function useAiChat(route: string, module: string) {
       setIsStreaming(false);
       abortControllerRef.current = null;
     }
-  }, [conversationId, flushPendingBuffer, input, isStreaming, module, refreshConversations, route]);
+  }, [conversationId, flushPendingBuffer, input, isStreaming, learningContext, module, refreshConversations, route]);
 
   /** Gửi câu hỏi kèm tệp hình ảnh để Gemini Vision phân tích. */
   const sendImageMessage = sendFileMessage;
+
+  /** Gửi lại câu hỏi gần nhất sau lỗi stream và bỏ cặp message lỗi khỏi giao diện. */
+  const retryLastMessage = useCallback(() => {
+    if (isStreaming) return;
+    let failedIndex = -1;
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      if (messages[index].role === "assistant" && messages[index].status === "error") {
+        failedIndex = index;
+        break;
+      }
+    }
+    if (failedIndex < 0) return;
+    let userIndex = -1;
+    for (let index = failedIndex - 1; index >= 0; index -= 1) {
+      if (messages[index].role === "user") {
+        userIndex = index;
+        break;
+      }
+    }
+    if (userIndex < 0) return;
+    const question = messages[userIndex].content;
+    setMessages((previous) => previous.slice(0, userIndex));
+    void sendMessage(question);
+  }, [isStreaming, messages, sendMessage]);
 
   /** Dừng stream đang chạy và giữ phần câu trả lời đã nhận. */
   const stopGenerating = useCallback(() => {
@@ -253,6 +294,6 @@ export function useAiChat(route: string, module: string) {
   return {
     messages, conversations, input, setInput, isStreaming, isHistoryLoading, historyError,
     conversationId, sendMessage, sendImageMessage, sendFileMessage, stopGenerating, startNewConversation,
-    openConversation, removeConversation, renameConversation, refreshConversations,
+    retryLastMessage, openConversation, removeConversation, renameConversation, refreshConversations,
   };
 }

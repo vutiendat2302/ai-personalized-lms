@@ -51,6 +51,8 @@ import com.ailms.repository.StudentProfileRepository;
 import com.ailms.repository.UserCouponRepository;
 import com.ailms.repository.UserRepository;
 import com.ailms.repository.ContractTemplateRepository;
+import com.ailms.security.CourseAccess;
+import org.springframework.security.core.context.SecurityContextHolder;
 import com.ailms.request.GenerateEmployeeContractRequest;
 import com.ailms.request.QuizQuestionOptionRequest;
 import com.ailms.request.QuizQuestionRequest;
@@ -110,6 +112,7 @@ public class ManagementAiContextService {
     private final ICourseAuthoringService courseAuthoringService;
     private final IEmployeeContractService employeeContractService;
     private final ContractTemplateRepository contractTemplateRepository;
+    private final CourseAccess courseAccess;
 
     /** Thực thi đúng một tool allow-list và ghi audit metadata không chứa dữ liệu nhạy cảm. */
     @Transactional
@@ -131,7 +134,9 @@ public class ManagementAiContextService {
             case "draft_notification" -> notificationDraft(arguments, context);
             case "get_course_details" -> courseDetails(arguments);
             case "get_course_curriculum" -> courseCurriculum(arguments);
+            case "get_teacher_course_students" -> teacherCourseStudents(arguments, context);
             case "get_my_learning_progress" -> myLearningProgress(arguments, context);
+            case "get_my_classes" -> myClasses(context);
             case "recommend_next_learning_step" -> recommendNextLearningStep(arguments, context);
             case "get_lesson_summary_and_resources" -> lessonSummaryAndResources(arguments);
             case "check_and_prepare_contract_creation" -> withAdminOrHr(context, () -> checkAndPrepareContractCreation(arguments));
@@ -647,6 +652,35 @@ public class ManagementAiContextService {
         );
     }
 
+    /** Danh sách học viên và tiến độ thật, chỉ cho người đang phụ trách đúng khóa học. */
+    private Map<String, Object> teacherCourseStudents(Map<String, Object> arguments, AiToolAccessContext context) {
+        requireTeacherOrAdmin(context);
+        String courseIdValue = optionalString(arguments, "courseId");
+        if (courseIdValue == null) throw new BadRequestException("Cần truyền courseId");
+        Long courseId;
+        try { courseId = Long.valueOf(courseIdValue); }
+        catch (NumberFormatException exception) { throw new BadRequestException("courseId không hợp lệ"); }
+        if (!courseAccess.canManage(courseId, SecurityContextHolder.getContext().getAuthentication())) {
+            throw new ForbiddenException("Bạn không phụ trách khóa học này");
+        }
+        CourseEntity course = courseRepository.findById(courseId)
+                .orElseThrow(() -> ResourceNotFoundException.of("Course", courseId));
+        List<Map<String, Object>> students = enrollmentRepository.findByCourseEntity_Id(courseId).stream()
+                .map(enrollment -> {
+                    Long userId = enrollment.getUserEntity().getId();
+                    CourseProgressEntity progress = courseProgressRepository.findByUserIdAndCourseId(userId, courseId).orElse(null);
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("studentId", String.valueOf(userId));
+                    item.put("studentName", enrollment.getUserEntity().getFullName());
+                    item.put("progressPercent", progress == null || progress.getProgressPercent() == null ? 0 : progress.getProgressPercent());
+                    item.put("completedLessons", progress == null || progress.getCompletedLessons() == null ? 0 : progress.getCompletedLessons());
+                    item.put("lastAccessedAt", progress == null || progress.getUpdatedAt() == null ? null : progress.getUpdatedAt().toString());
+                    return item;
+                }).toList();
+        return Map.of("courseId", String.valueOf(courseId), "courseName", course.getName(),
+                "studentCount", students.size(), "students", students);
+    }
+
     /** Lấy tiến độ học tập cá nhân của chính học viên hiện tại. */
     private Map<String, Object> myLearningProgress(Map<String, Object> arguments, AiToolAccessContext context) {
         Long userId = context.ownerId();
@@ -714,6 +748,24 @@ public class ManagementAiContextService {
                 "enrolledCoursesCount", progressSummaries.size(),
                 "courses", progressSummaries
         );
+    }
+
+    /** Lấy lớp học thật của chính học viên, tách biệt hoàn toàn với danh sách khóa học đã đăng ký. */
+    private Map<String, Object> myClasses(AiToolAccessContext context) {
+        List<Map<String, Object>> classes = enrollmentRepository.findByUserEntity_Id(context.ownerId()).stream()
+                .filter(enrollment -> enrollment.getClassEntity() != null)
+                .map(enrollment -> {
+                    var clazz = enrollment.getClassEntity();
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("classId", String.valueOf(clazz.getId()));
+                    item.put("className", clazz.getName());
+                    item.put("classCode", clazz.getCode());
+                    item.put("courseId", clazz.getCourseEntity() == null ? null : String.valueOf(clazz.getCourseEntity().getId()));
+                    item.put("courseName", clazz.getCourseEntity() == null ? null : clazz.getCourseEntity().getName());
+                    item.put("enrollmentStatus", enrollment.getStatus() == null ? null : String.valueOf(enrollment.getStatus()));
+                    return item;
+                }).toList();
+        return Map.of("studentId", String.valueOf(context.ownerId()), "classCount", classes.size(), "classes", classes);
     }
 
     /** Phân tích tiến độ để gợi ý bài học tiếp theo hoặc bài ôn tập cho học viên. */

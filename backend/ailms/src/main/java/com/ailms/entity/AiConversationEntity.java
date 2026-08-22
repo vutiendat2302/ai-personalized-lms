@@ -45,6 +45,22 @@ public class AiConversationEntity extends BaseEntity {
     @Column(name = "context_route", length = 255)
     private String contextRoute;
 
+    /** Course đã được Backend xác thực khi conversation thuộc Student Assistant. */
+    @Column(name = "course_id")
+    private Long courseId;
+
+    /** Lớp học đã được Backend suy ra từ enrollment/membership. */
+    @Column(name = "class_id")
+    private Long classId;
+
+    /** Lesson hiện tại của Course Player. */
+    @Column(name = "lesson_id")
+    private Long lessonId;
+
+    /** Phạm vi RAG cố định của conversation để tránh trộn ngữ cảnh. */
+    @Column(name = "retrieval_scope", length = 30)
+    private String retrievalScope;
+
     /** Thời điểm có tin nhắn mới nhất để sắp xếp lịch sử. */
     @Column(name = "last_message_at", nullable = false)
     private LocalDateTime lastMessageAt;

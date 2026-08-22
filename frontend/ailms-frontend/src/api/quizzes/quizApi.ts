@@ -6,6 +6,8 @@ export interface QuizSearchRequest {
   courseId?: string | number;
   lessonId?: string | number;
   sectionId?: string | number;
+  classId?: string | number;
+  sourceQuizId?: string | number;
   status?: string;
   page?: number;
   size?: number;
@@ -33,6 +35,8 @@ export interface QuizResponseItem {
   lessonId?: string | number;
   courseId?: string | number;
   sectionId?: string | number;
+  classId?: string | number;
+  sourceQuizId?: string | number;
   code?: string;
   title: string;
   description?: string;

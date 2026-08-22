@@ -2,6 +2,7 @@ package com.ailms.service.imp;
 import com.ailms.common.converter.SimpleJsonWriter;
 import com.ailms.entity.enums.FileUsageTypeEnum;
 import com.ailms.event.AuditLogEvent;
+import com.ailms.event.LessonResourceKnowledgeChangedEvent;
 import com.ailms.repository.specification.LessonResourceSpecification;
 import com.ailms.request.LessonResourceSearchRequest;
 import com.ailms.service.ILessonResourceService;
@@ -87,6 +88,7 @@ public class LessonResourceService implements ILessonResourceService {
         resourceResponse.setFileUrl(fileService.getDownloadUrl(entity.getFileMetadata().getFileKey()));
 
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CREATE", "RESOURCE_LESSON", request.getLessonId(), null, savedEntity));
+        applicationEventPublisher.publishEvent(new LessonResourceKnowledgeChangedEvent(savedEntity.getId(), false));
         return resourceResponse;
     }
 
@@ -112,6 +114,7 @@ public class LessonResourceService implements ILessonResourceService {
         resourceResponse.setFileUrl(fileService.getDownloadUrl(updatedEntity.getFileMetadata().getFileKey()));
 
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CREATE", "RESOURCE_LESSON", id, oldValue, updatedEntity));
+        applicationEventPublisher.publishEvent(new LessonResourceKnowledgeChangedEvent(updatedEntity.getId(), false));
         return resourceResponse;
     }
 
@@ -126,6 +129,7 @@ public class LessonResourceService implements ILessonResourceService {
 
         lessonResourceRepository.deleteById(id);
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "CREATE", "RESOURCE_LESSON", id, null, null));
+        applicationEventPublisher.publishEvent(new LessonResourceKnowledgeChangedEvent(id, true));
     }
 
     @Override

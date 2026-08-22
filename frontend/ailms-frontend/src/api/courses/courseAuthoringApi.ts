@@ -13,6 +13,9 @@ export interface QuizResponseDTO {
   passScore?: number;
   maxAttempts?: number;
   shuffleQuestions?: boolean;
+  availableFrom?: string;
+  dueAt?: string;
+  showResultAfterSubmit?: boolean;
   status?: string;
   questions?: QuizQuestionDTO[];
 }

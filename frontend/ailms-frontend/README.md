@@ -152,7 +152,17 @@ sequenceDiagram
 ```
 ---
 
-## 4. Design System & Chuẩn mực Giao diện
+## 4. AI Assessment và Learning Chat
+
+- `AiQuizGeneratorModal` tải lớp/resource thật, kết hợp resource RAG với tối đa 3 file upload, cho review/chỉnh sửa Quiz và có thể phát hành ngay vào lớp.
+- Trang thư viện assessment của Teacher có nút `Giao lớp` để phát hành cả Quiz đã tạo trước đó.
+- `StudentAssignmentsPage` hiển thị `UPCOMING/IN_PROGRESS/SUBMITTED/PASSED/EXPIRED`; Quiz lớp mở bằng `StudentQuizAttemptPage` và tải câu hỏi qua API học viên đã ẩn đáp án.
+- Course Player render `AiChatWidget` theo `courseId/lessonId`. Selector hỗ trợ `LESSON_ONLY`, `CLASS_MATERIALS`, `COURSE_MATERIALS`, `GENERAL`.
+- Hook `useAiChat` hủy stream bằng `AbortController`, giữ phần text đã nhận, hiển thị citation và cho retry message lỗi. Đổi course/lesson/scope sẽ tách conversation.
+
+---
+
+## 5. Design System & Chuẩn mực Giao diện
 
 - **Thư viện UI Lõi:** Sử dụng **shadcn/ui** xây dựng trên nền tảng **Radix UI Primitives** đảm bảo khả năng tiếp cận chuẩn mực (WAI-ARIA Accessibility).
 - **Bộ màu & Typography:** Sử dụng Tailwind CSS v4 với hệ màu HSL linh hoạt, tối ưu tương phản thị giác, hệ thống Typography rõ ràng.
@@ -168,7 +178,7 @@ sequenceDiagram
 
 ---
 
-## 5. Cấu hình Môi trường & Hướng dẫn Khởi chạy
+## 6. Cấu hình Môi trường & Hướng dẫn Khởi chạy
 
 ### 1. Yêu cầu hệ thống
 - **Node.js:** Phiên bản 20.x hoặc 22.x LTS trở lên.
@@ -200,7 +210,7 @@ npm run preview
 
 ---
 
-## 6. Đóng gói Container với Docker & Nginx
+## 7. Đóng gói Container với Docker & Nginx
 
 Frontend được tối ưu hóa thông qua **Multi-stage Dockerfile**:
 1. **Stage 1 (Builder):** Sử dụng `node:20-alpine` để cài đặt dependencies và thực thi lệnh `npm run build`.

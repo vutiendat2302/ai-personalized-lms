@@ -31,4 +31,13 @@ public class AiChatRequest {
     private String route;
 
     private String retrievalMode;
+
+    private Long courseId;
+
+    private Long lessonId;
+
+    private String retrievalScope;
+
+    /** Chỉ Backend được phép ghi field này sau khi resolve enrollment. */
+    private Long classId;
 }

@@ -15,4 +15,8 @@ public class AiAssessmentGenerationRequest {
     private String assessmentType;
     private Integer questionCount;
     private List<AiAssessmentSourceFile> sourceFiles;
+    private List<String> ragSourceIds;
+    private String classId;
+    private String courseId;
+    private List<String> allowedRoles;
 }

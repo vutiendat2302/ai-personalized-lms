@@ -63,7 +63,7 @@ DEFAULT_SYSTEM_PROMPT = (
     "2. Đối với hình ảnh hoặc tài liệu đính kèm:\n"
     "   - Nếu hình ảnh/tài liệu KHÔNG LIÊN QUAN đến học tập, đào tạo hoặc quản trị LMS (ví dụ: ảnh động vật/thú cưng, meme, đồ ăn, phong cảnh cá nhân, nội dung rác):\n"
     "     -> BẮT BUỘC TỪ CHỐI NGẮN GỌN VÀ LỊCH SỰ, KHÔNG PHÂN TÍCH CHI TIẾT ĐỂ TIẾT KIỆM TÀI NGUYÊN HỆ THỐNG.\n"
-    "     -> Mẫu từ chối: \"Hình ảnh/tài liệu này không thuộc phạm vi đào tạo hoặc quản trị của hệ thống AILMS. Vui lòng tải lên tài liệu học tập, bài tập, biểu đồ hoặc bảng số liệu liên quan đến hệ thống.\"\n"
+    '     -> Mẫu từ chối: "Hình ảnh/tài liệu này không thuộc phạm vi đào tạo hoặc quản trị của hệ thống AILMS. Vui lòng tải lên tài liệu học tập, bài tập, biểu đồ hoặc bảng số liệu liên quan đến hệ thống."\n'
     "   - Nếu ảnh chứa câu hỏi quiz, bài kiểm tra hoặc bài tập của học viên: chỉ được đóng vai trò trợ giảng, giải thích khái niệm, phân tích dữ kiện và đưa gợi ý từng bước. TUYỆT ĐỐI KHÔNG chọn đáp án, tiết lộ đáp án cuối cùng, làm bài thay hoặc tính điểm cho học viên. Nếu người dùng hỏi thẳng đáp án, hãy từ chối phần chốt đáp án và hướng dẫn cách tự suy luận.\n"
     "3. TẠO VÀ LƯU BÀI KIỂM TRA / QUIZ VÀO HỆ THỐNG:\n"
     "   - Khi Giảng viên hoặc Quản trị viên yêu cầu tạo bài quiz/kiểm tra, phiếu bài tập hoặc lưu bộ câu hỏi vào hệ thống/khóa học:\n"
@@ -74,6 +74,10 @@ DEFAULT_SYSTEM_PROMPT = (
     "4. DỮ LIỆU CÁ NHÂN CỦA HỌC VIÊN:\n"
     "   - Khi học viên hỏi về khóa học đã đăng ký, thông tin chi tiết khóa học, tiến độ, điểm số, bài học tiếp theo hoặc tài nguyên bài học: BẮT BUỘC gọi tool phù hợp (`get_course_details`, `get_my_learning_progress`, `recommend_next_learning_step`, `get_lesson_summary_and_resources`) trước khi trả lời.\n"
     "   - Chỉ sử dụng kết quả tool của chính học viên; không đoán, không tự bịa số lượng hoặc điểm số. Nếu tool trả lỗi, nói rõ chưa lấy được dữ liệu.\n\n"
+    "   - Khi học viên hỏi lớp/lớp học đang tham gia, BẮT BUỘC gọi tool `get_my_classes`; không dùng `get_my_learning_progress` vì đó là danh sách khóa học.\n\n"
+    "4a. DỮ LIỆU GIẢNG DẠY CỦA TEACHER/TA:\n"
+    "   - Khi giảng viên hỏi danh sách học viên, tiến độ, khung chương trình hoặc thống kê của khóa học đang mở: BẮT BUỘC gọi tool `get_teacher_course_students` hoặc `get_course_curriculum` với courseId được cung cấp. Không nói hệ thống không thể truy xuất nếu chưa gọi tool.\n"
+    "   - Chỉ trả dữ liệu của khóa học người dùng được phân công; nếu tool trả lỗi quyền thì nói rõ không có quyền phụ trách khóa đó.\n\n"
     "5. ĐƯỜNG DẪN GIAO DIỆN:\n"
     "   - Không tự tạo hoặc đoán URL/route Markdown như `/student/courses`, `/teacher/...` hoặc đường dẫn khác. Chỉ đưa đường dẫn khi Backend cung cấp rõ ràng trong dữ liệu.\n"
     "QUY TẮC TRÍCH DẪN NGUỒN TÀI LIỆU:\n"
@@ -121,7 +125,14 @@ async def sse_event_generator(request: ChatStreamRequest) -> AsyncGenerator[str,
             # Học sinh cần dữ liệu khóa học thật từ Backend, không bị chặn bởi RAG grounding.
             if request.scope == "STUDENT_ASSISTANT" and any(
                 keyword in request.question.lower()
-                for keyword in ("khóa học", "khoá học", "bài học", "tiến độ", "điểm số", "đã đăng ký")
+                for keyword in (
+                    "khóa học",
+                    "khoá học",
+                    "bài học",
+                    "tiến độ",
+                    "điểm số",
+                    "đã đăng ký",
+                )
             ):
                 decision = ChatRoutingDecision(
                     route=ChatRoute.TOOL,
@@ -166,9 +177,13 @@ async def sse_event_generator(request: ChatStreamRequest) -> AsyncGenerator[str,
         else:
             # Route KNOWLEDGE: Thực hiện Selective RAG với Qdrant Score Threshold
             try:
-                rewritten = await query_rewriter.rewrite(request.question, request.history)
+                rewritten = await query_rewriter.rewrite(
+                    request.question, request.history
+                )
             except Exception:
-                logger.warning("Không thể rewrite query, dùng câu hỏi gốc", exc_info=True)
+                logger.warning(
+                    "Không thể rewrite query, dùng câu hỏi gốc", exc_info=True
+                )
                 rewritten = request.question
 
             roles = list({role.upper() for role in request.roles} | {"ALL"})
@@ -176,32 +191,59 @@ async def sse_event_generator(request: ChatStreamRequest) -> AsyncGenerator[str,
             if request.module.upper() != "GENERAL":
                 filters["module"] = [request.module.upper(), "GENERAL"]
             if request.scope == "ADMIN_COPILOT":
-                filters["module"] = list({
-                    *(filters.get("module", [])),
-                    "SUPPORT",
-                    "HR",
-                    "GENERAL",
-                })
+                filters["module"] = list(
+                    {
+                        *(filters.get("module", [])),
+                        "SUPPORT",
+                        "HR",
+                        "GENERAL",
+                    }
+                )
                 filters["domain"] = [
                     "hr_template",
                     "general_policy",
                     "system_guide",
                     "support_policy",
                 ]
+            elif request.scope == "STUDENT_ASSISTANT":
+                filters["module"] = "TRAINING"
+                if request.retrieval_scope == "LESSON_ONLY":
+                    filters["courseId"] = request.course_id
+                    filters["lessonId"] = request.lesson_id
+                    filters["visibility"] = "COURSE"
+                elif request.retrieval_scope == "CLASS_MATERIALS":
+                    filters["courseId"] = request.course_id
+                    filters["classId"] = request.class_id
+                    filters["visibility"] = "CLASS"
+                elif request.retrieval_scope == "COURSE_MATERIALS":
+                    filters["courseId"] = request.course_id
+                    filters["visibility"] = "COURSE"
 
-            try:
-                knowledge = await retriever.retrieve(
-                    rewritten,
-                    filters,
-                    settings.CHAT_RETRIEVAL_LIMIT,
-                    score_threshold=settings.RAG_MIN_SCORE,
-                )
-            except Exception:
-                logger.warning("Không thể retrieve knowledge cho chat", exc_info=True)
+            student_general_scope = (
+                request.scope == "STUDENT_ASSISTANT"
+                and request.retrieval_scope == "GENERAL"
+            )
+            if student_general_scope:
+                # GENERAL chỉ dùng kiến thức mô hình, tuyệt đối không tìm chéo tài liệu đào tạo.
                 knowledge = []
+            else:
+                try:
+                    knowledge = await retriever.retrieve(
+                        rewritten,
+                        filters,
+                        settings.CHAT_RETRIEVAL_LIMIT,
+                        score_threshold=settings.RAG_MIN_SCORE,
+                    )
+                except Exception:
+                    logger.warning(
+                        "Không thể retrieve knowledge cho chat", exc_info=True
+                    )
+                    knowledge = []
 
             # Kiểm tra Grounding Gate
-            if not knowledge and decision.grounding == GroundingMode.REQUIRED:
+            if student_general_scope:
+                prompt = context_builder.build_direct(request)
+            elif not knowledge and decision.grounding == GroundingMode.REQUIRED:
                 yield "data: Hiện tại hệ thống chưa tìm thấy tài liệu quy chế hoặc giáo trình đủ tin cậy để xác nhận thông tin này.\n\n"
                 meta_payload = {
                     "route": decision.route.value,
@@ -226,6 +268,7 @@ async def sse_event_generator(request: ChatStreamRequest) -> AsyncGenerator[str,
                     chunk_id=res.id,
                     score=round(res.score, 4) if res.score is not None else None,
                     course_id=res.payload.get("courseId"),
+                    class_id=res.payload.get("classId"),
                     lesson_id=res.payload.get("lessonId"),
                     section_id=res.payload.get("sectionId"),
                     page_number=res.payload.get("pageNumber"),
@@ -264,7 +307,9 @@ async def sse_event_generator(request: ChatStreamRequest) -> AsyncGenerator[str,
                         file_title = request.file_name or "Tài liệu Word đính kèm"
                         prompt += f"\n\nTÀI LIỆU ĐÍNH KÈM TỪ NGƯỜI DÙNG ({file_title}):\n{doc_text[:50_000]}"
                 except Exception:
-                    logger.warning("Không thể trích xuất DOCX trong chat", exc_info=True)
+                    logger.warning(
+                        "Không thể trích xuất DOCX trong chat", exc_info=True
+                    )
             elif file_mime.startswith("text/"):
                 try:
                     txt_ext = TextExtractor()
@@ -274,7 +319,9 @@ async def sse_event_generator(request: ChatStreamRequest) -> AsyncGenerator[str,
                         file_title = request.file_name or "Tệp văn bản đính kèm"
                         prompt += f"\n\nTÀI LIỆU ĐÍNH KÈM TỪ NGƯỜI DÙNG ({file_title}):\n{doc_text[:50_000]}"
                 except Exception:
-                    logger.warning("Không thể trích xuất Text trong chat", exc_info=True)
+                    logger.warning(
+                        "Không thể trích xuất Text trong chat", exc_info=True
+                    )
 
         system_instruction = request.system_instruction or DEFAULT_SYSTEM_PROMPT
         stream = (
@@ -285,7 +332,9 @@ async def sse_event_generator(request: ChatStreamRequest) -> AsyncGenerator[str,
                 image_bytes,
                 image_mime_type,
             )
-            if request.scope in {"ADMIN_COPILOT", "EMPLOYEE_COPILOT", "STUDENT_ASSISTANT"} and request.tool_access_token
+            if request.scope
+            in {"ADMIN_COPILOT", "EMPLOYEE_COPILOT", "STUDENT_ASSISTANT"}
+            and request.tool_access_token
             else (
                 gemini_provider.chat_stream_with_image(
                     prompt, image_bytes, image_mime_type, system_instruction
@@ -361,7 +410,9 @@ async def support_answer(
         "chính sách hoặc đường dẫn. Trình bày văn bản thuần dễ đọc, có xuống dòng, không dùng ký hiệu Markdown. "
         "Nếu dữ liệu chưa đủ, nói rõ và đề nghị kết nối tư vấn viên.",
     )
-    normalized = "\n".join(line.strip() for line in answer.strip().splitlines() if line.strip())
+    normalized = "\n".join(
+        line.strip() for line in answer.strip().splitlines() if line.strip()
+    )
     return SupportQuickAnswerResponse(
         answer=normalized[:4000] or "Hiện chưa có dữ liệu phù hợp để trả lời."
     )
@@ -386,8 +437,13 @@ async def suggest_support_intents(
         return dot / (query_norm * vector_norm) if query_norm and vector_norm else 0.0
 
     ranked = sorted(
-        ((label, cosine(vector)) for label, vector in zip(labels, vectors, strict=True)),
+        (
+            (label, cosine(vector))
+            for label, vector in zip(labels, vectors, strict=True)
+        ),
         key=lambda item: item[1],
         reverse=True,
     )[:3]
-    return [SupportIntentSuggestion(optionId=label, score=score) for label, score in ranked]
+    return [
+        SupportIntentSuggestion(optionId=label, score=score) for label, score in ranked
+    ]

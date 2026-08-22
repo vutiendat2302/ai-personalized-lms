@@ -335,6 +335,19 @@ def management_tools() -> list[types.Tool]:
                     },
                 ),
                 types.FunctionDeclaration(
+                    name="get_teacher_course_students",
+                    description=(
+                        "Giảng viên lấy danh sách học viên của khóa học mình phụ trách cùng tiến độ, "
+                        "bài đã hoàn thành và lần truy cập gần nhất. Bắt buộc dùng khi hỏi học viên/tiến độ khóa học."
+                    ),
+                    parameters_json_schema={
+                        "type": "object",
+                        "properties": {"courseId": {"type": "string"}},
+                        "required": ["courseId"],
+                        "additionalProperties": False,
+                    },
+                ),
+                types.FunctionDeclaration(
                     name="get_my_learning_progress",
                     description=(
                         "Lấy tiến độ học tập cá nhân của chính học viên hiện tại (% hoàn thành, "
@@ -348,6 +361,13 @@ def management_tools() -> list[types.Tool]:
                         },
                         "additionalProperties": False,
                     },
+                ),
+                types.FunctionDeclaration(
+                    name="get_my_classes",
+                    description=(
+                        "Lấy danh sách lớp học hiện tại của chính học viên, gồm tên lớp, khóa học liên kết "
+                        "và trạng thái ghi danh. Bắt buộc dùng khi học viên hỏi lớp/lớp học."
+                    ),
                 ),
                 types.FunctionDeclaration(
                     name="recommend_next_learning_step",

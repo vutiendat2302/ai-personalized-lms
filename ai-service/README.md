@@ -5,9 +5,8 @@
 ![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?style=for-the-badge&logo=fastapi&logoColor=white)
 ![Google GenAI](https://img.shields.io/badge/Google_Gemini-3.5_Flash-8E75C2?style=for-the-badge&logo=google&logoColor=white)
-![Gemini Embedding 2](https://img.shields.io/badge/Embedding-Gemini_Embedding_2-blue?style=for-the-badge&logo=google&logoColor=white)
-![Qdrant](https://img.shields.io/badge/Qdrant-Vector_DB_768d-DC2626?style=for-the-badge&logo=qdrant&logoColor=white)
-![Sentence Transformers](https://img.shields.io/badge/Local_Embedding-Sentence_Transformers-FF6F00?style=for-the-badge&logo=huggingface&logoColor=white)
+![FastEmbed](https://img.shields.io/badge/Embedding-FastEmbed_384d-FF6F00?style=for-the-badge&logo=huggingface&logoColor=white)
+![Qdrant](https://img.shields.io/badge/Qdrant-Vector_DB_384d-DC2626?style=for-the-badge&logo=qdrant&logoColor=white)
 ![Pydantic v2](https://img.shields.io/badge/Pydantic-v2.x-E92063?style=for-the-badge&logo=pydantic&logoColor=white)
 
 <p align="center">
@@ -54,15 +53,16 @@ flowchart TD
 
         subgraph ProviderLayer ["AI Providers & Embedders"]
             GeminiLLM["GeminiProvider (gemini-3.5-flash-lite / Flash)"]
-            GeminiEmbedder["GeminiEmbedder (gemini-embedding-2: 768d)"]
-            LocalEmbedder["LocalCatalogEmbedder (sentence-transformers)"]
+            LocalRagEmbedder["LocalRagEmbedder (FastEmbed: 384d)"]
+            GeminiEmbedder["GeminiEmbedder (768d, không phải mặc định)"]
+            LocalEmbedder["LocalCatalogEmbedder (FastEmbed: 384d)"]
         end
     end
 
     subgraph VectorDB ["Qdrant Vector Database (Port 6333)"]
-        ColKnowledge[("management_knowledge<br/>(Tri thức quản trị & Học liệu)")]
-        ColMemory[("long_term_memory<br/>(Ký ức người dùng theo ownerId)")]
-        ColCatalog[("public_catalog_local_*<br/>(Danh mục công khai)")]
+        ColKnowledge[("management_knowledge_local - Tri thức quản trị và học liệu")]
+        ColMemory[("long_term_memory_local - Ký ức theo ownerId")]
+        ColCatalog[("public_catalog_local_* - Danh mục công khai")]
     end
 
     FE -->|Chỉ gọi Backend API /api/v1/*| BE
@@ -74,9 +74,9 @@ flowchart TD
     ContextBuilder --> GeminiLLM
 
     RAGRouter --> RAGPipeline
-    RAGPipeline --> GeminiEmbedder --> ColKnowledge
+    RAGPipeline --> LocalRagEmbedder --> ColKnowledge
 
-    MemoryRouter --> GeminiEmbedder --> ColMemory
+    MemoryRouter --> LocalRagEmbedder --> ColMemory
     CatalogRouter --> LocalEmbedder --> ColCatalog
 
     ToolRegistry -.->|Callback an toàn lấy dữ liệu| BE
@@ -111,7 +111,7 @@ sequenceDiagram
     AI->>AI: Query Rewriting (Tối ưu hóa câu truy vấn độc lập ngữ cảnh)
 
     alt Yêu cầu Tri thức / Học liệu (RAG Search)
-        AI->>Qdrant: Vector Search (collection: management_knowledge, Filter: allowedRoles)
+        AI->>Qdrant: Vector Search (collection: management_knowledge_local, Filter: allowedRoles)
         Qdrant-->>AI: Top-K Document Chunks
     else Yêu cầu Dữ liệu Quản trị (Admin Tool Calling)
         AI->>Gemini: Phân tích Ý định & Chọn Tool
@@ -199,7 +199,7 @@ Người dùng có thể đính kèm trực tiếp tệp văn bản hoặc hình
 
 ## 3. Đường ống RAG Ingestion Pipeline & Multi-Modal Processing
 
-Hệ thống hỗ trợ nạp tri thức từ đa dạng định dạng tệp tin, tự động làm sạch và chuyển hóa thành Vector 768 chiều lưu trữ trên **Qdrant**:
+Hệ thống hỗ trợ nạp tri thức từ đa dạng định dạng tệp tin, tự động làm sạch và chuyển hóa thành vector local 384 chiều lưu trữ trên **Qdrant**. Xem [luồng RAG chi tiết](../docs/rag-system-flow.md) để theo dõi đầy đủ ingestion, scoped chat và assessment retrieval.
 
 ```mermaid
 flowchart LR
@@ -213,15 +213,15 @@ flowchart LR
     end
 
     ExtractorFactory --> Extractors
-    Extractors --> Chunker["Contextual Chunker (Chia nhỏ 500-1000 tokens kèm Metadata)"]
-    Chunker --> Embedder["Gemini Embedding 2 (768-dim Embedding Model)"]
+    Extractors --> Chunker["RecursiveTextChunker (2000 ký tự, overlap 200)"]
+    Chunker --> Embedder["FastEmbed local (MiniLM multilingual, 384d)"]
 
     subgraph VectorUpsert ["Idempotent Vector Upsert"]
         DeleteOld["Xóa Vector cũ có cùng sourceId"]
-        InsertNew["Upsert Vector mới (ID = sourceId + chunkIndex)"]
+        InsertNew["Upsert vector mới (UUIDv5 từ sourceId và chunkIndex)"]
     end
 
-    Embedder --> DeleteOld --> InsertNew --> QdrantCol[("Qdrant: management_knowledge")]
+    Embedder --> DeleteOld --> InsertNew --> QdrantCol[("Qdrant: management_knowledge_local")]
 ```
 
 ### 3.1 Cơ chế Đảm bảo Tính Nhất quán (Idempotent Ingestion)
@@ -229,9 +229,11 @@ flowchart LR
 - **Cơ chế Re-ingest an toàn:** Khi tài liệu được cập nhật hoặc chỉnh sửa, pipeline thực hiện xóa toàn bộ các vector chunk cũ có cùng `sourceId` trước khi ghi dữ liệu mới, triệt tiêu hoàn toàn rủi ro trùng lặp ngữ cảnh.
 - **Fail-Closed Security:** Trường `allowedRoles` bắt buộc phải được khai báo trong request nạp; nếu Backend bỏ trống, hệ thống lập tức từ chối để ngăn chặn rò rỉ tài liệu nội bộ.
 
-### 3.2 Chiến lược Embedding Hai Tầng (Dual Embedding Strategy)
-1. **Cloud Embeddings (`gemini-embedding-2`):** Tạo vector 768 chiều cho toàn bộ học liệu, tài liệu quy chế, chính sách và ký ức dài hạn.
-2. **Local Embeddings (`sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`):** Chạy trực tiếp trên CPU container để lập chỉ mục và gợi ý danh mục khóa học công khai (`public_catalog_*`), xử lý batch lên tới 500 bản ghi với chi phí 0đ và không phụ thuộc kết nối Internet ngoài.
+### 3.2 Chiến lược embedding hiện tại
+
+1. **RAG và long-term memory:** `LocalRagEmbedder` dùng `fastembed.TextEmbedding` với model `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`, tạo vector 384 chiều trên CPU.
+2. **Public catalog:** `LocalCatalogEmbedder` dùng cùng model và dimension nhưng lưu trong các collection `public_catalog_local_*` riêng.
+3. **Gemini embedding:** `GeminiEmbedder` 768 chiều vẫn có trong source để hỗ trợ thay thế qua dependency injection, nhưng không được khởi tạo mặc định trong ingestion, retriever hoặc memory.
 
 ---
 
@@ -241,8 +243,8 @@ Hệ thống phân tách không gian vector thành 3 Collection độc lập tro
 
 | Tên Collection | Chiều Vector | Mô tả dữ liệu lưu trữ | Cơ chế phân quyền & Filter |
 | :--- | :---: | :--- | :--- |
-| **`management_knowledge`** | 768 | Tài liệu quy chế doanh nghiệp, chính sách đào tạo, nội dung bài học | Payload filter bắt buộc theo danh sách vai trò (`allowedRoles`) |
-| **`long_term_memory`** | 768 | Ký ức hội thoại, sở thích học tập, thói quen của từng người dùng | Bắt buộc gán nhãn theo `ownerId` và `scope` (ví dụ `student_study_habits`) |
+| **`management_knowledge_local`** | 384 | Tài liệu quy chế doanh nghiệp, chính sách đào tạo, nội dung bài học | Payload filter bắt buộc theo danh sách vai trò (`allowedRoles`) |
+| **`long_term_memory_local`** | 384 | Ký ức hội thoại, sở thích học tập, thói quen của từng người dùng | Bắt buộc gán nhãn theo `ownerId` và `scope` (ví dụ `student_study_habits`) |
 | **`public_catalog_local_*`** | 384 | Tên khóa học, danh mục, mô tả ngắn phục vụ tìm kiếm ngữ nghĩa công khai | Công khai (Public), không yêu cầu xác thực người dùng |
 
 ---
@@ -338,7 +340,32 @@ Content-Type: application/json
 
 ---
 
-## 6. Lộ trình Phát triển Nâng cấp Dựa trên Hệ thống Hiện có (Future Roadmap)
+## 6. Scoped Learning RAG và AI Assessment
+
+### Assessment generation
+
+`POST /assessments/generate` nhận `ragSourceIds` cùng `classId`, `courseId`, `allowedRoles` do Backend xác thực. Retriever lấy tối đa 8 chunk/source bằng filter chính xác; thiếu chunk cho source đã chọn thì fail-closed. Tối đa 3 `sourceFiles` upload được extract in-memory và không upsert vào Qdrant. Structured output trả `sourceIds` trên từng câu hỏi và chỉ chấp nhận source đã cấp.
+
+### Student chat
+
+`POST /chat/stream` nhận `courseId`, `classId`, `lessonId`, `retrievalScope` trong scope `STUDENT_ASSISTANT`:
+
+| retrievalScope | Qdrant filter |
+|---|---|
+| `LESSON_ONLY` | `TRAINING + courseId + lessonId + visibility=COURSE + allowedRoles` |
+| `CLASS_MATERIALS` | `TRAINING + courseId + classId + visibility=CLASS + allowedRoles` |
+| `COURSE_MATERIALS` | `TRAINING + courseId + visibility=COURSE + allowedRoles` |
+| `GENERAL` | Không gọi retriever |
+
+Schema Pydantic từ chối scope thiếu khóa filter. Citation metadata chỉ được dựng từ `SearchResult` đã qua cùng filter.
+
+### Ingestion metadata
+
+`POST /rag/ingest` nhận các khóa top-level `courseId`, `sectionId`, `lessonId`; Backend bổ sung `classId` trong metadata cho ClassResource. `sourceId` ổn định (`class-resource-{id}` hoặc `lesson-resource-{id}`) giúp retry upsert idempotent và xóa source khi file bị xóa.
+
+---
+
+## 7. Lộ trình Phát triển Nâng cấp Dựa trên Hệ thống Hiện có (Future Roadmap)
 
 Kiến trúc hiện tại của `ai-service` được thiết kế theo tính module hóa cao, sẵn sàng mở rộng các tính năng thông minh thế hệ tiếp theo:
 
@@ -382,7 +409,7 @@ flowchart TD
 
 ---
 
-## 7. Hướng dẫn Khởi chạy & Kiểm thử Cục bộ (Local Setup & Pytest)
+## 8. Hướng dẫn Khởi chạy & Kiểm thử Cục bộ (Local Setup & Pytest)
 
 ### 1. Cấu hình Môi trường
 Tạo và kích hoạt môi trường ảo Python 3.12:

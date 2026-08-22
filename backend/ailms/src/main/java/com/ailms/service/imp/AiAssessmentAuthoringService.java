@@ -3,9 +3,15 @@ package com.ailms.service.imp;
 import com.ailms.client.AiServiceClient;
 import com.ailms.common.snowflake.SnowflakeIdGenerator;
 import com.ailms.entity.CourseEntity;
+import com.ailms.entity.ClassEntity;
+import com.ailms.entity.ClassResourceEntity;
 import com.ailms.entity.LessonEntity;
+import com.ailms.entity.enums.ClassMemberRole;
+import com.ailms.entity.enums.ClassMemberStatusEnum;
+import com.ailms.entity.enums.RagProcessingStatusEnum;
 import com.ailms.entity.enums.BaseStatusEnum;
 import com.ailms.entity.enums.CourseInstructorStatusEnum;
+import com.ailms.entity.enums.QuestionTypeEnum;
 import com.ailms.event.AuditLogEvent;
 import com.ailms.exception.BadRequestException;
 import com.ailms.exception.ForbiddenException;
@@ -13,13 +19,21 @@ import com.ailms.exception.ResourceNotFoundException;
 import com.ailms.request.AssignmentRequest;
 import com.ailms.request.CreateAssignmentRequest;
 import com.ailms.request.QuizRequest;
+import com.ailms.request.QuizQuestionRequest;
+import com.ailms.request.QuizQuestionOptionRequest;
 import com.ailms.request.ai.AiAssessmentApplyRequest;
+import com.ailms.request.ai.AiAssessmentQuizEditRequest;
 import com.ailms.request.ai.AiAssessmentGenerationRequest;
 import com.ailms.request.ai.AiAssessmentSourceFile;
 import com.ailms.response.ai.AiAssessmentApplyResponse;
 import com.ailms.response.ai.AiAssessmentDraftResponse;
 import com.ailms.response.ai.AiGeneratedAssignmentResponse;
 import com.ailms.response.ai.AiGeneratedQuizResponse;
+import com.ailms.response.ai.AiAssessmentMaterialResponse;
+import com.ailms.response.ai.AiAssessmentSourceResponse;
+import com.ailms.repository.ClassRepository;
+import com.ailms.repository.ClassResourceRepository;
+import com.ailms.repository.ClassMemberRepository;
 import com.ailms.repository.CourseInstructorRepository;
 import com.ailms.repository.LessonRepository;
 import com.ailms.security.CustomUserDetails;
@@ -44,6 +58,8 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.HashSet;
 
 /** Sinh và áp dụng assessment draft, tái sử dụng hoàn toàn quiz/assignment block của Course Builder. */
 @Service
@@ -67,11 +83,15 @@ public class AiAssessmentAuthoringService {
     private final ObjectMapper objectMapper;
     private final SnowflakeIdGenerator snowflakeIdGenerator;
     private final ApplicationEventPublisher applicationEventPublisher;
+    private final ClassRepository classRepository;
+    private final ClassResourceRepository classResourceRepository;
+    private final ClassMemberRepository classMemberRepository;
 
     /** Tạo preview quiz/assignment từ block lesson và tài liệu upload tạm thời, chưa ghi database. */
     @Transactional(readOnly = true)
     public AiAssessmentDraftResponse generateDraft(
             Long lessonId, String assessmentType, Integer questionCount,
+            Long classId, List<Long> resourceIds,
             MultipartFile[] materials, CustomUserDetails currentUser) {
         LessonEntity lesson = lessonRepository.findById(lessonId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Lesson", lessonId));
@@ -79,6 +99,9 @@ public class AiAssessmentAuthoringService {
         verifyCanAuthor(lesson, currentUser);
         String type = normalizeAssessmentType(assessmentType);
         List<AiAssessmentSourceFile> files = sourceFiles(materials);
+        List<ClassResourceEntity> resources = resolveRagResources(lesson, classId, resourceIds, currentUser);
+        List<String> ragSourceIds = resources.stream()
+                .map(resource -> "class-resource-" + resource.getId()).toList();
         AiAssessmentDraftResponse generated = aiServiceClient.generateAssessment(
                 AiAssessmentGenerationRequest.builder()
                         .lessonId(String.valueOf(lessonId))
@@ -87,6 +110,10 @@ public class AiAssessmentAuthoringService {
                         .assessmentType(type)
                         .questionCount(normalizeQuestionCount(questionCount))
                         .sourceFiles(files)
+                        .ragSourceIds(ragSourceIds)
+                        .classId(classId == null ? null : String.valueOf(classId))
+                        .courseId(String.valueOf(lesson.getCourseSectionEntity().getCourseEntity().getId()))
+                        .allowedRoles(trustedRoles(currentUser))
                         .build());
         validateGeneratedDraft(generated, type);
         String draftId = String.valueOf(snowflakeIdGenerator.nextId());
@@ -99,6 +126,7 @@ public class AiAssessmentAuthoringService {
                 .expiresAt(expiresAt.toString())
                 .quiz(generated.getQuiz())
                 .assignment(generated.getAssignment())
+                .sources(sourceMetadata(resources, files))
                 .build();
         redisTemplate.opsForValue().set(redisKey(draftId), serialize(stored), DRAFT_TTL);
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "AI_ASSESSMENT_DRAFTED",
@@ -107,49 +135,131 @@ public class AiAssessmentAuthoringService {
         return response(stored);
     }
 
+    /** Liệt kê tài liệu READY của lớp cùng course với lesson sau khi kiểm tra quyền người dạy. */
+    @Transactional(readOnly = true)
+    public List<AiAssessmentMaterialResponse> getAvailableMaterials(
+            Long lessonId, Long classId, CustomUserDetails currentUser) {
+        LessonEntity lesson = lessonRepository.findById(lessonId)
+                .orElseThrow(() -> ResourceNotFoundException.of("Lesson", lessonId));
+        verifyCanAuthor(lesson, currentUser);
+        ClassEntity clazz = requireAssessmentClass(lesson, classId, currentUser);
+        return classResourceRepository.findByClassEntity_Id(clazz.getId()).stream()
+                .map(resource -> AiAssessmentMaterialResponse.builder()
+                        .id(String.valueOf(resource.getId()))
+                        .classId(String.valueOf(clazz.getId()))
+                        .courseId(String.valueOf(clazz.getCourseEntity().getId()))
+                        .title(resource.getTitle())
+                        .fileName(resource.getFileName())
+                        .fileType(resource.getFileType())
+                        .ragStatus(resource.getRagStatus().name())
+                        .canUseForAi(resource.getRagStatus() == RagProcessingStatusEnum.READY)
+                        .build())
+                .toList();
+    }
+
     /** Xóa atomically draft rồi tạo quiz/assignment thật bằng CourseAuthoringService hiện hữu. */
     @Transactional
     public AiAssessmentApplyResponse applyDraft(
             String draftId, AiAssessmentApplyRequest request, CustomUserDetails currentUser) {
-        AiAssessmentDraft draft = deserialize(redisTemplate.opsForValue().getAndDelete(redisKey(draftId)));
+        String key = redisKey(draftId);
+        AiAssessmentDraft draft = deserialize(redisTemplate.opsForValue().get(key));
         if (!draft.getOwnerId().equals(currentUser.getUser().getId())) {
             throw new ForbiddenException("Assessment draft không thuộc người dùng hiện tại");
         }
         LessonEntity lesson = lessonRepository.findById(draft.getLessonId())
                 .orElseThrow(() -> ResourceNotFoundException.of("Lesson", draft.getLessonId()));
         verifyCanAuthor(lesson, currentUser);
-        var result = AiAssessmentApplyResponse.builder();
+        QuizRequest quizRequest = null;
+        CreateAssignmentRequest assignmentRequest = null;
         if (Boolean.TRUE.equals(request.getApplyQuiz())) {
             if (draft.getQuiz() == null) {
                 throw new BadRequestException("Draft không có quiz để lưu");
             }
-            result.quiz(courseAuthoringService.createQuiz(toQuizRequest(lesson, draft.getQuiz())));
+            quizRequest = toQuizRequest(lesson, draft.getQuiz(), request.getQuiz());
+            validateQuizForApply(quizRequest.getQuestions());
         }
         if (Boolean.TRUE.equals(request.getApplyAssignment())) {
             if (draft.getAssignment() == null) {
                 throw new BadRequestException("Draft không có assignment để lưu");
             }
-            result.assignment(courseAuthoringService.createAssignment(toAssignmentRequest(lesson, draft.getAssignment())));
+            assignmentRequest = toAssignmentRequest(lesson, draft.getAssignment());
         }
+        if (redisTemplate.opsForValue().getAndDelete(key) == null) {
+            throw new BadRequestException("Assessment draft đã được áp dụng bởi yêu cầu khác");
+        }
+        var result = AiAssessmentApplyResponse.builder();
+        if (quizRequest != null) result.quiz(courseAuthoringService.createQuiz(quizRequest));
+        if (assignmentRequest != null) result.assignment(courseAuthoringService.createAssignment(assignmentRequest));
         applicationEventPublisher.publishEvent(new AuditLogEvent(this, "AI_ASSESSMENT_APPLIED",
                 "AiAssessmentDraft", currentUser.getUser().getId(), null,
                 Map.of("draftId", draftId, "lessonId", String.valueOf(draft.getLessonId()))));
         return result.build();
     }
 
+    /** Kiểm tra câu hỏi chỉnh sửa trước khi claim draft để lỗi dữ liệu không làm mất bản nháp. */
+    private void validateQuizForApply(List<QuizQuestionRequest> questions) {
+        if (questions == null || questions.isEmpty() || questions.size() > 15) {
+            throw new BadRequestException("Quiz phải có từ 1 đến 15 câu hỏi");
+        }
+        for (int index = 0; index < questions.size(); index++) {
+            QuizQuestionRequest question = questions.get(index);
+            if (question == null || question.getContent() == null || question.getContent().isBlank()) {
+                throw new BadRequestException("Câu hỏi " + (index + 1) + " chưa có nội dung");
+            }
+            QuestionTypeEnum type;
+            try {
+                type = QuestionTypeEnum.fromName(question.getQuestionType());
+            } catch (RuntimeException exception) {
+                throw new BadRequestException("Câu hỏi " + (index + 1) + " có loại không hợp lệ");
+            }
+            if (question.getPoints() == null || question.getPoints().compareTo(BigDecimal.ZERO) <= 0) {
+                throw new BadRequestException("Điểm câu hỏi " + (index + 1) + " phải lớn hơn 0");
+            }
+            if (question.getOptions() == null || question.getOptions().size() < 2
+                    || question.getOptions().stream().anyMatch(option -> option == null
+                    || option.getContent() == null || option.getContent().isBlank())) {
+                throw new BadRequestException("Câu hỏi " + (index + 1) + " phải có ít nhất 2 phương án");
+            }
+            long correctCount = question.getOptions().stream()
+                    .filter(option -> Boolean.TRUE.equals(option.getIsCorrect())).count();
+            if ((type == QuestionTypeEnum.SINGLE_CHOICE || type == QuestionTypeEnum.TRUE_FALSE)
+                    && correctCount != 1) {
+                throw new BadRequestException("Câu hỏi " + (index + 1) + " phải có đúng một đáp án đúng");
+            }
+            if (type == QuestionTypeEnum.MULTIPLE_CHOICE && correctCount < 1) {
+                throw new BadRequestException("Câu hỏi " + (index + 1) + " phải có ít nhất một đáp án đúng");
+            }
+        }
+    }
+
     /** Tạo QuizRequest giữ nguyên JSON block questions mà CourseAuthoringService đã hỗ trợ. */
-    private QuizRequest toQuizRequest(LessonEntity lesson, AiGeneratedQuizResponse quiz) {
+    private QuizRequest toQuizRequest(
+            LessonEntity lesson, AiGeneratedQuizResponse quiz, AiAssessmentQuizEditRequest edited) {
+        List<QuizQuestionRequest> questions = edited == null
+                ? quiz.getQuestions().stream().map(question -> QuizQuestionRequest.builder()
+                        .content(question.getContent()).questionType(question.getQuestionType())
+                        .points(question.getPoints()).explanation(question.getExplanation())
+                        .options(question.getOptions().stream().map(option -> QuizQuestionOptionRequest.builder()
+                                .content(option.getContent()).isCorrect(option.getIsCorrect()).build()).toList())
+                        .build()).toList()
+                : edited.getQuestions();
         return QuizRequest.builder()
                 .lessonId(lesson.getId())
                 .courseId(lesson.getCourseSectionEntity().getCourseEntity().getId())
                 .sectionId(lesson.getCourseSectionEntity().getId())
-                .title(quiz.getTitle())
-                .description(serializeQuestions(quiz))
-                .timeLimitMin(quiz.getTimeLimitMin())
-                .passScore(quiz.getPassScore())
-                .maxAttempts(quiz.getMaxAttempts())
-                .shuffleQuestions(quiz.getShuffleQuestions())
+                .title(edited == null ? quiz.getTitle() : edited.getTitle().trim())
+                .description(edited == null || edited.getDescription() == null
+                        ? quiz.getDescription() : edited.getDescription())
+                .timeLimitMin(edited == null || edited.getTimeLimitMin() == null
+                        ? quiz.getTimeLimitMin() : edited.getTimeLimitMin())
+                .passScore(edited == null || edited.getPassScore() == null
+                        ? quiz.getPassScore() : edited.getPassScore())
+                .maxAttempts(edited == null || edited.getMaxAttempts() == null
+                        ? quiz.getMaxAttempts() : edited.getMaxAttempts())
+                .shuffleQuestions(edited == null || edited.getShuffleQuestions() == null
+                        ? quiz.getShuffleQuestions() : edited.getShuffleQuestions())
                 .status(BaseStatusEnum.DRAFT)
+                .questions(questions)
                 .build();
     }
 
@@ -183,6 +293,77 @@ public class AiAssessmentAuthoringService {
         if (!owner && !instructor) {
             throw new ForbiddenException("Bạn không có quyền tạo assessment cho khóa học này");
         }
+    }
+
+    /** Resolve các resource đã chọn, chặn ID ngoài lớp và nguồn chưa ingest thành công. */
+    private List<ClassResourceEntity> resolveRagResources(
+            LessonEntity lesson, Long classId, List<Long> resourceIds, CustomUserDetails currentUser) {
+        if (resourceIds == null || resourceIds.isEmpty()) return List.of();
+        if (classId == null) throw new BadRequestException("Cần chọn lớp khi sử dụng tài liệu trong lớp");
+        ClassEntity clazz = requireAssessmentClass(lesson, classId, currentUser);
+        Set<Long> uniqueIds = new HashSet<>(resourceIds);
+        if (uniqueIds.size() != resourceIds.size()) {
+            throw new BadRequestException("Danh sách tài liệu nguồn không được trùng lặp");
+        }
+        if (uniqueIds.size() > 10) {
+            throw new BadRequestException("Tối đa 10 tài liệu RAG cho mỗi lần sinh assessment");
+        }
+        List<ClassResourceEntity> resources = classResourceRepository.findAllById(uniqueIds);
+        if (resources.size() != uniqueIds.size()) {
+            throw new BadRequestException("Có tài liệu nguồn không tồn tại");
+        }
+        for (ClassResourceEntity resource : resources) {
+            if (!resource.getClassEntity().getId().equals(clazz.getId())) {
+                throw new ForbiddenException("Không được sử dụng tài liệu của lớp khác");
+            }
+            if (resource.getRagStatus() != RagProcessingStatusEnum.READY) {
+                throw new BadRequestException("Tài liệu " + resource.getTitle() + " chưa sẵn sàng cho AI");
+            }
+        }
+        return resources;
+    }
+
+    /** Xác thực lớp thuộc course của lesson và người dùng đang quản lý đúng lớp. */
+    private ClassEntity requireAssessmentClass(
+            LessonEntity lesson, Long classId, CustomUserDetails currentUser) {
+        if (classId == null) throw new BadRequestException("Cần chọn lớp học");
+        ClassEntity clazz = classRepository.findById(classId)
+                .orElseThrow(() -> ResourceNotFoundException.of("Class", classId));
+        Long lessonCourseId = lesson.getCourseSectionEntity().getCourseEntity().getId();
+        if (clazz.getCourseEntity() == null || !lessonCourseId.equals(clazz.getCourseEntity().getId())) {
+            throw new BadRequestException("Lớp không thuộc khóa học chứa lesson");
+        }
+        boolean admin = currentUser.getAuthorities().stream()
+                .anyMatch(item -> "ROLE_ADMIN".equals(item.getAuthority()));
+        if (!admin) {
+            var member = classMemberRepository.findById_ClassIdAndId_UserId(
+                            classId, currentUser.getUser().getId())
+                    .filter(item -> item.getStatus() == ClassMemberStatusEnum.ACTIVE)
+                    .filter(item -> item.getRoleInClass() == ClassMemberRole.TEACHER
+                            || item.getRoleInClass() == ClassMemberRole.TA);
+            if (member.isEmpty()) throw new ForbiddenException("Bạn không quản lý lớp học này");
+        }
+        return clazz;
+    }
+
+    /** Trả role từ JWT để AI Service tiếp tục áp dụng filter allowedRoles. */
+    private List<String> trustedRoles(CustomUserDetails currentUser) {
+        return currentUser.getAuthorities().stream().map(item -> item.getAuthority().toUpperCase(Locale.ROOT)).toList();
+    }
+
+    /** Chuyển resource/file upload thành metadata nguồn lưu cùng draft. */
+    private List<AiAssessmentSourceResponse> sourceMetadata(
+            List<ClassResourceEntity> resources, List<AiAssessmentSourceFile> files) {
+        List<AiAssessmentSourceResponse> result = new java.util.ArrayList<>();
+        resources.forEach(resource -> result.add(AiAssessmentSourceResponse.builder()
+                .sourceId("class-resource-" + resource.getId()).sourceType("CLASS_RESOURCE")
+                .title(resource.getTitle()).fileName(resource.getFileName()).build()));
+        for (int index = 0; index < files.size(); index++) {
+            result.add(AiAssessmentSourceResponse.builder().sourceId("upload-" + (index + 1))
+                    .sourceType("UPLOAD").title(files.get(index).getName())
+                    .fileName(files.get(index).getName()).build());
+        }
+        return result;
     }
 
     /** Chuyển multipart file thành base64 sau allow-list MIME và giới hạn kích thước. */
@@ -263,12 +444,8 @@ public class AiAssessmentAuthoringService {
         response.setRequiresConfirmation(true);
         response.setQuiz(draft.getQuiz());
         response.setAssignment(draft.getAssignment());
+        response.setSources(draft.getSources());
         return response;
-    }
-
-    /** Serialize question block để CourseAuthoringService đồng bộ question và option relation. */
-    private String serializeQuestions(AiGeneratedQuizResponse quiz) {
-        return serialize(quiz.getQuestions());
     }
 
     /** Serialize JSON nhỏ đã validate để lưu vào description chuẩn của hệ thống. */
@@ -315,5 +492,6 @@ public class AiAssessmentAuthoringService {
         private String expiresAt;
         private AiGeneratedQuizResponse quiz;
         private AiGeneratedAssignmentResponse assignment;
+        private List<AiAssessmentSourceResponse> sources;
     }
 }

@@ -599,8 +599,8 @@ export const StudentLearningPage: React.FC = () => {
         )}
       </div>
 
-      {/* Trợ lý AI sẵn sàng hỗ trợ trực tiếp trong không gian học tập */}
-      <AiChatWidget />
+      {/* Trợ lý AI nhận đúng course/lesson từ URL của không gian học tập. */}
+      {user && <AiChatWidget key={`${courseId ?? "course"}-${lessonId ?? "course"}`} />}
     </div>
   );
 };

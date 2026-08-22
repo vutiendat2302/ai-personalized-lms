@@ -127,6 +127,9 @@ public class AssessmentService implements IAssessmentService {
         if (quiz.getDueAt() != null && LocalDateTime.now().isAfter(quiz.getDueAt())) {
             throw new BusinessException("Quiz đã hết hạn làm bài.");
         }
+        if (quiz.getAvailableFrom() != null && LocalDateTime.now().isBefore(quiz.getAvailableFrom())) {
+            throw new BusinessException("Quiz chưa đến thời gian mở.");
+        }
         EnrollmentEntity enrollment = enrollmentRepository.findByUserEntity_Id(userId).stream()
                 .filter(item -> quiz.getCourseId() != null
                         && item.getCourseEntity().getId().equals(quiz.getCourseId()))
@@ -138,6 +141,12 @@ public class AssessmentService implements IAssessmentService {
 
         // Check attempts limit
         List<QuizAttemptEntity> existingAttempts = quizAttemptRepository.findByQuizIdAndUserId(quizId, userId);
+        Optional<QuizAttemptEntity> inProgressAttempt = existingAttempts.stream()
+                .filter(item -> Byte.valueOf((byte) 0).equals(item.getStatus()))
+                .findFirst();
+        if (inProgressAttempt.isPresent()) {
+            return inProgressAttempt.get().getId();
+        }
         if (quiz.getMaxAttempts() != null && existingAttempts.size() >= quiz.getMaxAttempts()) {
             throw new BusinessException("User has reached max allowed attempts for quiz: " + quizId);
         }

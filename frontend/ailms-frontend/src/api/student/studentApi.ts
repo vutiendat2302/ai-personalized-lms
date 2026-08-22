@@ -117,13 +117,16 @@ export interface StudentQuizItem {
   courseId: string;
   classId?: string;
   courseName: string;
+  availableFrom?: string;
   dueAt?: string;
   timeLimitMin?: number;
   maxAttempts?: number;
-  status: "NOT_STARTED" | "IN_PROGRESS" | "SUBMITTED" | "PASSED" | "EXPIRED";
+  showResultAfterSubmit?: boolean;
+  canStart: boolean;
+  status: "UPCOMING" | "NOT_STARTED" | "IN_PROGRESS" | "SUBMITTED" | "PASSED" | "EXPIRED";
   attemptsUsed: number;
   bestScore?: number;
-  passed: boolean;
+  passed?: boolean;
 }
 
 export interface StudentCertificateCard {
@@ -368,6 +371,12 @@ export const studentApi = {
 
   getQuizzes: async (): Promise<StudentQuizItem[]> =>
     getData(await httpClient.get<ApiResponse<StudentQuizItem[]>>("/v1/student/quizzes")),
+
+  /** Lấy câu hỏi Quiz đã mở; Backend luôn loại bỏ đáp án đúng và kiểm tra quyền lớp. */
+  getQuiz: async (quizId: string): Promise<import("@/api/courses/courseAuthoringApi").QuizResponseDTO> =>
+    getData(await httpClient.get<ApiResponse<import("@/api/courses/courseAuthoringApi").QuizResponseDTO>>(
+      `/v1/student/quizzes/${encodeURIComponent(quizId)}`,
+    )),
 
   /** Bắt đầu một lượt làm quiz của học viên hiện tại. */
   startQuizAttempt: async (quizId: string): Promise<string> =>

@@ -36,7 +36,7 @@ class AiChatServiceTest {
                 persistence,
                 mock(AiConversationBufferService.class),
                 mock(AiToolAccessTokenService.class),
-                mock(ManagementAiContextService.class));
+                mock(StudentLearningAiContextService.class));
         CustomUserDetails currentUser = mock(CustomUserDetails.class);
         UserEntity user = mock(UserEntity.class);
         when(user.getId()).thenReturn(10L);

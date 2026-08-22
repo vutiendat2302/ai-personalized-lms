@@ -13,6 +13,7 @@ import com.ailms.request.OnboardingRequest;
 import com.ailms.response.StudentProfileResponse;
 import com.ailms.response.StudentPersonalizationResponse;
 import com.ailms.response.UserCouponResponse;
+import com.ailms.response.QuizResponse;
 import com.ailms.request.RefundRequest;
 import com.ailms.request.OneOnOneNeedsRequest;
 
@@ -53,6 +54,8 @@ public interface IStudentPortalService {
     List<StudentPortalItemResponse.AssignmentItem> getAssignments(Long userId);
     /** Lấy quiz/bài thi cần làm và kết quả gần nhất của học viên. */
     List<StudentPortalItemResponse.QuizItem> getQuizzes(Long userId);
+    /** Lấy nội dung Quiz đã mở sau khi kiểm tra enrollment và membership lớp. */
+    QuizResponse getQuiz(Long userId, Long quizId);
     /** Lấy chứng chỉ đã cấp cho học viên. */
     List<StudentPortalItemResponse.CertificateItem> getCertificates(Long userId);
     /** Tổng hợp biểu đồ tiến độ học tập từ dữ liệu thật. */

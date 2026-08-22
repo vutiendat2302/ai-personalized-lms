@@ -70,6 +70,7 @@ import { StudentDashboardPage } from "./pages/student/StudentDashboardPage";
 import { StudentMyCoursesPage } from "./pages/student/StudentMyCoursesPage";
 import { StudentSchedulePage } from "./pages/student/StudentSchedulePage";
 import { StudentAssignmentsPage } from "./pages/student/StudentAssignmentsPage";
+import { StudentQuizAttemptPage } from "./pages/student/StudentQuizAttemptPage";
 import { StudentCertificatesPage } from "./pages/student/StudentCertificatesPage";
 import { StudentProgressPage } from "./pages/student/StudentProgressPage";
 import { StudentGoalsPage } from "./pages/student/StudentGoalsPage";
@@ -356,7 +357,7 @@ function App() {
                 <Route path="/student/classes" element={<StudentClassesPage />} />
                 <Route path="/student/classes/:id" element={<ClassDetailPage />} />
                 <Route path="/student/assignments" element={<StudentAssignmentsPage />} />
-                <Route path="/student/quizzes/:id/attempt" element={<StudentAssignmentsPage />} />
+                <Route path="/student/quizzes/:id/attempt" element={<StudentQuizAttemptPage />} />
                 <Route path="/student/certificates" element={<StudentCertificatesPage />} />
                 <Route path="/student/progress" element={<StudentProgressPage />} />
                 <Route path="/student/goals" element={<StudentGoalsPage />} />

@@ -1,5 +1,5 @@
 import httpClient from "@/api/httpClient";
-import type { ApiResponse } from "@/types/base";
+import type { ApiResponse, PageResponse } from "@/types/base";
 
 export type StreamPostType = "QUESTION" | "DISCUSSION" | "ANNOUNCEMENT";
 
@@ -46,6 +46,22 @@ export interface ScheduleClassSessionPayload {
   meetingProvider?: string;
   scheduledAt: string;
   durationMin: number;
+}
+
+export interface ClassResourceApiItem {
+  id: string;
+  title: string;
+  fileKey: string;
+  fileName?: string | null;
+  fileType?: string | null;
+  fileSize?: number | null;
+  fileUrl?: string | null;
+  uploadedByName?: string | null;
+  createdAt?: string | null;
+  ragStatus?: "PENDING" | "PROCESSING" | "READY" | "FAILED";
+  ragChunksCount?: number | null;
+  ragError?: string | null;
+  canUseForAi?: boolean;
 }
 
 export const adminCourseClassApi = {
@@ -133,11 +149,14 @@ export const adminCourseClassApi = {
 
   // Class Resources API
   getClassResources: async (classId: string, params?: { keyword?: string; page?: number; size?: number }) =>
-    (await httpClient.get<ApiResponse<any>>(`/v1/classes/${classId}/resources`, { params })).data.data,
+    (await httpClient.get<ApiResponse<PageResponse<ClassResourceApiItem>>>(`/v1/classes/${classId}/resources`, { params })).data.data,
   createClassResource: async (classId: string, payload: any) =>
     (await httpClient.post<ApiResponse<any>>(`/v1/classes/${classId}/resources`, payload)).data.data,
   deleteClassResource: async (classId: string, resourceId: string) =>
     httpClient.delete(`/v1/classes/${classId}/resources/${resourceId}`),
+  /** Yêu cầu Backend ingest lại resource vào RAG. */
+  retryClassResourceRag: async (classId: string, resourceId: string) =>
+    httpClient.post(`/v1/classes/${classId}/resources/${resourceId}/rag/retry`),
 
   // Member Detail & Paged API
   getMemberDetail: async (classId: string, userId: string) =>

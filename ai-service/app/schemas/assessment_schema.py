@@ -63,10 +63,22 @@ class AssessmentGenerationRequest(BaseModel):
     source_files: list[AssessmentSourceFile] = Field(
         default_factory=list, alias="sourceFiles", max_length=3
     )
+    rag_source_ids: list[str] = Field(
+        default_factory=list, alias="ragSourceIds", max_length=10
+    )
+    class_id: str | None = Field(default=None, alias="classId")
+    course_id: str | None = Field(default=None, alias="courseId")
+    allowed_roles: list[str] = Field(default_factory=list, alias="allowedRoles")
 
     @model_validator(mode="after")
     def validate_requested_assessment(self) -> "AssessmentGenerationRequest":
         """Kiểm tra và tiền xử lý logic các thông số yêu cầu tạo bài đánh giá."""
+        if self.rag_source_ids and (not self.class_id or not self.course_id):
+            raise ValueError("Nguồn RAG của lớp cần classId và courseId")
+        if self.rag_source_ids and not self.allowed_roles:
+            raise ValueError("Nguồn RAG cần allowedRoles do Backend xác thực")
+        if len(set(self.rag_source_ids)) != len(self.rag_source_ids):
+            raise ValueError("ragSourceIds không được trùng lặp")
         if self.assessment_type == "ASSIGNMENT" and self.question_count != 3:
             return self
         return self
@@ -106,6 +118,9 @@ class GeneratedQuestion(BaseModel):
     points: float = Field(ge=0.1, le=100)
     explanation: str = Field(min_length=1, max_length=4_000)
     options: list[GeneratedQuestionOption] = Field(min_length=2, max_length=6)
+    source_ids: list[str] = Field(
+        default_factory=list, alias="sourceIds", max_length=10
+    )
 
     @model_validator(mode="after")
     def validate_answers(self) -> "GeneratedQuestion":

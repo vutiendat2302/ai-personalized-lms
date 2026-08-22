@@ -408,7 +408,9 @@ public class TeacherWorkspaceService implements ITeacherWorkspaceService {
             List<ClassMemberEntity> students = classMemberRepository.findById_ClassId(clazz.getId()).stream()
                     .filter(item -> item.getStatus() == ClassMemberStatusEnum.ACTIVE && item.getRoleInClass() == ClassMemberRole.STUDENT).toList();
             int avg = averageProgress(students, clazz.getCourseEntity() != null ? clazz.getCourseEntity().getId() : null);
-            return TeacherWorkspaceResponse.ClassCard.builder().id(String.valueOf(clazz.getId())).className(clazz.getName())
+            return TeacherWorkspaceResponse.ClassCard.builder().id(String.valueOf(clazz.getId()))
+                    .courseId(clazz.getCourseEntity() == null ? null : String.valueOf(clazz.getCourseEntity().getId()))
+                    .className(clazz.getName())
                     .courseName(clazz.getCourseEntity() != null ? clazz.getCourseEntity().getName() : null)
                     .deliveryMode(enumName(clazz.getPackageType())).roleInClass(member.getRoleInClass().name())
                     .currentStudents(students.size()).maxStudents(clazz.getMaxMembers() == null ? 0 : clazz.getMaxMembers())

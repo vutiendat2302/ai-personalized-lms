@@ -26,4 +26,8 @@ public class AiServiceChatRequest {
     private String fileMimeType;
     private String fileName;
     private String retrievalMode;
+    private String courseId;
+    private String classId;
+    private String lessonId;
+    private String retrievalScope;
 }

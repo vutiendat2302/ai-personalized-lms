@@ -1,6 +1,7 @@
 package com.ailms.response.ai;
 
 import lombok.Data;
+import java.util.List;
 
 /** Draft assessment có TTL, chỉ được owner xác nhận mới tạo quiz/assignment thật. */
 @Data
@@ -11,4 +12,5 @@ public class AiAssessmentDraftResponse {
     private boolean requiresConfirmation;
     private AiGeneratedQuizResponse quiz;
     private AiGeneratedAssignmentResponse assignment;
+    private List<AiAssessmentSourceResponse> sources;
 }

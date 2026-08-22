@@ -48,7 +48,8 @@ public final class StudentPortalItemResponse {
     @Getter @Builder @NoArgsConstructor @AllArgsConstructor
     public static class QuizItem {
         private Long id; private String title; private Long courseId; private Long classId; private String courseName;
-        private LocalDateTime dueAt; private Integer timeLimitMin; private Integer maxAttempts;
+        private LocalDateTime availableFrom; private LocalDateTime dueAt; private Integer timeLimitMin; private Integer maxAttempts;
+        private Boolean showResultAfterSubmit; private Boolean canStart;
         private String status; private Integer attemptsUsed; private BigDecimal bestScore; private Boolean passed;
     }
 

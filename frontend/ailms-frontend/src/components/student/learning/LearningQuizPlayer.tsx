@@ -47,6 +47,7 @@ export const LearningQuizPlayer = ({ quiz, onComplete, persistAttempt = false }:
   const [score, setScore] = useState<number | null>(null);
   const [passed, setPassed] = useState(false);
   const [timeLeftSec, setTimeLeftSec] = useState<number | null>(null);
+  const resultVisible = quiz.showResultAfterSubmit !== false;
 
   /** Chỉ đọc danh sách câu hỏi thật từ DTO; JSON mô tả được hỗ trợ cho dữ liệu cũ. */
   const questions = useMemo<QuestionItem[]>(() => {
@@ -168,8 +169,8 @@ export const LearningQuizPlayer = ({ quiz, onComplete, persistAttempt = false }:
       await studentApi.submitQuizAttempt(attemptId, buildSubmission());
       const quizResults = await studentApi.getQuizzes();
       const result = quizResults.find((item) => item.id === quiz.id);
-      setScore(result?.bestScore ?? null);
-      setPassed(Boolean(result?.passed));
+      setScore(resultVisible ? result?.bestScore ?? null : null);
+      setPassed(resultVisible && Boolean(result?.passed));
       setSubmitted(true);
       toast.success("Đã nộp quiz thành công.");
     } catch {
@@ -221,14 +222,20 @@ export const LearningQuizPlayer = ({ quiz, onComplete, persistAttempt = false }:
         </div>
       ) : submitted ? (
         <div className="space-y-6 py-4">
-          <div className={`rounded-2xl border p-8 text-center ${passed ? "border-emerald-200 bg-emerald-50 text-emerald-950" : "border-rose-200 bg-rose-50 text-rose-950"}`}>
-            {passed ? <CheckCircle className="mx-auto mb-3 h-12 w-12 text-emerald-600" /> : <AlertCircle className="mx-auto mb-3 h-12 w-12 text-rose-600" />}
-            <h3 className="text-xl font-bold">{passed ? "Bạn đã đạt quiz" : "Quiz chưa đạt yêu cầu"}</h3>
-            {score != null && <p className="mt-2 text-2xl font-black">{persistAttempt ? "Điểm backend" : "Điểm preview"}: {score}</p>}
+          <div className={`rounded-2xl border p-8 text-center ${!resultVisible && persistAttempt ? "border-primary/20 bg-primary/5" : passed ? "border-emerald-200 bg-emerald-50 text-emerald-950" : "border-rose-200 bg-rose-50 text-rose-950"}`}>
+            {!resultVisible && persistAttempt
+              ? <Clock className="mx-auto mb-3 h-12 w-12 text-primary" />
+              : passed ? <CheckCircle className="mx-auto mb-3 h-12 w-12 text-emerald-600" /> : <AlertCircle className="mx-auto mb-3 h-12 w-12 text-rose-600" />}
+            <h3 className="text-xl font-bold">
+              {!resultVisible && persistAttempt ? "Đã ghi nhận bài nộp" : passed ? "Bạn đã đạt quiz" : "Quiz chưa đạt yêu cầu"}
+            </h3>
+            {!resultVisible && persistAttempt
+              ? <p className="mt-2 text-sm text-muted-foreground">Giáo viên chưa cho phép xem điểm ngay sau khi nộp.</p>
+              : score != null && <p className="mt-2 text-2xl font-black">{persistAttempt ? "Điểm backend" : "Điểm preview"}: {score}</p>}
           </div>
           <div className="flex flex-wrap justify-between gap-3">
             <Button variant="outline" onClick={resetAttempt} className="gap-2"><RefreshCw className="h-4 w-4" />Làm lượt mới</Button>
-            {passed && <Button onClick={onComplete} className="gap-2"><CheckCircle className="h-4 w-4" />Hoàn thành và tiếp tục</Button>}
+            {(passed || (!resultVisible && persistAttempt)) && <Button onClick={onComplete} className="gap-2"><CheckCircle className="h-4 w-4" />Hoàn thành và tiếp tục</Button>}
           </div>
         </div>
       ) : (

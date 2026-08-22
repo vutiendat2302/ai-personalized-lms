@@ -4,7 +4,6 @@ import { getAccessToken, httpClient } from "@/api/httpClient";
 import type { ApiResponse, PageResponse } from "@/types/base";
 
 const CHAT_STREAM_ENDPOINT = "/api/v1/ai/chat/stream";
-const IMAGE_CHAT_STREAM_ENDPOINT = "/api/v1/ai/chat/image/stream";
 const PUBLIC_CHAT_STREAM_ENDPOINT = "/api/v1/public/ai/chat/stream";
 
 export async function streamChat(
@@ -41,6 +40,9 @@ export async function streamChatWithFile(
     conversationId?: string;
     module?: string;
     route?: string;
+    courseId?: string;
+    lessonId?: string;
+    retrievalScope?: AiChatRequestPayload["retrievalScope"];
     file: File;
   },
   options: Omit<SSEReaderOptions, "signal"> & {
@@ -54,6 +56,9 @@ export async function streamChatWithFile(
   if (payload.conversationId) formData.append("conversationId", payload.conversationId);
   if (payload.module) formData.append("module", payload.module);
   if (payload.route) formData.append("route", payload.route);
+  if (payload.courseId) formData.append("courseId", payload.courseId);
+  if (payload.lessonId) formData.append("lessonId", payload.lessonId);
+  if (payload.retrievalScope) formData.append("retrievalScope", payload.retrievalScope);
   formData.append("file", payload.file);
 
   const response = await fetch(FILE_CHAT_STREAM_ENDPOINT, {
@@ -79,6 +84,9 @@ export async function streamChatWithImage(
     conversationId?: string;
     module?: string;
     route?: string;
+    courseId?: string;
+    lessonId?: string;
+    retrievalScope?: AiChatRequestPayload["retrievalScope"];
     image: File;
   },
   options: Omit<SSEReaderOptions, "signal"> & {
@@ -92,6 +100,9 @@ export async function streamChatWithImage(
       conversationId: payload.conversationId,
       module: payload.module,
       route: payload.route,
+      courseId: payload.courseId,
+      lessonId: payload.lessonId,
+      retrievalScope: payload.retrievalScope,
       file: payload.image,
     },
     options

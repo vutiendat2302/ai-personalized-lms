@@ -54,9 +54,13 @@ public class AiChatController {
             @RequestParam(value = "conversationId", required = false) String conversationId,
             @RequestParam(value = "module", required = false) String module,
             @RequestParam(value = "route", required = false) String route,
+            @RequestParam(value = "courseId", required = false) Long courseId,
+            @RequestParam(value = "lessonId", required = false) Long lessonId,
+            @RequestParam(value = "retrievalScope", required = false) String retrievalScope,
             @RequestPart("image") MultipartFile image,
             @AuthenticationPrincipal CustomUserDetails currentUser) {
-        return chatFileStream(question, conversationId, module, route, image, currentUser);
+        return chatFileStream(question, conversationId, module, route,
+                courseId, lessonId, retrievalScope, image, currentUser);
     }
 
     /** Stream phân tích tệp tài liệu PDF, DOCX, TXT hoặc hình ảnh đính kèm trong chat. */
@@ -67,6 +71,9 @@ public class AiChatController {
             @RequestParam(value = "conversationId", required = false) String conversationId,
             @RequestParam(value = "module", required = false) String module,
             @RequestParam(value = "route", required = false) String route,
+            @RequestParam(value = "courseId", required = false) Long courseId,
+            @RequestParam(value = "lessonId", required = false) Long lessonId,
+            @RequestParam(value = "retrievalScope", required = false) String retrievalScope,
             @RequestPart(value = "file", required = false) MultipartFile file,
             @AuthenticationPrincipal CustomUserDetails currentUser) {
         AiChatRequest request = AiChatRequest.builder()
@@ -76,6 +83,9 @@ public class AiChatController {
                 .conversationId(conversationId)
                 .module(module)
                 .route(route)
+                .courseId(courseId)
+                .lessonId(lessonId)
+                .retrievalScope(retrievalScope)
                 .build();
         if (request.getConversationId() == null || request.getConversationId().isBlank()) {
             request.setConversationId(String.valueOf(snowflakeIdGenerator.nextId()));

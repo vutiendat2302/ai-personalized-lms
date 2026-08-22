@@ -11,6 +11,7 @@ export interface ChatSource {
   chunkId: string;
   score?: number;
   courseId?: string;
+  classId?: string;
   lessonId?: string;
   sectionId?: string;
   pageNumber?: number;
@@ -37,6 +38,9 @@ export interface AiChatRequestPayload {
   module?: string;
   route?: string;
   retrievalMode?: "AUTO" | "ALWAYS" | "NEVER";
+  courseId?: string;
+  lessonId?: string;
+  retrievalScope?: "LESSON_ONLY" | "CLASS_MATERIALS" | "COURSE_MATERIALS" | "GENERAL";
 }
 
 export interface AiConversation {
@@ -45,6 +49,10 @@ export interface AiConversation {
   scope: "ADMIN_COPILOT" | "EMPLOYEE_COPILOT" | "STUDENT_ASSISTANT" | "COURSE_ASSISTANT";
   module: string;
   route?: string;
+  courseId?: string;
+  classId?: string;
+  lessonId?: string;
+  retrievalScope?: string;
   createdAt: string;
   updatedAt: string;
   messages: ChatMessage[];

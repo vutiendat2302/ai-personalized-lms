@@ -32,6 +32,7 @@ export interface AgendaSessionItem {
 
 export interface TeacherClassCard {
   id: string;
+  courseId?: string;
   className: string;
   courseName: string;
   deliveryMode: "GROUP_CLASS" | "ONE_ON_ONE";

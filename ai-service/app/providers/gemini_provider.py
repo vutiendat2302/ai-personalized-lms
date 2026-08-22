@@ -203,7 +203,9 @@ class GeminiProvider(BaseAIProvider):
             calls = self._function_calls(response)
             if not calls:
                 if response.text:
-                    if last_tool_result and self._looks_like_raw_tool_call(response.text):
+                    if last_tool_result and self._looks_like_raw_tool_call(
+                        response.text
+                    ):
                         yield self._natural_tool_result(last_tool_result)
                     else:
                         yield response.text
@@ -218,10 +220,12 @@ class GeminiProvider(BaseAIProvider):
                 last_tool_result = await tool_client.execute(
                     name, arguments, tool_access_token
                 )
-                responses.append(types.Part.from_function_response(
-                    name=name,
-                    response={"result": last_tool_result},
-                ))
+                responses.append(
+                    types.Part.from_function_response(
+                        name=name,
+                        response={"result": last_tool_result},
+                    )
+                )
             contents.append(types.Content(role="user", parts=responses))
         yield "Yêu cầu cần quá nhiều bước tra cứu; vui lòng chia nhỏ câu hỏi."
 
@@ -350,25 +354,26 @@ class GeminiProvider(BaseAIProvider):
             '    "maxAttempts": 3,\n'
             '    "shuffleQuestions": true,\n'
             '    "questions": [\n'
-            '      {\n'
+            "      {\n"
             '        "content": "Nội dung câu hỏi",\n'
             '        "questionType": "SINGLE_CHOICE",\n'
             '        "points": 2.0,\n'
             '        "explanation": "Giải thích chi tiết đáp án",\n'
+            '        "sourceIds": ["ID nguồn nằm trong nhãn NGUỒN RAG, hoặc [] nếu chỉ dùng lesson/upload"],\n'
             '        "options": [\n'
             '          {"content": "Đáp án A", "isCorrect": true},\n'
             '          {"content": "Đáp án B", "isCorrect": false}\n'
-            '        ]\n'
-            '      }\n'
-            '    ]\n'
-            '  },\n'
+            "        ]\n"
+            "      }\n"
+            "    ]\n"
+            "  },\n"
             '  "assignment": {\n'
             '    "title": "Tiêu đề bài tập",\n'
             '    "instructions": "Hướng dẫn và tiêu chí đánh giá",\n'
             '    "maxScore": 10.0,\n'
             '    "allowLate": false,\n'
             '    "submissionMode": "FILE_UPLOAD"\n'
-            '  }\n'
+            "  }\n"
             "}"
         )
         prompt = (
@@ -380,6 +385,8 @@ class GeminiProvider(BaseAIProvider):
             "assignment và quiz=null. Nếu BOTH trả cả hai. Quiz chỉ dùng SINGLE_CHOICE, "
             "MULTIPLE_CHOICE hoặc TRUE_FALSE; mỗi câu có explanation, đáp án chính xác và "
             "không trùng lặp. Assignment phải có yêu cầu, tiêu chí đánh giá và đầu ra mong đợi.\n\n"
+            "Với mỗi câu hỏi, sourceIds chỉ được lấy từ nhãn NGUỒN RAG xuất hiện trong NỘI DUNG NGUỒN; "
+            "không tự tạo ID nguồn.\n\n"
             f"CẤU TRÚC JSON MẪU:\n{schema_desc}\n\n"
             f"NỘI DUNG NGUỒN:\n{lesson_content}"
         )

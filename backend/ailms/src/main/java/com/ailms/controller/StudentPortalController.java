@@ -20,6 +20,7 @@ import com.ailms.response.StudentPersonalizationResponse;
 import com.ailms.response.OrderResponse;
 import com.ailms.response.ReviewResponse;
 import com.ailms.response.CertificateResponse;
+import com.ailms.response.QuizResponse;
 import com.ailms.request.RefundRequest;
 import jakarta.validation.Valid;
 import com.ailms.security.CustomUserDetails;
@@ -229,6 +230,14 @@ public class StudentPortalController {
             @AuthenticationPrincipal CustomUserDetails currentUser) {
         return ResponseEntity.ok(ApiResponse.of("Lấy quiz cần làm thành công",
                 studentPortalService.getQuizzes(currentUser.getUser().getId())));
+    }
+
+    /** Lấy câu hỏi Quiz đã được mở mà học viên hiện tại có quyền làm. */
+    @GetMapping("/quizzes/{quizId}")
+    public ResponseEntity<ApiResponse<QuizResponse>> getQuiz(
+            @AuthenticationPrincipal CustomUserDetails currentUser, @PathVariable Long quizId) {
+        return ResponseEntity.ok(ApiResponse.of("Lấy nội dung quiz thành công",
+                studentPortalService.getQuiz(currentUser.getUser().getId(), quizId)));
     }
 
     /** Bắt đầu một lượt quiz bằng danh tính học viên từ JWT. */

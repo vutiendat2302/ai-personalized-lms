@@ -57,6 +57,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { QuestionBuilderManager, type QuestionItem } from "@/components/admin/course-builder/QuestionBuilderManager";
 import { LearningQuizPlayer } from "@/components/student/learning/LearningQuizPlayer";
 import type { QuizResponseDTO } from "@/api/courses/courseAuthoringApi";
+import { ClassQuizPublishDialog } from "@/components/teacher/assessment/ClassQuizPublishDialog";
 
 // Format date display (DD/MM/YYYY HH:mm)
 const formatDateDisplay = (dateStr?: string | null) => {
@@ -173,6 +174,7 @@ export const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ scop
   // Confirm Delete Dialog
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<string | number | null>(null);
+  const [quizToPublish, setQuizToPublish] = useState<QuizResponseItem | null>(null);
 
   // Notification Banners
   const [banner, setBanner] = useState<{ type: "success" | "error"; msg: string } | null>(null);
@@ -683,6 +685,19 @@ export const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ scop
                             <Eye className="h-3.5 w-3.5" />
                             <span>Preview</span>
                           </Button>
+                          {authoredOnly && !quiz.classId && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => {
+                                setQuizToPublish(quiz);
+                              }}
+                              className="h-8 gap-1 rounded-xl text-xs font-bold text-primary hover:bg-primary/10"
+                              title="Phát hành Quiz vào lớp"
+                            >
+                              <Send className="h-3.5 w-3.5" /><span>Giao lớp</span>
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="ghost"
@@ -986,6 +1001,18 @@ export const AssessmentManagement: React.FC<AssessmentManagementProps> = ({ scop
         cancelText="Hủy"
         onConfirm={handleConfirmDelete}
       />
+
+      {quizToPublish && (
+        <ClassQuizPublishDialog
+          open
+          onOpenChange={(value) => {
+            if (!value) setQuizToPublish(null);
+          }}
+          quizId={String(quizToPublish.id)}
+          quizTitle={quizToPublish.title}
+          courseId={quizToPublish.courseId == null ? undefined : String(quizToPublish.courseId)}
+        />
+      )}
 
       {/* CREATE / EDIT FORM DIALOG FOR QUIZ & ASSIGNMENT (STUDIO AUTHORING EXPERIENCE) */}
       <Dialog

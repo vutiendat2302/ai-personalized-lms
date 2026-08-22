@@ -2897,6 +2897,7 @@ Các API bên dưới yêu cầu JWT có `ROLE_STUDENT`. Backend luôn suy ra h�
 | `GET` | `/api/v1/student/schedule` | Lịch hợp nhất buổi học, hạn bài tập và hạn quiz của đúng enrollment/lớp |
 | `GET` | `/api/v1/student/assignments` | Bài tập và trạng thái bài nộp của khóa/lớp hiện tại |
 | `GET` | `/api/v1/student/quizzes` | Quiz cần làm, deadline, số lượt và kết quả của học viên |
+| `GET` | `/api/v1/student/quizzes/{quizId}` | Câu hỏi Quiz đã mở sau kiểm tra enrollment/lớp; không trả đáp án đúng và explanation |
 | `POST` | `/api/v1/student/quizzes/{quizId}/attempts` | Tạo một lượt làm quiz sau khi kiểm tra enrollment, lớp, deadline và số lượt |
 | `POST` | `/api/v1/student/quiz-attempts/{attemptId}/submit` | Nộp câu trả lời của attempt thuộc chính học viên để backend chấm |
 | `POST` | `/api/v1/student/assignments/{assignmentId}/submissions` | Nộp nội dung/tệp bài tập sau khi kiểm tra enrollment, lớp và deadline |
@@ -3010,3 +3011,16 @@ Accept và mọi state transition dùng row lock. Khi HR phê duyệt kết nố
 ### 18.3 Cơ chế Tool Calling & Đồng bộ Tri thức RAG
 - `ManagementAiContextService` cung cấp hơn 20 tool nghiệp vụ nội bộ (Nhân sự, Hợp đồng, Chấm công, Học viên, Doanh số, Khóa học).
 - `ManagementKnowledgeSyncService` & `ContractKnowledgeChangedListener`: Tự động đồng bộ các quy chế, mẫu hợp đồng sang `ai-service` để lưu trữ vector trên Qdrant (`management_knowledge`).
+
+### 18.4 AI Assessment từ tài liệu lớp và phát hành Quiz
+
+- `ClassResourceKnowledgeSyncListener` ingest resource after-commit, cập nhật `PENDING/PROCESSING/READY/FAILED` và xóa vector khi resource bị xóa.
+- `LessonResourceKnowledgeSyncListener` ingest resource bài học với metadata `courseId/sectionId/lessonId`.
+- `GET /api/v1/authoring/lessons/{lessonId}/ai-assessment-materials?classId=...` chỉ trả resource cùng lớp/course và trạng thái RAG thật.
+- `POST /api/v1/authoring/lessons/{lessonId}/ai-assessment-drafts` nhận đồng thời `resourceIds` lặp và tối đa 3 file upload.
+- Apply draft nhận Quiz đã review, validate trước khi claim Redis và tạo đầy đủ `question/question_option`.
+- `POST /api/v1/teacher/classes/{classId}/quizzes/{sourceQuizId}/publish` sao chép Quiz thành bản ACTIVE độc lập theo lớp; các endpoint GET/PATCH/close cùng prefix quản lý lịch và trạng thái.
+
+### 18.5 Learning Chat scope
+
+`StudentLearningAiContextService` không tin context quyền từ Frontend. Service kiểm tra enrollment, package ACTIVE còn hạn, course/lesson, membership STUDENT ACTIVE rồi suy ra class. Context `courseId/classId/lessonId/retrievalScope` được lưu vào conversation; dùng lại conversation với context khác bị từ chối. Các scope hợp lệ: `LESSON_ONLY`, `CLASS_MATERIALS`, `COURSE_MATERIALS`, `GENERAL`.

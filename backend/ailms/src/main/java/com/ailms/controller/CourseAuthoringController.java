@@ -7,6 +7,7 @@ import com.ailms.service.imp.AiAssessmentAuthoringService;
 import com.ailms.request.ai.AiAssessmentApplyRequest;
 import com.ailms.response.ai.AiAssessmentApplyResponse;
 import com.ailms.response.ai.AiAssessmentDraftResponse;
+import com.ailms.response.ai.AiAssessmentMaterialResponse;
 import com.ailms.security.CustomUserDetails;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +38,7 @@ public class CourseAuthoringController {
     // ────────────── CURRICULUM TREE ──────────────
 
     @GetMapping("/courses/{courseId}/curriculum")
+    @PreAuthorize("@courseAccess.canManage(#courseId, authentication)")
     public ResponseEntity<ApiResponse<CourseCurriculumResponse>> getCurriculum(@PathVariable Long courseId) {
         return ResponseEntity.ok(ApiResponse.of("Lấy cây nội dung thành công", courseAuthoringService.getCurriculum(courseId)));
     }
@@ -142,11 +144,23 @@ public class CourseAuthoringController {
             @PathVariable Long lessonId,
             @RequestParam(value = "assessmentType", required = false) String assessmentType,
             @RequestParam(value = "questionCount", required = false) Integer questionCount,
+            @RequestParam(value = "classId", required = false) Long classId,
+            @RequestParam(value = "resourceIds", required = false) List<Long> resourceIds,
             @RequestPart(value = "materials", required = false) MultipartFile[] materials,
             @AuthenticationPrincipal CustomUserDetails currentUser) {
         return ResponseEntity.ok(ApiResponse.of("Đã tạo draft assessment AI, hãy xem và xác nhận trước khi lưu",
                 aiAssessmentAuthoringService.generateDraft(
-                        lessonId, assessmentType, questionCount, materials, currentUser)));
+                        lessonId, assessmentType, questionCount, classId, resourceIds, materials, currentUser)));
+    }
+
+    /** Lấy các tài liệu lớp có thể chọn làm nguồn RAG cho lesson. */
+    @GetMapping("/lessons/{lessonId}/ai-assessment-materials")
+    public ResponseEntity<ApiResponse<List<AiAssessmentMaterialResponse>>> getAssessmentMaterials(
+            @PathVariable Long lessonId,
+            @RequestParam Long classId,
+            @AuthenticationPrincipal CustomUserDetails currentUser) {
+        return ResponseEntity.ok(ApiResponse.of("Lấy tài liệu AI khả dụng thành công",
+                aiAssessmentAuthoringService.getAvailableMaterials(lessonId, classId, currentUser)));
     }
 
     /** Áp dụng một lần draft đã xem vào quiz/assignment block thật của lesson. */

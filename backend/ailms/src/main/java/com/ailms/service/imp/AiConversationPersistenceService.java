@@ -46,6 +46,7 @@ public class AiConversationPersistenceService {
                             || existing.getScope() != scope) {
                         throw conversationNotFound();
                     }
+                    requireSameLearningContext(existing, request);
                     return existing;
                 })
                 .orElseGet(() -> AiConversationEntity.builder()
@@ -55,6 +56,10 @@ public class AiConversationPersistenceService {
                         .scope(scope)
                         .module(normalizeModule(request.getModule()))
                         .contextRoute(request.getRoute())
+                        .courseId(request.getCourseId())
+                        .classId(request.getClassId())
+                        .lessonId(request.getLessonId())
+                        .retrievalScope(request.getRetrievalScope())
                         .lastMessageAt(now)
                         .build());
         conversation.setModule(normalizeModule(request.getModule()));
@@ -66,6 +71,18 @@ public class AiConversationPersistenceService {
                 .role("user")
                 .content(request.getQuestion())
                 .build());
+    }
+
+    /** Kiểm tra sớm conversation không bị tái sử dụng cho course/class/lesson khác. */
+    @Transactional(readOnly = true)
+    public void validateLearningContext(
+            Long ownerId, AiConversationScope scope, AiChatRequest request) {
+        conversationRepository.findById(request.getConversationId()).ifPresent(existing -> {
+            if (!existing.getOwnerId().equals(ownerId) || existing.getScope() != scope) {
+                throw conversationNotFound();
+            }
+            requireSameLearningContext(existing, request);
+        });
     }
 
     /** Lưu câu trả lời hoàn chỉnh sau khi stream kết thúc. */
@@ -203,6 +220,10 @@ public class AiConversationPersistenceService {
                 .scope(entity.getScope())
                 .module(entity.getModule())
                 .route(entity.getContextRoute())
+                .courseId(entity.getCourseId())
+                .classId(entity.getClassId())
+                .lessonId(entity.getLessonId())
+                .retrievalScope(entity.getRetrievalScope())
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getLastMessageAt())
                 .messages(messages)
@@ -228,6 +249,10 @@ public class AiConversationPersistenceService {
                 .scope(entity.getScope())
                 .module(entity.getModule())
                 .route(entity.getContextRoute())
+                .courseId(entity.getCourseId())
+                .classId(entity.getClassId())
+                .lessonId(entity.getLessonId())
+                .retrievalScope(entity.getRetrievalScope())
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getLastMessageAt())
                 .build();
@@ -241,5 +266,16 @@ public class AiConversationPersistenceService {
     /** Trả lỗi 404 không tiết lộ message của user khác. */
     private ResourceNotFoundException messageNotFound() {
         return new ResourceNotFoundException("Không tìm thấy tin nhắn.");
+    }
+
+    /** Chặn lịch sử hội thoại học tập bị trộn giữa hai context khác nhau. */
+    private void requireSameLearningContext(AiConversationEntity existing, AiChatRequest request) {
+        if (existing.getScope() != AiConversationScope.STUDENT_ASSISTANT) return;
+        if (!java.util.Objects.equals(existing.getCourseId(), request.getCourseId())
+                || !java.util.Objects.equals(existing.getClassId(), request.getClassId())
+                || !java.util.Objects.equals(existing.getLessonId(), request.getLessonId())
+                || !java.util.Objects.equals(existing.getRetrievalScope(), request.getRetrievalScope())) {
+            throw new BadRequestException("Hãy tạo hội thoại mới khi thay đổi phạm vi học tập");
+        }
     }
 }

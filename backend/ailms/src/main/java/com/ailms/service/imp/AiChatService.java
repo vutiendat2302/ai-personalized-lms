@@ -23,7 +23,6 @@ import java.io.IOException;
 import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 
 /** Điều phối persistence và stream Admin Copilot qua ai-service. */
 @Service
@@ -34,7 +33,7 @@ public class AiChatService implements IAiChatService {
     private final AiConversationPersistenceService persistenceService;
     private final AiConversationBufferService bufferService;
     private final AiToolAccessTokenService toolAccessTokenService;
-    private final ManagementAiContextService managementAiContextService;
+    private final StudentLearningAiContextService studentLearningAiContextService;
 
     /** Khởi tạo client streaming và service lưu lịch sử. */
     public AiChatService(
@@ -43,13 +42,13 @@ public class AiChatService implements IAiChatService {
             AiConversationPersistenceService persistenceService,
             AiConversationBufferService bufferService,
             AiToolAccessTokenService toolAccessTokenService,
-            ManagementAiContextService managementAiContextService) {
+            StudentLearningAiContextService studentLearningAiContextService) {
         this.streamingClient = streamingClient;
         this.standardClient = standardClient;
         this.persistenceService = persistenceService;
         this.bufferService = bufferService;
         this.toolAccessTokenService = toolAccessTokenService;
-        this.managementAiContextService = managementAiContextService;
+        this.studentLearningAiContextService = studentLearningAiContextService;
     }
 
     /** Lưu câu hỏi, gửi context đáng tin cậy và lưu câu trả lời khi stream xong. */
@@ -86,6 +85,20 @@ public class AiChatService implements IAiChatService {
             String fileBase64, String fileMimeType, String fileName) {
         Long ownerId = currentUser.getUser().getId();
         AiConversationScope scope = resolveScope(currentUser);
+        if (scope == AiConversationScope.STUDENT_ASSISTANT) {
+            var context = studentLearningAiContextService.resolve(ownerId, request);
+            request.setCourseId(context.courseId());
+            request.setClassId(context.classId());
+            request.setLessonId(context.lessonId());
+            request.setRetrievalScope(context.retrievalScope());
+            persistenceService.validateLearningContext(ownerId, scope, request);
+        } else {
+            // Teacher Copilot cần giữ courseId do route cung cấp để tool truy vấn dữ liệu thật.
+            // Quyền trên course vẫn được kiểm tra lại trong ManagementAiContextService.
+            request.setClassId(null);
+            request.setLessonId(null);
+            request.setRetrievalScope("GENERAL");
+        }
         List<AiHistoryMessageRequest> history = bufferService
                 .get(ownerId, request.getConversationId());
         if (history.isEmpty()) {
@@ -104,19 +117,8 @@ public class AiChatService implements IAiChatService {
                         .content(request.getQuestion())
                         .build());
         String toolAccessToken = toolAccessTokenService.issue(currentUser);
-        String aiQuestion = request.getQuestion();
-        if (scope == AiConversationScope.STUDENT_ASSISTANT) {
-            try {
-                Map<String, Object> learningContext = managementAiContextService.execute(
-                        "get_my_learning_progress", Map.of(), toolAccessTokenService.verify(toolAccessToken));
-                aiQuestion += "\n\nDỮ LIỆU HỌC TẬP THẬT CỦA HỌC VIÊN (chỉ dùng để trả lời, không hiển thị JSON):\n"
-                        + learningContext;
-            } catch (RuntimeException ignored) {
-                // Vẫn cho phép câu hỏi kiến thức chung chạy nếu context cá nhân tạm thời lỗi.
-            }
-        }
         AiServiceChatRequest internalRequest = AiServiceChatRequest.builder()
-                .question(aiQuestion)
+                .question(request.getQuestion())
                 .conversationId(request.getConversationId())
                 .ownerId(String.valueOf(ownerId))
                 .roles(trustedRoles(currentUser))
@@ -132,6 +134,10 @@ public class AiChatService implements IAiChatService {
                 .fileName(fileName)
                 .retrievalMode(request.getRetrievalMode() == null
                         ? "AUTO" : request.getRetrievalMode())
+                .courseId(request.getCourseId() == null ? null : String.valueOf(request.getCourseId()))
+                .classId(request.getClassId() == null ? null : String.valueOf(request.getClassId()))
+                .lessonId(request.getLessonId() == null ? null : String.valueOf(request.getLessonId()))
+                .retrievalScope(request.getRetrievalScope())
                 .build();
         StringBuilder answer = new StringBuilder();
         return streamingClient.chatStream(internalRequest)

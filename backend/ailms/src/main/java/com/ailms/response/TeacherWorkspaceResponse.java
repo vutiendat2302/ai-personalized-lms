@@ -153,6 +153,7 @@ public final class TeacherWorkspaceResponse {
     @Data @Builder @NoArgsConstructor @AllArgsConstructor
     public static class ClassCard {
         private String id;
+        private String courseId;
         private String className;
         private String courseName;
         private String deliveryMode;

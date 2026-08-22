@@ -30,6 +30,9 @@ public interface QuizRepository extends BaseRepository<QuizEntity, Long> {
     /** Lấy quiz/bài thi được giao riêng cho một lớp. */
     List<QuizEntity> findByClassIdOrderByDueAtAsc(Long classId);
 
+    /** Chặn tạo trùng một bản phát hành đang hoạt động từ cùng Quiz nguồn trong lớp. */
+    boolean existsByClassIdAndSourceQuizIdAndStatus(Long classId, Long sourceQuizId, BaseStatusEnum status);
+
     /** Lấy deadline quiz chung của các khóa học đang còn quyền truy cập. */
     List<QuizEntity> findByStatusAndClassIdIsNullAndCourseIdInAndDueAtBetweenOrderByDueAtAsc(
             BaseStatusEnum status, List<Long> courseIds, LocalDateTime from, LocalDateTime to);

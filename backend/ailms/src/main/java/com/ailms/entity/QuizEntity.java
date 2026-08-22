@@ -47,6 +47,10 @@ public class QuizEntity extends BaseEntity {
     @Column(name = "class_id")
     private Long classId;
 
+    /** Quiz nguồn trong Course Builder khi bản ghi này là bản phát hành riêng cho lớp. */
+    @Column(name = "source_quiz_id")
+    private Long sourceQuizId;
+
     /** Mã định danh bài kiểm tra dạng chữ/số duy nhất. */
     @Column(name = "code")
     private String code;
@@ -74,6 +78,15 @@ public class QuizEntity extends BaseEntity {
     /** Xáo trộn thứ tự câu hỏi khi học viên bắt đầu làm bài (true = xáo trộn). */
     @Column(name = "shuffle_questions")
     private Boolean shuffleQuestions;
+
+    /** Thời điểm học viên được phép bắt đầu lượt làm. */
+    @Column(name = "available_from")
+    private LocalDateTime availableFrom;
+
+    /** Cho phép học viên xem điểm ngay sau khi nộp. */
+    @Column(name = "show_result_after_submit", nullable = false)
+    @Builder.Default
+    private Boolean showResultAfterSubmit = true;
 
     /** Thời điểm đóng bài quiz/thi đối với học viên. */
     @Column(name = "due_at")

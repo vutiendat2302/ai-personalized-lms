@@ -6,6 +6,7 @@ from app.schemas.assessment_schema import (
     AssessmentGenerationRequest,
     AssessmentGenerationResponse,
 )
+from app.rag.retriever import Retriever
 
 
 class AssessmentGenerator:
@@ -19,7 +20,9 @@ class AssessmentGenerator:
       để sinh ra các câu hỏi trắc nghiệm (Quiz) hoặc bài tập thực hành (Assignment) có giải thích chi tiết đáp án và barem điểm chuẩn xác.
     """
 
-    def __init__(self, provider: BaseAIProvider) -> None:
+    def __init__(
+        self, provider: BaseAIProvider, retriever: Retriever | None = None
+    ) -> None:
         """
         Khởi tạo AssessmentGenerator với AI Provider.
 
@@ -27,6 +30,7 @@ class AssessmentGenerator:
             provider (BaseAIProvider): Provider thực hiện sinh nội dung có cấu trúc qua LLM.
         """
         self.provider = provider
+        self.retriever = retriever or Retriever()
 
     async def generate(
         self, request: AssessmentGenerationRequest
@@ -46,12 +50,17 @@ class AssessmentGenerator:
             AssessmentGenerationResponse: Dữ liệu bài Quiz/Assignment đã qua kiểm định schema.
         """
         source_text = await self._source_text(request)
-        return await self.provider.generate_assessment(
+        response = await self.provider.generate_assessment(
             lesson_title=request.lesson_title,
             lesson_content=source_text,
             assessment_type=request.assessment_type,
             question_count=request.question_count,
         )
+        allowed_source_ids = set(request.rag_source_ids) | {
+            f"upload-{index}" for index in range(1, len(request.source_files) + 1)
+        }
+        self._normalize_question_sources(response, allowed_source_ids)
+        return response
 
     async def _source_text(self, request: AssessmentGenerationRequest) -> str:
         """
@@ -71,8 +80,11 @@ class AssessmentGenerator:
         Returns:
             str: Toàn bộ nội dung học liệu đã được làm sạch và hợp nhất.
         """
-        segments = [f"NỘI DUNG BÀI HỌC:\n{request.lesson_content}"]
-        for source_file in request.source_files:
+        segments = [
+            f"NỘI DUNG BÀI HỌC [lesson:{request.lesson_id}]:\n{request.lesson_content}"
+        ]
+        segments.extend(await self._rag_segments(request))
+        for index, source_file in enumerate(request.source_files, start=1):
             file_bytes = source_file.decoded_content()
             if source_file.mime_type == "application/pdf":
                 extracted = await PdfExtractor().extract(file_bytes=file_bytes)
@@ -85,5 +97,61 @@ class AssessmentGenerator:
                     content=source_file.mime_type, file_bytes=file_bytes
                 )
             text = "\n".join(segment.text for segment in extracted.segments)
-            segments.append(f"TÀI LIỆU BỔ SUNG ({source_file.name}):\n{text}")
+            segments.append(
+                f"TÀI LIỆU BỔ SUNG [upload-{index}] ({source_file.name}):\n{text}"
+            )
         return "\n\n".join(segments)[:80_000]
+
+    async def _rag_segments(self, request: AssessmentGenerationRequest) -> list[str]:
+        """Truy xuất Top-K chunk theo từng source đã được Backend cấp quyền thay vì tải toàn bộ file."""
+        if not request.rag_source_ids:
+            return []
+        roles = list({role.upper() for role in request.allowed_roles} | {"ALL"})
+        segments: list[str] = []
+        seen_chunks: set[str] = set()
+        missing_sources: list[str] = []
+        query = f"{request.lesson_title}. Khái niệm chính, kiến thức trọng tâm và ví dụ để đánh giá học tập"
+        for source_id in request.rag_source_ids:
+            filters: dict[str, object] = {
+                "sourceId": source_id,
+                "classId": request.class_id,
+                "courseId": request.course_id,
+                "allowedRoles": roles,
+            }
+            results = await self.retriever.retrieve(
+                query, filters, limit=8, score_threshold=0.0
+            )
+            source_has_content = False
+            for result in results:
+                if result.id in seen_chunks:
+                    continue
+                seen_chunks.add(result.id)
+                text = str(result.payload.get("chunkText", "")).strip()
+                if text:
+                    source_has_content = True
+                    segments.append(
+                        f"NGUỒN RAG [{source_id}] CHUNK [{result.id}]:\n{text}"
+                    )
+            if not source_has_content:
+                missing_sources.append(source_id)
+        if missing_sources:
+            raise ValueError(
+                "Không tìm thấy nội dung RAG cho nguồn đã chọn: "
+                + ", ".join(missing_sources)
+            )
+        return segments
+
+    def _normalize_question_sources(
+        self, response: AssessmentGenerationResponse, allowed_source_ids: set[str]
+    ) -> None:
+        """Loại citation lạ do mô hình sinh và fallback về nguồn RAG hợp lệ đã truy xuất."""
+        if response.quiz is None:
+            return
+        fallback = sorted(allowed_source_ids)
+        for question in response.quiz.questions:
+            valid = [
+                source_id
+                for source_id in question.source_ids
+                if source_id in allowed_source_ids
+            ]
+            question.source_ids = valid or fallback

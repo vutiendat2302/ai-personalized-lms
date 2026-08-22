@@ -538,6 +538,7 @@ PRIMARY KEY (course_id, user_id)
 | course_id | BIGINT | FK → course.id |
 | section_id | BIGINT | FK → course_section.id |
 | class_id | BIGINT | NULL, FK → class.id — chỉ giao cho một lớp |
+| source_quiz_id | BIGINT | NULL, self FK → quiz.id — Quiz nguồn khi phát hành vào lớp |
 | code | VARCHAR | Mã bài kiểm tra |
 | title | VARCHAR | Tên bài kiểm tra |
 | description | TEXT | Mô tả |
@@ -545,8 +546,10 @@ PRIMARY KEY (course_id, user_id)
 | pass_score | DECIMAL(5,2) | Số điểm tối thiểu cần đạt để pass bài kiểm tra |
 | max_attempts | INT | Số lần được phép làm bài |
 | shuffle_questions | BOOLEAN | Trộn thứ tự câu hỏi |
+| available_from | DATETIME | Thời điểm học viên được bắt đầu |
+| show_result_after_submit | BOOLEAN | Có trả điểm/pass ngay sau nộp hay không |
 | due_at | DATETIME | Hạn làm quiz/lịch thi |
-| status | TINYINT | DRAFT / PUBLISHED / ARCHIVED |
+| status | VARCHAR | DRAFT / ACTIVE / INACTIVE |
 | created_at / created_by / updated_at / updated_by | | Audit fields |
 
 ## question
@@ -712,5 +715,16 @@ Các cột MoMo ở v4 được giữ để tương thích migration đã áp d�
 - `course_package.delivery_mode` chỉ còn `SELF_STUDY`, `GROUP_CLASS`, `ONE_ON_ONE`.
 - `course_package.class_id` chỉ dùng cho `GROUP_CLASS`; sức chứa được kiểm tra bằng thành viên thực tế trong `class_member`.
 - Migration v23 chuyển dữ liệu hình thức cũ theo quyền lợi chính: có lớp thành `GROUP_CLASS`, có buổi gia sư thành `ONE_ON_ONE`, còn lại thành `SELF_STUDY`.
+
+## AI assessment và learning scope (v29)
+
+Migration `v29_ai_class_learning_scope.sql` bổ sung:
+
+- `class_resource.rag_status`, `rag_chunks_count`, `rag_error` để theo dõi ingestion Qdrant và retry lỗi; resource tồn tại trước migration được chuyển `FAILED` để UI cho phép đồng bộ có chủ đích.
+- `quiz.source_quiz_id`, `available_from`, `show_result_after_submit`; bản Quiz có `class_id` là bản sao độc lập đã phát hành cho lớp.
+- `ai_conversation.course_id`, `class_id`, `lesson_id`, `retrieval_scope` để không trộn hội thoại giữa các ngữ cảnh học tập.
+- Index theo trạng thái RAG, class/source Quiz, lịch Quiz và context conversation.
+
+`source_quiz_id` dùng `ON DELETE SET NULL`; xóa Quiz nguồn không xóa đề đã giao hay attempts của học viên.
 
 ---

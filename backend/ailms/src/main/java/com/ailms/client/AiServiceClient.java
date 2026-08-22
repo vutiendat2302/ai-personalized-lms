@@ -16,6 +16,7 @@ import com.ailms.response.ai.AiConversationTitleResponse;
 import com.ailms.response.ai.AiAssessmentDraftResponse;
 import com.ailms.response.ai.AiSupportQuickAnswerResponse;
 import com.ailms.response.ai.AiSupportIntentResponse;
+import com.ailms.response.ai.AiIngestResponse;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.service.annotation.HttpExchange;
 import org.springframework.web.service.annotation.PostExchange;
@@ -61,7 +62,7 @@ public interface AiServiceClient {
 
     /** Đồng bộ một nguồn nghiệp vụ vào Qdrant sau khi MySQL commit. */
     @PostExchange("/rag/ingest")
-    void ingest(@RequestBody AiIngestRequest request);
+    AiIngestResponse ingest(@RequestBody AiIngestRequest request);
 
     /** Xóa vector của nguồn nghiệp vụ khi bản ghi gốc bị xóa. */
     @DeleteExchange("/rag/sources/{sourceId}")

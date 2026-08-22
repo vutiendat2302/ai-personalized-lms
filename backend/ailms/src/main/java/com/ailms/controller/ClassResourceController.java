@@ -19,6 +19,7 @@ public class ClassResourceController {
 
     private final IClassResourceService resourceService;
 
+    /** Tạo tài liệu lớp khi người gọi có quyền quản lý lớp. */
     @PostMapping
     @PreAuthorize("@classAccess.canManage(#classId, authentication)")
     public ResponseEntity<ApiResponse<ClassResourceResponse>> createResource(
@@ -29,6 +30,7 @@ public class ClassResourceController {
                 .body(ApiResponse.of("Class resource created successfully", response));
     }
 
+    /** Lấy tài liệu lớp khi người gọi có quyền xem lớp. */
     @GetMapping
     @PreAuthorize("@classAccess.canView(#classId, authentication)")
     public ResponseEntity<ApiResponse<PageResponse<ClassResourceResponse>>> getResourcesPage(
@@ -40,6 +42,7 @@ public class ClassResourceController {
         return ResponseEntity.ok(ApiResponse.of("Class resources retrieved successfully", response));
     }
 
+    /** Xóa tài liệu sau khi kiểm tra resource thuộc đúng lớp trên URL. */
     @DeleteMapping("/{resourceId}")
     @PreAuthorize("@classAccess.canManageResource(#classId, #resourceId, authentication)")
     public ResponseEntity<ApiResponse<Void>> deleteResource(
@@ -47,5 +50,15 @@ public class ClassResourceController {
             @PathVariable Long resourceId) {
         resourceService.deleteResource(resourceId);
         return ResponseEntity.ok(ApiResponse.message("Class resource deleted successfully"));
+    }
+
+    /** Thử ingest lại một tài liệu lớp đang FAILED. */
+    @PostMapping("/{resourceId}/rag/retry")
+    @PreAuthorize("@classAccess.canManageResource(#classId, #resourceId, authentication)")
+    public ResponseEntity<ApiResponse<ClassResourceResponse>> retryRag(
+            @PathVariable Long classId,
+            @PathVariable Long resourceId) {
+        return ResponseEntity.accepted().body(ApiResponse.of(
+                "Đã đưa tài liệu vào hàng đợi xử lý AI", resourceService.retryRag(resourceId)));
     }
 }

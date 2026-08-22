@@ -2,7 +2,7 @@ import base64
 from enum import Enum
 from typing import Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class RetrievalMode(str, Enum):
@@ -49,6 +49,7 @@ class ChatSource(BaseModel):
     chunk_id: str = Field(alias="chunkId")
     score: float | None = None
     course_id: str | None = Field(default=None, alias="courseId")
+    class_id: str | None = Field(default=None, alias="classId")
     lesson_id: str | None = Field(default=None, alias="lessonId")
     section_id: str | None = Field(default=None, alias="sectionId")
     page_number: int | None = Field(default=None, alias="pageNumber")
@@ -156,8 +157,27 @@ class ChatStreamRequest(BaseModel):
     )
     file_mime_type: str | None = Field(default=None, alias="fileMimeType")
     file_name: str | None = Field(default=None, alias="fileName")
+    course_id: str | None = Field(default=None, alias="courseId")
+    class_id: str | None = Field(default=None, alias="classId")
+    lesson_id: str | None = Field(default=None, alias="lessonId")
+    retrieval_scope: Literal[
+        "LESSON_ONLY", "CLASS_MATERIALS", "COURSE_MATERIALS", "GENERAL"
+    ] = Field(default="GENERAL", alias="retrievalScope")
 
     model_config = ConfigDict(populate_by_name=True)
+
+    @model_validator(mode="after")
+    def validate_learning_scope(self) -> "ChatStreamRequest":
+        """Yêu cầu đủ khóa filter khi Backend chọn RAG theo lesson/class/course."""
+        if self.scope != "STUDENT_ASSISTANT":
+            return self
+        if self.retrieval_scope != "GENERAL" and not self.course_id:
+            raise ValueError("Learning RAG cần courseId")
+        if self.retrieval_scope == "LESSON_ONLY" and not self.lesson_id:
+            raise ValueError("LESSON_ONLY cần lessonId")
+        if self.retrieval_scope == "CLASS_MATERIALS" and not self.class_id:
+            raise ValueError("CLASS_MATERIALS cần classId")
+        return self
 
     def decoded_image(self) -> bytes | None:
         """

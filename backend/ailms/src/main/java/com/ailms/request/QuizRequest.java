@@ -23,6 +23,8 @@ public class QuizRequest {
 
     private Long classId;
 
+    private Long sourceQuizId;
+
     private String code;
 
     @NotBlank(message = "Title must not be blank")
@@ -37,6 +39,10 @@ public class QuizRequest {
     private Integer maxAttempts;
 
     private Boolean shuffleQuestions;
+
+    private LocalDateTime availableFrom;
+
+    private Boolean showResultAfterSubmit;
 
     private LocalDateTime dueAt;
 

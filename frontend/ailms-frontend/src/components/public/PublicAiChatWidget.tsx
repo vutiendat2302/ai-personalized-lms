@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, ArrowRight, Bot, Check, CircleStop, Clock, ExternalLink, FileText, Headset, History, Layers, Loader2, Paperclip, RotateCcw, Send, Sparkles, X } from "lucide-react";
+import { AlertTriangle, ArrowRight, Bot, Check, CircleStop, Clock, ExternalLink, FileText, Headset, History, Layers, Loader2, Maximize2, Minimize2, Paperclip, RotateCcw, Send, Sparkles, X } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -133,6 +133,7 @@ export const PublicAiChatWidget: React.FC = () => {
   const { auth } = useAuth();
   const { error: showError } = useToast();
   const [isOpen, setIsOpen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [newConversationOpen, setNewConversationOpen] = useState(false);
   const [cancelConversationOpen, setCancelConversationOpen] = useState(false);
   const [endConversationOpen, setEndConversationOpen] = useState(false);
@@ -201,6 +202,15 @@ export const PublicAiChatWidget: React.FC = () => {
   useEffect(() => {
     isOpenRef.current = isOpen;
   }, [isOpen]);
+
+  /** Thoát chế độ toàn màn hình khi visitor nhấn Escape. */
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsFullscreen(false);
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   /** Chỉ bám cuối khi visitor chưa kéo lên đọc lịch sử. */
   useEffect(() => {
@@ -674,15 +684,18 @@ export const PublicAiChatWidget: React.FC = () => {
   const hasDirectSupportOpen = ["QUEUED", "ASSIGNED", "ACTIVE", "WAITING_CONFIRMATION"]
     .includes(conversation?.status ?? "");
 
-  return <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
-    {isOpen && <Card className="relative mb-4 flex h-[min(700px,calc(100vh-6rem))] w-[420px] max-w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden border p-0 shadow-2xl">
+  return <div className={isFullscreen ? "fixed inset-0 z-50" : "fixed bottom-6 right-6 z-50 flex flex-col items-end"}>
+    {isOpen && <Card className={isFullscreen
+      ? "relative flex h-full w-full max-w-none flex-col gap-0 overflow-hidden rounded-none border-0 p-0 shadow-2xl text-base [&_button]:text-base [&_input]:text-base [&_li]:text-base [&_p]:text-base [&_span]:text-base [&_textarea]:text-base"
+      : "relative mb-4 flex h-[min(700px,calc(100vh-6rem))] w-[420px] max-w-[calc(100vw-2rem)] flex-col gap-0 overflow-hidden border p-0 shadow-2xl"}>
       <div className="flex items-center justify-between border-b bg-primary px-4 py-3 text-primary-foreground">
         <div className="flex items-center gap-2"><Bot className="h-5 w-5" /><div><p className="text-sm font-semibold">Tư vấn AILMS</p><p className="text-sm opacity-80">Đồng hành cùng bạn</p></div></div>
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="icon" disabled={!visitorToken || loading} onClick={() => void openHistory()} className="h-8 w-8 text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground" aria-label="Lịch sử trò chuyện"><History className="h-4 w-4" /></Button>
           <Button variant="ghost" size="sm" disabled={!visitorToken || loading || hasDirectSupportOpen} onClick={() => { setNewConversationOpen(true); }} className="h-8 px-2 text-sm text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"><RotateCcw className="mr-1  h-3.5 w-3.5" /></Button>
           <Button variant="ghost" size="icon" disabled={!conversation || loading || ["CLOSED", "CANCELLED"].includes(conversation.status)} onClick={() => { setEndConversationOpen(true); }} className="h-8 w-8 text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground" aria-label="Kết thúc cuộc trò chuyện"><CircleStop className="h-4 w-4" /></Button>
-          <Button variant="ghost" size="icon" onClick={() => { setIsOpen(false); }} className="h-8 w-8 text-primary-foreground" aria-label="Đóng tư vấn"><X className="h-4 w-4" /></Button>
+          <Button variant="ghost" size="icon" onClick={() => { setIsFullscreen((value) => !value); }} className="h-8 w-8 text-primary-foreground" aria-label={isFullscreen ? "Thu nhỏ khung chat" : "Mở chat toàn màn hình"}>{isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}</Button>
+          <Button variant="ghost" size="icon" onClick={() => { setIsOpen(false); setIsFullscreen(false); }} className="h-8 w-8 text-primary-foreground" aria-label="Đóng tư vấn"><X className="h-4 w-4" /></Button>
         </div>
       </div>
 
@@ -890,7 +903,7 @@ export const PublicAiChatWidget: React.FC = () => {
       </div>}
     </Card>}
 
-    <div className="relative"><Button size="icon" onClick={() => { if (!isOpen) setUnreadCount(0); setIsOpen((value) => !value); }} title={isOpen ? "Đóng tư vấn" : "Mở tư vấn"} className="h-14 w-14 rounded-full shadow-xl">{isOpen ? <X className="h-6 w-6" /> : <Bot className="h-7 w-7" />}</Button>{!isOpen && unreadCount > 0 && <span className="pointer-events-none absolute -right-1 -top-1 min-w-5 rounded-full bg-destructive px-1.5 py-1 text-center text-[10px] font-extrabold leading-none text-destructive-foreground shadow-md">{unreadCount > 99 ? "99+" : `+${String(unreadCount)}`}</span>}</div>
+    {!isFullscreen && <div className="relative"><Button size="icon" onClick={() => { if (!isOpen) setUnreadCount(0); setIsOpen((value) => !value); }} title={isOpen ? "Đóng tư vấn" : "Mở tư vấn"} className="h-14 w-14 rounded-full shadow-xl">{isOpen ? <X className="h-6 w-6" /> : <Bot className="h-7 w-7" />}</Button>{!isOpen && unreadCount > 0 && <span className="pointer-events-none absolute -right-1 -top-1 min-w-5 rounded-full bg-destructive px-1.5 py-1 text-center text-[10px] font-extrabold leading-none text-destructive-foreground shadow-md">{unreadCount > 99 ? "99+" : `+${String(unreadCount)}`}</span>}</div>}
 
     <ConfirmDialog open={newConversationOpen} onOpenChange={setNewConversationOpen} title="Tạo cuộc trò chuyện mới?" description="Cuộc trò chuyện đang mở sẽ được kết thúc và lịch sử vẫn được lưu lại." confirmText="Tạo mới" variant="warning" loading={loading} onConfirm={createNewConversation} />
     <ConfirmDialog open={cancelConversationOpen} onOpenChange={setCancelConversationOpen} title="Hủy kết nối với tư vấn viên?" description="Yêu cầu sẽ được rút khỏi hàng đợi. Bạn có thể tạo yêu cầu mới bất cứ lúc nào." confirmText="Hủy kết nối" variant="warning" loading={loading} onConfirm={cancelQueuedConversation} />

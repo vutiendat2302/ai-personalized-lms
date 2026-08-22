@@ -25,6 +25,8 @@ public class QuizResponse {
 
     private Long classId;
 
+    private Long sourceQuizId;
+
     private String code;
 
     private String title;
@@ -38,6 +40,11 @@ public class QuizResponse {
     private Integer maxAttempts;
 
     private Boolean shuffleQuestions;
+
+    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
+    private LocalDateTime availableFrom;
+
+    private Boolean showResultAfterSubmit;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime dueAt;

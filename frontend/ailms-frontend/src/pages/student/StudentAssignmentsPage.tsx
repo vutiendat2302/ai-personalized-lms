@@ -100,8 +100,10 @@ export const StudentAssignmentsPage: React.FC = () => {
               <p className="text-xs text-muted-foreground">{item.courseName} · Hạn làm: {deadline(item.dueAt)}</p>
             </div>
             <div className="text-xs text-muted-foreground">Lượt làm: {item.attemptsUsed}/{item.maxAttempts ?? "∞"}</div>
-            <Button size="sm" disabled={item.status === "EXPIRED" || item.status === "PASSED"}
-              onClick={() => { void navigate(`/learn/courses/${item.courseId}`); }}>Mở không gian học</Button>
+            <Button size="sm" disabled={!item.canStart}
+              onClick={() => { void navigate(`/student/quizzes/${item.id}/attempt`); }}>
+              {item.status === "UPCOMING" ? "Chưa đến giờ mở" : item.status === "IN_PROGRESS" ? "Tiếp tục làm" : "Làm Quiz"}
+            </Button>
           </Card>
         ))}
       </div>}

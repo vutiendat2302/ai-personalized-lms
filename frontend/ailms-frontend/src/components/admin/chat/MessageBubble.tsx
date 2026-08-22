@@ -3,11 +3,13 @@ import { Bot, User, Shield, Briefcase, GraduationCap, AlertCircle, Loader2, File
 import type { ChatMessage, UserSystemRole } from "@/types/ai";
 import { MarkdownRenderer } from "@/components/common/MarkdownRenderer";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 
 interface MessageBubbleProps {
   message: ChatMessage;
   userName?: string;
   userRole?: UserSystemRole;
+  onRetry?: () => void;
 }
 
 /** Ẩn protocol function-calling cũ nếu Backend/AI trả nhầm payload kỹ thuật ra giao diện. */
@@ -24,6 +26,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   message,
   userName = "Người dùng",
   userRole,
+  onRetry,
 }) => {
   const isUser = message.role === "user";
   const isStreaming = message.status === "streaming";
@@ -117,18 +120,18 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
               <span>Nguồn tham chiếu ({message.sources.length})</span>
             </div>
             <div className="flex flex-wrap gap-1.5">
-              {message.sources.map((src, index) => (
+              {message.sources.map((src) => (
                 <div
-                  key={`${src.chunkId}-${index}`}
+                  key={src.chunkId}
                   className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-card/90 border border-border/50 text-[10px] text-foreground hover:bg-card transition-colors shadow-2xs"
-                  title={`Score: ${src.score ? `${Math.round(src.score * 100)}%` : "N/A"}`}
+                  title={`Score: ${src.score != null ? `${String(Math.round(src.score * 100))}%` : "N/A"}`}
                 >
                   <FileText className="h-3 w-3 text-primary shrink-0" />
-                  <span className="font-medium truncate max-w-[160px]">{src.title || src.sourceId}</span>
-                  {src.pageNumber && (
+                  <span className="font-medium truncate max-w-[160px]">{src.title ?? src.sourceId}</span>
+                  {src.pageNumber != null && (
                     <span className="text-muted-foreground shrink-0">(Trang {src.pageNumber})</span>
                   )}
-                  {src.score && (
+                  {src.score != null && (
                     <span className="text-[9px] px-1 py-0.2 rounded bg-primary/10 text-primary font-semibold shrink-0">
                       {Math.round(src.score * 100)}%
                     </span>
@@ -141,9 +144,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
         {/* Error alert indicator */}
         {isError && (
-          <div className="flex items-center gap-1 mt-1 text-[11px] font-medium text-destructive">
-            <AlertCircle className="h-3.5 w-3.5" />
-            <span>Lỗi kết nối</span>
+          <div className="mt-2 flex items-center justify-between gap-2 text-[11px] font-medium text-destructive">
+            <span className="flex items-center gap-1"><AlertCircle className="h-3.5 w-3.5" />Lỗi kết nối</span>
+            {onRetry && <Button type="button" size="xs" variant="outline" onClick={onRetry}>Thử lại</Button>}
           </div>
         )}
       </div>

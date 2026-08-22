@@ -2,6 +2,7 @@ import React, { useRef, useEffect } from "react";
 import { MessageSquare, Sparkles, BookOpen, BarChart3, Lightbulb, FileText, Users, Building2, Calendar } from "lucide-react";
 import type { ChatMessage, UserSystemRole } from "@/types/ai";
 import { MessageBubble } from "./MessageBubble";
+import { Button } from "@/components/ui/button";
 
 interface ChatMessagesProps {
   messages: ChatMessage[];
@@ -9,6 +10,7 @@ interface ChatMessagesProps {
   userRole?: UserSystemRole;
   isStreaming?: boolean;
   onSelectPrompt?: (prompt: string) => void;
+  onRetry?: () => void;
 }
 
 export const ChatMessages: React.FC<ChatMessagesProps> = ({
@@ -17,6 +19,7 @@ export const ChatMessages: React.FC<ChatMessagesProps> = ({
   userRole,
   isStreaming,
   onSelectPrompt,
+  onRetry,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const isNearBottomRef = useRef<boolean>(true);
@@ -93,20 +96,21 @@ export const ChatMessages: React.FC<ChatMessagesProps> = ({
               Gợi ý câu hỏi nhanh:
             </p>
             <div className="grid grid-cols-1 gap-1.5">
-              {suggestions.map((item, idx) => {
+              {suggestions.map((item) => {
                 const IconComponent = item.icon;
                 return (
-                  <button
-                    key={idx}
+                  <Button
+                    key={item.prompt}
                     type="button"
-                    onClick={() => onSelectPrompt?.(item.prompt)}
-                    className="flex items-center gap-2 px-3 py-2 rounded-xl bg-card hover:bg-primary/10 border border-border/50 hover:border-primary/30 text-left transition-all text-xs font-medium text-foreground hover:text-primary cursor-pointer group shadow-2xs"
+                    variant="outline"
+                    onClick={() => { onSelectPrompt?.(item.prompt); }}
+                    className="h-auto justify-start gap-2 px-3 py-2 rounded-xl bg-card hover:bg-primary/10 border-border/50 hover:border-primary/30 text-left text-xs text-foreground hover:text-primary group shadow-2xs"
                   >
                     <div className="h-6 w-6 rounded-lg bg-muted group-hover:bg-primary/20 flex items-center justify-center shrink-0 text-muted-foreground group-hover:text-primary transition-colors">
                       <IconComponent className="h-3.5 w-3.5" />
                     </div>
                     <span className="truncate">{item.text}</span>
-                  </button>
+                  </Button>
                 );
               })}
             </div>
@@ -120,6 +124,7 @@ export const ChatMessages: React.FC<ChatMessagesProps> = ({
           message={msg}
           userName={userName}
           userRole={userRole}
+          onRetry={onRetry}
         />
       ))}
     </div>

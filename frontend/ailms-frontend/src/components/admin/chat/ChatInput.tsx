@@ -2,6 +2,7 @@ import React, { useRef, useEffect, useState } from "react";
 import { Send, Square, Paperclip, FileText, X } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 interface ChatInputProps {
   input: string;
@@ -26,25 +27,31 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const previewUrlRef = useRef<string | null>(null);
 
   // Auto resize textarea height based on content
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
+      textareaRef.current.style.height = `${String(Math.min(textareaRef.current.scrollHeight, 120))}px`;
     }
   }, [input]);
 
-  // Clean up preview url
+  /** Thu hồi object URL còn lại khi chat input bị unmount. */
   useEffect(() => {
-    if (selectedFile && selectedFile.type.startsWith("image/")) {
-      const url = URL.createObjectURL(selectedFile);
-      setPreviewUrl(url);
-      return () => URL.revokeObjectURL(url);
-    } else {
-      setPreviewUrl(null);
-    }
-  }, [selectedFile]);
+    return () => {
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    };
+  }, []);
+
+  /** Chọn file mới và quản lý vòng đời URL preview ảnh. */
+  const selectFile = (file: File) => {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    const nextPreviewUrl = file.type.startsWith("image/") ? URL.createObjectURL(file) : null;
+    previewUrlRef.current = nextPreviewUrl;
+    setPreviewUrl(nextPreviewUrl);
+    setSelectedFile(file);
+  };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -56,20 +63,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setSelectedFile(file);
+      selectFile(file);
     }
     e.target.value = "";
   };
 
   const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const items = e.clipboardData?.items;
-    if (!items) return;
-    for (let i = 0; i < items.length; i++) {
-      if (items[i].kind === "file") {
-        const file = items[i].getAsFile();
+    for (const item of Array.from(e.clipboardData.items)) {
+      if (item.kind === "file") {
+        const file = item.getAsFile();
         if (file) {
           e.preventDefault();
-          setSelectedFile(file);
+          selectFile(file);
           break;
         }
       }
@@ -78,22 +83,25 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   const handleSubmit = () => {
     if (isStreaming) return;
-    const fileHandler = onSendFile || onSendImage;
+    const fileHandler = onSendFile ?? onSendImage;
     if (selectedFile && fileHandler) {
       fileHandler(selectedFile);
-      setSelectedFile(null);
+      clearFile();
     } else if (input.trim()) {
       onSend();
     }
   };
 
   const clearFile = () => {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    previewUrlRef.current = null;
+    setPreviewUrl(null);
     setSelectedFile(null);
   };
 
   const isImage = selectedFile?.type.startsWith("image/");
   const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024) return `${String(bytes)} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
@@ -115,14 +123,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                 <FileText className="h-6 w-6" />
               </div>
             )}
-            <button
+            <Button
               type="button"
+              variant="destructive"
+              size="icon-xs"
               onClick={clearFile}
-              className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
+              className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full shadow-sm hover:scale-110"
               title="Xóa tệp đính kèm"
             >
               <X className="h-3 w-3" />
-            </button>
+            </Button>
           </div>
           <div className="text-[11px] pr-2 text-muted-foreground truncate max-w-[200px]">
             <p className="font-medium text-foreground truncate">{selectedFile.name}</p>
@@ -135,7 +145,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
       <div className="flex items-end gap-1.5">
         {/* Hidden File Input for Images and Docs */}
-        <input
+        <Input
           ref={fileInputRef}
           type="file"
           accept="image/png,image/jpeg,image/jpg,image/webp,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
@@ -148,7 +158,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           type="button"
           variant="ghost"
           size="icon-sm"
-          onClick={() => fileInputRef.current?.click()}
+          onClick={() => { fileInputRef.current?.click(); }}
           disabled={isStreaming}
           title="Đính kèm tài liệu (PDF, Word, TXT) hoặc hình ảnh"
           className="rounded-xl h-[38px] w-[38px] shrink-0 text-muted-foreground hover:text-primary hover:bg-primary/10"
@@ -159,7 +169,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         <Textarea
           ref={textareaRef}
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={(e) => { setInput(e.target.value); }}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
           placeholder={

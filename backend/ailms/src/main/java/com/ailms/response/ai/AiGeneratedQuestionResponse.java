@@ -13,4 +13,5 @@ public class AiGeneratedQuestionResponse {
     private BigDecimal points;
     private String explanation;
     private List<AiGeneratedQuestionOptionResponse> options;
+    private List<String> sourceIds;
 }

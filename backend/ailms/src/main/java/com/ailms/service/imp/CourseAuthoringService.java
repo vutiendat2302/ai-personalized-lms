@@ -49,6 +49,7 @@ public class CourseAuthoringService implements ICourseAuthoringService {
     private final AssignmentRepository assignmentRepository;
     private final SubmissionRepository submissionRepository;
     private final CourseInstructorRepository courseInstructorRepository;
+    private final CourseTeacherRepository courseTeacherRepository;
     private final UserRepository userRepository;
     private final EmployeeRepository employeeRepository;
     private final INotificationService notificationService;
@@ -509,7 +510,7 @@ public class CourseAuthoringService implements ICourseAuthoringService {
         return resolved;
     }
 
-    /** Chỉ cho phép chủ sở hữu hoặc Admin sửa khóa học ở trạng thái có thể biên soạn. */
+    /** Chỉ cho phép chủ sở hữu, giảng viên phụ trách đã xác nhận hoặc Admin sửa khóa học ở trạng thái có thể biên soạn. */
     private CourseEntity requireEditableCourse(Long courseId) {
         CourseEntity course = courseRepository.findById(courseId)
                 .orElseThrow(() -> ResourceNotFoundException.of("Course", courseId));
@@ -532,8 +533,16 @@ public class CourseAuthoringService implements ICourseAuthoringService {
             if (isAdmin) return;
         }
 
-        if (course.getCreatedBy() != null && !course.getCreatedBy().equals(currentUserId)) {
-            throw new BusinessException("Chỉ người tạo khóa học mới có quyền thực hiện thao tác này.");
+        if (course.getCreatedBy() != null && course.getCreatedBy().equals(currentUserId)) {
+            return;
+        }
+        boolean acceptedCoInstructor = courseInstructorRepository.existsByCourseIdAndInstructorIdAndStatus(
+                course.getId(), currentUserId, CourseInstructorStatusEnum.ACCEPTED);
+        boolean activeAssignedTeacher = courseTeacherRepository
+                .existsByCourseEntity_IdAndUserEntity_IdAndStatus(
+                        course.getId(), currentUserId, CourseTeacherStatusEnum.ACTIVE);
+        if (!acceptedCoInstructor && !activeAssignedTeacher) {
+            throw new BusinessException("Chỉ người tạo hoặc giảng viên phụ trách khóa học mới có quyền thực hiện thao tác này.");
         }
     }
 

@@ -19,6 +19,7 @@ import com.ailms.entity.ClassOnlineEntity;
 import com.ailms.entity.ClassEntity;
 import com.ailms.entity.QuizEntity;
 import com.ailms.entity.QuizAttemptEntity;
+import com.ailms.entity.enums.QuestionTypeEnum;
 import com.ailms.entity.enums.BaseStatusEnum;
 import com.ailms.entity.enums.ClassMemberRole;
 import com.ailms.entity.enums.ClassMemberStatusEnum;
@@ -52,6 +53,8 @@ import com.ailms.repository.LearningSessionRepository;
 import com.ailms.repository.LessonRepository;
 import com.ailms.repository.QuizRepository;
 import com.ailms.repository.QuizAttemptRepository;
+import com.ailms.repository.QuestionRepository;
+import com.ailms.repository.QuestionOptionRepository;
 import com.ailms.repository.ClassMemberRepository;
 import com.ailms.repository.ClassRepository;
 import com.ailms.repository.EnrollmentPackageRepository;
@@ -61,6 +64,9 @@ import com.ailms.response.StudentCatalogCourseResponse;
 import com.ailms.response.StudentDashboardResponse;
 import com.ailms.response.StudentPortalItemResponse;
 import com.ailms.response.CourseCurriculumResponse;
+import com.ailms.response.QuizQuestionOptionResponse;
+import com.ailms.response.QuizQuestionResponse;
+import com.ailms.response.QuizResponse;
 import com.ailms.response.CouponResponse;
 import com.ailms.response.StudyGoalResponse;
 import com.ailms.request.CreateStudyGoalRequest;
@@ -143,6 +149,8 @@ public class StudentPortalService implements IStudentPortalService {
     private final LessonRepository lessonRepository;
     private final QuizRepository quizRepository;
     private final QuizAttemptRepository quizAttemptRepository;
+    private final QuestionRepository questionRepository;
+    private final QuestionOptionRepository questionOptionRepository;
     private final ClassMemberRepository classMemberRepository;
     private final ClassRepository classRepository;
     private final EnrollmentPackageRepository enrollmentPackageRepository;
@@ -433,6 +441,49 @@ public class StudentPortalService implements IStudentPortalService {
                 .map(item -> mapQuiz(item, attempts.getOrDefault(item.getId(), List.of()))).toList();
     }
 
+    /** Lấy Quiz đã đến giờ mở và loại bỏ đáp án/giải thích trước khi trả cho học viên. */
+    @Override
+    public QuizResponse getQuiz(Long userId, Long quizId) {
+        QuizEntity quiz = quizRepository.findById(quizId)
+                .orElseThrow(() -> ResourceNotFoundException.of("StudentQuiz", quizId));
+        Set<Long> courseIds = getActiveCourseIds(userId);
+        Set<Long> classIds = getActiveStudentClassIds(userId);
+        if (quiz.getStatus() != BaseStatusEnum.ACTIVE
+                || !isLearningItemVisible(quiz.getCourseId(), quiz.getClassId(), courseIds, classIds)) {
+            throw ResourceNotFoundException.of("StudentQuiz", quizId);
+        }
+        LocalDateTime now = LocalDateTime.now();
+        if (quiz.getAvailableFrom() != null && now.isBefore(quiz.getAvailableFrom())) {
+            throw new BusinessException("Quiz chưa đến thời gian mở.");
+        }
+        if (quiz.getDueAt() != null && now.isAfter(quiz.getDueAt())) {
+            throw new BusinessException("Quiz đã hết hạn làm bài.");
+        }
+        List<QuizQuestionResponse> questions = questionRepository
+                .findByQuizIdOrderByOrderIndexAsc(quizId).stream()
+                .map(question -> QuizQuestionResponse.builder()
+                        .id(question.getId()).content(question.getContent())
+                        .questionType(QuestionTypeEnum.apiName(question.getQuestionType()))
+                        .points(question.getPoints()).orderIndex(question.getOrderIndex())
+                        .explanation(null)
+                        .options(questionOptionRepository
+                                .findByQuestionIdOrderByOrderIndexAsc(question.getId()).stream()
+                                .map(option -> QuizQuestionOptionResponse.builder()
+                                        .id(option.getId()).content(option.getContent())
+                                        .isCorrect(null).orderIndex(option.getOrderIndex()).build())
+                                .toList())
+                        .build())
+                .toList();
+        return QuizResponse.builder().id(quiz.getId()).lessonId(quiz.getLessonId())
+                .courseId(quiz.getCourseId()).sectionId(quiz.getSectionId()).classId(quiz.getClassId())
+                .sourceQuizId(quiz.getSourceQuizId()).code(quiz.getCode()).title(quiz.getTitle())
+                .description(quiz.getDescription()).timeLimitMin(quiz.getTimeLimitMin())
+                .passScore(quiz.getPassScore()).maxAttempts(quiz.getMaxAttempts())
+                .shuffleQuestions(quiz.getShuffleQuestions()).availableFrom(quiz.getAvailableFrom())
+                .showResultAfterSubmit(quiz.getShowResultAfterSubmit()).dueAt(quiz.getDueAt())
+                .status(quiz.getStatus()).questions(questions).build();
+    }
+
     /** Lấy chứng chỉ thật đã cấp cho học viên. */
     @Override
     public List<StudentPortalItemResponse.CertificateItem> getCertificates(Long userId) {
@@ -614,14 +665,26 @@ public class StudentPortalService implements IStudentPortalService {
         BigDecimal bestScore = attempts.stream().map(QuizAttemptEntity::getScore).filter(Objects::nonNull)
                 .max(BigDecimal::compareTo).orElse(null);
         boolean passed = attempts.stream().anyMatch(item -> Boolean.TRUE.equals(item.getIsPassed()));
-        String status = passed ? "PASSED" : quiz.getDueAt() != null && quiz.getDueAt().isBefore(LocalDateTime.now())
+        LocalDateTime now = LocalDateTime.now();
+        boolean resultVisible = !Boolean.FALSE.equals(quiz.getShowResultAfterSubmit());
+        boolean inProgress = attempts.stream().anyMatch(item -> Byte.valueOf((byte) 0).equals(item.getStatus()));
+        boolean underAttemptLimit = quiz.getMaxAttempts() == null || attempts.size() < quiz.getMaxAttempts();
+        boolean canStart = (quiz.getAvailableFrom() == null || !now.isBefore(quiz.getAvailableFrom()))
+                && (quiz.getDueAt() == null || !now.isAfter(quiz.getDueAt()))
+                && (underAttemptLimit || inProgress);
+        String status = quiz.getAvailableFrom() != null && now.isBefore(quiz.getAvailableFrom())
+                ? "UPCOMING" : resultVisible && passed ? "PASSED"
+                : quiz.getDueAt() != null && quiz.getDueAt().isBefore(now)
                 ? "EXPIRED" : attempts.stream().anyMatch(item -> Byte.valueOf((byte) 0).equals(item.getStatus()))
                 ? "IN_PROGRESS" : attempts.isEmpty() ? "NOT_STARTED" : "SUBMITTED";
         return StudentPortalItemResponse.QuizItem.builder().id(quiz.getId()).title(quiz.getTitle())
                 .courseId(quiz.getCourseId()).classId(quiz.getClassId())
                 .courseName(courseRepository.findById(quiz.getCourseId()).map(CourseEntity::getName).orElse(null))
-                .dueAt(quiz.getDueAt()).timeLimitMin(quiz.getTimeLimitMin()).maxAttempts(quiz.getMaxAttempts())
-                .status(status).attemptsUsed(attempts.size()).bestScore(bestScore).passed(passed).build();
+                .availableFrom(quiz.getAvailableFrom()).dueAt(quiz.getDueAt())
+                .timeLimitMin(quiz.getTimeLimitMin()).maxAttempts(quiz.getMaxAttempts())
+                .showResultAfterSubmit(resultVisible).canStart(canStart)
+                .status(status).attemptsUsed(attempts.size())
+                .bestScore(resultVisible ? bestScore : null).passed(resultVisible ? passed : null).build();
     }
 
     /** Lấy ID các lớp mà học viên đang là thành viên ACTIVE. */
