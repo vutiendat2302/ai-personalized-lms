@@ -1,0 +1,31 @@
+# Local Development Overrides
+# Automatically merged by Docker Compose when running `docker compose up` locally.
+
+services:
+  mysql:
+    ports:
+      - "3306:3306"
+
+  redis:
+    ports:
+      - "6379:6379"
+
+  minio:
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+
+  ai-service:
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./ai-service:/app
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
+  backend:
+    ports:
+      - "8080:8080"
+
+  frontend:
+    ports:
+      - "5173:80"

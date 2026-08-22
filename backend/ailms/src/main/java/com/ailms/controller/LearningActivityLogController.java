@@ -1,0 +1,77 @@
+package com.ailms.controller;
+
+import com.ailms.request.CreateLearningActivityLogRequest;
+import com.ailms.response.PageResponse;
+import com.ailms.request.LearningActivityLogSearchRequest;
+import com.ailms.response.LearningActivityLogResponse;
+
+
+import com.ailms.response.ApiResponse;
+import com.ailms.service.ILearningActivityLogService;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("${api.prefix}/learning-activity-logs")
+@RequiredArgsConstructor
+public class LearningActivityLogController {
+
+    private final ILearningActivityLogService learningActivityLogService;
+
+    @PostMapping
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponse<LearningActivityLogResponse>> create(@Valid @RequestBody CreateLearningActivityLogRequest request) {
+        LearningActivityLogResponse response = learningActivityLogService.create(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.of("Learning activity log created successfully", response));
+    }
+
+    @GetMapping("/{id}")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ResponseEntity<ApiResponse<LearningActivityLogResponse>> getById(@PathVariable Long id) {
+        LearningActivityLogResponse response = learningActivityLogService.getById(id);
+        return ResponseEntity.ok(ApiResponse.of("Learning activity log retrieved successfully", response));
+    }
+
+    @GetMapping
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ResponseEntity<ApiResponse<List<LearningActivityLogResponse>>> getAll() {
+        List<LearningActivityLogResponse> response = learningActivityLogService.getAll();
+        return ResponseEntity.ok(ApiResponse.of("Learning activity logs retrieved successfully", response));
+    }
+
+    @GetMapping("/user/{userId}")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN') or #userId == authentication.principal.user.id")
+    public ResponseEntity<ApiResponse<List<LearningActivityLogResponse>>> getByUserId(@PathVariable Long userId) {
+        List<LearningActivityLogResponse> response = learningActivityLogService.getByUserId(userId);
+        return ResponseEntity.ok(ApiResponse.of("Learning activity logs retrieved successfully", response));
+    }
+
+    @GetMapping("/entity/{entityType}/{entityId}")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ResponseEntity<ApiResponse<List<LearningActivityLogResponse>>> getByEntity(
+            @PathVariable String entityType,
+            @PathVariable Long entityId) {
+        List<LearningActivityLogResponse> response = learningActivityLogService.getByEntity(entityType, entityId);
+        return ResponseEntity.ok(ApiResponse.of("Learning activity logs retrieved successfully", response));
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
+        learningActivityLogService.delete(id);
+        return ResponseEntity.ok(ApiResponse.message("Learning activity log deleted successfully"));
+    }
+
+    @GetMapping("/search")
+    @PreAuthorize("hasAuthority('ROLE_ADMIN')")
+    public ResponseEntity<ApiResponse<PageResponse<LearningActivityLogResponse>>> search(LearningActivityLogSearchRequest request) {
+        PageResponse<LearningActivityLogResponse> result = learningActivityLogService.search(request);
+        return ResponseEntity.ok(ApiResponse.of("Search LearningActivityLog successfully", result));
+    }
+}

@@ -8,15 +8,12 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-@Component //Tự tạo đối tượng, lưu vào Spring (Coi là một Bean)
-
 /**
  * Snowflake ID Generator
  * 64-bi Id structure:
  * [1 bit sign] [41 bits timestamp] [10 bits machine id] [12 bits sequence]
  */
-
-
+@Component //Tự tạo đối tượng, lưu vào Spring (Coi là một Bean)
 @IdGeneratorType(SnowflakeIdGeneratorStrategy.class)
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.FIELD, ElementType.METHOD})

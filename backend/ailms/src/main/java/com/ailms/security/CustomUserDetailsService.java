@@ -95,13 +95,24 @@ public class CustomUserDetailsService implements UserDetailsService {
 
         // Thêm Role với tiền tố ROLE_ theo chuẩn Spring Security
         for (RoleEntity roleEntity : roleEntities) {
-            authorities.add(new SimpleGrantedAuthority("ROLE_" + roleEntity.getCode().toUpperCase()));
+            String roleCode = roleEntity.getCode().trim().toUpperCase();
+            // Dữ liệu cũ có thể đã lưu sẵn tiền tố ROLE_. Không tạo ROLE_ROLE_ADMIN.
+            authorities.add(new SimpleGrantedAuthority(
+                    roleCode.startsWith("ROLE_") ? roleCode : "ROLE_" + roleCode));
         }
 
-        // Thêm Permission (ví dụ: course_create, user_delete, ...)
+        // Thêm Permission (hỗ trợ cả format entity_action và name như employee:read, employee:delete)
         for (RolePermissionEntity rolePermissionEntity : rolePermissionEntities) {
             PermissionEntity permission = rolePermissionEntity.getPermissionEntity();
-            authorities.add(new SimpleGrantedAuthority(permission.getEntity() + "_" + permission.getAction()));
+            if (permission.getEntity() != null && permission.getAction() != null) {
+                authorities.add(new SimpleGrantedAuthority(permission.getEntity() + "_" + permission.getAction()));
+            }
+            if (permission.getName() != null && !permission.getName().isBlank()) {
+                authorities.add(new SimpleGrantedAuthority(permission.getName().trim()));
+            }
+            if (permission.getCode() != null && !permission.getCode().isBlank()) {
+                authorities.add(new SimpleGrantedAuthority(permission.getCode().trim()));
+            }
         }
 
         // Trả về đối tượng UserDetails cho Spring Security

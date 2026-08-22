@@ -8,7 +8,9 @@ import type {
   VerifyOtpRequest, 
   ChangePasswordRequest, 
   ForgotPasswordRequest, 
-  ResetPasswordRequest 
+  ResetPasswordRequest, 
+  CompleteInviteRequest,
+  SetPasswordRequest
 } from "@/types/jwtAuthentication";
 
 /* ============================================================
@@ -39,7 +41,10 @@ export const authService = {
    *  - Trả User Information cho Component.
    * ========================================================== */
   async login(payload: LoginRequest): Promise<JwtAuthenticationResponse> {
-    const { data } = await authApi.login(payload);
+    const { data } = await authApi.login({
+      ...payload,
+      usernameOrEmail: payload.usernameOrEmail.trimEnd(),
+    });
     setAccessToken(data.data.accessToken);
     return data.data;
   },
@@ -73,7 +78,13 @@ export const authService = {
   },
 
   async register(payload: RegisterRequest): Promise<void> {
-    await authApi.register(payload);
+    await authApi.register({
+      ...payload,
+      username: payload.username.trimEnd(),
+      email: payload.email.trimEnd(),
+      fullName: payload.fullName.trimEnd(),
+      phone: payload.phone.trimEnd(),
+    });
   },
 
   async verifyOtp(payload: VerifyOtpRequest): Promise<void> {
@@ -98,5 +109,13 @@ export const authService = {
 
   async resetPassword(payload: ResetPasswordRequest): Promise<void> {
     await authApi.resetPassword(payload);
-  }
+  },
+
+  async completeInvite(payload: CompleteInviteRequest): Promise<void> {
+    await authApi.completeInvite(payload);
+  },
+
+  async setPassword(payload: SetPasswordRequest): Promise<void> {
+    await authApi.setPassword(payload);
+  }, 
 };

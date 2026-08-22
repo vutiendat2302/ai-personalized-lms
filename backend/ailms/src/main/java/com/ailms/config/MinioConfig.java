@@ -1,0 +1,53 @@
+package com.ailms.config;
+
+import io.minio.BucketExistsArgs;
+import io.minio.MakeBucketArgs;
+import io.minio.MinioClient;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class MinioConfig {
+
+    @Value("${minio.endpoint}")
+    private String endpoint;
+
+    @Value("${minio.external-endpoint:${minio.endpoint}}")
+    private String externalEndpoint;
+
+    @Value("${minio.access-key}")
+    private String accessKey;
+
+    @Value("${minio.secret-key}")
+    private String secretKey;
+
+    @Value("${minio.bucket-name}")
+    private String bucketName;
+
+    @Bean
+    public MinioClient minioClient() throws Exception {
+        MinioClient client = MinioClient.builder()
+                .endpoint(endpoint)
+                .credentials(accessKey, secretKey)
+		.region("us-east-1")
+                .build();
+
+        // Tự tạo bucket nếu chưa tồn tại
+        boolean exists = client.bucketExists(BucketExistsArgs.builder().bucket(bucketName).build());
+        if (!exists) {
+            client.makeBucket(MakeBucketArgs.builder().bucket(bucketName).build());
+        }
+
+        return client;
+    }
+
+    @Bean
+    public MinioClient minioPresignClient() {
+        return MinioClient.builder()
+                .endpoint(externalEndpoint)
+                .credentials(accessKey, secretKey)
+		.region("us-east-1")
+                .build();
+    }
+}

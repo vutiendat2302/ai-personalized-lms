@@ -5,10 +5,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * Twitter Snowflake ID Generator
- *
  * 64-bit ID structure:
  * [1 bit sign] [41 bits timestamp] [10 bits machine id] [12 bits sequence]
- *
  * Max ~4096 IDs/ms per node, valid until year 2039 (relative to epoch).
  */
 @Component

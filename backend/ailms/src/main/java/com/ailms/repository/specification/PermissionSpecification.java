@@ -1,33 +1,46 @@
 package com.ailms.repository.specification;
 
 import com.ailms.entity.PermissionEntity;
+import com.ailms.entity.RolePermissionEntity;
+import com.ailms.common.util.SpecificationBuilder;
+import com.ailms.request.PermissionSearchRequest;
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.util.StringUtils;
 
 public class PermissionSpecification {
 
-    public static Specification<PermissionEntity> filterAndSearch(String entityFilter, String actionFilter, String search) {
-        Specification<PermissionEntity> spec = (root, query, criteriaBuilder) -> criteriaBuilder.conjunction();
+    public static Specification<PermissionEntity> filterAndSearch(PermissionSearchRequest request) {
+        SpecificationBuilder<PermissionEntity> builder = SpecificationBuilder.of();
 
-        if (StringUtils.hasText(entityFilter)) {
-            spec = spec.and((root, query, criteriaBuilder) ->
-                    criteriaBuilder.equal(root.get("entity"), entityFilter));
+        if (request == null) {
+            return builder.build();
         }
 
-        if (StringUtils.hasText(actionFilter)) {
-            spec = spec.and((root, query, criteriaBuilder) ->
-                    criteriaBuilder.equal(root.get("action"), actionFilter));
+        if (org.springframework.util.StringUtils.hasText(request.getEntity())) {
+            builder.custom((root, query, cb) -> cb.equal(cb.lower(root.get("entity")), request.getEntity().toLowerCase()));
+        }
+        if (org.springframework.util.StringUtils.hasText(request.getAction())) {
+            builder.custom((root, query, cb) -> cb.equal(cb.lower(root.get("action")), request.getAction().toLowerCase()));
+        }
+        builder.likeAnyIfPresent(request.getKeyword(), "name", "code", "description");
+
+        if ("USED".equalsIgnoreCase(request.getAssignedStatus())) {
+            builder.custom((root, query, cb) -> {
+                Subquery<Long> subquery = query.subquery(Long.class);
+                Root<RolePermissionEntity> rpRoot = subquery.from(RolePermissionEntity.class);
+                subquery.select(rpRoot.get("permissionEntity").get("id"));
+                return root.get("id").in(subquery);
+            });
+        } else if ("ORPHAN".equalsIgnoreCase(request.getAssignedStatus())) {
+            builder.custom((root, query, cb) -> {
+                Subquery<Long> subquery = query.subquery(Long.class);
+                Root<RolePermissionEntity> rpRoot = subquery.from(RolePermissionEntity.class);
+                subquery.select(rpRoot.get("permissionEntity").get("id"));
+                return cb.not(root.get("id").in(subquery));
+            });
         }
 
-        if (StringUtils.hasText(search)) {
-            String pattern = "%" + search.toLowerCase() + "%";
-            spec = spec.and((root, query, criteriaBuilder) -> criteriaBuilder.or(
-                    criteriaBuilder.like(criteriaBuilder.lower(root.get("name")), pattern),
-                    criteriaBuilder.like(criteriaBuilder.lower(root.get("code")), pattern),
-                    criteriaBuilder.like(criteriaBuilder.lower(root.get("description")), pattern)
-            ));
-        }
-
-        return spec;
+        return builder.build();
     }
 }

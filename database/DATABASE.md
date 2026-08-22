@@ -180,7 +180,8 @@ PRIMARY KEY (role_id, permission_id)
 | content_type | VARCHAR | VIDEO / PDF / TEXT / LIVE |
 | content_url | VARCHAR | Content URL |
 | description | TEXT | Description |
-| duration_min | INT | Duration (minutes) |
+| duration_min | INT | Estimated learning duration (minutes) |
+| duration_sec | INT | Actual VIDEO/AUDIO media duration (seconds) |
 | is_preview | BOOLEAN | Preview lesson |
 | order_index | INT | Display order |
 | status | TINYINT | Status |
@@ -213,6 +214,7 @@ PRIMARY KEY (course_id, user_id)
 | user_id | BIGINT | FK → user.id |
 | assigned_at | DATETIME | Assigned time |
 | assigned_by | BIGINT | Assigned by |
+| status | VARCHAR(50) | PENDING / ACTIVE / REJECTED / INACTIVE |
 
 ---
 
@@ -395,6 +397,9 @@ PRIMARY KEY (course_id, user_id)
 ## Tables
 * student_profile
 * guardian
+* interest
+* interest_category
+* student_interest
 
 ## student_profile
 
@@ -424,6 +429,17 @@ PRIMARY KEY (course_id, user_id)
 | email | VARCHAR | Email |
 | address | VARCHAR | Địa chỉ |
 | created_at / created_by / updated_at / updated_by | | Audit fields |
+
+## interest_category
+
+> Quan hệ định danh nhiều-nhiều giữa lựa chọn sở thích cố định và danh mục khóa học cố định; catalog cá nhân hóa truy vấn theo ID từ bảng này, không so khớp chuỗi.
+
+| Column | Type | Description |
+|---|---|---|
+| interest_id | BIGINT | PK, FK → interest.id |
+| category_id | BIGINT | PK, FK → category.id |
+
+**Unique:** `(interest_id, category_id)`
 
 ---
 
@@ -521,6 +537,8 @@ PRIMARY KEY (course_id, user_id)
 | lesson_id | BIGINT | FK → lesson.id |
 | course_id | BIGINT | FK → course.id |
 | section_id | BIGINT | FK → course_section.id |
+| class_id | BIGINT | NULL, FK → class.id — chỉ giao cho một lớp |
+| source_quiz_id | BIGINT | NULL, self FK → quiz.id — Quiz nguồn khi phát hành vào lớp |
 | code | VARCHAR | Mã bài kiểm tra |
 | title | VARCHAR | Tên bài kiểm tra |
 | description | TEXT | Mô tả |
@@ -528,7 +546,10 @@ PRIMARY KEY (course_id, user_id)
 | pass_score | DECIMAL(5,2) | Số điểm tối thiểu cần đạt để pass bài kiểm tra |
 | max_attempts | INT | Số lần được phép làm bài |
 | shuffle_questions | BOOLEAN | Trộn thứ tự câu hỏi |
-| status | TINYINT | DRAFT / PUBLISHED / ARCHIVED |
+| available_from | DATETIME | Thời điểm học viên được bắt đầu |
+| show_result_after_submit | BOOLEAN | Có trả điểm/pass ngay sau nộp hay không |
+| due_at | DATETIME | Hạn làm quiz/lịch thi |
+| status | VARCHAR | DRAFT / ACTIVE / INACTIVE |
 | created_at / created_by / updated_at / updated_by | | Audit fields |
 
 ## question
@@ -600,6 +621,7 @@ PRIMARY KEY (course_id, user_id)
 | lesson_id | BIGINT | FK → lesson.id |
 | course_id | BIGINT | FK → course.id |
 | section_id | BIGINT | FK → course_section.id |
+| class_id | BIGINT | NULL, FK → class.id — chỉ giao cho một lớp |
 | title | VARCHAR | Tên bài tập |
 | description | TEXT | Đề bài/hướng dẫn |
 | max_score | DECIMAL(5,2) | Điểm tối đa |
@@ -631,27 +653,6 @@ PRIMARY KEY (course_id, user_id)
 
 ---
 
-# Module 8. Audit & System Log
-
-## Tables
-* audit_log
-
-## audit_log
-
-| Column | Type | Description |
-|---|---|---|
-| id | BIGINT | Log ID |
-| user_id | BIGINT | FK → user.id — Ai thực hiện hành động |
-| action | VARCHAR | CREATE / UPDATE / DELETE / LOGIN / LOGIN_FAILED / LOGOUT / GRANT_ROLE / REVOKE_ROLE |
-| entity_type | VARCHAR | Bảng bị tác động — user, role, permission, course, enrollment, salary... |
-| entity_id | BIGINT | Xem bản ghi nào trong entity đó bị tác động |
-| old_value | JSON | Data trước khi bị thay đổi |
-| new_value | JSON | Data sau khi bị thay đổi |
-| ip_address | VARCHAR | IP thực hiện |
-| user_agent | VARCHAR | Trình duyệt |
-| occurred_at | DATETIME | Thời điểm xảy ra |
-
----
 
 # Module 9. AI Recommendation (To Do)
 
@@ -664,3 +665,66 @@ PRIMARY KEY (course_id, user_id)
 
 ---
 
+# Module 10. Course Commerce, PayPal và One-on-One Matching (v4-v7)
+
+Migration áp dụng tuần tự từ `v4_course_commerce_momo_one_on_one.sql` đến `v11_repair_combo_package_class_links.sql`.
+
+## course, class và class_online
+
+- `course`: bổ sung `thumbnail_url`, `learning_objectives`, `prerequisites`.
+- `class`: bổ sung `class_kind`, `description`, `registration_open`, `allow_late_enrollment`.
+- `class_online`: bổ sung `session_kind`, `counts_toward_package`, `payable`. Buổi thử dùng `TRIAL`, không trừ số buổi và không tạo thù lao.
+- Migration `v16_add_class_session_cancellation.sql` bổ sung `cancellation_reason`, `cancelled_at`, `cancelled_by_user_id` để lưu đầy đủ lịch sử hủy buổi học.
+
+## payment_transaction và idempotency
+
+Các cột MoMo ở v4 được giữ để tương thích migration đã áp dụng. Luồng PayPal dùng `paypal_request_id`, `gateway_order_id` (PayPal order ID), `paypal_capture_id`, `gateway_amount`, `gateway_currency`; request/capture ID đều unique. Refund toàn phần dùng thêm `paypal_refund_request_id`, `paypal_refund_id`, `refund_amount`, `refund_currency`, `refund_reason`, `refunded_at`; hai PayPal refund ID có unique constraint để retry không hoàn tiền hai lần. `enrollment` unique theo `(user_id, course_id)` và `enrollment_package` unique theo `order_item_id`. `order_item.one_on_one_needs` giữ snapshot nhu cầu đã thanh toán để matching chỉ được tạo sau capture PayPal.
+
+## Voucher sở hữu và snapshot hóa đơn (v7)
+
+- `user_coupon` liên kết duy nhất `(user_id, coupon_id)` và quản lý trạng thái `AVAILABLE`, `RESERVED`, `USED`, `EXPIRED`.
+- `order.user_coupon_id` tham chiếu đúng quyền voucher đã dùng; `coupon_code` tiếp tục giữ snapshot mã hiển thị.
+- `order_item.discount_snapshot` và `final_price` giữ số tiền từng dòng tại lúc checkout để xem/tải hóa đơn không phụ thuộc giá gói hiện tại.
+- Voucher được reserve khi tạo order, chuyển `USED` sau PayPal capture, trả `AVAILABLE` khi order PENDING bị hủy/hết hạn hoặc refund nếu coupon còn hiệu lực.
+
+## one_on_one_request
+
+`one_on_one_request` liên kết duy nhất với một `enrollment_package`, học viên, assignee và lớp/buổi thử. Cột `version` hỗ trợ optimistic locking, còn các transition tranh chấp sử dụng pessimistic row lock. `one_on_one_rejected_instructor` có unique `(request_id, instructor_id)` để người đã bị từ chối không nhận lại cùng yêu cầu.
+
+## Cart, quyền theo package và thảo luận lớp (v9)
+
+- `cart_item.one_on_one_needs` giữ bản nháp nhu cầu của gói 1-1; bản nháp chỉ được chuyển thành yêu cầu matching sau capture thanh toán thành công.
+- `enrollment_package.status` quản lý riêng `ACTIVE`, `REFUNDED`, `CANCELLED`, `REVOKED`, `EXPIRED`; quyền học chỉ tính từ package `ACTIVE` chưa hết hạn.
+
+## Support chat
+
+- `anonymous_visitor.id` và `support_conversation.visitor_id` dùng `BIGINT` Snowflake.
+- `support_conversation.last_hr_message_at`, `last_visitor_message_at` và `close_requested_at` lưu mốc timeout: supporter được yêu cầu đóng sau 5 phút visitor chưa phản hồi; hệ thống tự đóng sau 20 phút.
+- `support_conversation.full_name` và `email` là thông tin định danh chính trên hàng đợi supporter; `phone` chỉ còn tùy chọn và không hiển thị trên card.
+- Policy support không dùng bảng riêng. Tài liệu được lưu ở MinIO dưới `policies/`, metadata dùng `file_metadata.usage_type = POLICY`; bản `ACTIVE` mới nhất là bản hiện hành.
+- Thumbnail khóa học dùng `file_metadata.usage_type = COURSE_THUMBNAIL`, `reference_entity_type = Course` và `reference_entity_id` là Snowflake ID của khóa học.
+- Migration `v19_expand_file_usage_type_for_policy.sql` bổ sung giá trị `POLICY` vào enum `file_metadata.usage_type` của MySQL, đồng bộ với backend.
+- `support_chat_message.message_type` hỗ trợ thêm `RESOURCE_CARD` và `ATTACHMENT`. Card catalog và thông tin file MinIO được lưu trong cột JSON `metadata`.
+- Attachment dùng prefix MinIO `support/{conversationId}/`, giới hạn 10MB và chỉ được gửi khi conversation `ACTIVE`; schema không cần migration mới vì `message_type` là `VARCHAR` và `metadata` đã là JSON.
+- `support_hr_presence.status` do heartbeat/workload tự suy ra. Heartbeat quá 90 giây chuyển `OFFLINE`; ticket của supporter offline được trả về queue và ưu tiên phân phối cho `ONLINE_AVAILABLE`, sau đó tới `ONLINE_BUSY` có workload thấp nhất.
+- `class_stream_post` bổ sung loại bài, ghim, khóa bình luận và ẩn nội dung.
+- `class_stream_comment` lưu trả lời phân trang; khóa ngoại bài dùng cascade để không để lại bình luận mồ côi.
+
+## Chuẩn hóa hình thức gói học (v23)
+
+- `course_package.delivery_mode` chỉ còn `SELF_STUDY`, `GROUP_CLASS`, `ONE_ON_ONE`.
+- `course_package.class_id` chỉ dùng cho `GROUP_CLASS`; sức chứa được kiểm tra bằng thành viên thực tế trong `class_member`.
+- Migration v23 chuyển dữ liệu hình thức cũ theo quyền lợi chính: có lớp thành `GROUP_CLASS`, có buổi gia sư thành `ONE_ON_ONE`, còn lại thành `SELF_STUDY`.
+
+## AI assessment và learning scope (v29)
+
+Migration `v29_ai_class_learning_scope.sql` bổ sung:
+
+- `class_resource.rag_status`, `rag_chunks_count`, `rag_error` để theo dõi ingestion Qdrant và retry lỗi; resource tồn tại trước migration được chuyển `FAILED` để UI cho phép đồng bộ có chủ đích.
+- `quiz.source_quiz_id`, `available_from`, `show_result_after_submit`; bản Quiz có `class_id` là bản sao độc lập đã phát hành cho lớp.
+- `ai_conversation.course_id`, `class_id`, `lesson_id`, `retrieval_scope` để không trộn hội thoại giữa các ngữ cảnh học tập.
+- Index theo trạng thái RAG, class/source Quiz, lịch Quiz và context conversation.
+
+`source_quiz_id` dùng `ON DELETE SET NULL`; xóa Quiz nguồn không xóa đề đã giao hay attempts của học viên.
+
+---

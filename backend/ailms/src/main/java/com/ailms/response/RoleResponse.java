@@ -14,4 +14,6 @@ public class RoleResponse {
     private Long createdBy;
     private Long updatedBy;
     private LocalDateTime updatedAt;
+    private Long permissionCount;
+    private Long userCount;
 }

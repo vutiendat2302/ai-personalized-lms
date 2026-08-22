@@ -1,16 +1,59 @@
 package com.ailms.mapper;
 
 import com.ailms.entity.UserEntity;
+import com.ailms.request.*;
 import com.ailms.response.UserResponse;
-import org.mapstruct.Mapper;
-import org.mapstruct.Mapping;
+import org.mapstruct.*;
 
 import java.util.List;
 
 @Mapper(componentModel = "spring")
 public interface UserMapper {
-    @Mapping(target = "roles", ignore = true) // Will be mapped in Service manually if needed
+
+    @Mapping(target = "roles", ignore = true)
     UserResponse toUserResponse(UserEntity userEntity);
-    
+
     List<UserResponse> toUserResponseList(List<UserEntity> userEntities);
+
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "createdBy", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "updatedBy", ignore = true)
+    @Mapping(target = "passwordHash", ignore = true)
+    @Mapping(target = "attributes", ignore = true)
+    @Mapping(target = "lastLoginAt", ignore = true)
+    @Mapping(target = "statusBeforeDelete", ignore = true)
+    UserEntity toUserEntity(CreateUserRequest request);
+
+    @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "username", ignore = true)
+    @Mapping(target = "email", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "createdBy", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "updatedBy", ignore = true)
+    @Mapping(target = "passwordHash", ignore = true)
+    @Mapping(target = "attributes", ignore = true)
+    @Mapping(target = "lastLoginAt", ignore = true)
+    @Mapping(target = "statusBeforeDelete", ignore = true)
+    void updateUserEntity(@MappingTarget UserEntity userEntity, UpdateUserRequest request);
+
+    @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
+    @Mapping(target = "id", ignore = true)
+    @Mapping(target = "username", ignore = true)
+    @Mapping(target = "email", ignore = true)
+    @Mapping(target = "createdAt", ignore = true)
+    @Mapping(target = "createdBy", ignore = true)
+    @Mapping(target = "updatedAt", ignore = true)
+    @Mapping(target = "updatedBy", ignore = true)
+    @Mapping(target = "passwordHash", ignore = true)
+    @Mapping(target = "lastLoginAt", ignore = true)
+    @Mapping(target = "status", ignore = true)
+    @Mapping(target = "statusBeforeDelete", ignore = true)
+    void updateUserProfile(@MappingTarget UserEntity userEntity, UpdateProfileRequest request);
+
+    UserEntity cloneUser(UserEntity oldUser);
+
 }

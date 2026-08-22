@@ -17,7 +17,7 @@ public class UpdateProfileRequest {
      * Số điện thoại Việt Nam.
      * Cho phép để trống.
      */
-    @Pattern(regexp = "^(0|\\+84)[35789][0-9]{8}$", message = "Phone number is invalid")
+    @Pattern(regexp = "^$|^[0-9\\+\\(\\)\\s\\.-]{8,20}$", message = "Phone number is invalid")
     private String phone;
 
     /**
@@ -37,4 +37,14 @@ public class UpdateProfileRequest {
     @Min(value = 0, message = "Gender is invalid")
     @Max(value = 2, message = "Gender is invalid")
     private Integer gender;
+
+    /**
+     * Đường dẫn ảnh đại diện.
+     */
+    private String avatarUrl;
+
+    /**
+     * Thông tin mở rộng dưới dạng JSON string.
+     */
+    private String attributes;
 }

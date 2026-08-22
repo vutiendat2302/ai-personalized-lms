@@ -4,7 +4,7 @@ export interface UserEntity extends BaseEntity {
     id: string;
     username: string;
     email: string;
-    fullname: string | null;
+    fullName?: string | null;
     phone: string | null;
     avatarUrl: string | null;
     gender: number | null;

@@ -12,5 +12,8 @@ public class PermissionResponse {
     private String action;
     private String description;
     private LocalDateTime createdAt;
+    private Long createdBy;
+    private Long updatedBy;
     private LocalDateTime updatedAt;
+    private Long roleCount;
 }

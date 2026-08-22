@@ -3,15 +3,15 @@ package com.ailms.mapper;
 import com.ailms.entity.RoleEntity;
 import com.ailms.request.RoleRequest;
 import com.ailms.response.RoleResponse;
-import org.mapstruct.Mapper;
-import org.mapstruct.Mapping;
-import org.mapstruct.MappingTarget;
+import org.mapstruct.*;
 
 import java.util.List;
 
 @Mapper(componentModel = "spring")
 public interface RoleMapper {
 
+    @Mapping(target = "permissionCount", ignore = true)
+    @Mapping(target = "userCount", ignore = true)
     RoleResponse toRoleResponse(RoleEntity roleEntity);
 
     List<RoleResponse> toRoleResponseList(List<RoleEntity> roleEntities);
@@ -21,15 +21,19 @@ public interface RoleMapper {
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
-    @Mapping(target = "rolePermissions", ignore = true)
     @Mapping(target = "isSystem", ignore = true)
+    @Mapping(target = "rolePermissions", ignore = true)
+    @Mapping(target = "code", ignore = true)
     RoleEntity toRoleEntity(RoleRequest request);
 
+    @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
     @Mapping(target = "createdBy", ignore = true)
     @Mapping(target = "updatedAt", ignore = true)
     @Mapping(target = "updatedBy", ignore = true)
+    @Mapping(target = "isSystem", ignore = true)
+    @Mapping(target = "code", ignore = true)
     @Mapping(target = "rolePermissions", ignore = true)
     void updateRoleFromRequest(RoleRequest request, @MappingTarget RoleEntity entity);
 }

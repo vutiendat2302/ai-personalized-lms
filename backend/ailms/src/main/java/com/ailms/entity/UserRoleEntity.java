@@ -10,6 +10,15 @@ import lombok.experimental.SuperBuilder;
 
 import java.time.LocalDateTime;
 
+/**
+ * Liên kết giữa User và Role.
+ * Hỗ trợ:
+ * - Một user có nhiều role.
+ * - Theo dõi ai đã gán role và thời điểm gán.
+ * - Có thể đặt thời hạn cho role.
+ * - Hỗ trợ mở rộng ABAC thông qua scopeType và scopeId.
+ */
+
 @Entity
 @Table(name = "user_role")
 @Getter
@@ -19,33 +28,39 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class UserRoleEntity extends BaseEntity {
 
+    /** ID duy nhất được sinh bằng thuật toán Snowflake. */
     @Id
     @SnowflakeId
     @Column(name = "id", updatable = false, nullable = false)
     private Long id;
 
+    /** Người dùng được gán vai trò. */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)
     private UserEntity userEntity;
 
+    /** Vai trò được gán cho người dùng. */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "role_id", nullable = false)
     private RoleEntity roleEntity;
 
-    /** Id của user thực hiện gán (admin), null nếu do hệ thống tự gán lúc register. */
+    /** ID của người dùng thực hiện gán (Admin), null nếu hệ thống tự gán khi đăng ký. */
     @Column(name = "assigned_by")
     private Long assignedBy;
 
+    /** Thời điểm gán vai trò. */
     @Column(name = "assigned_at")
-    private LocalDateTime assigned_at;
+    private LocalDateTime assignedAt;
 
+    /** Thời điểm vai trò hết hiệu lực (nếu có hạn). */
     @Column(name = "expired_at")
-    private LocalDateTime expired_at;
+    private LocalDateTime expiredAt;
 
-    /** Chỗ trống cho ABAC sau này: giới hạn role theo phạm vi, VD: courseId cụ thể. Để null = áp dụng toàn hệ thống. */
+    /** Phạm vi áp dụng ABAC (VD: COURSE, DEPARTMENT, CLASS). Để null = áp dụng toàn hệ thống. */
     @Column(name = "scope_type", length = 50)
     private String scopeType;
 
+    /** ID của đối tượng thuộc phạm vi áp dụng ABAC tương ứng. */
     @Column(name = "scope_id")
     private Long scopeId;
 }

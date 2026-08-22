@@ -1,5 +1,6 @@
 package com.ailms.response;
 
+import com.ailms.entity.enums.BaseStatusEnum;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.*;
 
@@ -15,9 +16,11 @@ public class CategoryResponse {
     private Long id;
     private String name;
     private String description;
-    private Byte status;
+    private BaseStatusEnum status;
 
-    //private Long courseCount;
+    private Long coursesCount;
+    private Long degreesCount;
+    private Long credentialsCount;
 
     @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime createdAt;

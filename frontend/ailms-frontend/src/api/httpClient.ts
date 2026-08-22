@@ -1,6 +1,8 @@
 // api/httpClient.ts
 import axios from "axios";
-import type { ApiResponse, ErrorResponse, JwtAuthenticationResponse } from "@/types/jwtAuthentication";
+import type { JwtAuthenticationResponse } from "@/types/jwtAuthentication";
+import type { ApiResponse, ErrorResponse } from "@/types/base";
+import { normalizeAvatarFields } from "@/utils/avatarUrl";
 
 /* ============================================================
  * ACCESS TOKEN
@@ -37,11 +39,30 @@ export const clearAuth = () => {
  *  - Cho phép Browser tự động gửi HttpOnly Cookie.
  *  - Đây là điều kiện bắt buộc để Refresh Token hoạt động.
  * ============================================================ */
+const BASE_URL = (import.meta.env.VITE_BE_URL || import.meta.env.VITE_API_BASE_URL || "/api").replace(/\/+$/, "");
+
 const httpClient = axios.create({
-  baseURL: import.meta.env.VITE_BE_URL,
+  baseURL: BASE_URL,
 
   // Gửi kèm Cookie trong mọi request
   withCredentials: true,
+
+  // Format array params as param=val1&param=val2 (e.g. sort=fullName:desc&sort=id:desc)
+  paramsSerializer: (params) => {
+    const parts: string[] = [];
+    Object.keys(params).forEach((key) => {
+      const val = params[key];
+      if (val === undefined || val === null || val === "") return;
+      if (Array.isArray(val)) {
+        val.forEach((item) => {
+          parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(item)}`);
+        });
+      } else {
+        parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(val)}`);
+      }
+    });
+    return parts.join("&");
+  },
 });
 
 /* ============================================================
@@ -73,7 +94,10 @@ httpClient.interceptors.request.use((config) => {
  * 19 request còn lại sẽ đứng đợi trong queue.
  * ============================================================ */
 let isRefreshing = false;
-let queue: ((token: string) => void)[] = [];
+let queue: Array<{
+  resolve: (token: string) => void;
+  reject: (error: unknown) => void;
+}> = [];
 
 /* ============================================================
  * RESPONSE INTERCEPTOR
@@ -87,7 +111,10 @@ let queue: ((token: string) => void)[] = [];
  *      Gửi lại Request cũ.
  * ============================================================ */
 httpClient.interceptors.response.use(
-  (res) => res, // Response thành công
+  (res) => {
+    normalizeAvatarFields(res.data);
+    return res;
+  }, // Response thành công
   async (error) => { // Response lỗi
     // Request ban đầu
     const originalReq = error.config;
@@ -117,11 +144,11 @@ httpClient.interceptors.response.use(
        * Chỉ đưa Request hiện tại vào Queue.
        * ===================================================== */
       if (isRefreshing) {
-        return new Promise((resolve) => {
-          queue.push((newToken: string) => {
+        return new Promise<string>((resolve, reject) => {
+          queue.push({ resolve, reject });
+        }).then((newToken) => {
             originalReq.headers.Authorization = `Bearer ${newToken}`;
-            resolve(httpClient(originalReq));
-          });
+            return httpClient(originalReq);
         });
       }
 
@@ -135,7 +162,7 @@ httpClient.interceptors.response.use(
          * Refresh Token được Browser tự gửi thông qua Cookie.
          * =================================================== */
         const { data } = await axios.post<ApiResponse<JwtAuthenticationResponse>>(
-          `${import.meta.env.VITE_BE_URL}/auth/refresh`,
+          `${BASE_URL}/auth/refresh`,
           {},
           { withCredentials: true }
         );
@@ -149,7 +176,7 @@ httpClient.interceptors.response.use(
         /* ===================================================
          * Đánh thức toàn bộ Request đang chờ.
          * =================================================== */
-        queue.forEach((cb) => cb(newToken));
+        queue.forEach(({ resolve }) => resolve(newToken));
         queue = [];
 
          // Gắn Access Token mới vào Request hiện tại
@@ -157,15 +184,16 @@ httpClient.interceptors.response.use(
 
         // Gửi lại Request
         return httpClient(originalReq);
-      } catch {
+      } catch (refreshError) {
         /* ===================================================
          * Refresh Token không hợp lệ hoặc đã hết hạn.
          * Xóa Access Token và chuyển người dùng về Login.
          * =================================================== */
         setAccessToken(null);
+        queue.forEach(({ reject }) => reject(refreshError));
         queue = [];
         window.location.href = "/login";
-        return Promise.reject(errData);
+        return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;
       }
@@ -181,4 +209,5 @@ httpClient.interceptors.response.use(
   }
 );
 
+export { httpClient };
 export default httpClient;

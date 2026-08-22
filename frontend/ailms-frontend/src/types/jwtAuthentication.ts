@@ -1,5 +1,5 @@
 // types/auth.ts
-export type RoleCode = "ADMIN" | "TEACHER" | "TA" | "STUDENT" | "HR";
+export type RoleCode = "ADMIN" | "TEACHER" | "TA" | "STUDENT" | "HR" | "SUPPORT";
 
 
 export interface JwtAuthenticationResponse {
@@ -8,15 +8,19 @@ export interface JwtAuthenticationResponse {
   username: string;
   email: string;
   fullName: string;
+  avatarUrl?: string | null;
   roles: RoleCode[];
   permissions: string[];
 }
 
 export interface AuthUser {
   id: string;
+  username: string;
   email: string;
-  role: RoleCode;
+  roles: RoleCode[];
   permissions: string[];
+  fullName?: string;
+  avatarUrl?: string | null;
 }
 
 export interface AuthState {
@@ -65,18 +69,14 @@ export interface VerifyOtpRequest {
   otp: string;
 }
 
-export interface ApiResponse<T> {
-  success: boolean;
-  message: string | null;
-  data: T;
-  timestamp: string;
+export interface CompleteInviteRequest {
+
+  token: string;
+  password: string;
 }
 
-export interface ErrorResponse {
-  timestamp: string;
-  status: number;
-  error: string;
-  message: string;
-  path: string;
-  details: string[] | null;
+export interface SetPasswordRequest {
+  token: string;
+  password: string;
+  confirmPassword: string;
 }
